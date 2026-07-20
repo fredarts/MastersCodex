@@ -27,6 +27,7 @@ import { useAuth } from '@/context/AuthContext';
 import { GameScene, SceneType, Combatant } from '@/lib/types';
 import { INITIAL_MONSTERS, SFX_BUTTONS } from '@/lib/srd-data';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
+import { normalizeImageUrl } from '@/lib/imageUtils';
 
 interface SessionStudioProps {
   onEquipScene: (scene: GameScene) => void;
@@ -435,15 +436,36 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                       <input
                         type="url"
                         value={imageUrl}
-                        onChange={(e) => setImageUrl(e.target.value)}
+                        onChange={(e) => {
+                          const normalized = normalizeImageUrl(e.target.value);
+                          setImageUrl(normalized);
+                        }}
                         placeholder="https://images.unsplash.com/photo-..."
                         className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-purple-500"
                       />
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        💡 Colou um link do Unsplash ou Imgur? Convertemos automaticamente para o link direto de imagem!
+                      </p>
                     </div>
 
                     {imageUrl ? (
-                      <div className="rounded-2xl overflow-hidden border border-[#2a3449] shadow-2xl relative max-h-80 bg-black flex items-center justify-center">
-                        <img src={imageUrl} alt="Arte da cena" className="w-full h-full object-cover max-h-80" />
+                      <div className="rounded-2xl overflow-hidden border border-[#2a3449] shadow-2xl relative max-h-80 bg-black flex flex-col items-center justify-center min-h-[160px]">
+                        <img 
+                          src={imageUrl} 
+                          alt="Arte da cena" 
+                          className="w-full h-full object-cover max-h-80" 
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                            const errDiv = (e.target as HTMLElement).nextElementSibling as HTMLElement;
+                            if (errDiv) errDiv.classList.remove('hidden');
+                          }}
+                        />
+                        <div className="hidden p-6 text-center text-amber-400/90 text-xs">
+                          <p className="font-bold mb-1">⚠️ Não foi possível carregar esta imagem diretamente.</p>
+                          <p className="text-[11px] text-slate-400">
+                            Dica: No Unsplash, clique com o botão direito na imagem e escolha <b>"Copiar endereço da imagem"</b> para obter o link direto.
+                          </p>
+                        </div>
                         <span className="absolute top-2 right-2 bg-black/70 text-cyan-400 text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-cyan-500/30 flex items-center gap-1">
                           <Tv className="w-3 h-3" /> Transmitida aos Jogadores
                         </span>

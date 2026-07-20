@@ -18,11 +18,12 @@ import { PlayerViewModal } from '@/components/PlayerViewModal';
 import { AuthModal } from '@/components/AuthModal';
 import { CreateCampaignModal } from '@/components/CreateCampaignModal';
 import { PlayerLobby } from '@/components/PlayerLobby';
+import { LiveCockpitStudio } from '@/components/LiveCockpitStudio';
 import { Combatant, Encounter, World, GameScene, UserCampaign } from '@/lib/types';
 
 function MainApp() {
   const { roleMode, loadDemoEverything, setActiveCampaign } = useAuth();
-  const [activeTab, setActiveTab] = useState<ActiveTab>('combat');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('live_cockpit');
   
   const [combatants, setCombatants] = useState<Combatant[]>([]);
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
@@ -66,18 +67,24 @@ function MainApp() {
 
   const handleEquipScene = (scene: GameScene) => {
     // 1-Click Auto Equip Scene Logic
+    if (scene.combatants && scene.combatants.length > 0) {
+      setCombatants((prev) => {
+        const existingPlayers = prev.filter((c) => c.type === 'player');
+        const nonPlayerMonsters = scene.combatants!.filter(
+          (sc) => !existingPlayers.some((p) => p.name.toLowerCase() === sc.name.toLowerCase())
+        );
+        return [...existingPlayers, ...nonPlayerMonsters].sort((a, b) => b.initiative - a.initiative);
+      });
+      setCurrentTurnIndex(0);
+      setRoundCount(1);
+    }
+
     if (scene.sceneType === 'combat') {
-      if (scene.combatants && scene.combatants.length > 0) {
-        setCombatants((prev) => [
-          ...prev.filter((c) => c.type === 'player'),
-          ...scene.combatants!,
-        ].sort((a, b) => b.initiative - a.initiative));
-      }
-      setActiveTab('combat');
+      setActiveTab('live_cockpit');
     } else if (scene.sceneType === 'exploration') {
       setActiveTab('map');
     } else {
-      setActiveTab('ai');
+      setActiveTab('live_cockpit');
     }
   };
 
@@ -139,6 +146,19 @@ function MainApp() {
                 <WorldbuilderStudio
                   onOpenCreateCampaignWithWorld={handleOpenCreateCampaignWithWorld}
                   onSelectCampaign={handleSelectCampaignFromWorld}
+                />
+              )}
+
+              {activeTab === 'live_cockpit' && (
+                <LiveCockpitStudio
+                  combatants={combatants}
+                  setCombatants={setCombatants}
+                  currentTurnIndex={currentTurnIndex}
+                  setCurrentTurnIndex={setCurrentTurnIndex}
+                  roundCount={roundCount}
+                  setRoundCount={setRoundCount}
+                  onGenerateLoot={handleGenerateLootForCombat}
+                  onOpenPlayerView={() => setIsPlayerViewOpen(true)}
                 />
               )}
 

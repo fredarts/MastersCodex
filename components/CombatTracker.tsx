@@ -224,7 +224,7 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
 
             return (
               <div
-                key={c.id}
+                key={`${c.id}-${idx}`}
                 className={`p-4 rounded-2xl border transition-all flex flex-wrap items-center justify-between gap-4 ${
                   isTurn
                     ? 'bg-gradient-to-r from-rose-950/40 via-[#161c28] to-[#121824] border-rose-500/80 shadow-xl shadow-rose-900/20 ring-1 ring-rose-500/40'

@@ -30,7 +30,7 @@ interface PlayerLobbyProps {
 }
 
 export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) => {
-  const { activeCampaign, setActiveCampaign, userCampaigns, joinCampaignByCode, leaveCampaign, feedEvents } = useAuth();
+  const { activeCampaign, setActiveCampaign, userCampaigns, joinCampaignByCode, leaveCampaign, feedEvents, tokenPositions3D, updateTokenPosition3D } = useAuth();
   
   // Navigation & Modal States
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(activeCampaign?.id || null);
@@ -586,6 +586,83 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                     <span className="text-slate-400">Seu Personagem:</span>
                     <span className="font-semibold text-cyan-300">{currentCampaign?.characterName || 'Aventureiro'}</span>
                   </div>
+                </div>
+              </div>
+
+              {/* 3D Battle Grid Smartphone D-Pad Controller */}
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-[#161c28] to-[#0f141d] border border-cyan-500/30 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-cyan-300 flex items-center gap-2 uppercase font-mono">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                    Controle de Pino no Grid 3D
+                  </h3>
+                  <span className="text-[10px] font-mono text-slate-400 bg-[#0a0d14] px-2 py-0.5 rounded border border-[#2a3449]">
+                    1 Passo = 1,5m (5ft)
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Use o controle direcional abaixo no seu smartphone para mover o seu personagem pelo mapa 3D da batalha ao vivo:
+                </p>
+
+                <div className="flex flex-col items-center justify-center p-3 bg-[#0a0d14] rounded-2xl border border-[#2a3449] space-y-2">
+                  <button
+                    onClick={() => {
+                      const charName = currentCampaign?.characterName || 'player';
+                      const cur = tokenPositions3D[charName] || { x: 0, z: 2 };
+                      const nextZ = Math.max(-5, Math.min(5, cur.z - 1));
+                      updateTokenPosition3D(charName, undefined, undefined, cur.x, nextZ);
+                    }}
+                    className="w-12 h-12 rounded-xl bg-gradient-to-b from-cyan-500 to-cyan-600 active:scale-95 text-slate-950 font-black shadow-lg shadow-cyan-900/40 flex items-center justify-center text-lg transition-all"
+                    title="Mover 1,5m para Frente"
+                  >
+                    ▲
+                  </button>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        const charName = currentCampaign?.characterName || 'player';
+                        const cur = tokenPositions3D[charName] || { x: 0, z: 2 };
+                        const nextX = Math.max(-5, Math.min(5, cur.x - 1));
+                        updateTokenPosition3D(charName, undefined, undefined, nextX, cur.z);
+                      }}
+                      className="w-12 h-12 rounded-xl bg-gradient-to-b from-cyan-500 to-cyan-600 active:scale-95 text-slate-950 font-black shadow-lg shadow-cyan-900/40 flex items-center justify-center text-lg transition-all"
+                      title="Mover 1,5m para Esquerda"
+                    >
+                      ◀
+                    </button>
+
+                    <div className="w-10 h-10 rounded-full bg-[#161c28] border border-cyan-500/40 flex items-center justify-center text-[10px] font-mono text-cyan-400 font-bold">
+                      1.5m
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        const charName = currentCampaign?.characterName || 'player';
+                        const cur = tokenPositions3D[charName] || { x: 0, z: 2 };
+                        const nextX = Math.max(-5, Math.min(5, cur.x + 1));
+                        updateTokenPosition3D(charName, undefined, undefined, nextX, cur.z);
+                      }}
+                      className="w-12 h-12 rounded-xl bg-gradient-to-b from-cyan-500 to-cyan-600 active:scale-95 text-slate-950 font-black shadow-lg shadow-cyan-900/40 flex items-center justify-center text-lg transition-all"
+                      title="Mover 1,5m para Direita"
+                    >
+                      ▶
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const charName = currentCampaign?.characterName || 'player';
+                      const cur = tokenPositions3D[charName] || { x: 0, z: 2 };
+                      const nextZ = Math.max(-5, Math.min(5, cur.z + 1));
+                      updateTokenPosition3D(charName, undefined, undefined, cur.x, nextZ);
+                    }}
+                    className="w-12 h-12 rounded-xl bg-gradient-to-b from-cyan-500 to-cyan-600 active:scale-95 text-slate-950 font-black shadow-lg shadow-cyan-900/40 flex items-center justify-center text-lg transition-all"
+                    title="Mover 1,5m para Trás"
+                  >
+                    ▼
+                  </button>
                 </div>
               </div>
             </div>

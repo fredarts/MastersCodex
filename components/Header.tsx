@@ -37,7 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-bold text-base tracking-wider text-slate-100 uppercase flex items-center gap-1.5">
-                Co-Mestre <span className="text-amber-500">RPG</span>
+                Master's <span className="text-amber-500">Codex</span>
               </h1>
               <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded font-mono">
                 D&D 5e

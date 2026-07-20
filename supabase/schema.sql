@@ -6,8 +6,15 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   email TEXT,
   display_name TEXT,
   avatar_url TEXT,
+  active_world_id UUID,
+  active_campaign_id UUID,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Garantir adição de colunas para bancos existentes
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS active_world_id UUID;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS active_campaign_id UUID;
+ALTER TABLE public.campaigns ADD COLUMN IF NOT EXISTS world_id UUID REFERENCES public.worlds(id) ON DELETE SET NULL;
 
 -- 1.2 Tabela Worlds
 CREATE TABLE IF NOT EXISTS public.worlds (

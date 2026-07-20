@@ -31,6 +31,8 @@ import { CreateCampaignModal } from '@/components/CreateCampaignModal';
 export const CampaignSettingsStudio: React.FC = () => {
   const { 
     userCampaigns,
+    userWorlds,
+    activeWorld,
     activeCampaign, 
     setActiveCampaign,
     campaignMembers,
@@ -43,6 +45,12 @@ export const CampaignSettingsStudio: React.FC = () => {
     user,
     loadDemoEverything
   } = useAuth();
+
+  const worldCampaigns = userCampaigns.filter((c) => {
+    if (!activeWorld) return true;
+    const effectiveWorldId = c.worldId || (userWorlds.length > 0 ? userWorlds[0].id : null);
+    return effectiveWorldId === activeWorld.id;
+  });
 
   const [activeTab, setActiveTab] = useState<'feed' | 'roster' | 'houserules' | 'ai' | 'export'>('feed');
 
@@ -87,7 +95,9 @@ export const CampaignSettingsStudio: React.FC = () => {
               <Settings className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-100 mt-1">Selecione uma Campanha / Mesa de Jogo</h2>
+              <h2 className="text-xl font-bold text-slate-100 mt-1">
+                {activeWorld ? `Campanhas do Mundo: ${activeWorld.title}` : 'Selecione uma Campanha / Mesa de Jogo'}
+              </h2>
               <p className="text-xs text-slate-400 mt-0.5 max-w-xl">
                 Escolha uma das suas campanhas ativas abaixo para acessar o Diário da Jornada, Feed, Jogadores e Regras da Mesa.
               </p>
@@ -104,15 +114,15 @@ export const CampaignSettingsStudio: React.FC = () => {
         </div>
 
         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-          Suas Campanhas Criadas ({userCampaigns.length}):
+          Campanhas Deste Mundo ({worldCampaigns.length}):
         </h3>
 
-        {userCampaigns.length === 0 ? (
+        {worldCampaigns.length === 0 ? (
           <div className="border-2 border-dashed border-[#2a3449] rounded-2xl p-8 text-center text-slate-500 bg-[#0f141d]/40 max-w-xl mx-auto my-4">
             <Settings className="w-12 h-12 mx-auto mb-3 text-slate-600" />
-            <p className="font-semibold text-slate-300 text-sm mb-1">Nenhuma campanha encontrada.</p>
+            <p className="font-semibold text-slate-300 text-sm mb-1">Nenhuma campanha cadastrada para este mundo.</p>
             <p className="text-xs text-slate-500 mb-4">
-              Você pode iniciar uma nova campanha de RPG agora mesmo ou carregar o exemplo de demonstração.
+              Você pode iniciar uma nova campanha de RPG alimentada por este universo agora mesmo.
             </p>
             <div className="flex justify-center gap-2">
               <button
@@ -121,17 +131,11 @@ export const CampaignSettingsStudio: React.FC = () => {
               >
                 + Iniciar Campanha
               </button>
-              <button
-                onClick={loadDemoEverything}
-                className="px-4 py-2 bg-[#161c28] hover:bg-[#1f2738] text-slate-300 border border-[#2a3449] font-bold text-xs rounded-xl"
-              >
-                Carregar Exemplo de Demo
-              </button>
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {userCampaigns.map((camp) => (
+            {worldCampaigns.map((camp) => (
               <div
                 key={camp.id}
                 onClick={() => setActiveCampaign(camp)}
@@ -266,12 +270,12 @@ export const CampaignSettingsStudio: React.FC = () => {
               <select
                 value={activeCampaign.id}
                 onChange={(e) => {
-                  const selected = userCampaigns.find((c) => c.id === e.target.value);
+                  const selected = worldCampaigns.find((c) => c.id === e.target.value);
                   if (selected) setActiveCampaign(selected);
                 }}
                 className="bg-[#0a0d14] border border-[#2a3449] rounded px-2 py-0.5 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-500"
               >
-                {userCampaigns.map((c) => (
+                {worldCampaigns.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title} ({c.inviteCode})
                   </option>

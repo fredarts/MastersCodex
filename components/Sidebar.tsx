@@ -14,13 +14,14 @@ import {
   Plus,
   Crown,
   Settings,
-  Film
+  Film,
+  Tv
 } from 'lucide-react';
 import { Encounter } from '@/lib/types';
 import { INITIAL_ENCOUNTERS } from '@/lib/srd-data';
 import { useAuth } from '@/context/AuthContext';
 
-export type ActiveTab = 'worldbuilder' | 'session_studio' | 'campaign_settings' | 'combat' | 'map' | 'ai' | 'lore' | 'compendium' | 'audio';
+export type ActiveTab = 'worldbuilder' | 'session_studio' | 'campaign_settings' | 'live_cockpit' | 'combat' | 'map' | 'ai' | 'lore' | 'compendium' | 'audio';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -37,8 +38,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenCreateCampaign,
   onLoadDemoEverything,
 }) => {
-  const { userCampaigns, activeCampaign, setActiveCampaign, activeWorld } = useAuth();
-  const dmCampaigns = userCampaigns.filter((c) => c.role === 'dm');
+  const { userCampaigns, userWorlds, activeCampaign, setActiveCampaign, activeWorld } = useAuth();
+  const dmCampaigns = userCampaigns.filter((c) => {
+    if (c.role !== 'dm') return false;
+    if (!activeWorld) return true;
+    const effectiveWorldId = c.worldId || (userWorlds.length > 0 ? userWorlds[0].id : null);
+    return effectiveWorldId === activeWorld.id;
+  });
 
   const navigationHubs = [
     {
@@ -57,6 +63,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: '⚔️ Sessão Ao Vivo (Cockpit)',
       items: [
+        { id: 'live_cockpit', label: 'Estúdio Sessão ao Vivo', icon: Tv, color: 'text-rose-400 font-bold' },
         { id: 'combat', label: 'Combat Tracker', icon: Swords, color: 'text-rose-400' },
         { id: 'map', label: 'Map Maker & Grid', icon: Map, color: 'text-cyan-400' },
         { id: 'ai', label: 'IA Co-Mestre', icon: Sparkles, color: 'text-amber-300' },

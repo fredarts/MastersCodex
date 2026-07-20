@@ -52,6 +52,11 @@ interface AuthContextType {
   joinCampaignByCode: (code: string, characterName?: string) => Promise<boolean>;
   leaveCampaign: (campaignId: string) => Promise<void>;
   createCampaign: (title: string, worldId?: string, description?: string) => Promise<UserCampaign>;
+  liveDisplayMode: 'artwork' | 'map' | 'combat';
+  setLiveDisplayMode: (mode: 'artwork' | 'map' | 'combat') => void;
+  broadcastToPlayerView: (payload: any) => void;
+  tokenPositions3D: Record<string, { x: number; z: number }>;
+  updateTokenPosition3D: (idOrName: string, deltaX?: number, deltaZ?: number, newX?: number, newZ?: number) => void;
   loadDemoEverything: () => void;
   isLoading: boolean;
 }
@@ -151,7 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Worlds & Entities State
   const [userWorlds, setUserWorlds] = useState<World[]>([]);
-  const [activeWorld, setActiveWorld] = useState<World | null>(null);
+  const [activeWorld, setActiveWorldState] = useState<World | null>(null);
   const [worldEntities, setWorldEntities] = useState<WorldEntity[]>([]);
 
   // Campaigns & Members State
@@ -168,6 +173,74 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Feed Events State
   const [feedEvents, setFeedEvents] = useState<CampaignFeedEvent[]>([]);
 
+  // Live Cockpit & Broadcast State
+  const [liveDisplayMode, setLiveDisplayMode] = useState<'artwork' | 'map' | 'combat'>('artwork');
+
+  const broadcastToPlayerView = (payload: any) => {
+    try {
+      const bc = new BroadcastChannel('masters_codex_sync');
+      bc.postMessage({ type: 'LIVE_PROJECTION_UPDATE', ...payload });
+      bc.close();
+    } catch (e) {}
+  };
+
+  // Global 3D Token Positions State
+  const [tokenPositions3D, setTokenPositions3D] = useState<Record<string, { x: number; z: number }>>({});
+
+  const updateTokenPosition3D = (
+    idOrName: string,
+    deltaX?: number,
+    deltaZ?: number,
+    newX?: number,
+    newZ?: number
+  ) => {
+    setTokenPositions3D((prev) => {
+      const current = prev[idOrName] || { x: 0, z: 0 };
+      const nextX = newX !== undefined ? newX : Math.max(-5, Math.min(5, current.x + (deltaX || 0)));
+      const nextZ = newZ !== undefined ? newZ : Math.max(-5, Math.min(5, current.z + (deltaZ || 0)));
+      const updated = { ...prev, [idOrName]: { x: nextX, z: nextZ } };
+
+      try {
+        const bc = new BroadcastChannel('masters_codex_sync');
+        bc.postMessage({
+          type: 'TOKEN_MOVE_3D',
+          combatantId: idOrName,
+          characterName: idOrName,
+          newX: nextX,
+          newZ: nextZ,
+        });
+        bc.close();
+      } catch (e) {}
+
+      return updated;
+    });
+  };
+
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('masters_codex_sync');
+      bc.onmessage = (event) => {
+        if (event.data?.type === 'TOKEN_MOVE_3D') {
+          const { combatantId, characterName, deltaX, deltaZ, newX, newZ } = event.data;
+          const targetKey = combatantId || characterName;
+          if (targetKey) {
+            setTokenPositions3D((prev) => {
+              const current = prev[targetKey] || { x: 0, z: 0 };
+              const nextX = newX !== undefined ? newX : Math.max(-5, Math.min(5, current.x + (deltaX || 0)));
+              const nextZ = newZ !== undefined ? newZ : Math.max(-5, Math.min(5, current.z + (deltaZ || 0)));
+              return { ...prev, [targetKey]: { x: nextX, z: nextZ } };
+            });
+          }
+        }
+      };
+    } catch (e) {}
+
+    return () => {
+      if (bc) bc.close();
+    };
+  }, []);
+
   const [isLoading, setIsLoading] = useState(true);
 
   const setRoleMode = (role: UserRoleMode) => {
@@ -177,15 +250,75 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {}
   };
 
+  const setActiveWorld = (world: World | null) => {
+    setActiveWorldState(world);
+    try {
+      if (world) {
+        localStorage.setItem('codex_activeWorldId', world.id);
+      } else {
+        localStorage.removeItem('codex_activeWorldId');
+      }
+    } catch (e) {}
+
+    const userId = user?.id;
+    if (isSupabaseConfigured() && userId) {
+      const validWorldId = world?.id && isValidUUID(world.id) ? world.id : null;
+      supabase.from('profiles').update({
+        active_world_id: validWorldId,
+      }).eq('id', userId).then(({ error }) => {
+        if (error) console.warn('Aviso ao persistir active_world_id no Supabase:', error.message);
+      });
+    }
+
+    // When changing world, clear campaign selection if it doesn't belong to the new world
+    setActiveCampaignState((currentCamp) => {
+      if (currentCamp) {
+        const campWorldId = currentCamp.worldId || (userWorlds.length > 0 ? userWorlds[0].id : null);
+        if (campWorldId !== world?.id) {
+          try {
+            localStorage.removeItem('codex_activeCampaignId');
+          } catch (e) {}
+          if (isSupabaseConfigured() && userId) {
+            supabase.from('profiles').update({ active_campaign_id: null }).eq('id', userId);
+          }
+          return null;
+        }
+      }
+      return currentCamp;
+    });
+  };
+
   const setActiveCampaign = (camp: UserCampaign | null) => {
     setActiveCampaignState(camp);
     try {
       if (camp) {
         localStorage.setItem('codex_activeCampaignId', camp.id);
+        const campWorldId = camp.worldId || (userWorlds.length > 0 ? userWorlds[0].id : null);
+        if (campWorldId) {
+          const matchingWorld = userWorlds.find((w) => w.id === campWorldId);
+          if (matchingWorld && activeWorld?.id !== matchingWorld.id) {
+            setActiveWorldState(matchingWorld);
+            try {
+              localStorage.setItem('codex_activeWorldId', matchingWorld.id);
+            } catch (e) {}
+          }
+        }
       } else {
         localStorage.removeItem('codex_activeCampaignId');
       }
     } catch (e) {}
+
+    const userId = user?.id;
+    if (isSupabaseConfigured() && userId) {
+      const validCampId = camp?.id && isValidUUID(camp.id) ? camp.id : null;
+      const validWorldId = camp?.worldId && isValidUUID(camp.worldId) ? camp.worldId : undefined;
+      const payload: any = { active_campaign_id: validCampId };
+      if (validWorldId !== undefined) payload.active_world_id = validWorldId;
+
+      supabase.from('profiles').update(payload).eq('id', userId).then(({ error }) => {
+        if (error) console.warn('Aviso ao persistir active_campaign_id no Supabase:', error.message);
+      });
+    }
   };
 
   const loadLocalStorageState = () => {
@@ -198,41 +331,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const savedEntities = localStorage.getItem('codex_entities');
       const savedFeed = localStorage.getItem('codex_feed');
       const savedRoleMode = localStorage.getItem('codex_roleMode') as UserRoleMode;
+      const savedActiveWorldId = localStorage.getItem('codex_activeWorldId');
       const savedActiveCampId = localStorage.getItem('codex_activeCampaignId');
 
+      let currentWorld = activeWorld;
+      let parsedWorlds: World[] = [];
       if (savedWorlds) {
-        const parsed = JSON.parse(savedWorlds);
-        setUserWorlds((prev) => (JSON.stringify(prev) === JSON.stringify(parsed) ? prev : parsed));
+        parsedWorlds = JSON.parse(savedWorlds);
+        setUserWorlds((prev) => (JSON.stringify(prev) === JSON.stringify(parsedWorlds) ? prev : parsedWorlds));
+        if (savedActiveWorldId) {
+          const foundW = parsedWorlds.find((w) => w.id === savedActiveWorldId);
+          if (foundW) {
+            currentWorld = foundW;
+            setActiveWorldState(foundW);
+          }
+        } else if (parsedWorlds.length > 0) {
+          currentWorld = parsedWorlds[0];
+          setActiveWorldState(parsedWorlds[0]);
+        }
       }
+
+      let parsedCampaigns: UserCampaign[] = [];
       if (savedCampaigns) {
-        const parsed = JSON.parse(savedCampaigns);
-        setUserCampaigns((prev) => (JSON.stringify(prev) === JSON.stringify(parsed) ? prev : parsed));
+        parsedCampaigns = JSON.parse(savedCampaigns);
+        setUserCampaigns((prev) => (JSON.stringify(prev) === JSON.stringify(parsedCampaigns) ? prev : parsedCampaigns));
       }
       if (savedMembers) {
         const parsed = JSON.parse(savedMembers);
         setCampaignMembers((prev) => (JSON.stringify(prev) === JSON.stringify(parsed) ? prev : parsed));
       }
-      if (savedSessions) {
-        const parsed = JSON.parse(savedSessions);
-        setSessions((prev) => (JSON.stringify(prev) === JSON.stringify(parsed) ? prev : parsed));
-      }
-      if (savedScenes) {
-        const parsed = JSON.parse(savedScenes);
-        setScenes((prev) => (JSON.stringify(prev) === JSON.stringify(parsed) ? prev : parsed));
-      }
-      if (savedEntities) {
-        const parsed = JSON.parse(savedEntities);
-        setWorldEntities((prev) => (JSON.stringify(prev) === JSON.stringify(parsed) ? prev : parsed));
-      }
-      if (savedFeed) {
-        const parsed = JSON.parse(savedFeed);
-        setFeedEvents((prev) => (JSON.stringify(prev) === JSON.stringify(parsed) ? prev : parsed));
-      }
       if (savedRoleMode) setRoleModeState(savedRoleMode);
 
-      if (savedActiveCampId && userCampaigns.length > 0) {
-        const found = userCampaigns.find((c) => c.id === savedActiveCampId);
-        if (found && activeCampaign?.id !== found.id) setActiveCampaignState(found);
+      if (savedActiveCampId && parsedCampaigns.length > 0) {
+        const found = parsedCampaigns.find((c) => c.id === savedActiveCampId);
+        if (found) {
+          const campWorldId = found.worldId || (parsedWorlds.length > 0 ? parsedWorlds[0].id : null);
+          if (!currentWorld || campWorldId === currentWorld.id) {
+            setActiveCampaignState(found);
+          } else {
+            setActiveCampaignState(null);
+          }
+        }
+      } else if (currentWorld && parsedCampaigns.length > 0) {
+        const matchingCamp = parsedCampaigns.find((c) => {
+          const campWorldId = c.worldId || (parsedWorlds.length > 0 ? parsedWorlds[0].id : null);
+          return campWorldId === currentWorld?.id;
+        });
+        setActiveCampaignState(matchingCamp || null);
       }
     } catch (e) {
       console.error('LocalStorage load error:', e);
@@ -266,7 +411,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [activeCampaign?.id]);
 
-  // Save to LocalStorage
+  // Save to LocalStorage (Global entities)
   useEffect(() => {
     try {
       if (userWorlds.length > 0) {
@@ -278,22 +423,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (campaignMembers.length > 0) {
         localStorage.setItem('codex_members', JSON.stringify(campaignMembers));
       }
-      if (sessions.length > 0) {
-        localStorage.setItem('codex_sessions', JSON.stringify(sessions));
-      }
-      if (scenes.length > 0) {
-        localStorage.setItem('codex_scenes', JSON.stringify(scenes));
-      }
-      if (worldEntities.length > 0) {
-        localStorage.setItem('codex_entities', JSON.stringify(worldEntities));
-      }
-      if (feedEvents.length > 0) {
-        localStorage.setItem('codex_feed', JSON.stringify(feedEvents));
-      }
     } catch (e) {
       console.error('LocalStorage save error:', e);
     }
-  }, [userWorlds, userCampaigns, campaignMembers, sessions, scenes, worldEntities, feedEvents]);
+  }, [userWorlds, userCampaigns, campaignMembers]);
 
   useEffect(() => {
     if (activeWorld) {
@@ -325,7 +458,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setScenes([]);
       setActiveScene(null);
     }
-  }, [activeSession?.id]);
+  }, [activeSession?.id, activeCampaign?.id]);
 
   useEffect(() => {
     if (isSupabaseConfigured()) {
@@ -368,32 +501,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     } else {
       setUser(DEMO_USER);
-      if (userWorlds.length === 0) {
+      const hasSavedWorlds = !!localStorage.getItem('codex_worlds');
+      loadLocalStorageState();
+
+      if (!hasSavedWorlds) {
         setUserWorlds([SAMPLE_DEMO_WORLD]);
-        setActiveWorld(SAMPLE_DEMO_WORLD);
-      }
-      if (userCampaigns.length === 0) {
+        setActiveWorldState(SAMPLE_DEMO_WORLD);
         setUserCampaigns([SAMPLE_DEMO_CAMPAIGN]);
         setActiveCampaignState(SAMPLE_DEMO_CAMPAIGN);
-      }
-      if (campaignMembers.length === 0) {
         setCampaignMembers(SAMPLE_DEMO_MEMBERS);
+        setSessions([SAMPLE_DEMO_SESSION]);
+        setActiveSession(SAMPLE_DEMO_SESSION);
+        setScenes(SAMPLE_DEMO_SCENES);
+        setActiveScene(SAMPLE_DEMO_SCENES[0]);
+        setFeedEvents(SAMPLE_DEMO_FEED_EVENTS);
       }
-      setSessions([SAMPLE_DEMO_SESSION]);
-      setActiveSession(SAMPLE_DEMO_SESSION);
-      setScenes(SAMPLE_DEMO_SCENES);
-      setActiveScene(SAMPLE_DEMO_SCENES[0]);
-      setFeedEvents(SAMPLE_DEMO_FEED_EVENTS);
       setIsLoading(false);
     }
   }, []);
 
   const fetchUserWorldsAndCampaigns = async (userId: string) => {
     try {
+      let dbSavedWorldId: string | null = null;
+      let dbSavedCampId: string | null = null;
+
+      try {
+        const { data: profData } = await supabase
+          .from('profiles')
+          .select('active_world_id, active_campaign_id')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (profData) {
+          dbSavedWorldId = profData.active_world_id;
+          dbSavedCampId = profData.active_campaign_id;
+        }
+      } catch (e) {}
+
+      const savedWorldId = dbSavedWorldId || localStorage.getItem('codex_activeWorldId');
+      const savedCampId = dbSavedCampId || localStorage.getItem('codex_activeCampaignId');
+
       const { data: worldsData, error: worldsError } = await supabase
         .from('worlds')
         .select('*')
         .eq('dm_id', userId);
+
+      let currentActiveWorld: World | null = null;
 
       if (worldsError) {
         console.warn('Aviso: Não foi possível carregar os mundos do Supabase:', worldsError.message);
@@ -406,7 +559,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: w.description,
         }));
         setUserWorlds((prev) => (JSON.stringify(prev) === JSON.stringify(formattedWorlds) ? prev : formattedWorlds));
-        if (!activeWorld) setActiveWorld(formattedWorlds[0]);
+        
+        const foundWorld = formattedWorlds.find((w) => w.id === savedWorldId);
+        currentActiveWorld = foundWorld || formattedWorlds[0];
+        setActiveWorldState(currentActiveWorld);
       }
 
       const { data: campsData, error: campsError } = await supabase
@@ -462,10 +618,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (allCamps.length > 0) {
         setUserCampaigns((prev) => (JSON.stringify(prev) === JSON.stringify(allCamps) ? prev : allCamps));
-        if (!activeCampaign) {
-          const savedActiveCampId = localStorage.getItem('codex_activeCampaignId');
-          const found = allCamps.find((c) => c.id === savedActiveCampId);
-          setActiveCampaignState(found || allCamps[0]);
+        const found = allCamps.find((c) => c.id === savedCampId);
+        const getCampWorldId = (c: UserCampaign) => c.worldId || (userWorlds.length > 0 ? userWorlds[0].id : null);
+
+        if (found && (!currentActiveWorld || getCampWorldId(found) === currentActiveWorld.id)) {
+          setActiveCampaignState(found);
+        } else if (currentActiveWorld) {
+          const worldCamp = allCamps.find((c) => getCampWorldId(c) === currentActiveWorld?.id);
+          setActiveCampaignState(worldCamp || null);
+        } else {
+          setActiveCampaignState(allCamps[0] || null);
         }
       } else {
         // Se a busca no Supabase não retornar campanhas ou falhar por tabela inexistente, carrega dados salvos localmente
@@ -802,214 +964,182 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchWorldEntities = async (worldId: string) => {
-    // 1. Load local entities first
+    let finalEntities: WorldEntity[] = [];
     try {
       const saved = localStorage.getItem('codex_entities');
       if (saved) {
         const parsed: WorldEntity[] = JSON.parse(saved);
-        const filtered = parsed.filter((e) => e.worldId === worldId);
-        if (filtered.length > 0) {
-          setWorldEntities((prev) => {
-            const merged = [...filtered];
-            prev.forEach((p) => {
-              if (p.worldId === worldId && !merged.some((m) => m.id === p.id)) merged.push(p);
-            });
-            return merged;
-          });
-        }
+        finalEntities = parsed.filter((e) => e.worldId === worldId);
       }
     } catch (e) {}
 
-    if (!isSupabaseConfigured() || !isValidUUID(worldId)) return;
+    if (isSupabaseConfigured() && isValidUUID(worldId)) {
+      try {
+        const { data: entitiesData } = await supabase
+          .from('world_entities')
+          .select('*')
+          .eq('world_id', worldId);
 
-    try {
-      const { data: entitiesData } = await supabase
-        .from('world_entities')
-        .select('*')
-        .eq('world_id', worldId);
-
-      if (entitiesData) {
-        const formatted: WorldEntity[] = entitiesData.map((e) => ({
-          id: e.id,
-          worldId: e.world_id,
-          category: e.category,
-          name: e.name,
-          subType: e.sub_type,
-          status: e.status || 'active',
-          shortDesc: e.short_desc,
-          fullContent: e.full_content,
-          attributes: e.attributes,
-          connections: e.connections || [],
-        }));
-        setWorldEntities((prev) => {
-          const merged = [...formatted];
-          prev.forEach((p) => {
-            if (p.worldId === worldId && !merged.some((m) => m.id === p.id)) merged.push(p);
+        if (entitiesData && entitiesData.length > 0) {
+          const formatted: WorldEntity[] = entitiesData.map((e) => ({
+            id: e.id,
+            worldId: e.world_id,
+            category: e.category,
+            name: e.name,
+            subType: e.sub_type,
+            status: e.status || 'active',
+            shortDesc: e.short_desc,
+            fullContent: e.full_content,
+            attributes: e.attributes,
+            connections: e.connections || [],
+          }));
+          formatted.forEach((f) => {
+            if (!finalEntities.some((m) => m.id === f.id)) finalEntities.push(f);
           });
-          return merged;
-        });
+        }
+      } catch (e) {
+        console.error('Error fetching world entities:', e);
       }
-    } catch (e) {
-      console.error('Error fetching world entities:', e);
     }
+
+    setWorldEntities(finalEntities);
   };
 
   const fetchCampaignSessions = async (campaignId: string) => {
-    // 1. Load local sessions first
-    let localForCamp: GameSession[] = [];
+    let finalSessions: GameSession[] = [];
     try {
       const saved = localStorage.getItem('codex_sessions');
       if (saved) {
         const parsed: GameSession[] = JSON.parse(saved);
-        localForCamp = parsed.filter((s) => s.campaignId === campaignId);
-        if (localForCamp.length > 0) {
-          setSessions((prev) => {
-            const merged = [...localForCamp];
-            prev.forEach((p) => {
-              if (p.campaignId === campaignId && !merged.some((m) => m.id === p.id)) merged.push(p);
-            });
-            return merged.sort((a, b) => a.sessionNumber - b.sessionNumber);
-          });
-          if (!activeSession) setActiveSession(localForCamp[0]);
-        }
+        finalSessions = parsed.filter((s) => s.campaignId === campaignId);
       }
     } catch (e) {}
 
-    if (!isSupabaseConfigured() || !isValidUUID(campaignId)) return;
+    if (isSupabaseConfigured() && isValidUUID(campaignId)) {
+      try {
+        const { data: sessionsData } = await supabase
+          .from('sessions')
+          .select('*')
+          .eq('campaign_id', campaignId)
+          .order('session_number', { ascending: true });
 
-    try {
-      const { data: sessionsData } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('campaign_id', campaignId)
-        .order('session_number', { ascending: true });
-
-      if (sessionsData && sessionsData.length > 0) {
-        const formatted: GameSession[] = sessionsData.map((s) => ({
-          id: s.id,
-          campaignId: s.campaign_id,
-          sessionNumber: s.session_number,
-          title: s.title,
-          notes: s.notes,
-        }));
-        setSessions((prev) => {
-          const merged = [...formatted];
-          localForCamp.forEach((l) => {
-            if (!merged.some((m) => m.id === l.id)) merged.push(l);
+        if (sessionsData && sessionsData.length > 0) {
+          const formatted: GameSession[] = sessionsData.map((s) => ({
+            id: s.id,
+            campaignId: s.campaign_id,
+            sessionNumber: s.session_number,
+            title: s.title,
+            notes: s.notes,
+          }));
+          formatted.forEach((f) => {
+            if (!finalSessions.some((m) => m.id === f.id)) finalSessions.push(f);
           });
-          return merged.sort((a, b) => a.sessionNumber - b.sessionNumber);
-        });
-        if (!activeSession) setActiveSession(formatted[0]);
+        }
+      } catch (e) {
+        console.error('Error fetching sessions:', e);
       }
-    } catch (e) {
-      console.error('Error fetching sessions:', e);
+    }
+
+    finalSessions.sort((a, b) => a.sessionNumber - b.sessionNumber);
+    setSessions(finalSessions);
+
+    if (finalSessions.length > 0) {
+      setActiveSession((current) => {
+        if (current && finalSessions.some((s) => s.id === current.id)) return current;
+        return finalSessions[0];
+      });
+    } else {
+      setActiveSession(null);
     }
   };
 
   const fetchSessionScenes = async (sessionId: string) => {
-    // 1. Load local scenes first for this session only
-    let localForSession: GameScene[] = [];
+    let finalScenes: GameScene[] = [];
     try {
       const saved = localStorage.getItem('codex_scenes');
       if (saved) {
         const parsed: GameScene[] = JSON.parse(saved);
-        localForSession = parsed.filter((sc) => sc.sessionId === sessionId);
+        finalScenes = parsed.filter((sc) => sc.sessionId === sessionId);
       }
     } catch (e) {}
 
-    const sortedLocal = [...localForSession].sort((a, b) => a.orderIndex - b.orderIndex);
-    setScenes(sortedLocal);
-    setActiveScene(sortedLocal.length > 0 ? sortedLocal[0] : null);
+    if (isSupabaseConfigured() && isValidUUID(sessionId)) {
+      try {
+        const { data: scenesData } = await supabase
+          .from('scenes')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('order_index', { ascending: true });
 
-    if (!isSupabaseConfigured() || !isValidUUID(sessionId)) return;
-
-    try {
-      const { data: scenesData } = await supabase
-        .from('scenes')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('order_index', { ascending: true });
-
-      if (scenesData) {
-        const formatted: GameScene[] = scenesData.map((sc) => ({
-          id: sc.id,
-          sessionId: sc.session_id,
-          orderIndex: sc.order_index,
-          title: sc.title,
-          sceneType: sc.scene_type as any,
-          npcName: sc.npc_name,
-          sensoryText: sc.sensory_text,
-          secretNotes: sc.secret_notes,
-          bgmCategory: sc.bgm_category,
-          imageUrl: sc.image_url,
-          npcAudioUrl: sc.npc_audio_url,
-          sfxShortcuts: sc.sfx_shortcuts || [],
-          combatants: sc.combatants || [],
-        }));
-        const merged = [...formatted];
-        sortedLocal.forEach((l) => {
-          if (!merged.some((m) => m.id === l.id)) merged.push(l);
-        });
-        merged.sort((a, b) => a.orderIndex - b.orderIndex);
-
-        setScenes(merged);
-        setActiveScene(merged.length > 0 ? merged[0] : null);
+        if (scenesData && scenesData.length > 0) {
+          const formatted: GameScene[] = scenesData.map((sc) => ({
+            id: sc.id,
+            sessionId: sc.session_id,
+            orderIndex: sc.order_index,
+            title: sc.title,
+            sceneType: sc.scene_type as any,
+            npcName: sc.npc_name,
+            sensoryText: sc.sensory_text,
+            secretNotes: sc.secret_notes,
+            bgmCategory: sc.bgm_category,
+            imageUrl: sc.image_url,
+            npcAudioUrl: sc.npc_audio_url,
+            sfxShortcuts: sc.sfx_shortcuts || [],
+            combatants: sc.combatants || [],
+          }));
+          formatted.forEach((f) => {
+            if (!finalScenes.some((m) => m.id === f.id)) finalScenes.push(f);
+          });
+        }
+      } catch (e) {
+        console.error('Error fetching scenes:', e);
       }
-    } catch (e) {
-      console.error('Error fetching scenes:', e);
     }
+
+    finalScenes.sort((a, b) => a.orderIndex - b.orderIndex);
+    setScenes(finalScenes);
+    setActiveScene(finalScenes.length > 0 ? finalScenes[0] : null);
   };
 
   const fetchCampaignFeed = async (campaignId: string) => {
-    // 1. Load local feed first
+    let finalFeed: CampaignFeedEvent[] = [];
     try {
       const saved = localStorage.getItem('codex_feed');
       if (saved) {
         const parsed: CampaignFeedEvent[] = JSON.parse(saved);
-        const filtered = parsed.filter((f) => f.campaignId === campaignId);
-        if (filtered.length > 0) {
-          setFeedEvents((prev) => {
-            const merged = [...filtered];
-            prev.forEach((p) => {
-              if (p.campaignId === campaignId && !merged.some((m) => m.id === p.id)) merged.push(p);
-            });
-            return merged;
-          });
-        }
+        finalFeed = parsed.filter((f) => f.campaignId === campaignId);
       }
     } catch (e) {}
 
-    if (!isSupabaseConfigured() || !isValidUUID(campaignId)) return;
+    if (isSupabaseConfigured() && isValidUUID(campaignId)) {
+      try {
+        const { data: feedData } = await supabase
+          .from('campaign_feed_events')
+          .select('*')
+          .eq('campaign_id', campaignId)
+          .order('created_at', { ascending: false });
 
-    try {
-      const { data: feedData } = await supabase
-        .from('campaign_feed_events')
-        .select('*')
-        .eq('campaign_id', campaignId)
-        .order('created_at', { ascending: false });
-
-      if (feedData) {
-        const formatted: CampaignFeedEvent[] = feedData.map((f) => ({
-          id: f.id,
-          campaignId: f.campaign_id,
-          sessionId: f.session_id,
-          eventType: f.event_type as any,
-          title: f.title,
-          summary: f.summary,
-          details: f.details,
-          isPublic: f.is_public ?? true,
-        }));
-        setFeedEvents((prev) => {
-          const merged = [...formatted];
-          prev.forEach((p) => {
-            if (p.campaignId === campaignId && !merged.some((m) => m.id === p.id)) merged.push(p);
+        if (feedData && feedData.length > 0) {
+          const formatted: CampaignFeedEvent[] = feedData.map((f) => ({
+            id: f.id,
+            campaignId: f.campaign_id,
+            sessionId: f.session_id,
+            eventType: f.event_type as any,
+            title: f.title,
+            summary: f.summary,
+            details: f.details,
+            isPublic: f.is_public ?? true,
+          }));
+          formatted.forEach((f) => {
+            if (!finalFeed.some((m) => m.id === f.id)) finalFeed.push(f);
           });
-          return merged;
-        });
+        }
+      } catch (e) {
+        console.error('Error fetching feed events:', e);
       }
-    } catch (e) {
-      console.error('Error fetching feed events:', e);
     }
+
+    setFeedEvents(finalFeed);
   };
 
   const createFeedEvent = async (eventData: Omit<CampaignFeedEvent, 'id'>): Promise<CampaignFeedEvent> => {
@@ -1288,10 +1418,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const createCampaign = async (title: string, worldId?: string, description?: string): Promise<UserCampaign> => {
     const code = `${title.slice(0, 4).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
     const userId = user?.id || 'demo-dm-user-123';
+    const effectiveWorldId = worldId || (activeWorld ? activeWorld.id : (userWorlds.length > 0 ? userWorlds[0].id : undefined));
     const newCamp: UserCampaign = {
       id: `camp-${Date.now()}`,
       dmId: userId,
-      worldId,
+      worldId: effectiveWorldId,
       title,
       description: description || 'Minha nova campanha de RPG D&D 5e.',
       inviteCode: code,
@@ -1314,18 +1445,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           display_name: user?.displayName || 'Frederico Monteiro (Game Dev)',
         });
 
-        const validWorldId = isValidUUID(worldId) ? worldId : null;
+        const validWorldId = isValidUUID(effectiveWorldId) ? effectiveWorldId : null;
 
-        const { data: cData, error: cErr } = await supabase.from('campaigns').insert({
+        const insertPayload: any = {
           dm_id: userId,
-          world_id: validWorldId,
           title,
           description,
           invite_code: code,
-        }).select().single();
+        };
+        if (validWorldId) {
+          insertPayload.world_id = validWorldId;
+        }
+
+        let { data: cData, error: cErr } = await supabase.from('campaigns').insert(insertPayload).select().single();
+
+        if (cErr && (cErr.code === 'PGRST204' || cErr.message?.includes('world_id')) && insertPayload.world_id) {
+          console.warn('Coluna world_id não encontrada em campaigns. Tentando inserir sem world_id...');
+          delete insertPayload.world_id;
+          const retry = await supabase.from('campaigns').insert(insertPayload).select().single();
+          cData = retry.data;
+          cErr = retry.error;
+        }
 
         if (cErr) {
-          console.error('Error inserting campaign into Supabase:', cErr);
+          console.error('Error inserting campaign into Supabase:', JSON.stringify(cErr, null, 2));
         }
 
         if (cData) {
@@ -1465,6 +1608,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         joinCampaignByCode,
         leaveCampaign,
         createCampaign,
+        liveDisplayMode,
+        setLiveDisplayMode,
+        broadcastToPlayerView,
+        tokenPositions3D,
+        updateTokenPosition3D,
         loadDemoEverything,
         isLoading,
       }}
