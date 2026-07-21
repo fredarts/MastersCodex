@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Globe,
   Swords, 
@@ -15,7 +15,9 @@ import {
   Crown,
   Settings,
   Film,
-  Tv
+  Tv,
+  Edit3,
+  Check
 } from 'lucide-react';
 import { Encounter } from '@/lib/types';
 import { INITIAL_ENCOUNTERS } from '@/lib/srd-data';
@@ -38,13 +40,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenCreateCampaign,
   onLoadDemoEverything,
 }) => {
-  const { userCampaigns, userWorlds, activeCampaign, setActiveCampaign, activeWorld } = useAuth();
+  const { userCampaigns, userWorlds, activeCampaign, setActiveCampaign, activeWorld, updateWorld } = useAuth();
+  const [isEditingWorld, setIsEditingWorld] = useState(false);
+  const [editedWorldTitle, setEditedWorldTitle] = useState('');
+
   const dmCampaigns = userCampaigns.filter((c) => {
     if (c.role !== 'dm') return false;
     if (!activeWorld) return true;
     const effectiveWorldId = c.worldId || (userWorlds.length > 0 ? userWorlds[0].id : null);
     return effectiveWorldId === activeWorld.id;
   });
+
+  const handleSaveWorldTitle = async () => {
+    if (activeWorld && editedWorldTitle.trim()) {
+      await updateWorld({ ...activeWorld, title: editedWorldTitle.trim() });
+    }
+    setIsEditingWorld(false);
+  };
 
   const navigationHubs = [
     {
@@ -84,8 +96,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* World indicator */}
         {activeWorld && (
           <div className="p-2.5 bg-gradient-to-r from-amber-950/40 to-[#161c28] border border-amber-500/30 rounded-xl">
-            <div className="text-[10px] font-bold uppercase text-amber-400 font-mono">MUNDO ATIVO:</div>
-            <div className="text-xs font-bold text-slate-100 truncate">{activeWorld.title}</div>
+            <div className="text-[10px] font-bold uppercase text-amber-400 font-mono flex items-center justify-between">
+              <span>MUNDO ATIVO:</span>
+              {!isEditingWorld && (
+                <button
+                  onClick={() => {
+                    setIsEditingWorld(true);
+                    setEditedWorldTitle(activeWorld.title);
+                  }}
+                  className="text-slate-400 hover:text-amber-300 transition-colors p-0.5"
+                  title="Editar Nome do Mundo"
+                >
+                  <Edit3 className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {isEditingWorld ? (
+              <div className="flex items-center gap-1 mt-1">
+                <input
+                  type="text"
+                  autoFocus
+                  value={editedWorldTitle}
+                  onChange={(e) => setEditedWorldTitle(e.target.value)}
+                  className="bg-[#0a0d14] border border-amber-500 rounded px-2 py-0.5 text-xs text-amber-300 font-bold focus:outline-none w-full"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveWorldTitle();
+                    if (e.key === 'Escape') setIsEditingWorld(false);
+                  }}
+                />
+                <button onClick={handleSaveWorldTitle} className="p-1 text-emerald-400 hover:text-emerald-300">
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="text-xs font-bold text-slate-100 truncate mt-0.5">{activeWorld.title}</div>
+            )}
           </div>
         )}
 

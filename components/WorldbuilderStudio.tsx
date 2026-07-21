@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Globe, Plus, Sparkles, Rocket, Compass, Layers, Crown, ArrowRight, Edit3, BookOpen, Play, Settings, Network } from 'lucide-react';
+import { Globe, Plus, Sparkles, Rocket, Compass, Layers, Crown, ArrowRight, Edit3, BookOpen, Play, Settings, Network, Check } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { World, UserCampaign } from '@/lib/types';
 import { WorldEditor } from '@/components/WorldEditor';
@@ -16,10 +16,14 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
   onOpenCreateCampaignWithWorld,
   onSelectCampaign,
 }) => {
-  const { userWorlds, activeWorld, setActiveWorld, createWorld, userCampaigns, setActiveCampaign } = useAuth();
+  const { userWorlds, activeWorld, setActiveWorld, createWorld, updateWorld, userCampaigns, setActiveCampaign } = useAuth();
   const [showCreateWorldModal, setShowCreateWorldModal] = useState(false);
   const [isEditingActiveWorld, setIsEditingActiveWorld] = useState(false);
   const [subTab, setSubTab] = useState<'overview' | 'lore'>('overview');
+
+  // World inline title editing state
+  const [editingWorldId, setEditingWorldId] = useState<string | null>(null);
+  const [editedWorldTitle, setEditedWorldTitle] = useState('');
 
   const [worldTitle, setWorldTitle] = useState('');
   const [worldGenre, setWorldGenre] = useState('Fantasia Medieval Heróica');
@@ -38,6 +42,13 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
     setIsEditingActiveWorld(true);
   };
 
+  const handleSaveWorldTitle = async (worldToUpdate: World) => {
+    if (editedWorldTitle.trim()) {
+      await updateWorld({ ...worldToUpdate, title: editedWorldTitle.trim() });
+    }
+    setEditingWorldId(null);
+  };
+
   if (isEditingActiveWorld && activeWorld) {
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -48,8 +59,40 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
           >
             ← Voltar para Biblioteca de Mundos
           </button>
-          <span className="text-xs text-amber-400 font-mono">
-            Editando Mundo: <strong>{activeWorld.title}</strong>
+          <span className="text-xs text-amber-400 font-mono flex items-center gap-1.5">
+            <span>Editando Mundo:</span>
+            {editingWorldId === activeWorld.id ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  autoFocus
+                  value={editedWorldTitle}
+                  onChange={(e) => setEditedWorldTitle(e.target.value)}
+                  className="bg-[#0a0d14] border border-amber-500 rounded px-1.5 py-0.5 text-xs text-amber-300 font-bold focus:outline-none w-36"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveWorldTitle(activeWorld);
+                    if (e.key === 'Escape') setEditingWorldId(null);
+                  }}
+                />
+                <button onClick={() => handleSaveWorldTitle(activeWorld)} className="p-0.5 text-emerald-400 hover:text-emerald-300">
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 font-bold">
+                <span>{activeWorld.title}</span>
+                <button
+                  onClick={() => {
+                    setEditingWorldId(activeWorld.id);
+                    setEditedWorldTitle(activeWorld.title);
+                  }}
+                  className="p-0.5 text-slate-500 hover:text-amber-300 transition-colors"
+                  title="Editar Nome do Mundo"
+                >
+                  <Edit3 className="w-3 h-3" />
+                </button>
+              </div>
+            )}
           </span>
         </div>
         <WorldEditor onOpenCreateCampaignWithWorld={() => onOpenCreateCampaignWithWorld(activeWorld)} />
@@ -132,7 +175,43 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
                 </span>
                 <span className="text-xs text-amber-300 font-semibold">{activeWorld.genre}</span>
               </div>
-              <h3 className="text-2xl font-black text-slate-100">{activeWorld.title}</h3>
+
+              {editingWorldId === activeWorld.id ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={editedWorldTitle}
+                    onChange={(e) => setEditedWorldTitle(e.target.value)}
+                    className="bg-[#0a0d14] border border-amber-500 rounded px-2 py-1 text-lg text-amber-300 font-black focus:outline-none max-w-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveWorldTitle(activeWorld);
+                      if (e.key === 'Escape') setEditingWorldId(null);
+                    }}
+                  />
+                  <button
+                    onClick={() => handleSaveWorldTitle(activeWorld)}
+                    className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-lg shadow"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 group">
+                  <h3 className="text-2xl font-black text-slate-100">{activeWorld.title}</h3>
+                  <button
+                    onClick={() => {
+                      setEditingWorldId(activeWorld.id);
+                      setEditedWorldTitle(activeWorld.title);
+                    }}
+                    className="p-1 text-slate-500 hover:text-amber-400 rounded transition-colors opacity-70 group-hover:opacity-100"
+                    title="Editar Nome do Mundo"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed font-serif">
                 {activeWorld.description || 'Nenhuma descrição detalhada informada.'}
               </p>
@@ -184,7 +263,7 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
       )}
 
       {/* Worlds List Grid */}
-      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+      <h3 className="text-xs font-bold text-[#94a3b8] uppercase tracking-wider mb-3">
         Todos os Seus Mundos Forjados ({userWorlds.length}):
       </h3>
 
@@ -232,7 +311,43 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
                     )}
                   </div>
 
-                  <h4 className="font-bold text-base text-slate-100">{world.title}</h4>
+                  {editingWorldId === world.id ? (
+                    <div className="flex items-center gap-1 mt-1 mb-2" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="text"
+                        autoFocus
+                        value={editedWorldTitle}
+                        onChange={(e) => setEditedWorldTitle(e.target.value)}
+                        className="bg-[#0a0d14] border border-amber-500 rounded px-1.5 py-0.5 text-xs text-amber-300 font-bold focus:outline-none w-full"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveWorldTitle(world);
+                          if (e.key === 'Escape') setEditingWorldId(null);
+                        }}
+                      />
+                      <button
+                        onClick={() => handleSaveWorldTitle(world)}
+                        className="p-1 text-emerald-400 hover:text-emerald-300"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between group">
+                      <h4 className="font-bold text-base text-slate-100 truncate">{world.title}</h4>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingWorldId(world.id);
+                          setEditedWorldTitle(world.title);
+                        }}
+                        className="p-1 text-slate-500 hover:text-amber-400 rounded transition-colors opacity-70 group-hover:opacity-100"
+                        title="Editar Nome do Mundo"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
                   <p className="text-xs text-slate-400 line-clamp-2 mt-1 font-serif">{world.description}</p>
                 </div>
 

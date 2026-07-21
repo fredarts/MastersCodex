@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import logoImg from '@/app/logo.png';
 
 interface HeaderProps {
   onOpenSearch: () => void;
@@ -31,8 +32,8 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Brand & Mode Switcher */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center shadow-md shadow-amber-500/20 border border-amber-400/30">
-            <Shield className="w-6 h-6 text-slate-950 font-bold" />
+          <div className="w-12 h-12 flex items-center justify-center">
+            <img src={logoImg.src || '/logo.png'} alt="Master's Codex Logo" className="w-full h-full object-contain drop-shadow-md" />
           </div>
           <div>
             <div className="flex items-center gap-2">

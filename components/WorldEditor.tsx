@@ -15,7 +15,9 @@ import {
   Rocket, 
   Crown,
   Search,
-  Wand2
+  Wand2,
+  Edit3,
+  Check
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { WorldEntityCategory, WorldEntity } from '@/lib/types';
@@ -29,11 +31,15 @@ interface WorldEditorProps {
 export const WorldEditor: React.FC<WorldEditorProps> = ({
   onOpenCreateCampaignWithWorld,
 }) => {
-  const { activeWorld, worldEntities, deleteWorldEntity, createWorldEntity } = useAuth();
+  const { activeWorld, updateWorld, worldEntities, deleteWorldEntity, createWorldEntity } = useAuth();
   const [activeSubTab, setActiveSubTab] = useState<WorldEntityCategory | 'graph' | 'ai'>('npc');
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalCategory, setModalCategory] = useState<WorldEntityCategory>('npc');
   const [filterQuery, setFilterQuery] = useState('');
+
+  // World title inline edit state
+  const [isEditingWorldTitle, setIsEditingWorldTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
 
   if (!activeWorld) {
     return (
@@ -46,6 +52,13 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
       </div>
     );
   }
+
+  const handleSaveWorldTitle = async () => {
+    if (activeWorld && editedTitle.trim()) {
+      await updateWorld({ ...activeWorld, title: editedTitle.trim() });
+    }
+    setIsEditingWorldTitle(false);
+  };
 
   const openModalForCategory = (cat: WorldEntityCategory) => {
     setModalCategory(cat);
@@ -124,7 +137,41 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
               </span>
               <span className="text-xs text-slate-400 font-semibold">• {activeWorld.genre}</span>
             </div>
-            <h2 className="text-xl font-bold text-slate-100 mt-0.5">{activeWorld.title}</h2>
+            {isEditingWorldTitle ? (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <input
+                  type="text"
+                  autoFocus
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  className="bg-[#0a0d14] border border-amber-500 rounded px-2 py-0.5 text-lg text-amber-300 font-bold focus:outline-none w-64"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveWorldTitle();
+                    if (e.key === 'Escape') setIsEditingWorldTitle(false);
+                  }}
+                />
+                <button
+                  onClick={handleSaveWorldTitle}
+                  className="p-1 text-emerald-400 hover:text-emerald-300"
+                >
+                  <Check className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group mt-0.5">
+                <h2 className="text-xl font-bold text-slate-100">{activeWorld.title}</h2>
+                <button
+                  onClick={() => {
+                    setIsEditingWorldTitle(true);
+                    setEditedTitle(activeWorld.title);
+                  }}
+                  className="p-0.5 text-slate-500 hover:text-amber-400 rounded transition-colors opacity-70 group-hover:opacity-100"
+                  title="Editar Nome do Mundo"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             <p className="text-xs text-slate-400 max-w-xl truncate">{activeWorld.description}</p>
           </div>
         </div>

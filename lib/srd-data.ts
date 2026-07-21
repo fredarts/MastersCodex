@@ -115,6 +115,97 @@ export const INITIAL_MONSTERS: SRDMonster[] = [
     actions: [
       { name: 'Cimitarra', desc: '+4 para acertar, dano 5 (1d6+2) cortante.' }
     ]
+  },
+  {
+    id: 'orc',
+    name: 'Orc Guerreiro',
+    type: 'Humanóide (Orc)',
+    size: 'Médio',
+    alignment: 'Caótico e Mau',
+    ac: 13,
+    hp: 15,
+    speed: '9m (30ft)',
+    cr: '1/2',
+    xp: 100,
+    str: 16, dex: 12, con: 16, int: 7, wis: 11, cha: 10,
+    abilities: [
+      { name: 'Agressivo', desc: 'Como ação bônus, o orc pode se mover até o seu deslocamento em direção a uma criatura inimiga.' }
+    ],
+    actions: [
+      { name: 'Machado Grande', desc: '+5 para acertar, dano 9 (1d12+3) cortante.' }
+    ]
+  },
+  {
+    id: 'zombie',
+    name: 'Zumbi',
+    type: 'Morto-Vivo',
+    size: 'Médio',
+    alignment: 'Neutro e Mau',
+    ac: 8,
+    hp: 22,
+    speed: '6m (20ft)',
+    cr: '1/4',
+    xp: 50,
+    str: 13, dex: 6, con: 16, int: 3, wis: 6, cha: 5,
+    abilities: [
+      { name: 'Fortitude Inumana', desc: 'Se o dano reduzir o zumbi a 0 PV, ele faz um teste de CON (CD 5 + dano sofrido). Se passar, fica com 1 PV.' }
+    ],
+    actions: [
+      { name: 'Pancada', desc: '+3 para acertar, dano 4 (1d6+1) de concussão.' }
+    ]
+  },
+  {
+    id: 'dire-wolf',
+    name: 'Lobo Atroz',
+    type: 'Besta',
+    size: 'Grande',
+    alignment: 'Sem Alinhamento',
+    ac: 14,
+    hp: 37,
+    speed: '15m (50ft)',
+    cr: '1',
+    xp: 200,
+    str: 17, dex: 15, con: 15, int: 3, wis: 12, cha: 7,
+    abilities: [
+      { name: 'Táticas de Matilha', desc: 'Vantagem em jogadas de ataque se um aliado estiver a 1.5m da criatura.' }
+    ],
+    actions: [
+      { name: 'Mordida', desc: '+5 para acertar, dano 10 (2d6+3) perfurante. Teste de FOR CD 13 ou cai caído.' }
+    ]
+  },
+  {
+    id: 'bandit',
+    name: 'Bandido do Caminho',
+    type: 'Humanóide',
+    size: 'Médio',
+    alignment: 'Qualquer Não Leal',
+    ac: 12,
+    hp: 11,
+    speed: '9m (30ft)',
+    cr: '1/8',
+    xp: 25,
+    str: 11, dex: 12, con: 12, int: 10, wis: 10, cha: 10,
+    abilities: [],
+    actions: [
+      { name: 'Cimitarra', desc: '+3 para acertar, dano 4 (1d6+1) cortante.' }
+    ]
+  },
+  {
+    id: 'ogre',
+    name: 'Ogro das Colinas',
+    type: 'Gigante',
+    size: 'Grande',
+    alignment: 'Caótico e Mau',
+    ac: 11,
+    hp: 59,
+    speed: '12m (40ft)',
+    cr: '2',
+    xp: 450,
+    str: 19, dex: 8, con: 16, int: 5, wis: 7, cha: 7,
+    abilities: [],
+    actions: [
+      { name: 'Grande Clava', desc: '+6 para acertar, dano 13 (2d8+4) de concussão.' }
+    ]
   }
 ];
 

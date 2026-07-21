@@ -22,7 +22,8 @@ interface AuthContextType {
   userWorlds: World[];
   activeWorld: World | null;
   setActiveWorld: (world: World | null) => void;
-  createWorld: (title: string, description?: string, genre?: string) => Promise<World>;
+  createWorld: (title: string, genre?: string, description?: string) => Promise<World>;
+  updateWorld: (updatedWorld: World) => Promise<void>;
   worldEntities: WorldEntity[];
   createWorldEntity: (entity: Omit<WorldEntity, 'id'>) => Promise<WorldEntity>;
   deleteWorldEntity: (id: string) => Promise<void>;
@@ -36,6 +37,7 @@ interface AuthContextType {
   activeSession: GameSession | null;
   setActiveSession: (session: GameSession | null) => void;
   createSession: (title: string, notes?: string) => Promise<GameSession>;
+  updateSession: (updatedSession: GameSession) => Promise<void>;
   scenes: GameScene[];
   activeScene: GameScene | null;
   setActiveScene: (scene: GameScene | null) => void;
@@ -166,9 +168,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Sessions & Scenes State
   const [sessions, setSessions] = useState<GameSession[]>([]);
-  const [activeSession, setActiveSession] = useState<GameSession | null>(null);
+  const [activeSession, setActiveSessionState] = useState<GameSession | null>(null);
   const [scenes, setScenes] = useState<GameScene[]>([]);
-  const [activeScene, setActiveScene] = useState<GameScene | null>(null);
+  const [activeScene, setActiveSceneState] = useState<GameScene | null>(null);
+
+  const setActiveSession = (session: GameSession | null | ((prev: GameSession | null) => GameSession | null)) => {
+    setActiveSessionState((prev) => {
+      const next = typeof session === 'function' ? session(prev) : session;
+      try {
+        if (next?.id) {
+          localStorage.setItem('codex_activeSessionId', next.id);
+        } else {
+          localStorage.removeItem('codex_activeSessionId');
+        }
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const setActiveScene = (scene: GameScene | null | ((prev: GameScene | null) => GameScene | null)) => {
+    setActiveSceneState((prev) => {
+      const next = typeof scene === 'function' ? scene(prev) : scene;
+      try {
+        if (next?.id) {
+          localStorage.setItem('codex_activeSceneId', next.id);
+        } else {
+          localStorage.removeItem('codex_activeSceneId');
+        }
+      } catch (e) {}
+      return next;
+    });
+  };
 
   // Feed Events State
   const [feedEvents, setFeedEvents] = useState<CampaignFeedEvent[]>([]);
@@ -333,6 +363,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const savedRoleMode = localStorage.getItem('codex_roleMode') as UserRoleMode;
       const savedActiveWorldId = localStorage.getItem('codex_activeWorldId');
       const savedActiveCampId = localStorage.getItem('codex_activeCampaignId');
+      const savedActiveSessionId = localStorage.getItem('codex_activeSessionId');
+      const savedActiveSceneId = localStorage.getItem('codex_activeSceneId');
 
       let currentWorld = activeWorld;
       let parsedWorlds: World[] = [];
@@ -378,6 +410,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return campWorldId === currentWorld?.id;
         });
         setActiveCampaignState(matchingCamp || null);
+      }
+
+      if (savedSessions) {
+        try {
+          const parsedSessions: GameSession[] = JSON.parse(savedSessions);
+          setSessions(parsedSessions);
+          if (savedActiveSessionId) {
+            const foundSess = parsedSessions.find((s) => s.id === savedActiveSessionId);
+            if (foundSess) setActiveSessionState(foundSess);
+          }
+        } catch (e) {}
+      }
+
+      if (savedScenes) {
+        try {
+          const parsedScenes: GameScene[] = JSON.parse(savedScenes);
+          setScenes(parsedScenes);
+          if (savedActiveSceneId) {
+            const foundScene = parsedScenes.find((sc) => sc.id === savedActiveSceneId);
+            if (foundScene) setActiveSceneState(foundScene);
+          }
+        } catch (e) {}
       }
     } catch (e) {
       console.error('LocalStorage load error:', e);
@@ -1046,7 +1100,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (finalSessions.length > 0) {
       setActiveSession((current) => {
         if (current && finalSessions.some((s) => s.id === current.id)) return current;
-        return finalSessions[0];
+        const savedSessionId = localStorage.getItem('codex_activeSessionId');
+        const saved = finalSessions.find((s) => s.id === savedSessionId);
+        return saved || finalSessions[0];
       });
     } else {
       setActiveSession(null);
@@ -1098,7 +1154,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     finalScenes.sort((a, b) => a.orderIndex - b.orderIndex);
     setScenes(finalScenes);
-    setActiveScene(finalScenes.length > 0 ? finalScenes[0] : null);
+    setActiveScene((current) => {
+      if (current && current.sessionId === sessionId && finalScenes.some((sc) => sc.id === current.id)) {
+        return current;
+      }
+      const savedSceneId = localStorage.getItem('codex_activeSceneId');
+      const saved = finalScenes.find((sc) => sc.id === savedSceneId);
+      return saved || (finalScenes.length > 0 ? finalScenes[0] : null);
+    });
   };
 
   const fetchCampaignFeed = async (campaignId: string) => {
@@ -1251,6 +1314,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActiveScene(null);
     setActiveSession(newSess);
     return newSess;
+  };
+
+  const updateSession = async (updatedSession: GameSession) => {
+    if (isSupabaseConfigured() && isValidUUID(updatedSession.id)) {
+      try {
+        await supabase
+          .from('sessions')
+          .update({
+            title: updatedSession.title,
+            notes: updatedSession.notes,
+          })
+          .eq('id', updatedSession.id);
+      } catch (e) {
+        console.error('Error updating session in Supabase:', e);
+      }
+    }
+
+    setSessions((prev) => {
+      const next = prev.map((s) => (s.id === updatedSession.id ? updatedSession : s));
+      try {
+        localStorage.setItem('codex_sessions', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+
+    if (activeSession?.id === updatedSession.id) {
+      setActiveSession(updatedSession);
+    }
   };
 
   const createScene = async (sceneData: Omit<GameScene, 'id'>): Promise<GameScene> => {
@@ -1413,6 +1504,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUserWorlds((prev) => [...prev, newWorld]);
     setActiveWorld(newWorld);
     return newWorld;
+  };
+
+  const updateWorld = async (updatedWorld: World) => {
+    if (isSupabaseConfigured() && isValidUUID(updatedWorld.id)) {
+      try {
+        await supabase
+          .from('worlds')
+          .update({
+            title: updatedWorld.title,
+            genre: updatedWorld.genre,
+            description: updatedWorld.description,
+          })
+          .eq('id', updatedWorld.id);
+      } catch (e) {
+        console.error('Error updating world in Supabase:', e);
+      }
+    }
+
+    setUserWorlds((prev) => {
+      const next = prev.map((w) => (w.id === updatedWorld.id ? updatedWorld : w));
+      try {
+        localStorage.setItem('codex_worlds', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+
+    if (activeWorld?.id === updatedWorld.id) {
+      setActiveWorldState(updatedWorld);
+    }
   };
 
   const createCampaign = async (title: string, worldId?: string, description?: string): Promise<UserCampaign> => {
@@ -1579,6 +1699,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         activeWorld,
         setActiveWorld,
         createWorld,
+        updateWorld,
         worldEntities,
         createWorldEntity,
         deleteWorldEntity,
@@ -1592,6 +1713,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         activeSession,
         setActiveSession,
         createSession,
+        updateSession,
         scenes,
         activeScene,
         setActiveScene,
