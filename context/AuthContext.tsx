@@ -33,6 +33,7 @@ interface AuthContextType {
   campaignMembers: CampaignMember[];
   fetchCampaignMembers: (campaignId: string) => Promise<void>;
   addCampaignMember: (campaignId: string, characterName: string, role?: 'dm' | 'player') => Promise<void>;
+  removeCampaignMember: (memberId: string) => Promise<void>;
   sessions: GameSession[];
   activeSession: GameSession | null;
   setActiveSession: (session: GameSession | null) => void;
@@ -51,9 +52,10 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
-  joinCampaignByCode: (code: string, characterName?: string) => Promise<boolean>;
+  joinCampaignByCode: (code: string, characterName?: string, modelUrl?: string) => Promise<boolean>;
   leaveCampaign: (campaignId: string) => Promise<void>;
   createCampaign: (title: string, worldId?: string, description?: string) => Promise<UserCampaign>;
+  updateCampaign: (updatedCampaign: UserCampaign) => Promise<void>;
   liveDisplayMode: 'artwork' | 'map' | 'combat';
   setLiveDisplayMode: (mode: 'artwork' | 'map' | 'combat') => void;
   broadcastToPlayerView: (payload: any) => void;
@@ -712,6 +714,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role: m.role,
             characterName: m.character_name,
             displayName: m.character_name || 'Jogador',
+            modelUrl: m.model_url || m.modelUrl,
             joinedAt: m.joined_at,
           }));
         }
@@ -754,7 +757,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const addCampaignMember = async (campaignId: string, characterName: string, role: 'dm' | 'player' = 'player') => {
+  const addCampaignMember = async (
+    campaignId: string,
+    characterName: string,
+    role: 'dm' | 'player' = 'player',
+    modelUrl?: string
+  ) => {
     const charName = characterName.trim();
     const newMember: CampaignMember = {
       id: `mem-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -763,6 +771,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role,
       characterName: charName,
       displayName: charName,
+      modelUrl,
     };
 
     if (isSupabaseConfigured() && isValidUUID(campaignId)) {
@@ -778,6 +787,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           user_id: newMember.userId,
           role,
           character_name: charName,
+          model_url: modelUrl || null,
         }).select().single();
 
         if (memberResult?.id) {
@@ -810,7 +820,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {}
   };
 
-  const joinCampaignByCode = async (code: string, characterName?: string): Promise<boolean> => {
+  const removeCampaignMember = async (memberId: string) => {
+    const memberToRemove = campaignMembers.find((m) => m.id === memberId);
+    const campaignId = memberToRemove?.campaignId;
+
+    if (isSupabaseConfigured() && isValidUUID(memberId)) {
+      try {
+        await supabase.from('campaign_members').delete().eq('id', memberId);
+      } catch (e) {
+        console.error('Error removing campaign member from Supabase:', e);
+      }
+    }
+
+    try {
+      const savedMembersStr = localStorage.getItem('codex_members');
+      if (savedMembersStr) {
+        let allMembers: CampaignMember[] = JSON.parse(savedMembersStr);
+        allMembers = allMembers.filter((m) => m.id !== memberId);
+        localStorage.setItem('codex_members', JSON.stringify(allMembers));
+      }
+    } catch (e) {}
+
+    setCampaignMembers((prev) => prev.filter((m) => m.id !== memberId));
+
+    if (campaignId) {
+      try {
+        const bc = new BroadcastChannel('masters_codex_sync');
+        bc.postMessage({ type: 'REFRESH_MEMBERS', campaignId });
+        bc.close();
+      } catch (e) {}
+    }
+  };
+
+  const joinCampaignByCode = async (
+    code: string,
+    characterName?: string,
+    modelUrl?: string
+  ): Promise<boolean> => {
     const rawCode = code.trim();
     const cleanCode = rawCode.toUpperCase();
     const normalizedCode = cleanCode.replace(/[\s-]/g, '');
@@ -856,6 +902,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               user_id: userId,
               role: 'player',
               character_name: charName,
+              model_url: modelUrl || null,
             }, { onConflict: 'campaign_id,user_id,character_name' });
 
             if (memErr) {
@@ -865,6 +912,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 user_id: userId,
                 role: 'player',
                 character_name: charName,
+                model_url: modelUrl || null,
               });
             }
           } catch (me) {
@@ -917,6 +965,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: 'player',
       characterName: charName,
       displayName: user?.displayName || charName,
+      modelUrl,
     };
 
     // Save to LocalStorage for cross-browser / cross-tab fallback
@@ -1387,6 +1436,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateScene = async (updatedScene: GameScene) => {
+    const sceneWithTimestamp: GameScene = {
+      ...updatedScene,
+      updatedAt: new Date().toISOString(),
+    };
+
     if (isSupabaseConfigured() && isValidUUID(updatedScene.id)) {
       await supabase
         .from('scenes')
@@ -1406,14 +1460,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     setScenes((prev) => {
-      const next = prev.map((s) => (s.id === updatedScene.id ? updatedScene : s));
+      const next = prev.map((s) => (s.id === updatedScene.id ? sceneWithTimestamp : s));
       try {
         localStorage.setItem('codex_scenes', JSON.stringify(next));
       } catch (e) {}
       return next;
     });
-    if (activeScene?.id === updatedScene.id) {
-      setActiveScene(updatedScene);
+    if (!activeScene || activeScene.id === updatedScene.id) {
+      setActiveScene(sceneWithTimestamp);
     }
   };
 
@@ -1625,6 +1679,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return newCamp;
   };
 
+  const updateCampaign = async (updatedCampaign: UserCampaign) => {
+    if (isSupabaseConfigured() && isValidUUID(updatedCampaign.id)) {
+      try {
+        await supabase
+          .from('campaigns')
+          .update({
+            title: updatedCampaign.title,
+            description: updatedCampaign.description,
+          })
+          .eq('id', updatedCampaign.id);
+      } catch (e) {
+        console.error('Error updating campaign in Supabase:', e);
+      }
+    }
+
+    setUserCampaigns((prev) => {
+      const next = prev.map((c) => (c.id === updatedCampaign.id ? updatedCampaign : c));
+      try {
+        localStorage.setItem('codex_campaigns', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+
+    if (activeCampaign?.id === updatedCampaign.id) {
+      setActiveCampaignState(updatedCampaign);
+    }
+  };
+
   const signInWithGoogle = async () => {
     if (isSupabaseConfigured()) {
       await supabase.auth.signInWithOAuth({
@@ -1709,6 +1791,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         campaignMembers,
         fetchCampaignMembers,
         addCampaignMember,
+        removeCampaignMember,
         sessions,
         activeSession,
         setActiveSession,
@@ -1730,6 +1813,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         joinCampaignByCode,
         leaveCampaign,
         createCampaign,
+        updateCampaign,
         liveDisplayMode,
         setLiveDisplayMode,
         broadcastToPlayerView,

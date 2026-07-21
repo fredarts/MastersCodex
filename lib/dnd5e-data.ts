@@ -1,4 +1,5 @@
 import { AttributeKey, CharacterSheet, DndSkillKey } from './types';
+import { getModelUrlByNameOrPath } from './3d-models';
 
 export interface RacePreset {
   name: string;
@@ -269,6 +270,7 @@ export function createEmptyCharacterSheet(userId: string, campaignId?: string): 
     playerName: '',
     xp: 0,
     avatarUrl: '',
+    modelUrl: getModelUrlByNameOrPath('Guerreiro'),
 
     inspiration: false,
     attributes: {

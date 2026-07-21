@@ -28,6 +28,7 @@ import { GameScene, SceneType, Combatant } from '@/lib/types';
 import { INITIAL_MONSTERS, SFX_BUTTONS } from '@/lib/srd-data';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
 import { normalizeImageUrl } from '@/lib/imageUtils';
+import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 
 interface SessionStudioProps {
   onEquipScene: (scene: GameScene) => void;
@@ -162,6 +163,31 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
 
   const handleAddPlayerToScene = (mem: typeof campaignMembers[0]) => {
     const pName = mem.characterName || mem.displayName || 'Jogador';
+
+    // FONTE DE VERDADE: ficha salva do jogador tem prioridade sobre member.modelUrl
+    let resolvedModelUrl: string | undefined;
+    try {
+      const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
+      if (saved) {
+        const sheets: any[] = JSON.parse(saved);
+        const cClean = pName.split('(')[0].trim().toLowerCase();
+        const found = sheets.find(
+          (s) =>
+            (s.characterName && s.characterName.split('(')[0].trim().toLowerCase() === cClean) ||
+            (s.characterName && pName.toLowerCase().includes(s.characterName.toLowerCase())) ||
+            (s.characterName && s.characterName.toLowerCase().includes(pName.toLowerCase()))
+        );
+        if (found) {
+          if (found.modelUrl) resolvedModelUrl = found.modelUrl;
+          else if (found.className) resolvedModelUrl = getModelUrlByNameOrPath(found.className);
+        }
+      }
+    } catch (e) {}
+
+    if (!resolvedModelUrl) {
+      resolvedModelUrl = mem.modelUrl || getModelUrlByNameOrPath(pName);
+    }
+
     const newP: Combatant = {
       id: `c-pl-${Date.now()}-${Math.random()}`,
       name: pName,
@@ -171,6 +197,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       ac: 16,
       initiative: Math.floor(Math.random() * 20) + 1,
       conditions: [],
+      modelUrl: resolvedModelUrl,
     };
     setSceneCombatants((prev) => [...prev, newP]);
   };

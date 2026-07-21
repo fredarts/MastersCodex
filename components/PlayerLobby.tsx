@@ -24,6 +24,7 @@ import { UserCampaign, CharacterSheet } from '@/lib/types';
 import { CharacterSheetModal } from './character-sheet/CharacterSheetModal';
 import { CharacterManagerModal } from './character-sheet/CharacterManagerModal';
 import { createEmptyCharacterSheet } from '@/lib/dnd5e-data';
+import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 
 interface PlayerLobbyProps {
   onOpenPlayerView: () => void;
@@ -44,7 +45,16 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed: CharacterSheet[] = JSON.parse(saved);
+          return parsed.map((s) => {
+            // Se modelUrl ainda não foi definido pelo jogador, ou está com valor genérico antigo, corrige
+            if (!s.modelUrl || s.modelUrl === '/assets/3d/characters/Duida/Druida.glb') {
+              if (s.className && !s.className.toLowerCase().includes('druid')) {
+                return { ...s, modelUrl: getModelUrlByNameOrPath(s.className) };
+              }
+            }
+            return s;
+          });
         } catch (err) {
           console.error('Erro ao carregar fichas salvas:', err);
         }
@@ -113,20 +123,77 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   };
 
   const handleDeleteSheet = (sheetId: string) => {
-    if (characterSheets.length <= 1) {
-      alert('Você deve manter ao menos uma ficha de personagem.');
-      return;
-    }
     if (confirm('Tem certeza que deseja excluir esta ficha de personagem?')) {
-      setCharacterSheets((prev) => prev.filter((s) => s.id !== sheetId));
+      setCharacterSheets((prev) => {
+        const next = prev.filter((s) => s.id !== sheetId);
+        if (activeSheet?.id === sheetId) {
+          const fallback = next[0] || createEmptyCharacterSheet('player-1');
+          setActiveSheet(fallback);
+        }
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
     }
   };
 
   const handleSaveSheet = (updatedSheet: CharacterSheet) => {
-    setActiveSheet(updatedSheet);
-    setCharacterSheets((prev) =>
-      prev.map((s) => (s.id === updatedSheet.id ? { ...updatedSheet, updatedAt: new Date().toISOString() } : s))
+    const updatedWithTimestamp: CharacterSheet = {
+      ...updatedSheet,
+      updatedAt: new Date().toISOString(),
+    };
+    setActiveSheet(updatedWithTimestamp);
+    setCharacterSheets((prev) => {
+      const exists = prev.some((s) => s.id === updatedSheet.id);
+      const next = exists
+        ? prev.map((s) => (s.id === updatedSheet.id ? updatedWithTimestamp : s))
+        : [updatedWithTimestamp, ...prev];
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+
+    // Transmite evento instantâneo de atualização do modelo de personagem (local e cross-tab)
+    try {
+      const bc = new BroadcastChannel('masters_codex_sync');
+      bc.postMessage({
+        type: 'CHARACTER_MODEL_UPDATED',
+        sheet: updatedWithTimestamp,
+      });
+      bc.close();
+    } catch (e) {}
+
+    window.dispatchEvent(
+      new CustomEvent('masters_codex_character_model_updated', {
+        detail: updatedWithTimestamp,
+      })
     );
+
+    // Sincroniza modelUrl no codex_members para que o DM veja o modelo correto
+    try {
+      const memsStr = localStorage.getItem('codex_members');
+      if (memsStr) {
+        const mems: any[] = JSON.parse(memsStr);
+        let changed = false;
+        const updatedMems = mems.map((m) => {
+          if (
+            m.characterName &&
+            m.characterName.toLowerCase() === updatedWithTimestamp.characterName.toLowerCase()
+          ) {
+            if (m.modelUrl !== updatedWithTimestamp.modelUrl) {
+              changed = true;
+              return { ...m, modelUrl: updatedWithTimestamp.modelUrl };
+            }
+          }
+          return m;
+        });
+        if (changed) {
+          localStorage.setItem('codex_members', JSON.stringify(updatedMems));
+        }
+      }
+    } catch (e) {}
   };
   
   // Form States
@@ -154,10 +221,15 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   const handleJoinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteCodeInput.trim()) return;
-    setIsJoining(true);
-    setJoinErrorMsg(null);
+    const charName = characterNameInput.trim() || 'Seu Personagem';
+    const selectedSheet = characterSheets.find(
+      (s) => s.characterName.toLowerCase() === charName.toLowerCase()
+    );
+    const modelUrl =
+      selectedSheet?.modelUrl ||
+      (selectedSheet ? getModelUrlByNameOrPath(selectedSheet.className) : getModelUrlByNameOrPath(charName));
 
-    const success = await joinCampaignByCode(inviteCodeInput, characterNameInput);
+    const success = await joinCampaignByCode(inviteCodeInput, characterNameInput, modelUrl);
     setIsJoining(false);
 
     if (success) {

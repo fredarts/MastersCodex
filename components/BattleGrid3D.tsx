@@ -3,9 +3,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { HelpCircle } from 'lucide-react';
+import { HelpCircle, Sun, Moon, Sunrise, Sunset, CloudRain, CloudFog, Zap, Settings, X } from 'lucide-react';
 import { Combatant } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
+import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 
 interface BattleGrid3DProps {
   combatants: Combatant[];
@@ -15,6 +16,40 @@ interface BattleGrid3DProps {
   onSelectCombatant?: (c: Combatant) => void;
   interactive?: boolean;
 }
+
+const getMonsterModelUrl = (name: string): string | null => {
+  const norm = name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  // Goblin Arqueiro / Goblin Archer / Arqueiro
+  if (norm.includes('arqueiro') || norm.includes('archer')) {
+    return '/assets/3d/monsters/Goblin Arqueiro/Goblin Arqueiro.glb';
+  }
+
+  // Líder Goblin / Líder Hobgoblin / Goblin Boss / Lider / Chefe
+  if (
+    norm.includes('lider') ||
+    norm.includes('boss') ||
+    norm.includes('hobgoblin') ||
+    norm.includes('chefe')
+  ) {
+    return '/assets/3d/monsters/Líder Hobgoblin/Líder Hobgoblin.glb';
+  }
+
+  // Goblin padrão
+  if (norm.includes('goblin')) {
+    return '/assets/3d/monsters/Goblin/Goblin.glb';
+  }
+
+  // Esqueleto / Skeleton
+  if (norm.includes('esqueleto') || norm.includes('skeleton')) {
+    return '/assets/3d/monsters/Esqueleto/Esqueleto.glb';
+  }
+
+  return null;
+};
 
 export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   combatants,
@@ -29,6 +64,15 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
   // Local state for integer grid cell coordinates { x: gridX, z: gridZ }
   const [localPositions, setLocalPositions] = useState<Record<string, { x: number; z: number }>>({});
+
+  // Environmental Control State (0 to 24 hours)
+  const [timeOfDay, setTimeOfDay] = useState<number>(12); // Default noon
+  const [isEnvMenuOpen, setIsEnvMenuOpen] = useState<boolean>(false); // Collapsed by default
+  const timeOfDayRef = useRef<number>(timeOfDay);
+
+  useEffect(() => {
+    timeOfDayRef.current = timeOfDay;
+  }, [timeOfDay]);
 
   // Refs for WebGL animation loop without re-creating WebGL Context
   const combatantsRef = useRef<Combatant[]>(combatants);
@@ -141,8 +185,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
     // Scene, Camera, Renderer
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0d14);
-    scene.fog = new THREE.FogExp2(0x0a0d14, 0.035);
+    scene.background = null; // Allows Sky Sphere 3D to show through seamlessly
+    scene.fog = new THREE.FogExp2(0xbae6fd, 0.005);
 
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
     camera.position.set(0, 11, 13);
@@ -159,7 +203,23 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     }
     container.appendChild(renderer.domElement);
 
-    // Lights
+    // 3D Game Sky Dome (Dynamic Canvas Texture with Horizon Clouds)
+    const skyCanvas = document.createElement('canvas');
+    skyCanvas.width = 512;
+    skyCanvas.height = 512;
+    const skyCtx = skyCanvas.getContext('2d')!;
+
+    const skyTexture = new THREE.CanvasTexture(skyCanvas);
+    const skyGeo = new THREE.SphereGeometry(450, 32, 16);
+    const skyMat = new THREE.MeshBasicMaterial({
+      map: skyTexture,
+      side: THREE.BackSide,
+      depthWrite: false,
+      fog: false, // Ensures Three.js fog NEVER washes out or recolors the sky texture!
+    });
+    const skyMesh = new THREE.Mesh(skyGeo, skyMat);
+    scene.add(skyMesh);
+
     const ambientLight = new THREE.AmbientLight(0xffffff, 4.6);
     scene.add(ambientLight);
 
@@ -177,6 +237,192 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     const pointLight = new THREE.PointLight(0x38bdf8, 2, 15);
     pointLight.position.set(0, 5, 0);
     scene.add(pointLight);
+
+    let lastRenderedTime = -1;
+
+    const getSkyGradientColors = (t: number) => {
+      // t is 0..24
+      if (t >= 4 && t < 7) {
+        // Alvorada / Early Morning (04:00 - 07:00)
+        // Transição: Azul noturno no topo -> Azul royal no meio -> Dourado quente no horizonte
+        const p = (t - 4) / 3;
+        return {
+          zenith: '#090d16',
+          midSky: '#1e3a8a',
+          horizon: p > 0.5 ? '#ea580c' : '#d97706',
+          horizonLine: '#fef08a',
+        };
+      } else if (t >= 7 && t < 10) {
+        // Manhã (07:00 - 10:00)
+        // Transição: Azul celestial -> Azul ciano radiante -> Névoa azul clara
+        return {
+          zenith: '#1e40af',
+          midSky: '#0284c7',
+          horizon: '#38bdf8',
+          horizonLine: '#bae6fd',
+        };
+      } else if (t >= 10 && t < 16.5) {
+        // Dia Pleno (10:00 - 16:30)
+        // Céu azul radiante cristalino de jogo RPG 3D
+        return {
+          zenith: '#1d4ed8',
+          midSky: '#2563eb',
+          horizon: '#38bdf8',
+          horizonLine: '#e0f2fe',
+        };
+      } else if (t >= 16.5 && t < 19.5) {
+        // Pôr do Sol (16:30 - 19:30)
+        // Azul noite no topo -> Carmesim/Âmbar no meio -> Dourado radiante no horizonte
+        return {
+          zenith: '#0f172a',
+          midSky: '#1e3a8a',
+          horizon: '#c2410c',
+          horizonLine: '#f97316',
+        };
+      } else {
+        // Noite (19:30 - 04:00) - CÉU AZUL ESCURO NOTURNO (Zero Roxo!)
+        return {
+          zenith: '#020617',
+          midSky: '#090d16',
+          horizon: '#0f172a',
+          horizonLine: '#1e3a8a',
+        };
+      }
+    };
+
+    const updateEnvironment = (time: number) => {
+      const sunAngle = ((time - 6) / 24) * Math.PI * 2;
+      const sunX = Math.cos(sunAngle) * 80;
+      const sunY = Math.sin(sunAngle) * 80;
+      const sunZ = 30;
+
+      // Redraw sky canvas texture if time changed (> 0.05h or initial render)
+      if (Math.abs(time - lastRenderedTime) > 0.05) {
+        lastRenderedTime = time;
+
+        skyCtx.clearRect(0, 0, 512, 512);
+        const grad = skyCtx.createLinearGradient(0, 0, 0, 512);
+        const colors = getSkyGradientColors(time);
+
+        // Top half (Zenith to Horizon): Rich Sky Gradient
+        grad.addColorStop(0.0, colors.zenith);      // Topo (Zênite)
+        grad.addColorStop(0.22, colors.midSky);     // Meio do céu
+        grad.addColorStop(0.44, colors.horizon);    // Próximo ao horizonte
+        grad.addColorStop(0.49, colors.horizonLine); // Linha do horizonte
+
+        // Bottom half (Below Horizon): Transition to Black
+        grad.addColorStop(0.52, '#090d16'); // Logo abaixo do horizonte
+        grad.addColorStop(1.0, '#000000');  // Preto absoluto na base da esfera
+
+        skyCtx.fillStyle = grad;
+        skyCtx.fillRect(0, 0, 512, 512);
+
+        // Nuvens no horizonte para o Dia, Alvorada e Pôr do Sol
+        if (time >= 4.5 && time < 19.5) {
+          const isDay = time >= 7 && time < 16.5;
+          const isSunrise = time >= 4.5 && time < 7;
+          const cloudColor = isDay
+            ? 'rgba(255, 255, 255, '
+            : isSunrise
+            ? 'rgba(254, 215, 170, '
+            : 'rgba(251, 146, 60, ';
+
+          const cloudY = 245; // Exatamente na linha do horizonte (centro do canvas)
+
+          skyCtx.fillStyle = cloudColor + '0.45)';
+          const clouds = [
+            { x: 30, y: cloudY - 12, rx: 75, ry: 20 },
+            { x: 95, y: cloudY - 16, rx: 95, ry: 26 },
+            { x: 175, y: cloudY - 8, rx: 65, ry: 16 },
+            { x: 255, y: cloudY - 18, rx: 115, ry: 30 },
+            { x: 355, y: cloudY - 12, rx: 90, ry: 22 },
+            { x: 450, y: cloudY - 14, rx: 100, ry: 26 },
+            { x: 85, y: cloudY - 35, rx: 55, ry: 15 },
+            { x: 235, y: cloudY - 40, rx: 80, ry: 20 },
+            { x: 395, y: cloudY - 36, rx: 70, ry: 16 },
+          ];
+
+          clouds.forEach((c) => {
+            skyCtx.beginPath();
+            skyCtx.ellipse(c.x, c.y, c.rx, c.ry, 0, 0, Math.PI * 2);
+            skyCtx.fill();
+          });
+
+          skyCtx.fillStyle = cloudColor + '0.7)';
+          clouds.slice(0, 5).forEach((c) => {
+            skyCtx.beginPath();
+            skyCtx.ellipse(c.x + 8, c.y - 6, c.rx * 0.65, c.ry * 0.55, 0, 0, Math.PI * 2);
+            skyCtx.fill();
+          });
+        } else {
+          // Estrelas brilhantes na Noite no topo da esfera
+          skyCtx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          const stars = [
+            [50, 40], [120, 80], [200, 30], [280, 90], [350, 45], [420, 110], [480, 25],
+            [90, 150], [160, 120], [240, 170], [310, 130], [390, 160], [460, 140],
+            [30, 200], [110, 210], [190, 180], [270, 220], [360, 190], [440, 205],
+          ];
+          stars.forEach(([sx, sy]) => {
+            skyCtx.beginPath();
+            skyCtx.arc(sx, sy, 1.2, 0, Math.PI * 2);
+            skyCtx.fill();
+          });
+        }
+
+        skyTexture.needsUpdate = true;
+      }
+
+      // Lighting and Fog parameters
+      const lightColor = new THREE.Color();
+      const ambientColor = new THREE.Color();
+      const fogColor = new THREE.Color();
+      let lightIntensity = 5.5;
+      let ambientIntensity = 4.0;
+      let fogDensity = 0.003;
+
+      if (time >= 4 && time < 7) {
+        lightColor.set(0xffa726);
+        ambientColor.set(0xffcc80);
+        fogColor.set(0x1e3a8a);
+        lightIntensity = 3.5;
+        ambientIntensity = 2.5;
+      } else if (time >= 7 && time < 16.5) {
+        // Dia: Iluminação limpa e neblina sutil azul
+        lightColor.set(0xffffff);
+        ambientColor.set(0xe2e8f0);
+        fogColor.set(0xbae6fd);
+        lightIntensity = 5.5;
+        ambientIntensity = 4.0;
+        fogDensity = 0.003;
+      } else if (time >= 16.5 && time < 19.5) {
+        lightColor.set(0xe11d48);
+        ambientColor.set(0x9a3412);
+        fogColor.set(0x1e1b4b);
+        lightIntensity = 3.0;
+        ambientIntensity = 2.0;
+      } else {
+        // Noite: Luz e neblina azul noturno escuro (Zero Roxo!)
+        lightColor.set(0x3b82f6);
+        ambientColor.set(0x1e293b);
+        fogColor.set(0x090d16);
+        lightIntensity = 1.2;
+        ambientIntensity = 1.2;
+        fogDensity = 0.008;
+      }
+
+      scene.background = null;
+      if (scene.fog && scene.fog instanceof THREE.FogExp2) {
+        scene.fog.color.copy(fogColor);
+        scene.fog.density = fogDensity;
+      }
+
+      dirLight.position.set(sunX, Math.max(-20, sunY), sunZ);
+      dirLight.color.copy(lightColor);
+      dirLight.intensity = lightIntensity;
+
+      ambientLight.color.copy(ambientColor);
+      ambientLight.intensity = ambientIntensity;
+    };
 
     // Grid Floor (1.5m per cell)
     const gridSize = 12;
@@ -267,7 +513,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      cameraDistance = Math.max(6, Math.min(25, cameraDistance + e.deltaY * 0.01));
+      cameraDistance = Math.max(2, Math.min(50, cameraDistance + e.deltaY * 0.01));
       updateCameraPosition();
     };
 
@@ -318,6 +564,39 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     domElem.addEventListener('dblclick', onDblClick);
     domElem.addEventListener('click', onClickCanvas);
 
+    const resolveCombatantModelUrl = (c: Combatant): string | null => {
+      // Para monstros: usar modelUrl direta ou detectar por nome
+      if (c.type !== 'player') {
+        if (c.modelUrl) return c.modelUrl;
+        return getMonsterModelUrl(c.name);
+      }
+
+      // Para jogadores: SEMPRE consultar a ficha salva (fonte de verdade)
+      try {
+        const saved =
+          localStorage.getItem('masters_codex_character_sheets_v1') ||
+          localStorage.getItem('codex_character_sheets_v1');
+        if (saved) {
+          const sheets: any[] = JSON.parse(saved);
+          const cClean = c.name.split('(')[0].trim().toLowerCase();
+          const found = sheets.find((s: any) => {
+            if (!s.characterName) return false;
+            const sClean = s.characterName.split('(')[0].trim().toLowerCase();
+            return (
+              sClean === cClean ||
+              c.name.toLowerCase().includes(sClean) ||
+              s.characterName.toLowerCase().includes(cClean)
+            );
+          });
+          if (found?.modelUrl) return found.modelUrl;
+          if (found?.className) return getModelUrlByNameOrPath(found.className);
+        }
+      } catch (e) {}
+
+      // Fallback: usar modelUrl do combatante ou resolver por nome
+      return c.modelUrl || getModelUrlByNameOrPath(c.name);
+    };
+
     // Dynamic Pin Mesh Generator
     const createPawnMesh = (c: Combatant) => {
       const pinGroup = new THREE.Group();
@@ -326,12 +605,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       const baseColor = isPlayer ? 0x0284c7 : 0xe11d48;
       const ringColor = isPlayer ? 0x38bdf8 : 0xf43f5e;
 
-      const monsterName = c.name.toLowerCase();
-      if (monsterName === 'goblin' || monsterName === 'esqueleto') {
-        const url = monsterName === 'goblin'
-          ? '/assets/3d/monsters/Goblin/Goblin.glb'
-          : '/assets/3d/monsters/Esqueleto/Esqueleto.glb';
-
+      const modelUrl = resolveCombatantModelUrl(c);
+      if (modelUrl) {
         // Ring indicator
         const ringGeo = new THREE.TorusGeometry(0.58, 0.04, 16, 32);
         const ringMat = new THREE.MeshBasicMaterial({ color: ringColor });
@@ -340,10 +615,18 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         ringMesh.position.y = 0.02;
         pinGroup.add(ringMesh);
 
+        // Adjust scales
+        const isLeader = modelUrl.includes('Líder');
+        const isArcher = modelUrl.includes('Arqueiro');
+        let targetSize = 2.4; // default size
+        if (isLeader) targetSize = 2.1;
+        else if (isArcher) targetSize = 1.8;
+
         // Load 3D model
         const loader = new GLTFLoader();
+        const safeUrl = encodeURI(modelUrl);
         loader.load(
-          url,
+          safeUrl,
           (gltf) => {
             const model = gltf.scene;
 
@@ -352,8 +635,6 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
 
-            // Target height/size around 2.4 units (doubled from previous 1.2)
-            const targetSize = 2.4;
             const scale = maxDim > 0 ? (targetSize / maxDim) : 1;
             model.scale.setScalar(scale);
 
@@ -378,7 +659,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
             pinGroup.add(model);
           },
           undefined,
-          (error) => console.error('Error loading model:', url, error)
+          (error) => console.error('Error loading model:', safeUrl, error)
         );
 
         return pinGroup;
@@ -462,14 +743,34 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       const currentPosMap = positionsRef.current;
       const turnIdx = turnIdxRef.current;
 
+      // Update Sky Sphere & Environmental Lighting based on timeOfDay
+      updateEnvironment(timeOfDayRef.current);
+
       // Sync 3D Pin Meshes with current combatants
       currentList.forEach((c, idx) => {
         let pinGroup = meshesMap[c.id];
+
+        const targetModelUrl = resolveCombatantModelUrl(c);
+
+        // Se o peão 3D já existia mas o modelo foi alterado pelo jogador, remove o peão antigo e recarrega o novo
+        let previousPosition: THREE.Vector3 | null = null;
+        if (pinGroup && pinGroup.userData.loadedModelUrl !== targetModelUrl) {
+          previousPosition = pinGroup.position.clone();
+          pinsGroup.remove(pinGroup);
+          delete meshesMap[c.id];
+          pinGroup = undefined as any;
+        }
+
         if (!pinGroup) {
           pinGroup = createPawnMesh(c);
-          const gridPos = currentPosMap[c.id] || (c.type === 'player' ? { x: (idx % 5) - 2, z: 2 } : { x: (idx % 4) - 2, z: -2 - Math.floor(idx / 4) });
-          // Center inside cell: (gridX + 0.5) * cellSize
-          pinGroup.position.set((gridPos.x + 0.5) * cellSize, 0, (gridPos.z + 0.5) * cellSize);
+          pinGroup.userData.loadedModelUrl = targetModelUrl;
+          if (previousPosition) {
+            pinGroup.position.copy(previousPosition);
+          } else {
+            const gridPos = currentPosMap[c.id] || (c.type === 'player' ? { x: (idx % 5) - 2, z: 2 } : { x: (idx % 4) - 2, z: -2 - Math.floor(idx / 4) });
+            // Center inside cell: (gridX + 0.5) * cellSize
+            pinGroup.position.set((gridPos.x + 0.5) * cellSize, 0, (gridPos.z + 0.5) * cellSize);
+          }
           pinsGroup.add(pinGroup);
           meshesMap[c.id] = pinGroup;
         }
@@ -665,24 +966,182 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     const nextX = Math.max(-5, Math.min(5, curPos.x + dx));
     const nextZ = Math.max(-5, Math.min(5, curPos.z + dz));
 
-    updateTokenPosition3D(combatantId, undefined, undefined, nextX, nextZ);
+          updateTokenPosition3D(combatantId, undefined, undefined, nextX, nextZ);
   };
 
   return (
     <div className="w-full h-full relative bg-[#0a0d14] flex flex-col overflow-hidden select-none">
-      {/* Top 3D Grid Overlay Header */}
-      <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between pointer-events-none">
-        <div className="bg-[#0f141d]/90 backdrop-blur-md border border-[#2a3449] px-3 py-1.5 rounded-xl text-xs font-mono font-bold text-amber-400 flex items-center gap-2 shadow-lg pointer-events-auto">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span>GRID 3D • METRAGEM D&D: 1 CELULA = 1,5m (5ft)</span>
-        </div>
+      {/* Top Left Grid Metric Badge */}
+      <div className="absolute top-3 left-3 z-20 pointer-events-auto bg-[#0f172a]/90 backdrop-blur-md border border-[#2a3449] px-3 py-1.5 rounded-xl text-xs font-mono font-bold text-amber-400 flex items-center gap-2 shadow-lg">
+        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+        <span>GRID 3D (1,5m / 5ft)</span>
+      </div>
 
-        {activeCombatant && (
-          <div className="bg-[#121824]/90 backdrop-blur-md border border-rose-500/40 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-100 flex items-center gap-2 shadow-lg pointer-events-auto">
-            <span className="text-[10px] uppercase font-mono bg-rose-500 text-slate-950 px-1.5 py-0.5 rounded font-black">
-              TURNO 3D
-            </span>
-            <span className="text-amber-300">{activeCombatant.name}</span>
+      {/* Top Right Environmental Control Menu (Gear Button + Collapsible Panel) */}
+      <div className="absolute top-3 right-3 z-30 pointer-events-auto flex flex-col items-end">
+        {/* Gear Toggle Button (Catraca) */}
+        <button
+          type="button"
+          onClick={() => setIsEnvMenuOpen(!isEnvMenuOpen)}
+          className={`p-2 px-3 rounded-xl border backdrop-blur-md shadow-xl flex items-center gap-2 transition-all cursor-pointer ${
+            isEnvMenuOpen
+              ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold'
+              : 'bg-[#0f172a]/90 hover:bg-[#1e293b] text-amber-400 border-[#2a3449] hover:border-amber-400/60'
+          }`}
+          title="Configurações de Ambiente (Clima & Hora do Dia)"
+        >
+          <Settings className={`w-4 h-4 transition-transform duration-300 ${isEnvMenuOpen ? 'rotate-90 text-slate-950' : ''}`} />
+          <span className="text-xs font-mono font-bold">Clima & Hora</span>
+        </button>
+
+        {/* Collapsible Environmental Settings Card */}
+        {isEnvMenuOpen && (
+          <div className="mt-2 p-3.5 bg-[#0f172a]/95 backdrop-blur-md border border-amber-500/40 rounded-2xl shadow-2xl flex flex-col gap-3 min-w-[290px] sm:min-w-[330px] animate-in fade-in slide-in-from-top-2 duration-200">
+            {/* Card Header */}
+            <div className="flex items-center justify-between border-b border-[#2a3449] pb-2">
+              <span className="text-xs font-bold text-amber-400 uppercase font-mono tracking-wider flex items-center gap-1.5">
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                Controle de Ambiente
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsEnvMenuOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-[#1e293b] transition-all cursor-pointer"
+                title="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Time of Day Section */}
+            <div className="flex flex-col gap-2.5 bg-[#161d2f]/90 p-2.5 rounded-xl border border-[#2a3449]">
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-slate-400 font-semibold flex items-center gap-1">
+                  Hora do Dia:
+                </span>
+                <span className="font-bold text-amber-300 flex items-center gap-1">
+                  {timeOfDay >= 6 && timeOfDay < 18 ? (
+                    <Sun className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                  ) : (
+                    <Moon className="w-3.5 h-3.5 text-cyan-300" />
+                  )}
+                  {Math.floor(timeOfDay).toString().padStart(2, '0')}:
+                  {Math.floor((timeOfDay % 1) * 60).toString().padStart(2, '0')}
+                </span>
+              </div>
+
+              <input
+                type="range"
+                min="0"
+                max="24"
+                step="0.25"
+                value={timeOfDay}
+                onChange={(e) => setTimeOfDay(parseFloat(e.target.value))}
+                className="w-full h-1.5 bg-[#1e293b] rounded-lg appearance-none cursor-pointer accent-amber-500 hover:accent-amber-400 transition-all"
+                title="Ajustar Hora do Dia"
+              />
+
+              {/* Time Presets */}
+              <div className="grid grid-cols-4 gap-1 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setTimeOfDay(6)}
+                  className={`p-1.5 rounded-lg text-[11px] font-semibold transition-all flex flex-col items-center justify-center gap-1 ${
+                    timeOfDay === 6
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#20293d] border border-transparent'
+                  }`}
+                  title="Alvorada (06:00)"
+                >
+                  <Sunrise className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-[10px]">Alvorada</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTimeOfDay(12)}
+                  className={`p-1.5 rounded-lg text-[11px] font-semibold transition-all flex flex-col items-center justify-center gap-1 ${
+                    timeOfDay === 12
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#20293d] border border-transparent'
+                  }`}
+                  title="Meio-Dia (12:00)"
+                >
+                  <Sun className="w-3.5 h-3.5 text-yellow-400" />
+                  <span className="text-[10px]">Dia</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTimeOfDay(18)}
+                  className={`p-1.5 rounded-lg text-[11px] font-semibold transition-all flex flex-col items-center justify-center gap-1 ${
+                    timeOfDay === 18
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#20293d] border border-transparent'
+                  }`}
+                  title="Pôr do Sol (18:00)"
+                >
+                  <Sunset className="w-3.5 h-3.5 text-orange-400" />
+                  <span className="text-[10px]">Ocaso</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTimeOfDay(24)}
+                  className={`p-1.5 rounded-lg text-[11px] font-semibold transition-all flex flex-col items-center justify-center gap-1 ${
+                    timeOfDay === 24 || timeOfDay === 0
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#20293d] border border-transparent'
+                  }`}
+                  title="Noite (24:00)"
+                >
+                  <Moon className="w-3.5 h-3.5 text-cyan-300" />
+                  <span className="text-[10px]">Noite</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Weather & FX Placeholders Section */}
+            <div className="grid grid-cols-3 gap-1.5 border-t border-[#2a3449] pt-2">
+              <button
+                type="button"
+                disabled
+                className="p-1.5 rounded-xl bg-[#161d2f]/50 border border-[#2a3449]/60 text-slate-500 flex flex-col items-center justify-center gap-1 cursor-not-allowed opacity-70"
+                title="Mecânica de Chuva em Breve"
+              >
+                <CloudRain className="w-3.5 h-3.5 text-slate-500" />
+                <span className="text-[10px] font-mono">Chuva</span>
+                <span className="text-[8px] bg-slate-800 text-slate-400 px-1 rounded uppercase font-sans">
+                  Em breve
+                </span>
+              </button>
+
+              <button
+                type="button"
+                disabled
+                className="p-1.5 rounded-xl bg-[#161d2f]/50 border border-[#2a3449]/60 text-slate-500 flex flex-col items-center justify-center gap-1 cursor-not-allowed opacity-70"
+                title="Mecânica de Neblina em Breve"
+              >
+                <CloudFog className="w-3.5 h-3.5 text-slate-500" />
+                <span className="text-[10px] font-mono">Neblina</span>
+                <span className="text-[8px] bg-slate-800 text-slate-400 px-1 rounded uppercase font-sans">
+                  Em breve
+                </span>
+              </button>
+
+              <button
+                type="button"
+                disabled
+                className="p-1.5 rounded-xl bg-[#161d2f]/50 border border-[#2a3449]/60 text-slate-500 flex flex-col items-center justify-center gap-1 cursor-not-allowed opacity-70"
+                title="Efeitos Especiais (Tempestade, Raios) em Breve"
+              >
+                <Zap className="w-3.5 h-3.5 text-slate-500" />
+                <span className="text-[10px] font-mono">Efeitos</span>
+                <span className="text-[8px] bg-slate-800 text-slate-400 px-1 rounded uppercase font-sans">
+                  Em breve
+                </span>
+              </button>
+            </div>
           </div>
         )}
       </div>

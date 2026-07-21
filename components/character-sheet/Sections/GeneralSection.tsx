@@ -2,7 +2,8 @@ import React from 'react';
 import { CharacterSheet } from '@/lib/types';
 import { DND_ALIGNMENTS, DND_BACKGROUNDS, DND_CLASSES, DND_RACES } from '@/lib/dnd5e-data';
 import { applyClassPreset, applyLevelChange, applyRacePreset } from '@/lib/dnd5e-calculator';
-import { User, Shield, Sparkles, Award, Image as ImageIcon } from 'lucide-react';
+import { User, Shield, Sparkles, Award, Image as ImageIcon, Box, Check } from 'lucide-react';
+import { ALL_3D_MODELS, getModelUrlByNameOrPath } from '@/lib/3d-models';
 
 interface GeneralSectionProps {
   sheet: CharacterSheet;
@@ -17,7 +18,10 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
 
   const handleClassChange = (newClass: string) => {
     const updated = applyClassPreset(sheet, newClass);
-    onChange(updated);
+    onChange({
+      ...updated,
+      modelUrl: getModelUrlByNameOrPath(newClass),
+    });
   };
 
   const handleLevelChange = (newLevel: number) => {
@@ -64,6 +68,70 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
             placeholder="https://exemplo.com/minha-foto.png"
             className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-amber-500"
           />
+        </div>
+      </div>
+
+      {/* CARD: SELEÇÃO DE BONECO 3D (GRID DE BATALHA) */}
+      <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+            <Box className="w-4 h-4 text-sky-400" />
+            Boneco 3D para o Grid de Batalha
+          </h3>
+          <span className="text-[10px] text-slate-400 font-mono bg-[#0b0f19] px-2 py-0.5 rounded border border-slate-800">
+            Miniatura no Mapa
+          </span>
+        </div>
+
+        <p className="text-xs text-slate-400">
+          Escolha o boneco 3D que representará seu personagem quando ele for colocado na arena de batalha:
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {ALL_3D_MODELS.map((model) => {
+            const currentSelected = sheet.modelUrl || getModelUrlByNameOrPath(sheet.className);
+            const isSelected = currentSelected === model.modelUrl;
+            return (
+              <button
+                key={model.id}
+                type="button"
+                onClick={() => onChange({ ...sheet, modelUrl: model.modelUrl })}
+                className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all relative overflow-hidden ${
+                  isSelected
+                    ? 'bg-amber-500/10 border-amber-500/80 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/40'
+                    : 'bg-[#0b0f19] border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-lg border flex items-center justify-center text-xl shrink-0 ${
+                  isSelected ? 'bg-amber-500/20 border-amber-500/50' : 'bg-slate-800/80 border-slate-700'
+                }`}>
+                  {model.icon || '🎲'}
+                </div>
+                <div className="flex-1 min-w-0 pr-5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-bold text-white truncate">{model.name}</span>
+                    <span
+                      className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-semibold uppercase ${
+                        model.category === 'character'
+                          ? 'bg-sky-950/80 text-sky-400 border border-sky-800/60'
+                          : 'bg-rose-950/80 text-rose-400 border border-rose-800/60'
+                      }`}
+                    >
+                      {model.category === 'character' ? 'Hero' : 'Monstro'}
+                    </span>
+                  </div>
+                  {model.description && (
+                    <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">{model.description}</p>
+                  )}
+                </div>
+                {isSelected && (
+                  <div className="absolute top-2.5 right-2.5 text-amber-400 bg-amber-500/20 p-0.5 rounded-full border border-amber-500/40">
+                    <Check className="w-3.5 h-3.5" />
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 

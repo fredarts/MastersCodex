@@ -67,6 +67,7 @@ export interface GameScene {
   sfxShortcuts?: string[]; // IDs dos botões SFX
   combatants?: Combatant[];
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface GameSession {
@@ -99,6 +100,7 @@ export interface CampaignMember {
   characterName?: string;
   displayName?: string;
   avatarUrl?: string;
+  modelUrl?: string;
   joinedAt?: string;
 }
 
@@ -131,6 +133,7 @@ export interface Combatant {
   actions?: { name: string; desc: string }[];
   cr?: string;
   avatarUrl?: string;
+  modelUrl?: string;
   notes?: string;
   isCurrentTurn?: boolean;
 }
@@ -346,6 +349,7 @@ export interface CharacterSheet {
   playerName: string;
   xp: number;
   avatarUrl?: string;
+  modelUrl?: string;
 
   // Atributos & Inspiração
   inspiration: boolean;

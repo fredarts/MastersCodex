@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CharacterSheet } from '@/lib/types';
 import { GeneralSection } from './Sections/GeneralSection';
 import { CombatSection } from './Sections/CombatSection';
@@ -50,6 +50,14 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSavedFeedback, setIsSavedFeedback] = useState(false);
 
+  // Sincroniza o estado interno da ficha sempre que o modal for aberto ou a ficha inicial mudar
+  useEffect(() => {
+    if (isOpen) {
+      setSheet(initialSheet);
+      setActiveTab('general');
+    }
+  }, [initialSheet, isOpen]);
+
   if (!isOpen) return null;
 
   const handleSave = () => {
@@ -59,6 +67,11 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
       setIsSavedFeedback(false);
       onClose();
     }, 800);
+  };
+
+  const handleClose = () => {
+    onSave(sheet);
+    onClose();
   };
 
   return (
@@ -116,7 +129,7 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
           </button>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80"
           >
             <X className="w-5 h-5" />

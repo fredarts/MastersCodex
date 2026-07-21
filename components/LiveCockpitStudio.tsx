@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Tv, 
   Film, 
@@ -38,6 +38,7 @@ import { GameScene, SceneType, Combatant, ConditionType, CampaignMember } from '
 import { INITIAL_MONSTERS, SFX_BUTTONS, CONDITIONS } from '@/lib/srd-data';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
+import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { BattleLog } from '@/components/BattleLog';
 import { Dice3DCanvas, DieType } from '@/components/Dice3DCanvas';
 import { CombatLogEntry } from '@/lib/types';
@@ -89,6 +90,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   // Scene inline editing state
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
   const [editedSceneTitle, setEditedSceneTitle] = useState('');
+  const lastSyncedSceneVersionRef = useRef<string | null>(null);
 
   // Combat State & Search Modal
   const [isCombatActive, setIsCombatActive] = useState<boolean>(false);
@@ -347,20 +349,89 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   }, [activeScene?.id, activeScene?.sceneType, combatants.length]);
 
   useEffect(() => {
-    if (activeScene?.bgmCategory) {
+    if (!activeScene) return;
+
+    if (activeScene.bgmCategory) {
       setActiveBgmCategory(activeScene.bgmCategory);
     }
 
-    // Auto-load pre-programmed combatants if present and current list is empty
-    if (activeScene && activeScene.combatants && activeScene.combatants.length > 0 && combatants.length === 0) {
-      const sorted = [...activeScene.combatants].sort((a, b) => b.initiative - a.initiative);
-      setCombatants(sorted);
-      setCurrentTurnIndex(0);
-      setRoundCount(1);
-      setIsCombatActive(true);
-      broadcastToPlayerView({ combatants: sorted });
+    const sceneVersionKey = `${activeScene.id}_${activeScene.updatedAt || ''}_${JSON.stringify(
+      activeScene.combatants || []
+    )}`;
+
+    if (lastSyncedSceneVersionRef.current !== sceneVersionKey) {
+      lastSyncedSceneVersionRef.current = sceneVersionKey;
+
+      if (activeScene.combatants && activeScene.combatants.length > 0) {
+        const sorted = [...activeScene.combatants].sort((a, b) => b.initiative - a.initiative);
+        setCombatants(sorted);
+        setCurrentTurnIndex(0);
+        setRoundCount(1);
+        setIsCombatActive(true);
+        broadcastToPlayerView({ combatants: sorted });
+      }
     }
-  }, [activeScene?.id]);
+  }, [activeScene, setCombatants]);
+
+  // Escuta atualizações instantâneas de modelo 3D do personagem (local e cross-tab)
+  useEffect(() => {
+    const handleModelUpdate = (sheet: any) => {
+      if (!sheet || !sheet.characterName) return;
+
+      const updatedModelUrl = sheet.modelUrl || getModelUrlByNameOrPath(sheet.className || sheet.characterName);
+
+      setCombatants((prev) => {
+        let hasChanges = false;
+        const next = prev.map((c) => {
+          const cClean = c.name.split('(')[0].trim().toLowerCase();
+          const sheetClean = (sheet.characterName || '').split('(')[0].trim().toLowerCase();
+          const isMatch =
+            cClean === sheetClean ||
+            c.name.toLowerCase().includes(sheetClean) ||
+            sheet.characterName?.toLowerCase().includes(cClean) ||
+            (sheet.id && c.id.includes(sheet.id));
+
+          if (isMatch) {
+            if (c.modelUrl !== updatedModelUrl) {
+              hasChanges = true;
+              return { ...c, modelUrl: updatedModelUrl };
+            }
+          }
+          return c;
+        });
+
+        if (hasChanges) {
+          broadcastToPlayerView({ combatants: next });
+          return next;
+        }
+        return prev;
+      });
+    };
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('masters_codex_sync');
+      bc.onmessage = (event) => {
+        if (event.data?.type === 'CHARACTER_MODEL_UPDATED' && event.data?.sheet) {
+          handleModelUpdate(event.data.sheet);
+        }
+      };
+    } catch (e) {}
+
+    const handleLocalEvent = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      if (customEvt.detail) {
+        handleModelUpdate(customEvt.detail);
+      }
+    };
+
+    window.addEventListener('masters_codex_character_model_updated', handleLocalEvent);
+
+    return () => {
+      if (bc) bc.close();
+      window.removeEventListener('masters_codex_character_model_updated', handleLocalEvent);
+    };
+  }, [setCombatants]);
 
   const handleFireSceneLive = (scene: GameScene) => {
     setActiveScene(scene);
@@ -501,6 +572,31 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     const alreadyIn = combatants.some((c) => c.name.toLowerCase() === charName.toLowerCase());
     if (alreadyIn) return;
 
+    // FONTE DE VERDADE: sempre consultar a ficha salva do jogador primeiro
+    let resolvedModelUrl: string | undefined;
+    try {
+      const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
+      if (saved) {
+        const sheets: any[] = JSON.parse(saved);
+        const cClean = charName.split('(')[0].trim().toLowerCase();
+        const found = sheets.find(
+          (s) =>
+            (s.characterName && s.characterName.split('(')[0].trim().toLowerCase() === cClean) ||
+            (s.characterName && charName.toLowerCase().includes(s.characterName.toLowerCase())) ||
+            (s.characterName && s.characterName.toLowerCase().includes(charName.toLowerCase()))
+        );
+        if (found) {
+          if (found.modelUrl) resolvedModelUrl = found.modelUrl;
+          else if (found.className) resolvedModelUrl = getModelUrlByNameOrPath(found.className);
+        }
+      }
+    } catch (e) {}
+
+    // Fallback: member.modelUrl do cadastro, depois resolução por nome
+    if (!resolvedModelUrl) {
+      resolvedModelUrl = member.modelUrl || getModelUrlByNameOrPath(charName);
+    }
+
     const newC: Combatant = {
       id: `p-${member.id || Date.now()}`,
       name: charName,
@@ -510,6 +606,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       ac: 15,
       initiative: Math.floor(Math.random() * 20) + 1,
       conditions: [],
+      modelUrl: resolvedModelUrl,
     };
 
     setCombatants((prev) => {

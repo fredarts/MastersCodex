@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { Header } from '@/components/Header';
 import { Sidebar, ActiveTab } from '@/components/Sidebar';
@@ -20,7 +20,7 @@ import { CreateCampaignModal } from '@/components/CreateCampaignModal';
 import { PlayerLobby } from '@/components/PlayerLobby';
 import { LiveCockpitStudio } from '@/components/LiveCockpitStudio';
 import { Combatant, Encounter, World, GameScene, UserCampaign } from '@/lib/types';
-
+import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 function MainApp() {
   const { roleMode, loadDemoEverything, setActiveCampaign } = useAuth();
   const [activeTab, setActiveTab] = useState<ActiveTab>('live_cockpit');
@@ -34,6 +34,57 @@ function MainApp() {
   const [isCreateCampaignOpen, setIsCreateCampaignOpen] = useState(false);
   const [selectedWorldForCampaign, setSelectedWorldForCampaign] = useState<World | null>(null);
   const [generatedLootResult, setGeneratedLootResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleModelUpdate = (sheet: any) => {
+      const updatedModelUrl = sheet.modelUrl || getModelUrlByNameOrPath(sheet.className || sheet.characterName);
+      setCombatants((prev) => {
+        let hasChanges = false;
+        const next = prev.map((c) => {
+          const cClean = c.name.split('(')[0].trim().toLowerCase();
+          const sheetClean = (sheet.characterName || '').split('(')[0].trim().toLowerCase();
+          const isMatch =
+            cClean === sheetClean ||
+            c.name.toLowerCase().includes(sheetClean) ||
+            sheet.characterName?.toLowerCase().includes(cClean) ||
+            (sheet.id && c.id.includes(sheet.id));
+
+          if (isMatch) {
+            if (c.modelUrl !== updatedModelUrl) {
+              hasChanges = true;
+              return { ...c, modelUrl: updatedModelUrl };
+            }
+          }
+          return c;
+        });
+        return hasChanges ? next : prev;
+      });
+    };
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('masters_codex_sync');
+      bc.onmessage = (event) => {
+        if (event.data?.type === 'CHARACTER_MODEL_UPDATED' && event.data?.sheet) {
+          handleModelUpdate(event.data.sheet);
+        }
+      };
+    } catch (e) {}
+
+    const handleLocalEvent = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      if (customEvt.detail) {
+        handleModelUpdate(customEvt.detail);
+      }
+    };
+
+    window.addEventListener('masters_codex_character_model_updated', handleLocalEvent);
+
+    return () => {
+      if (bc) bc.close();
+      window.removeEventListener('masters_codex_character_model_updated', handleLocalEvent);
+    };
+  }, []);
 
   const handleLoadEncounter = (encounter: Encounter) => {
     const loadedCombatants: Combatant[] = encounter.combatants.map((c, idx) => ({
@@ -55,10 +106,10 @@ function MainApp() {
   const handleLoadDemoEverything = () => {
     loadDemoEverything();
     setCombatants([
-      { id: 'p1', name: 'Kaelen (Guerreiro Nível 5)', type: 'player', hp: 45, maxHp: 45, ac: 18, initiative: 18, conditions: [] },
-      { id: 'p2', name: 'Lyra (Maga Nível 5)', type: 'player', hp: 32, maxHp: 32, ac: 15, initiative: 14, conditions: ['Concentração'] },
-      { id: 'm1', name: 'Líder Hobgoblin Kraag', type: 'monster', hp: 11, maxHp: 11, ac: 18, initiative: 12, conditions: [], cr: '1/2' },
-      { id: 'm2', name: 'Goblin Arqueiro #1', type: 'monster', hp: 7, maxHp: 7, ac: 15, initiative: 9, conditions: [], cr: '1/4' }
+      { id: 'p1', name: 'Kaelen (Guerreiro Nível 5)', type: 'player', hp: 45, maxHp: 45, ac: 18, initiative: 18, conditions: [], modelUrl: getModelUrlByNameOrPath('Guerreiro') },
+      { id: 'p2', name: 'Lyra (Maga Nível 5)', type: 'player', hp: 32, maxHp: 32, ac: 15, initiative: 14, conditions: ['Concentração'], modelUrl: getModelUrlByNameOrPath('Mago') },
+      { id: 'm1', name: 'Líder Hobgoblin Kraag', type: 'monster', hp: 11, maxHp: 11, ac: 18, initiative: 12, conditions: [], cr: '1/2', modelUrl: '/assets/3d/monsters/Líder Hobgoblin/Líder Hobgoblin.glb' },
+      { id: 'm2', name: 'Goblin Arqueiro #1', type: 'monster', hp: 7, maxHp: 7, ac: 15, initiative: 9, conditions: [], cr: '1/4', modelUrl: '/assets/3d/monsters/Goblin Arqueiro/Goblin Arqueiro.glb' }
     ]);
     setCurrentTurnIndex(0);
     setRoundCount(1);

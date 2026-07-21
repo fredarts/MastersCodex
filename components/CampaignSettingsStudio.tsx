@@ -22,7 +22,8 @@ import {
   UserCheck,
   Shield,
   UserPlus,
-  RefreshCw
+  RefreshCw,
+  Pencil
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { CampaignFeedEventType, CampaignMember } from '@/lib/types';
@@ -38,12 +39,14 @@ export const CampaignSettingsStudio: React.FC = () => {
     campaignMembers,
     fetchCampaignMembers,
     addCampaignMember,
+    removeCampaignMember,
     feedEvents, 
     createFeedEvent, 
     toggleFeedEventVisibility, 
     deleteFeedEvent,
     user,
-    loadDemoEverything
+    loadDemoEverything,
+    updateCampaign
   } = useAuth();
 
   const worldCampaigns = userCampaigns.filter((c) => {
@@ -61,6 +64,11 @@ export const CampaignSettingsStudio: React.FC = () => {
   }, [activeCampaign?.id, activeTab]);
   const [feedFilter, setFeedFilter] = useState<CampaignFeedEventType | 'all'>('all');
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // Campaign Header Edit State
+  const [isEditingHeader, setIsEditingHeader] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
 
   // New Feed Event Form state
   const [showAddFeedModal, setShowAddFeedModal] = useState(false);
@@ -282,8 +290,66 @@ export const CampaignSettingsStudio: React.FC = () => {
                 ))}
               </select>
             </div>
-            <h2 className="text-xl font-bold text-slate-100 mt-0.5">{activeCampaign.title}</h2>
-            <p className="text-xs text-slate-400 max-w-xl truncate">{activeCampaign.description}</p>
+            {isEditingHeader ? (
+              <div className="mt-2 space-y-2 max-w-md animate-fade-in">
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="Nome da Campanha"
+                  className="w-full text-base font-bold bg-[#0a0d14] border border-amber-500/60 focus:border-amber-400 text-slate-100 px-3 py-1 rounded-xl outline-none shadow-inner"
+                  autoFocus
+                />
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Descrição da Campanha (opcional)"
+                  className="w-full text-xs bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500/50 text-slate-300 px-3 py-1 rounded-xl outline-none"
+                />
+                <div className="flex items-center gap-2 pt-0.5">
+                  <button
+                    onClick={async () => {
+                      if (editTitle.trim()) {
+                        await updateCampaign({
+                          ...activeCampaign,
+                          title: editTitle.trim(),
+                          description: editDescription.trim(),
+                        });
+                      }
+                      setIsEditingHeader(false);
+                    }}
+                    className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg shadow flex items-center gap-1 transition-all"
+                  >
+                    <Check className="w-3.5 h-3.5" /> Salvar
+                  </button>
+                  <button
+                    onClick={() => setIsEditingHeader(false)}
+                    className="px-3 py-1 bg-[#161c28] hover:bg-[#1f2738] text-slate-400 hover:text-slate-200 text-xs rounded-lg border border-[#2a3449] transition-all"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center gap-2 mt-0.5 group">
+                  <h2 className="text-xl font-bold text-slate-100">{activeCampaign.title}</h2>
+                  <button
+                    onClick={() => {
+                      setEditTitle(activeCampaign.title);
+                      setEditDescription(activeCampaign.description || '');
+                      setIsEditingHeader(true);
+                    }}
+                    className="p-1 text-slate-400 hover:text-amber-400 hover:bg-[#161c28] rounded-lg transition-all border border-transparent hover:border-[#2a3449]"
+                    title="Editar Nome e Descrição da Campanha"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 max-w-xl truncate">{activeCampaign.description}</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -562,9 +628,27 @@ export const CampaignSettingsStudio: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-mono font-bold flex items-center gap-1">
-                        <UserCheck className="w-3 h-3 text-emerald-400" /> CONECTADO
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-mono font-bold flex items-center gap-1">
+                          <UserCheck className="w-3 h-3 text-emerald-400" /> CONECTADO
+                        </span>
+                        {!isDM && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const pName = mem.characterName || mem.displayName || 'Jogador';
+                              if (confirm(`Tem certeza que deseja remover o jogador "${pName}" desta campanha?`)) {
+                                removeCampaignMember(mem.id);
+                              }
+                            }}
+                            className="p-1.5 bg-rose-950/60 hover:bg-rose-900 border border-rose-800/80 text-rose-300 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm"
+                            title="Excluir jogador da campanha"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                            <span className="text-[10px]">Excluir</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
