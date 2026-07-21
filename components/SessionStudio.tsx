@@ -164,28 +164,33 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
   const handleAddPlayerToScene = (mem: typeof campaignMembers[0]) => {
     const pName = mem.characterName || mem.displayName || 'Jogador';
 
-    // FONTE DE VERDADE: ficha salva do jogador tem prioridade sobre member.modelUrl
-    let resolvedModelUrl: string | undefined;
-    try {
-      const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
-      if (saved) {
-        const sheets: any[] = JSON.parse(saved);
-        const cClean = pName.split('(')[0].trim().toLowerCase();
-        const found = sheets.find(
-          (s) =>
-            (s.characterName && s.characterName.split('(')[0].trim().toLowerCase() === cClean) ||
-            (s.characterName && pName.toLowerCase().includes(s.characterName.toLowerCase())) ||
-            (s.characterName && s.characterName.toLowerCase().includes(pName.toLowerCase()))
-        );
-        if (found) {
-          if (found.modelUrl) resolvedModelUrl = found.modelUrl;
-          else if (found.className) resolvedModelUrl = getModelUrlByNameOrPath(found.className);
-        }
-      }
-    } catch (e) {}
+    // 1. Usa o modelUrl vindo do cadastro do membro no Supabase (fonte de verdade cross-account)
+    let resolvedModelUrl: string | undefined = mem.modelUrl;
 
+    // 2. Se não estiver no cadastro do membro, busca no localStorage (fallback local)
     if (!resolvedModelUrl) {
-      resolvedModelUrl = mem.modelUrl || getModelUrlByNameOrPath(pName);
+      try {
+        const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
+        if (saved) {
+          const sheets: any[] = JSON.parse(saved);
+          const cClean = pName.split('(')[0].trim().toLowerCase();
+          const found = sheets.find(
+            (s) =>
+              (s.characterName && s.characterName.split('(')[0].trim().toLowerCase() === cClean) ||
+              (s.characterName && pName.toLowerCase().includes(s.characterName.toLowerCase())) ||
+              (s.characterName && s.characterName.toLowerCase().includes(pName.toLowerCase()))
+          );
+          if (found) {
+            if (found.modelUrl) resolvedModelUrl = found.modelUrl;
+            else if (found.className) resolvedModelUrl = getModelUrlByNameOrPath(found.className);
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 3. Fallback por nome
+    if (!resolvedModelUrl) {
+      resolvedModelUrl = getModelUrlByNameOrPath(pName);
     }
 
     const newP: Combatant = {

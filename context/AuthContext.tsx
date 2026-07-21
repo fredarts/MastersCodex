@@ -34,6 +34,7 @@ interface AuthContextType {
   fetchCampaignMembers: (campaignId: string) => Promise<void>;
   addCampaignMember: (campaignId: string, characterName: string, role?: 'dm' | 'player') => Promise<void>;
   removeCampaignMember: (memberId: string) => Promise<void>;
+  updateCampaignMemberModelUrl: (campaignId: string, characterName: string, modelUrl: string) => Promise<void>;
   sessions: GameSession[];
   activeSession: GameSession | null;
   setActiveSession: (session: GameSession | null) => void;
@@ -61,6 +62,8 @@ interface AuthContextType {
   broadcastToPlayerView: (payload: any) => void;
   tokenPositions3D: Record<string, { x: number; z: number }>;
   updateTokenPosition3D: (idOrName: string, deltaX?: number, deltaZ?: number, newX?: number, newZ?: number) => void;
+  tokenRotations3D: Record<string, number>;
+  updateTokenRotation3D: (idOrName: string, angleInDegrees: number) => void;
   loadDemoEverything: () => void;
   isLoading: boolean;
 }
@@ -216,8 +219,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {}
   };
 
-  // Global 3D Token Positions State
+  // Global 3D Token Positions & Rotations State
   const [tokenPositions3D, setTokenPositions3D] = useState<Record<string, { x: number; z: number }>>({});
+  const [tokenRotations3D, setTokenRotations3D] = useState<Record<string, number>>({});
 
   const updateTokenPosition3D = (
     idOrName: string,
@@ -248,6 +252,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  const updateTokenRotation3D = (idOrName: string, angleInDegrees: number) => {
+    const normalizedAngle = ((angleInDegrees % 360) + 360) % 360;
+    setTokenRotations3D((prev) => {
+      const updated = { ...prev, [idOrName]: normalizedAngle };
+
+      try {
+        const bc = new BroadcastChannel('masters_codex_sync');
+        bc.postMessage({
+          type: 'TOKEN_ROTATE_3D',
+          combatantId: idOrName,
+          characterName: idOrName,
+          angle: normalizedAngle,
+        });
+        bc.close();
+      } catch (e) {}
+
+      return updated;
+    });
+  };
+
   useEffect(() => {
     let bc: BroadcastChannel | null = null;
     try {
@@ -263,6 +287,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const nextZ = newZ !== undefined ? newZ : Math.max(-5, Math.min(5, current.z + (deltaZ || 0)));
               return { ...prev, [targetKey]: { x: nextX, z: nextZ } };
             });
+          }
+        } else if (event.data?.type === 'TOKEN_ROTATE_3D') {
+          const { combatantId, characterName, angle } = event.data;
+          const targetKey = combatantId || characterName;
+          if (targetKey && angle !== undefined) {
+            setTokenRotations3D((prev) => ({ ...prev, [targetKey]: angle }));
           }
         }
       };
@@ -850,6 +880,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         bc.close();
       } catch (e) {}
     }
+  };
+
+  const updateCampaignMemberModelUrl = async (
+    campaignId: string,
+    characterName: string,
+    modelUrl: string
+  ) => {
+    if (!characterName || !modelUrl) return;
+    const charNameClean = characterName.trim();
+
+    if (isSupabaseConfigured()) {
+      try {
+        let query = supabase.from('campaign_members').update({ model_url: modelUrl });
+        if (isValidUUID(campaignId)) {
+          query = query.eq('campaign_id', campaignId);
+        } else if (activeCampaign?.id && isValidUUID(activeCampaign.id)) {
+          query = query.eq('campaign_id', activeCampaign.id);
+        }
+        await query.ilike('character_name', charNameClean);
+      } catch (e) {
+        console.error('Error updating campaign member model_url in Supabase:', e);
+      }
+    }
+
+    setCampaignMembers((prev) => {
+      let updated = false;
+      const next = prev.map((m) => {
+        if (
+          m.characterName &&
+          m.characterName.trim().toLowerCase() === charNameClean.toLowerCase()
+        ) {
+          updated = true;
+          return { ...m, modelUrl };
+        }
+        return m;
+      });
+
+      if (updated) {
+        try {
+          localStorage.setItem('codex_members', JSON.stringify(next));
+        } catch (e) {}
+      }
+      return next;
+    });
+
+    try {
+      const bc = new BroadcastChannel('masters_codex_sync');
+      bc.postMessage({
+        type: 'REFRESH_MEMBERS',
+        campaignId: campaignId || activeCampaign?.id,
+      });
+      bc.close();
+    } catch (e) {}
   };
 
   const joinCampaignByCode = async (
@@ -1792,6 +1875,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fetchCampaignMembers,
         addCampaignMember,
         removeCampaignMember,
+        updateCampaignMemberModelUrl,
         sessions,
         activeSession,
         setActiveSession,
@@ -1819,6 +1903,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         broadcastToPlayerView,
         tokenPositions3D,
         updateTokenPosition3D,
+        tokenRotations3D,
+        updateTokenRotation3D,
         loadDemoEverything,
         isLoading,
       }}

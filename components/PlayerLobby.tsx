@@ -31,7 +31,7 @@ interface PlayerLobbyProps {
 }
 
 export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) => {
-  const { activeCampaign, setActiveCampaign, userCampaigns, joinCampaignByCode, leaveCampaign, feedEvents, tokenPositions3D, updateTokenPosition3D } = useAuth();
+  const { activeCampaign, setActiveCampaign, userCampaigns, joinCampaignByCode, leaveCampaign, feedEvents, tokenPositions3D, updateTokenPosition3D, updateCampaignMemberModelUrl } = useAuth();
   
   // Navigation & Modal States
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(activeCampaign?.id || null);
@@ -171,8 +171,12 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
       })
     );
 
-    // Sincroniza modelUrl no codex_members para que o DM veja o modelo correto
+    // Sincroniza modelUrl no Supabase e no codex_members para que o DM veja o modelo correto
     try {
+      const targetModelUrl = updatedWithTimestamp.modelUrl || getModelUrlByNameOrPath(updatedWithTimestamp.className || updatedWithTimestamp.characterName);
+      const targetCampId = updatedWithTimestamp.campaignId || activeCampaign?.id || '';
+      updateCampaignMemberModelUrl(targetCampId, updatedWithTimestamp.characterName, targetModelUrl);
+
       const memsStr = localStorage.getItem('codex_members');
       if (memsStr) {
         const mems: any[] = JSON.parse(memsStr);
@@ -182,9 +186,9 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             m.characterName &&
             m.characterName.toLowerCase() === updatedWithTimestamp.characterName.toLowerCase()
           ) {
-            if (m.modelUrl !== updatedWithTimestamp.modelUrl) {
+            if (m.modelUrl !== targetModelUrl) {
               changed = true;
-              return { ...m, modelUrl: updatedWithTimestamp.modelUrl };
+              return { ...m, modelUrl: targetModelUrl };
             }
           }
           return m;

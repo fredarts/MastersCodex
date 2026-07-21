@@ -572,29 +572,33 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     const alreadyIn = combatants.some((c) => c.name.toLowerCase() === charName.toLowerCase());
     if (alreadyIn) return;
 
-    // FONTE DE VERDADE: sempre consultar a ficha salva do jogador primeiro
-    let resolvedModelUrl: string | undefined;
-    try {
-      const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
-      if (saved) {
-        const sheets: any[] = JSON.parse(saved);
-        const cClean = charName.split('(')[0].trim().toLowerCase();
-        const found = sheets.find(
-          (s) =>
-            (s.characterName && s.characterName.split('(')[0].trim().toLowerCase() === cClean) ||
-            (s.characterName && charName.toLowerCase().includes(s.characterName.toLowerCase())) ||
-            (s.characterName && s.characterName.toLowerCase().includes(charName.toLowerCase()))
-        );
-        if (found) {
-          if (found.modelUrl) resolvedModelUrl = found.modelUrl;
-          else if (found.className) resolvedModelUrl = getModelUrlByNameOrPath(found.className);
-        }
-      }
-    } catch (e) {}
+    // 1. Usa o modelUrl vindo do cadastro do membro no Supabase (fonte de verdade cross-account)
+    let resolvedModelUrl: string | undefined = member.modelUrl;
 
-    // Fallback: member.modelUrl do cadastro, depois resolução por nome
+    // 2. Se não estiver no cadastro do membro, busca na ficha salva no localStorage (fallback local)
     if (!resolvedModelUrl) {
-      resolvedModelUrl = member.modelUrl || getModelUrlByNameOrPath(charName);
+      try {
+        const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
+        if (saved) {
+          const sheets: any[] = JSON.parse(saved);
+          const cClean = charName.split('(')[0].trim().toLowerCase();
+          const found = sheets.find(
+            (s) =>
+              (s.characterName && s.characterName.split('(')[0].trim().toLowerCase() === cClean) ||
+              (s.characterName && charName.toLowerCase().includes(s.characterName.toLowerCase())) ||
+              (s.characterName && s.characterName.toLowerCase().includes(charName.toLowerCase()))
+          );
+          if (found) {
+            if (found.modelUrl) resolvedModelUrl = found.modelUrl;
+            else if (found.className) resolvedModelUrl = getModelUrlByNameOrPath(found.className);
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 3. Fallback por nome
+    if (!resolvedModelUrl) {
+      resolvedModelUrl = getModelUrlByNameOrPath(charName);
     }
 
     const newC: Combatant = {

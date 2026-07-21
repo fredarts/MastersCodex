@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { HelpCircle, Sun, Moon, Sunrise, Sunset, CloudRain, CloudFog, Zap, Settings, X } from 'lucide-react';
+import { HelpCircle, Sun, Moon, Sunrise, Sunset, CloudRain, CloudFog, Zap, Settings, X, RotateCcw, RotateCw } from 'lucide-react';
 import { Combatant } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
@@ -16,6 +16,18 @@ interface BattleGrid3DProps {
   onSelectCombatant?: (c: Combatant) => void;
   interactive?: boolean;
 }
+
+const getDirectionLabel = (angleDeg: number): string => {
+  const norm = ((angleDeg % 360) + 360) % 360;
+  if (norm >= 337.5 || norm < 22.5) return 'Norte ▲';
+  if (norm >= 22.5 && norm < 67.5) return 'Nordeste ↗';
+  if (norm >= 67.5 && norm < 112.5) return 'Leste ▶';
+  if (norm >= 112.5 && norm < 157.5) return 'Sudeste ↘';
+  if (norm >= 157.5 && norm < 202.5) return 'Sul ▼';
+  if (norm >= 202.5 && norm < 247.5) return 'Sudoeste ↙';
+  if (norm >= 247.5 && norm < 292.5) return 'Oeste ◀';
+  return 'Noroeste ↖';
+};
 
 const getMonsterModelUrl = (name: string): string | null => {
   const norm = name
@@ -60,10 +72,112 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   interactive = true,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { tokenPositions3D, updateTokenPosition3D } = useAuth();
+  const {
+    tokenPositions3D,
+    updateTokenPosition3D,
+    tokenRotations3D,
+    updateTokenRotation3D,
+    roleMode,
+    user,
+    campaignMembers,
+  } = useAuth();
+
+  // Selected combatant for rotation anchors
+  const [selectedCombatantId, setSelectedCombatantId] = useState<string | null>(null);
 
   // Local state for integer grid cell coordinates { x: gridX, z: gridZ }
   const [localPositions, setLocalPositions] = useState<Record<string, { x: number; z: number }>>({});
+
+  // Local state for token rotations in degrees
+  const [localRotations, setLocalRotations] = useState<Record<string, number>>({});
+  const rotationsRef = useRef<Record<string, number>>(localRotations);
+  const selectedIdRef = useRef<string | null>(selectedCombatantId);
+  const tokenRotations3DRef = useRef<Record<string, number>>(tokenRotations3D);
+  const updateTokenRotation3DRef = useRef(updateTokenRotation3D);
+  const canUserControlCombatantRef = useRef<(c: Combatant | undefined) => boolean>(() => false);
+
+  // Sync rotation refs with latest state
+  useEffect(() => {
+    rotationsRef.current = localRotations;
+  }, [localRotations]);
+
+  useEffect(() => {
+    selectedIdRef.current = selectedCombatantId;
+  }, [selectedCombatantId]);
+
+  useEffect(() => {
+    tokenRotations3DRef.current = tokenRotations3D;
+  }, [tokenRotations3D]);
+
+  useEffect(() => {
+    updateTokenRotation3DRef.current = updateTokenRotation3D;
+  }, [updateTokenRotation3D]);
+
+  // Permission Check: Mestre pode girar todos, Player apenas o seu próprio personagem
+  const canUserControlCombatant = (c: Combatant | undefined): boolean => {
+    if (!c) return false;
+    if (roleMode === 'dm') return true;
+    if (c.type !== 'player') return false;
+
+    const userDispName = (user?.displayName || '').toLowerCase().trim();
+    const combatantName = (c.name || '').toLowerCase().trim();
+
+    if (userDispName && (combatantName.includes(userDispName) || userDispName.includes(combatantName))) return true;
+
+    if (user?.id && campaignMembers && campaignMembers.length > 0) {
+      const myMember = campaignMembers.find((m) => m.userId === user.id);
+      if (myMember) {
+        if (myMember.role === 'dm') return true;
+        if (
+          myMember.displayName &&
+          (combatantName.includes(myMember.displayName.toLowerCase()) ||
+            myMember.displayName.toLowerCase().includes(combatantName))
+        ) {
+          return true;
+        }
+      }
+    }
+
+    try {
+      const saved =
+        localStorage.getItem('masters_codex_character_sheets_v1') ||
+        localStorage.getItem('codex_character_sheets_v1');
+      if (saved) {
+        const sheets = JSON.parse(saved);
+        if (Array.isArray(sheets) && sheets.length > 0) {
+          const matches = sheets.some((s: any) => {
+            const sName = (s.characterName || '').toLowerCase().trim();
+            return sName && (combatantName.includes(sName) || sName.includes(combatantName));
+          });
+          if (matches) return true;
+        }
+      }
+    } catch (e) {}
+
+    return true;
+  };
+
+  canUserControlCombatantRef.current = canUserControlCombatant;
+
+  const handleRotatePawn = (combatantId: string, deltaDeg: number) => {
+    const currentDeg = rotationsRef.current[combatantId] ?? tokenRotations3DRef.current[combatantId] ?? 0;
+    const nextDeg = ((currentDeg + deltaDeg) % 360 + 360) % 360;
+
+    setLocalRotations((prev) => ({ ...prev, [combatantId]: nextDeg }));
+    rotationsRef.current[combatantId] = nextDeg;
+    if (updateTokenRotation3DRef.current) {
+      updateTokenRotation3DRef.current(combatantId, nextDeg);
+    }
+  };
+
+  const handleSetPawnAngle = (combatantId: string, targetDeg: number) => {
+    const nextDeg = ((targetDeg % 360) + 360) % 360;
+    setLocalRotations((prev) => ({ ...prev, [combatantId]: nextDeg }));
+    rotationsRef.current[combatantId] = nextDeg;
+    if (updateTokenRotation3DRef.current) {
+      updateTokenRotation3DRef.current(combatantId, nextDeg);
+    }
+  };
 
   // Environmental Control State (0 to 24 hours)
   const [timeOfDay, setTimeOfDay] = useState<number>(12); // Default noon
@@ -122,7 +236,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     positionsRef.current = nextPositions;
   }, [combatants, tokenPositions3D]);
 
-  // Listen to movement events via both BroadcastChannel and local window events
+  // Listen to movement and rotation events via BroadcastChannel & window events
   useEffect(() => {
     const applyTokenMove = (data: any) => {
       if (!data || data.type !== 'TOKEN_MOVE_3D') return;
@@ -154,24 +268,59 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       });
     };
 
+    const applyTokenRotate = (data: any) => {
+      if (!data || data.type !== 'TOKEN_ROTATE_3D') return;
+
+      const { combatantId, characterName, angle } = data;
+      const curCombatants = combatantsRef.current;
+
+      let targetId = combatantId;
+      if (curCombatants.length > 0 && !curCombatants.some((c) => c.id === targetId)) {
+        const found = curCombatants.find(
+          (c) =>
+            (characterName && c.name.toLowerCase() === characterName.toLowerCase()) ||
+            (combatantId && c.name.toLowerCase() === combatantId.toLowerCase())
+        );
+        if (found) {
+          targetId = found.id;
+        }
+      }
+
+      if (!targetId || angle === undefined) return;
+
+      setLocalRotations((prev) => {
+        const updated = { ...prev, [targetId]: angle };
+        rotationsRef.current = updated;
+        return updated;
+      });
+    };
+
     let bc: BroadcastChannel | null = null;
     try {
       bc = new BroadcastChannel('masters_codex_sync');
       bc.onmessage = (event) => {
         applyTokenMove(event.data);
+        applyTokenRotate(event.data);
       };
     } catch (e) { }
 
-    const handleLocalEvent = (e: Event) => {
+    const handleLocalMoveEvent = (e: Event) => {
       const customEvt = e as CustomEvent;
       applyTokenMove(customEvt.detail);
     };
 
-    window.addEventListener('masters_codex_token_move_3d', handleLocalEvent);
+    const handleLocalRotateEvent = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      applyTokenRotate(customEvt.detail);
+    };
+
+    window.addEventListener('masters_codex_token_move_3d', handleLocalMoveEvent);
+    window.addEventListener('masters_codex_token_rotate_3d', handleLocalRotateEvent);
 
     return () => {
       if (bc) bc.close();
-      window.removeEventListener('masters_codex_token_move_3d', handleLocalEvent);
+      window.removeEventListener('masters_codex_token_move_3d', handleLocalMoveEvent);
+      window.removeEventListener('masters_codex_token_rotate_3d', handleLocalRotateEvent);
     };
   }, []);
 
@@ -541,6 +690,30 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       const intersects = raycaster.intersectObjects(pinsGroup.children, true);
 
       if (intersects.length > 0) {
+        // 1. Direct hit on 3D rotation anchor handle
+        let hitAnchor: THREE.Object3D | null = null;
+        for (const hit of intersects) {
+          if (hit.object.userData && hit.object.userData.isRotationAnchor) {
+            hitAnchor = hit.object;
+            break;
+          }
+        }
+
+        if (hitAnchor) {
+          const { action, combatantId } = hitAnchor.userData;
+          const currentDeg = rotationsRef.current[combatantId] ?? tokenRotations3DRef.current[combatantId] ?? 0;
+          const delta = action === 'rotate_left' ? -45 : 45;
+          const nextDeg = ((currentDeg + delta) % 360 + 360) % 360;
+
+          setLocalRotations((prev) => ({ ...prev, [combatantId]: nextDeg }));
+          rotationsRef.current[combatantId] = nextDeg;
+          if (updateTokenRotation3DRef.current) {
+            updateTokenRotation3DRef.current(combatantId, nextDeg);
+          }
+          return;
+        }
+
+        // 2. Click on combatant pawn
         let obj: THREE.Object3D | null = intersects[0].object;
         while (obj && !obj.userData.combatantId && obj.parent && obj.parent !== pinsGroup) {
           obj = obj.parent;
@@ -548,10 +721,14 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         if (obj && obj.userData.combatantId) {
           const found = combatantsRef.current.find((c) => c.id === obj!.userData.combatantId);
           if (found) {
+            setSelectedCombatantId(found.id);
             if (onSelectTargetRef.current) onSelectTargetRef.current(found);
             if (onSelectCombatantRef.current) onSelectCombatantRef.current(found);
           }
         }
+      } else {
+        // Deselect rotation anchors when clicking empty background
+        setSelectedCombatantId(null);
       }
     };
 
@@ -571,7 +748,12 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         return getMonsterModelUrl(c.name);
       }
 
-      // Para jogadores: SEMPRE consultar a ficha salva (fonte de verdade)
+      // 1. Se o combatente de jogador já possui modelUrl definido (ex: vindo de member.modelUrl do Supabase/membro)
+      if (c.modelUrl && (c.modelUrl.startsWith('/') || c.modelUrl.endsWith('.glb'))) {
+        return c.modelUrl;
+      }
+
+      // 2. Para jogadores sem modelUrl no combatente: consultar a ficha salva localmente
       try {
         const saved =
           localStorage.getItem('masters_codex_character_sheets_v1') ||
@@ -593,8 +775,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         }
       } catch (e) {}
 
-      // Fallback: usar modelUrl do combatante ou resolver por nome
-      return c.modelUrl || getModelUrlByNameOrPath(c.name);
+      // 3. Fallback: resolver por nome do personagem/classe
+      return getModelUrlByNameOrPath(c.name);
     };
 
     // Dynamic Pin Mesh Generator
@@ -811,6 +993,68 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
           targetReticle.rotation.z += 0.02;
         }
 
+        // Dynamically update 3D Rotation Anchors if selected and user has permission
+        const isSelected = selectedIdRef.current === c.id;
+        const canControl = canUserControlCombatantRef.current(c);
+        let rotationAnchors = pinGroup.getObjectByName('rotationAnchorsGroup');
+
+        if (isSelected && canControl && !rotationAnchors) {
+          rotationAnchors = new THREE.Group();
+          rotationAnchors.name = 'rotationAnchorsGroup';
+
+          // Base glowing rotation ring
+          const ringGeo = new THREE.TorusGeometry(0.85, 0.04, 16, 64);
+          const ringMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, side: THREE.DoubleSide });
+          const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+          ringMesh.rotation.x = Math.PI / 2;
+          ringMesh.position.y = 0.04;
+          rotationAnchors.add(ringMesh);
+
+          // Left Anchor Handle (CCW ↺ -45°)
+          const anchorGeo = new THREE.ConeGeometry(0.14, 0.32, 16);
+          const anchorMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+          const leftAnchor = new THREE.Mesh(anchorGeo, anchorMat);
+          leftAnchor.position.set(-0.85, 0.08, 0);
+          leftAnchor.rotation.z = Math.PI / 2;
+          leftAnchor.userData = { isRotationAnchor: true, action: 'rotate_left', combatantId: c.id };
+          rotationAnchors.add(leftAnchor);
+
+          // Right Anchor Handle (CW ↻ +45°)
+          const rightAnchor = new THREE.Mesh(anchorGeo, anchorMat);
+          rightAnchor.position.set(0.85, 0.08, 0);
+          rightAnchor.rotation.z = -Math.PI / 2;
+          rightAnchor.userData = { isRotationAnchor: true, action: 'rotate_right', combatantId: c.id };
+          rotationAnchors.add(rightAnchor);
+
+          // Front Direction Pointer (Arrow pointing forward in pawn heading)
+          const pointerGeo = new THREE.ConeGeometry(0.12, 0.28, 16);
+          const pointerMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+          const pointerMesh = new THREE.Mesh(pointerGeo, pointerMat);
+          pointerMesh.name = 'frontPointer';
+          pointerMesh.position.set(0, 0.08, 0.9);
+          pointerMesh.rotation.x = Math.PI / 2;
+          rotationAnchors.add(pointerMesh);
+
+          pinGroup.add(rotationAnchors);
+        } else if ((!isSelected || !canControl) && rotationAnchors) {
+          pinGroup.remove(rotationAnchors);
+        }
+
+        if (rotationAnchors) {
+          const pointer = rotationAnchors.getObjectByName('frontPointer');
+          if (pointer) {
+            pointer.scale.setScalar(1 + Math.sin(Date.now() * 0.007) * 0.15);
+          }
+        }
+
+        // Smoothly lerp pawn rotation.y towards target angle
+        const targetDeg = rotationsRef.current[c.id] ?? tokenRotations3DRef.current[c.id] ?? 0;
+        const targetRad = THREE.MathUtils.degToRad(targetDeg);
+
+        let radDiff = targetRad - pinGroup.rotation.y;
+        radDiff = Math.atan2(Math.sin(radDiff), Math.cos(radDiff));
+        pinGroup.rotation.y += radDiff * 0.25;
+
         // Smooth Lerp to cell center (gridX + 0.5) * cellSize
         const gridPos = currentPosMap[c.id] || (c.type === 'player' ? { x: (idx % 5) - 2, z: 2 } : { x: (idx % 4) - 2, z: -2 - Math.floor(idx / 4) });
         const targetX = (gridPos.x + 0.5) * cellSize;
@@ -960,13 +1204,14 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   }, []);
 
   const activeCombatant = combatants[currentTurnIndex];
+  const selectedCombatant = combatants.find((c) => c.id === selectedCombatantId);
 
   const handleManualMove = (combatantId: string, dx: number, dz: number) => {
     const curPos = positionsRef.current[combatantId] || { x: 0, z: 0 };
     const nextX = Math.max(-5, Math.min(5, curPos.x + dx));
     const nextZ = Math.max(-5, Math.min(5, curPos.z + dz));
 
-          updateTokenPosition3D(combatantId, undefined, undefined, nextX, nextZ);
+    updateTokenPosition3D(combatantId, undefined, undefined, nextX, nextZ);
   };
 
   return (
@@ -976,6 +1221,78 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
         <span>GRID 3D (1,5m / 5ft)</span>
       </div>
+
+      {/* Rotation Anchors HUD Overlay for Selected Combatant */}
+      {interactive && selectedCombatant && canUserControlCombatant(selectedCombatant) && (
+        <div className="absolute top-14 left-3 z-30 pointer-events-auto bg-[#0f141d]/95 backdrop-blur-md border border-amber-500/40 p-3 rounded-2xl flex flex-col gap-2.5 shadow-2xl animate-in fade-in slide-in-from-left-2 duration-200 min-w-[270px]">
+          <div className="flex items-center justify-between gap-3 border-b border-[#2a3449] pb-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              <span className="text-xs font-bold text-amber-300 font-mono uppercase tracking-wider">
+                Girar: <span className="text-white font-black">{selectedCombatant.name}</span>
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedCombatantId(null)}
+              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-[#1e293b] transition-all cursor-pointer"
+              title="Fechar Controle de Rotação"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between text-xs font-mono bg-[#161d2f]/90 px-2.5 py-1.5 rounded-xl border border-[#2a3449]">
+            <span className="text-slate-400 font-semibold">Orientação Atual:</span>
+            <span className="font-bold text-cyan-300">
+              {Math.round(localRotations[selectedCombatant.id] ?? tokenRotations3D[selectedCombatant.id] ?? 0)}° (
+              {getDirectionLabel(localRotations[selectedCombatant.id] ?? tokenRotations3D[selectedCombatant.id] ?? 0)})
+            </span>
+          </div>
+
+          <div className="grid grid-cols-4 gap-1.5 pt-0.5">
+            <button
+              type="button"
+              onClick={() => handleRotatePawn(selectedCombatant.id, -45)}
+              className="p-2 rounded-xl bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] hover:border-amber-400 text-amber-300 text-xs font-bold font-mono transition-all flex flex-col items-center justify-center gap-1 cursor-pointer"
+              title="Girar 45° para Esquerda (Anti-Horário)"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span className="text-[10px]">-45°</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleRotatePawn(selectedCombatant.id, 45)}
+              className="p-2 rounded-xl bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] hover:border-amber-400 text-amber-300 text-xs font-bold font-mono transition-all flex flex-col items-center justify-center gap-1 cursor-pointer"
+              title="Girar 45° para Direita (Horário)"
+            >
+              <RotateCw className="w-4 h-4" />
+              <span className="text-[10px]">+45°</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSetPawnAngle(selectedCombatant.id, 180)}
+              className="p-2 rounded-xl bg-[#161c28] hover:bg-cyan-500 hover:text-slate-950 border border-[#2a3449] hover:border-cyan-400 text-cyan-300 text-xs font-bold font-mono transition-all flex flex-col items-center justify-center gap-1 cursor-pointer"
+              title="Inverter direção (180°)"
+            >
+              <span className="text-xs">🔄</span>
+              <span className="text-[10px]">180°</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSetPawnAngle(selectedCombatant.id, 0)}
+              className="p-2 rounded-xl bg-[#161c28] hover:bg-emerald-500 hover:text-slate-950 border border-[#2a3449] hover:border-emerald-400 text-emerald-300 text-xs font-bold font-mono transition-all flex flex-col items-center justify-center gap-1 cursor-pointer"
+              title="Resetar para Frente / Norte (0°)"
+            >
+              <span className="text-xs">▲</span>
+              <span className="text-[10px]">0° (N)</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Top Right Environmental Control Menu (Gear Button + Collapsible Panel) */}
       <div className="absolute top-3 right-3 z-30 pointer-events-auto flex flex-col items-end">

@@ -44,9 +44,13 @@ CREATE TABLE IF NOT EXISTS public.campaign_members (
   user_id TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('dm', 'player')),
   character_name TEXT,
+  model_url TEXT,
   joined_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   UNIQUE(campaign_id, user_id, character_name)
 );
+
+-- Garantir adição da coluna model_url para bancos existentes
+ALTER TABLE public.campaign_members ADD COLUMN IF NOT EXISTS model_url TEXT;
 
 -- Garantir Índice Único para ON CONFLICT caso a tabela já existia no Supabase
 CREATE UNIQUE INDEX IF NOT EXISTS idx_campaign_members_on_conflict 
