@@ -311,10 +311,13 @@ function MainApp() {
   );
 }
 
+import { AppProviders } from '@/components/AppProviders';
+
 export default function Home() {
   return (
-    <AuthProvider>
+    <AppProviders>
       <MainApp />
-    </AuthProvider>
+    </AppProviders>
   );
 }
+

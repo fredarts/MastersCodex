@@ -71,6 +71,13 @@ CREATE TABLE IF NOT EXISTS public.world_entities (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- Garantir adição de colunas para world_entities em bancos existentes
+ALTER TABLE public.world_entities ADD COLUMN IF NOT EXISTS sub_type TEXT;
+ALTER TABLE public.world_entities ADD COLUMN IF NOT EXISTS short_desc TEXT;
+ALTER TABLE public.world_entities ADD COLUMN IF NOT EXISTS full_content TEXT;
+ALTER TABLE public.world_entities ADD COLUMN IF NOT EXISTS attributes JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.world_entities ADD COLUMN IF NOT EXISTS connections JSONB DEFAULT '[]'::jsonb;
+
 -- 1.6 Tabela Sessions
 CREATE TABLE IF NOT EXISTS public.sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -99,6 +106,16 @@ CREATE TABLE IF NOT EXISTS public.scenes (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- Garantir adição de colunas caso a tabela scenes já existia anteriormente no Supabase
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS npc_name TEXT;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS sensory_text TEXT;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS secret_notes TEXT;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS bgm_category TEXT;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS npc_audio_url TEXT;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS sfx_shortcuts JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS combatants JSONB DEFAULT '[]'::jsonb;
+
 -- 1.8 Tabela Campaign Feed Events
 CREATE TABLE IF NOT EXISTS public.campaign_feed_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -111,6 +128,11 @@ CREATE TABLE IF NOT EXISTS public.campaign_feed_events (
   is_public BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Garantir adição de colunas para campaign_feed_events em bancos existentes
+ALTER TABLE public.campaign_feed_events ADD COLUMN IF NOT EXISTS details JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.campaign_feed_events ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT true;
+
 
 -- Trigger automático para novos logins de usuários
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -175,3 +197,65 @@ CREATE POLICY "Allow_All_Scenes" ON public.scenes FOR ALL USING (true) WITH CHEC
 
 ALTER TABLE public.campaign_feed_events ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow_All_Feed" ON public.campaign_feed_events FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.character_sheets ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow_All_Character_Sheets" ON public.character_sheets FOR ALL USING (true) WITH CHECK (true);
+
+
+-- ==============================================================================
+-- VIEW SEGURA DE CENAS PARA JOGADORES (OMITE NOTAS SECRETAS DO MESTRE)
+-- ==============================================================================
+
+CREATE OR REPLACE VIEW public.scenes_player_view AS
+SELECT 
+  id,
+  session_id,
+  order_index,
+  title,
+  scene_type,
+  npc_name,
+  sensory_text,
+  bgm_category,
+  image_url,
+  npc_audio_url,
+  sfx_shortcuts,
+  combatants,
+  created_at
+FROM public.scenes;
+
+-- 1.9 Tabela Character Sheets (Fichas de Personagens em Tempo Real)
+CREATE TABLE IF NOT EXISTS public.character_sheets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL,
+  campaign_id UUID REFERENCES public.campaigns(id) ON DELETE CASCADE,
+  character_name TEXT NOT NULL,
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Garantir colunas e índices
+ALTER TABLE public.character_sheets ADD COLUMN IF NOT EXISTS data JSONB NOT NULL DEFAULT '{}'::jsonb;
+CREATE INDEX IF NOT EXISTS idx_character_sheets_user_campaign ON public.character_sheets(user_id, campaign_id);
+
+-- ==============================================================================
+-- PUBLICAÇÃO SUPABASE REALTIME (HABILITA WEBSOCKETS NAS TABELAS)
+-- ==============================================================================
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.campaign_members;
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.sessions;
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.scenes;
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.campaign_feed_events;
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.world_entities;
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.character_sheets;
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Ignorar erro caso a tabela já pertença à publicação
+    NULL;
+END $$;
+
+

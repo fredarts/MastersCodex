@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { CharacterSheet } from '@/lib/types';
 import { calculatePassivePerception, formatModifier, getAttributeModifier } from '@/lib/dnd5e-calculator';
-import { Shield, Eye, Dices, Heart, Plus, Minus, X } from 'lucide-react';
+import { Shield, Eye, Dices, Heart, X, Moon } from 'lucide-react';
+import { RestModal } from './Modals/RestModal';
 
 interface QuickCombatBarProps {
   sheet: CharacterSheet;
@@ -10,6 +11,7 @@ interface QuickCombatBarProps {
 
 export const QuickCombatBar: React.FC<QuickCombatBarProps> = ({ sheet, onChange }) => {
   const [isDiceModalOpen, setIsDiceModalOpen] = useState(false);
+  const [isRestModalOpen, setIsRestModalOpen] = useState(false);
   const [lastRoll, setLastRoll] = useState<{ d20: number; mod: number; total: number; label: string } | null>(null);
 
   const passivePerception = calculatePassivePerception(sheet);
@@ -71,6 +73,16 @@ export const QuickCombatBar: React.FC<QuickCombatBarProps> = ({ sheet, onChange 
           </div>
         </div>
 
+        {/* BOTÃO DESCANSO */}
+        <button
+          type="button"
+          onClick={() => setIsRestModalOpen(true)}
+          className="flex items-center gap-1 bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 border border-indigo-500/40 font-extrabold px-2.5 py-1.5 rounded-xl shadow-sm active:scale-95 transition-transform shrink-0 text-[10px] uppercase"
+        >
+          <Moon className="w-3.5 h-3.5" />
+          Rest
+        </button>
+
         {/* BOTÃO ROLADOR DE DADOS */}
         <button
           type="button"
@@ -78,9 +90,19 @@ export const QuickCombatBar: React.FC<QuickCombatBarProps> = ({ sheet, onChange 
           className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-3 py-1.5 rounded-xl shadow-lg shadow-amber-500/20 active:scale-95 transition-transform shrink-0 text-xs"
         >
           <Dices className="w-4 h-4" />
-          Rolador d20
+          d20
         </button>
       </div>
+
+      {/* REST MODAL */}
+      <RestModal
+        sheet={sheet}
+        isOpen={isRestModalOpen}
+        onClose={() => setIsRestModalOpen(false)}
+        onApply={(updated) => {
+          onChange(updated);
+        }}
+      />
 
       {/* MODAL ROLADOR DE DADOS D20 */}
       {isDiceModalOpen && (
@@ -139,3 +161,5 @@ export const QuickCombatBar: React.FC<QuickCombatBarProps> = ({ sheet, onChange 
     </>
   );
 };
+
+

@@ -273,13 +273,15 @@ export function createEmptyCharacterSheet(userId: string, campaignId?: string): 
     modelUrl: getModelUrlByNameOrPath('Guerreiro'),
 
     inspiration: false,
+    attributePointsAvailable: 27,
+    attributesLocked: false,
     attributes: {
-      str: { score: 10 },
-      dex: { score: 10 },
-      con: { score: 10 },
-      int: { score: 10 },
-      wis: { score: 10 },
-      cha: { score: 10 },
+      str: { score: 8 },
+      dex: { score: 8 },
+      con: { score: 8 },
+      int: { score: 8 },
+      wis: { score: 8 },
+      cha: { score: 8 },
     },
     savingThrows: {
       str: true,

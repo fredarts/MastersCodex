@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CharacterSheet } from '@/lib/types';
+import { AdvantageMode, CharacterSheet, DiceRollEvent } from '@/lib/types';
 import { GeneralSection } from './Sections/GeneralSection';
 import { CombatSection } from './Sections/CombatSection';
 import { SkillsSection } from './Sections/SkillsSection';
@@ -7,6 +7,8 @@ import { EquipmentSection } from './Sections/EquipmentSection';
 import { SpellsSection } from './Sections/SpellsSection';
 import { RPSection } from './Sections/RPSection';
 import { QuickCombatBar } from './QuickCombatBar';
+import { CharacterBuilderWizardModal } from './Modals/CharacterBuilderWizardModal';
+import { exportCharacterToJson, importCharacterFromJson, exportCharacterToPrintablePdf } from '@/lib/character-exporter';
 import {
   Menu,
   X,
@@ -19,6 +21,13 @@ import {
   Save,
   CheckCircle2,
   ChevronRight,
+  Dices,
+  TrendingUp,
+  TrendingDown,
+  Download,
+  Upload,
+  Printer,
+  Wand2,
 } from 'lucide-react';
 
 interface CharacterSheetModalProps {
@@ -26,6 +35,7 @@ interface CharacterSheetModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (updatedSheet: CharacterSheet) => void;
+  onRollEvent?: (event: DiceRollEvent) => void;
 }
 
 type TabType = 'general' | 'combat' | 'skills' | 'equipment' | 'spells' | 'rp';
@@ -44,11 +54,15 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  onRollEvent,
 }) => {
   const [sheet, setSheet] = useState<CharacterSheet>(initialSheet);
   const [activeTab, setActiveTab] = useState<TabType>('general');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSavedFeedback, setIsSavedFeedback] = useState(false);
+  const [advantageMode, setAdvantageMode] = useState<AdvantageMode>('normal');
+  const [lastRoll, setLastRoll] = useState<DiceRollEvent | null>(null);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   // Sincroniza o estado interno da ficha sempre que o modal for aberto ou a ficha inicial mudar
   useEffect(() => {
@@ -74,8 +88,41 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
     onClose();
   };
 
+  const handleRollExecuted = (event: DiceRollEvent) => {
+    setLastRoll(event);
+    if (onRollEvent) onRollEvent(event);
+    setTimeout(() => {
+      setLastRoll((prev) => (prev?.id === event.id ? null : prev));
+    }, 4500);
+  };
+
+  const handleImportJsonFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const imported = await importCharacterFromJson(file);
+      setSheet(imported);
+      onSave(imported);
+      alert('Ficha importada com sucesso!');
+    } catch (err) {
+      alert('Erro ao importar ficha: ' + (err as Error).message);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col justify-between overflow-hidden select-none animate-fade-in">
+      {/* WIZARD MODAL */}
+      <CharacterBuilderWizardModal
+        userId={sheet.userId}
+        campaignId={sheet.campaignId}
+        isOpen={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        onCharacterCreated={(newSheet) => {
+          setSheet(newSheet);
+          onSave(newSheet);
+        }}
+      />
+
       {/* HEADER SUPERIOR FIXO (MOBILE PORTRAIT FRIENDLY) */}
       <header className="bg-[#0f172a] border-b border-amber-500/30 px-4 py-3 flex items-center justify-between shrink-0 shadow-lg">
         {/* BOTÃO DO MENU SANDUÍCHE */}
@@ -137,6 +184,52 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
         </div>
       </header>
 
+      {/* SELETOR DE MODO DE DADO (VANTAGEM / NORMAL / DESVANTAGEM) */}
+      <div className="bg-[#0b0f19] border-b border-amber-500/20 px-3 py-1.5 flex items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center gap-1.5">
+          <Dices className="w-4 h-4 text-amber-400" />
+          <span className="text-[10px] font-extrabold uppercase text-slate-400">Modo de Rolagem d20:</span>
+        </div>
+
+        <div className="flex items-center bg-[#141b2d] p-0.5 rounded-xl border border-slate-800 gap-1">
+          <button
+            type="button"
+            onClick={() => setAdvantageMode('disadvantage')}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase transition-all ${
+              advantageMode === 'disadvantage'
+                ? 'bg-rose-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <TrendingDown className="w-3 h-3" />
+            Desvantagem
+          </button>
+          <button
+            type="button"
+            onClick={() => setAdvantageMode('normal')}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase transition-all ${
+              advantageMode === 'normal'
+                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Normal
+          </button>
+          <button
+            type="button"
+            onClick={() => setAdvantageMode('advantage')}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase transition-all ${
+              advantageMode === 'advantage'
+                ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <TrendingUp className="w-3 h-3" />
+            Vantagem
+          </button>
+        </div>
+      </div>
+
       {/* NAVEGAÇÃO DE ABAS RÁPIDAS (SCROLL HORIZONTAL PORTRAIT) */}
       <div className="bg-[#141b2d] border-b border-slate-800 px-3 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none shrink-0">
         {NAV_TABS.map((tab) => {
@@ -160,11 +253,47 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
         })}
       </div>
 
-      {/* ÁREA DE CONTEÚDO PRINCIPAL COM SCROLL DA FICHA */}
-      <main className="flex-1 overflow-y-auto px-4 py-4 max-w-xl mx-auto w-full relative">
+      {/* CONTEÚDO DA ABA SELECIONADA */}
+      <main className="flex-1 overflow-y-auto p-4 max-w-4xl w-full mx-auto relative scrollbar-thin">
+        {/* BANNER FLUTUANTE DE FEEDBACK DE ROLAGEM */}
+        {lastRoll && (
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#141b2d]/95 border border-amber-500/50 rounded-2xl px-5 py-3 shadow-2xl backdrop-blur-md flex items-center gap-4 animate-bounce-subtle">
+            <Dices className="w-6 h-6 text-amber-400 animate-spin-once" />
+            <div>
+              <span className="text-[10px] font-bold uppercase text-slate-400 block">{lastRoll.characterName}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-extrabold text-white">{lastRoll.label}:</span>
+                <span className="text-xl font-black text-amber-400 font-mono">{lastRoll.total}</span>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  (d20: {lastRoll.selectedD20 ?? 10} {lastRoll.modifier >= 0 ? `+${lastRoll.modifier}` : lastRoll.modifier})
+                  {lastRoll.isCrit && ' 🔥 CRÍTICO!'}
+                  {lastRoll.isFail && ' 💀 FALHA CRÍTICA!'}
+                </span>
+              </div>
+            </div>
+            <button type="button" onClick={() => setLastRoll(null)} className="text-slate-400 hover:text-white p-1">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {activeTab === 'general' && <GeneralSection sheet={sheet} onChange={setSheet} />}
-        {activeTab === 'combat' && <CombatSection sheet={sheet} onChange={setSheet} />}
-        {activeTab === 'skills' && <SkillsSection sheet={sheet} onChange={setSheet} />}
+        {activeTab === 'combat' && (
+          <CombatSection
+            sheet={sheet}
+            onChange={setSheet}
+            advantageMode={advantageMode}
+            onRoll={handleRollExecuted}
+          />
+        )}
+        {activeTab === 'skills' && (
+          <SkillsSection
+            sheet={sheet}
+            onChange={setSheet}
+            advantageMode={advantageMode}
+            onRoll={handleRollExecuted}
+          />
+        )}
         {activeTab === 'equipment' && <EquipmentSection sheet={sheet} onChange={setSheet} />}
         {activeTab === 'spells' && <SpellsSection sheet={sheet} onChange={setSheet} />}
         {activeTab === 'rp' && <RPSection sheet={sheet} onChange={setSheet} />}
@@ -176,7 +305,7 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
       {/* DRAWER LATERAL DO MENU SANDUÍCHE (RETRÁTIL MOBILE) */}
       {isDrawerOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-start animate-fade-in">
-          <div className="bg-[#0f172a] border-r border-amber-500/30 w-72 h-full p-5 space-y-6 flex flex-col justify-between shadow-2xl animate-slide-right">
+          <div className="bg-[#0f172a] border-r border-amber-500/30 w-72 h-full p-5 space-y-6 flex flex-col justify-between shadow-2xl animate-slide-right overflow-y-auto">
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2">
@@ -221,6 +350,46 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
                     </button>
                   );
                 })}
+              </div>
+
+              {/* FERRAMENTAS E EXPORTAÇÃO */}
+              <div className="pt-4 border-t border-slate-800 space-y-2">
+                <span className="text-[10px] font-black uppercase text-slate-500 block tracking-wider">
+                  Ferramentas & Exportação
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => { setIsWizardOpen(true); setIsDrawerOpen(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-all"
+                >
+                  <Wand2 className="w-4 h-4" />
+                  Criador Guiado (Wizard)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => exportCharacterToJson(sheet)}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 hover:text-white transition-all"
+                >
+                  <Download className="w-4 h-4 text-slate-400" />
+                  Exportar JSON
+                </button>
+
+                <label className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 hover:text-white transition-all cursor-pointer">
+                  <Upload className="w-4 h-4 text-slate-400" />
+                  <span>Importar JSON</span>
+                  <input type="file" accept=".json" onChange={handleImportJsonFile} className="hidden" />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => exportCharacterToPrintablePdf(sheet)}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 hover:text-white transition-all"
+                >
+                  <Printer className="w-4 h-4 text-slate-400" />
+                  Imprimir / PDF
+                </button>
               </div>
             </div>
 

@@ -3,7 +3,9 @@
 import React from 'react';
 import { X, Tv, Swords, Shield, Heart, Sparkles, Map } from 'lucide-react';
 import { Combatant } from '@/lib/types';
-import { useAuth } from '@/context/AuthContext';
+import { useSession } from '@/context/SessionContext';
+import { useCampaign } from '@/context/CampaignContext';
+import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 
 import { BattleGrid3D } from '@/components/BattleGrid3D';
@@ -23,7 +25,9 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
   currentTurnIndex,
   roundCount,
 }) => {
-  const { activeScene, activeCampaign, liveDisplayMode } = useAuth();
+  const { activeScene } = useSession();
+  const { activeCampaign } = useCampaign();
+  const { liveDisplayMode } = useLiveCockpit();
   if (!isOpen) return null;
 
   const isCombatMode = liveDisplayMode === 'combat' || activeScene?.sceneType === 'combat' || combatants.length > 0;

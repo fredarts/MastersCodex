@@ -113,25 +113,47 @@ export const Dice3DCanvas: React.FC<Dice3DCanvasProps> = ({
     const wireframe = new THREE.LineSegments(wireGeo, wireMat);
     mesh.add(wireframe);
 
-    // Animation Loop
+    // Physics Simulation Variables (Speed, Angular Velocity, Bounce Damping)
     let animationFrameId: number;
-    let rotX = Math.random() * Math.PI;
-    let rotY = Math.random() * Math.PI;
+    let angularVelX = (Math.random() - 0.5) * 0.4 + 0.25;
+    let angularVelY = (Math.random() - 0.5) * 0.4 + 0.25;
+    let angularVelZ = (Math.random() - 0.5) * 0.2 + 0.1;
+    let posX = (Math.random() - 0.5) * 0.4;
+    let posY = (Math.random() - 0.5) * 0.4;
+    let velX = (Math.random() - 0.5) * 0.04;
+    let velY = (Math.random() - 0.5) * 0.04;
 
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
 
       if (isRolling) {
-        rotX += 0.18;
-        rotY += 0.22;
-        mesh.rotation.x = rotX;
-        mesh.rotation.y = rotY;
-        mesh.rotation.z += 0.08;
+        // Physics motion simulation
+        mesh.rotation.x += angularVelX;
+        mesh.rotation.y += angularVelY;
+        mesh.rotation.z += angularVelZ;
+
+        posX += velX;
+        posY += velY;
+
+        // Table Boundary collisions
+        if (Math.abs(posX) > 0.3) {
+          velX *= -0.8;
+          angularVelX *= 0.9;
+        }
+        if (Math.abs(posY) > 0.3) {
+          velY *= -0.8;
+          angularVelY *= 0.9;
+        }
+
+        mesh.position.x = posX;
+        mesh.position.y = posY;
       } else {
-        // Smooth alignment to front face
-        mesh.rotation.x += (0 - mesh.rotation.x) * 0.15;
-        mesh.rotation.y += (0 - mesh.rotation.y) * 0.15;
-        mesh.rotation.z += (0 - mesh.rotation.z) * 0.15;
+        // Smooth alignment and landing rest
+        mesh.rotation.x += (0 - mesh.rotation.x) * 0.18;
+        mesh.rotation.y += (0 - mesh.rotation.y) * 0.18;
+        mesh.rotation.z += (0 - mesh.rotation.z) * 0.18;
+        mesh.position.x += (0 - mesh.position.x) * 0.18;
+        mesh.position.y += (0 - mesh.position.y) * 0.18;
       }
 
       renderer.render(scene, camera);
@@ -141,31 +163,29 @@ export const Dice3DCanvas: React.FC<Dice3DCanvasProps> = ({
 
     return () => {
       cancelAnimationFrame(animationFrameId);
-      if (container.contains(renderer.domElement)) {
-        container.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
       geometry.dispose();
       material.dispose();
+      wireGeo.dispose();
+      wireMat.dispose();
+      renderer.dispose();
     };
   }, [dieType, isRolling, isHit, isFail, isCrit]);
 
   return (
-    <div className="relative w-32 h-32 flex items-center justify-center">
-      {/* 3D WebGL Canvas */}
-      <div ref={containerRef} className="w-full h-full" />
-
-      {/* Floating 3D Die Number Overlay */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-slate-100 font-mono font-black select-none pointer-events-none drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
-        <span className="text-4xl font-extrabold tracking-tighter leading-none">
-          {number}
-        </span>
-        {modifier !== undefined && (
-          <span className="text-[10px] font-bold text-amber-300 bg-slate-950/80 px-1.5 py-0.5 rounded-full border border-amber-500/40 mt-1 shadow">
-            {dieType.toUpperCase()} {modifier >= 0 ? `+${modifier}` : modifier}
-          </span>
-        )}
-      </div>
+    <div className="relative w-full h-full flex flex-col items-center justify-center">
+      <div ref={containerRef} className="w-28 h-28 cursor-pointer" />
+      {!isRolling && number > 0 && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none animate-fade-in">
+          <div className="text-2xl font-black text-slate-100 font-mono drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)]">
+            {number}
+          </div>
+          {modifier !== undefined && modifier !== 0 && (
+            <div className="text-[10px] font-bold text-amber-300 font-mono">
+              ({number + modifier})
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

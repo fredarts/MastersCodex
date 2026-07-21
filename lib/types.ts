@@ -238,7 +238,30 @@ export interface SFXButton {
 // D&D 5E CHARACTER SHEET INTERFACES
 // ==========================================
 
+export type AdvantageMode = 'normal' | 'advantage' | 'disadvantage';
+
+export interface DiceRollEvent {
+  id: string;
+  characterId?: string;
+  characterName: string;
+  avatarUrl?: string;
+  rollType: 'attribute' | 'saving_throw' | 'skill' | 'attack' | 'damage' | 'hit_dice' | 'custom';
+  label: string;
+  d20Roll1?: number;
+  d20Roll2?: number;
+  selectedD20?: number;
+  modifier: number;
+  total: number;
+  isCrit?: boolean;
+  isFail?: boolean;
+  advantageMode?: AdvantageMode;
+  damageDice?: string;
+  damageType?: string;
+  timestamp: string;
+}
+
 export type AttributeKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
+
 
 export type SkillProficiencyLevel = 'none' | 'proficient' | 'expertise';
 
@@ -354,10 +377,14 @@ export interface CharacterSheet {
   // Atributos & Inspiração
   inspiration: boolean;
   attributes: CharacterAttributes;
+  attributePointsAvailable?: number;
+  attributesLocked?: boolean;
   savingThrows: SavingThrows;
 
   // Combate
   armorClass: number;
+  equippedArmor?: string;
+  hasShield?: boolean;
   initiativeBonus: number; // Override manual de iniciativa se houver
   speed: string;
   maxHp: number;

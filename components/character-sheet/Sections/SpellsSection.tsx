@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { AttributeKey, CharacterSheet, CharacterSpell } from '@/lib/types';
-import { calculateSpellAttackBonus, calculateSpellDC, formatModifier, getAttributeModifier } from '@/lib/dnd5e-calculator';
-import { Sparkles, BookOpen, Shield, Flame, Plus, Trash2, CheckCircle2 } from 'lucide-react';
+import { calculateSpellAttackBonus, calculateSpellDC, formatModifier } from '@/lib/dnd5e-calculator';
+import { Sparkles, BookOpen, Flame, Plus, Trash2, CheckCircle2, Wand2, Dices } from 'lucide-react';
+import { SpellCompendiumModal } from '../Modals/SpellCompendiumModal';
+import { executeCheckRoll } from '@/lib/dnd5e-dice';
 
 interface SpellsSectionProps {
   sheet: CharacterSheet;
@@ -10,6 +12,7 @@ interface SpellsSectionProps {
 
 export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange }) => {
   const [selectedSpellLevel, setSelectedSpellLevel] = useState<number>(0); // 0 = Cantrip
+  const [isCompendiumOpen, setIsCompendiumOpen] = useState(false);
 
   const spellDC = calculateSpellDC(sheet);
   const spellAtkBonus = calculateSpellAttackBonus(sheet);
@@ -51,16 +54,51 @@ export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange })
     });
   };
 
+  const handleCastSpell = (spell: CharacterSpell) => {
+    // Gastar 1 slot de magia se não for truque (nível 0)
+    if (spell.level > 0) {
+      handleUpdateSpellSlot(spell.level, 1);
+    }
+
+    executeCheckRoll({
+      sheet,
+      label: `${spell.name} (Magia Nív. ${spell.level})`,
+      modifier: spellAtkBonus,
+      rollType: 'attack',
+    });
+  };
+
   const activeLevelSpells = sheet.spells.filter((s) => s.level === selectedSpellLevel);
 
   return (
     <div className="space-y-6 pb-20 animate-fade-in select-none">
+      {/* COMPÊNDIO MODAL */}
+      <SpellCompendiumModal
+        sheet={sheet}
+        isOpen={isCompendiumOpen}
+        onClose={() => setIsCompendiumOpen(false)}
+        onAddSpell={(newSpell) => {
+          onChange({ ...sheet, spells: [...sheet.spells, newSpell] });
+        }}
+      />
+
       {/* CABEÇALHO DE MAGIA (CLASSE CONJURADORA, CD DO TR E BÔNUS DE ATAQUE) */}
       <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-amber-400" />
-          Conjuração & Poder Mágico
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            Conjuração & Poder Mágico
+          </h3>
+
+          <button
+            type="button"
+            onClick={() => setIsCompendiumOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-3 py-1.5 rounded-xl border border-purple-400/40 shadow-lg shadow-purple-900/30 transition-all active:scale-95 cursor-pointer"
+          >
+            <Wand2 className="w-4 h-4 text-purple-200" />
+            Compêndio SRD
+          </button>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* CLASSE & HABILIDADE CHAVE */}
@@ -173,13 +211,24 @@ export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange })
             <div className="p-6 text-center bg-[#0b0f19] border border-dashed border-slate-800 rounded-xl">
               <Flame className="w-8 h-8 text-purple-400/40 mx-auto mb-2" />
               <p className="text-xs text-slate-400">Nenhuma magia adicionada neste nível.</p>
-              <button
-                type="button"
-                onClick={() => handleAddSpell(selectedSpellLevel)}
-                className="mt-2 text-xs font-bold text-purple-400 hover:underline"
-              >
-                + Adicionar {selectedSpellLevel === 0 ? 'Truque' : `Magia Nível ${selectedSpellLevel}`}
-              </button>
+              <div className="flex items-center justify-center gap-3 mt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsCompendiumOpen(true)}
+                  className="text-xs font-bold text-purple-400 hover:underline flex items-center gap-1"
+                >
+                  <Wand2 className="w-3.5 h-3.5" />
+                  Buscar no Compêndio SRD
+                </button>
+                <span className="text-slate-600">•</span>
+                <button
+                  type="button"
+                  onClick={() => handleAddSpell(selectedSpellLevel)}
+                  className="text-xs font-bold text-slate-400 hover:underline"
+                >
+                  + Adicionar Manualmente
+                </button>
+              </div>
             </div>
           ) : (
             activeLevelSpells.map((spell) => (
@@ -214,20 +263,16 @@ export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange })
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={spell.castingTime || '1 Ação'}
-                    onChange={(e) =>
-                      onChange({
-                        ...sheet,
-                        spells: sheet.spells.map((s) =>
-                          s.id === spell.id ? { ...s, castingTime: e.target.value } : s
-                        ),
-                      })
-                    }
-                    placeholder="1 Ação"
-                    className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-400 text-center"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => handleCastSpell(spell)}
+                    className="flex items-center gap-1 bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 border border-purple-500/30 px-2.5 py-1 rounded-xl text-xs font-black font-mono transition-all active:scale-95 cursor-pointer"
+                    title="Lançar Magia no Chat"
+                  >
+                    <Dices className="w-3.5 h-3.5 text-purple-400" />
+                    Lançar
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => handleRemoveSpell(spell.id)}

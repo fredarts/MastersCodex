@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CharacterSheet, CharacterEquipmentItem } from '@/lib/types';
-import { Coins, Package, Plus, Trash2, Gem } from 'lucide-react';
+import { Coins, Package, Plus, Trash2, Gem, Weight, Scale, Sparkles } from 'lucide-react';
+import { ItemCompendiumModal } from '../Modals/ItemCompendiumModal';
 
 interface EquipmentSectionProps {
   sheet: CharacterSheet;
@@ -8,11 +9,12 @@ interface EquipmentSectionProps {
 }
 
 export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onChange }) => {
+  const [isItemCompendiumOpen, setIsItemCompendiumOpen] = useState(false);
   const [items, setItems] = useState<CharacterEquipmentItem[]>(() => {
     return [
-      { id: '1', name: 'Mochila de Aventureiro', quantity: 1, weight: '2kg', notes: 'Contém corda e rações' },
-      { id: '2', name: 'Tochas', quantity: 5, weight: '0.5kg', notes: 'Dura 1 hora cada' },
-      { id: '3', name: 'Odre de Água', quantity: 1, weight: '2kg', notes: 'Cheio' },
+      { id: '1', name: 'Mochila de Aventureiro', quantity: 1, weight: '5 lb', notes: 'Contém corda e rações' },
+      { id: '2', name: 'Tochas', quantity: 5, weight: '1 lb', notes: 'Dura 1 hora cada' },
+      { id: '3', name: 'Odre de Água', quantity: 1, weight: '5 lb', notes: 'Cheio' },
     ];
   });
 
@@ -24,12 +26,24 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
     pl: 0,
   });
 
+  // CÁLCULO DA CAPACIDADE DE CARGA (D&D 5e: FORÇA * 15 lb)
+  const strScore = sheet.attributes.str.score || 10;
+  const maxCarryingCapacity = strScore * 15;
+
+  const totalWeight = items.reduce((sum, item) => {
+    const raw = (item.weight || '0').replace(/[^0-9.]/g, '');
+    const num = parseFloat(raw) || 0;
+    return sum + num * (item.quantity || 1);
+  }, 0);
+
+  const isEncumbered = totalWeight > maxCarryingCapacity;
+
   const handleAddEquipment = () => {
     const newItem: CharacterEquipmentItem = {
       id: Date.now().toString(),
       name: 'Novo Item',
       quantity: 1,
-      weight: '1kg',
+      weight: '1 lb',
       notes: '',
     };
     setItems([...items, newItem]);
@@ -45,6 +59,16 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
 
   return (
     <div className="space-y-6 pb-20 animate-fade-in select-none">
+      {/* ITEM COMPENDIUM MODAL */}
+      <ItemCompendiumModal
+        sheet={sheet}
+        isOpen={isItemCompendiumOpen}
+        onClose={() => setIsItemCompendiumOpen(false)}
+        onAddItem={(newItem) => {
+          setItems((prev) => [...prev, newItem]);
+        }}
+      />
+
       {/* CARTEIRA / MOEDAS */}
       <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-3">
         <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
@@ -115,6 +139,34 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
         </div>
       </div>
 
+      {/* PAINEL DE CARGA TOTAL */}
+      <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Scale className="w-4 h-4 text-amber-400" />
+            <span className="text-xs font-bold uppercase text-amber-400">Capacidade de Carga</span>
+          </div>
+          <span className={`text-xs font-black font-mono ${isEncumbered ? 'text-rose-400' : 'text-emerald-400'}`}>
+            {totalWeight.toFixed(1)} / {maxCarryingCapacity} lb
+          </span>
+        </div>
+
+        {/* BARRA DE PROGRESSO DE CARGA */}
+        <div className="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-800">
+          <div
+            className={`h-full transition-all duration-300 ${
+              isEncumbered ? 'bg-rose-500 shadow-rose-500/50' : 'bg-emerald-500 shadow-emerald-500/50'
+            }`}
+            style={{ width: `${Math.min(100, (totalWeight / maxCarryingCapacity) * 100)}%` }}
+          />
+        </div>
+        {isEncumbered && (
+          <p className="text-[10px] font-bold text-rose-400">
+            ⚠️ Sobrecarrregado! O peso total ultrapassa a capacidade suportada pela sua Força ({strScore}).
+          </p>
+        )}
+      </div>
+
       {/* EQUIPAMENTOS E INVENTÁRIO */}
       <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-3">
         <div className="flex items-center justify-between">
@@ -122,14 +174,24 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
             <Package className="w-4 h-4 text-amber-400" />
             Equipamentos & Itens
           </h3>
-          <button
-            type="button"
-            onClick={handleAddEquipment}
-            className="flex items-center gap-1 text-[11px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-3 py-1 rounded-xl border border-amber-500/30 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Adicionar Item
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsItemCompendiumOpen(true)}
+              className="flex items-center gap-1 text-[11px] font-black bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 px-3 py-1 rounded-xl shadow-md transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Compêndio
+            </button>
+            <button
+              type="button"
+              onClick={handleAddEquipment}
+              className="flex items-center gap-1 text-[11px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-3 py-1 rounded-xl border border-amber-500/30 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Manual
+            </button>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -159,7 +221,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
                   type="text"
                   value={item.weight || ''}
                   onChange={(e) => handleUpdateEquipment(item.id, { weight: e.target.value })}
-                  placeholder="Peso (1kg)"
+                  placeholder="Peso (1 lb)"
                   className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-400 text-center"
                 />
                 <button

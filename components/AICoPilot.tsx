@@ -4,16 +4,18 @@ import React, { useState } from 'react';
 import { 
   Sparkles, 
   Wand2, 
-  Feather, 
-  MessageSquare, 
   Coins, 
   Copy, 
   Check, 
   Compass, 
   Crown,
-  Database
+  Save,
+  Cpu
 } from 'lucide-react';
 import { BattleLog } from '@/components/BattleLog';
+import { useWorld } from '@/context/WorldContext';
+import { useSession } from '@/context/SessionContext';
+import { useLiveCockpit } from '@/context/LiveCockpitContext';
 
 interface AICoPilotProps {
   generatedLootResult?: string | null;
@@ -25,54 +27,103 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
   const [aesthetic, setAesthetic] = useState('Sword and Sorcery, Sombrio e Cru');
   const [enhancedOutput, setEnhancedOutput] = useState('');
   const [copied, setCopied] = useState(false);
+  const [appliedToScene, setAppliedToScene] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [activeProvider, setActiveProvider] = useState<string | null>(null);
 
   // Smart Loot state
   const [lootCr, setLootCr] = useState('1/4 - 4');
   const [lootBiome, setLootBiome] = useState('Caverna Úmida / Masmorra');
   const [lootResultText, setLootResultText] = useState(generatedLootResult || '');
 
-  const sampleDescriptions: Record<string, string> = {
-    caverna: 'O cheiro impregnante de calcário úmido e musgo podre preenche o ar frio. O eco compassado de gotas d\'água ressoa nas paredes escuras de pedra vulcânica, enquanto sombras grotescas parecem se mover no limite da sua visão...',
-    taverna: 'O calor sufocante da lareira central mistura-se ao odor acre de hidromel derramado e ensopado de javali. Canecas de estanho se chocam com estrépito enquanto mercenários de rostos marcados trocam sussurros desconfiados nas mesas de madeira carcomida...',
-    castelo: 'Estandartes de veludo roído pelo tempo balançam suavemente com o vento uivante que passa pelas frestas das janelas ogivais. O chão de mármore refletivo ecoa cada passo com severidade real, sob o olhar silencioso de antigas armaduras de placas...'
-  };
+  // RAG Context Hooks
+  const { activeWorld, worldEntities } = useWorld();
+  const { activeScene, updateScene } = useSession();
+  const { combatants } = useLiveCockpit();
 
-  const handleEnhanceText = () => {
+  const handleEnhanceText = async () => {
     if (!draftInput.trim()) return;
     setIsGenerating(true);
-    setTimeout(() => {
-      let text = '';
-      if (draftInput.toLowerCase().includes('taverna')) text = sampleDescriptions.taverna;
-      else if (draftInput.toLowerCase().includes('castelo')) text = sampleDescriptions.castelo;
-      else text = sampleDescriptions.caverna;
+    setAppliedToScene(false);
 
-      setEnhancedOutput(
-        `[Estilo: ${aesthetic}]\n\n"${text}"`
-      );
+    try {
+      const prompt = `Estética Desejada: [${aesthetic}]. Rascunho/Ideia do Mestre: "${draftInput}". Gere uma narração sensorial imersiva e completa para os jogadores.`;
+
+      const response = await fetch('/api/ai/narrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          world: activeWorld,
+          scene: activeScene,
+          entities: worldEntities,
+          combatants: combatants,
+          actionType: 'narrate',
+          userPrompt: prompt,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.text) {
+        setEnhancedOutput(data.text);
+        if (data.provider) setActiveProvider(data.provider);
+      } else {
+        setEnhancedOutput('Erro ao gerar narração: ' + (data.error || 'Resposta inválida.'));
+      }
+    } catch (e: any) {
+      setEnhancedOutput('Erro de conexão com o servidor de IA: ' + e?.message);
+    } finally {
       setIsGenerating(false);
-    }, 800);
+    }
   };
 
-  const handleGenerateLoot = () => {
+  const handleGenerateLoot = async () => {
     setIsGenerating(true);
-    setTimeout(() => {
-      const result = `💰 TEASOURO GERADO (${lootBiome} - CR ${lootCr}):
-• 14 Moedas de Cobre (CP) enferrujadas e 8 Moedas de Prata (SP).
-• 1x Adaga Tosca de Osso de Goblin (+1 Dano contra bestas).
-• 2x Frascos com Cogumelo Luminescente (Emite luz azul suave por 1 hora).
-• 1x Poção de Cura Menor (Recupera 2d4+2 HP).
-• Um diário de paminho mofado contendo um mapa parcial do 2º nível da dungeon!`;
+    try {
+      const prompt = `Gere uma tabela detalhada de tesouros e saques (Loot) para o bioma "${lootBiome}" com Nível de Dificuldade (CR) "${lootCr}". Inclua moedas D&D 5e e itens mágicos/consumíveis.`;
 
-      setLootResultText(result);
+      const response = await fetch('/api/ai/narrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          world: activeWorld,
+          scene: activeScene,
+          entities: worldEntities,
+          combatants: combatants,
+          actionType: 'loot',
+          userPrompt: prompt,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.text) {
+        setLootResultText(data.text);
+        if (data.provider) setActiveProvider(data.provider);
+      }
+    } catch (e: any) {
+      setLootResultText('Erro ao gerar tesouro: ' + e?.message);
+    } finally {
       setIsGenerating(false);
-    }, 600);
+    }
   };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleApplyToActiveScene = async () => {
+    if (!activeScene || !enhancedOutput) return;
+    try {
+      await updateScene({
+        ...activeScene,
+        sensoryText: enhancedOutput,
+      });
+      setAppliedToScene(true);
+      setTimeout(() => setAppliedToScene(false), 2500);
+    } catch (e) {
+      console.error('Erro ao aplicar narração na cena:', e);
+    }
   };
 
   return (
@@ -85,7 +136,15 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
           </div>
           <div>
             <h3 className="text-xs font-bold text-slate-100 uppercase tracking-wider">IA Co-Mestre Narrativo</h3>
-            <p className="text-[10px] text-purple-300">Assistente & Refinador (Gemini / RAG)</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[10px] text-purple-300">RAG Contextualizado</span>
+              {activeProvider && (
+                <span className="text-[9px] font-mono px-1.5 py-0.2 bg-purple-950/80 border border-purple-500/30 text-purple-300 rounded flex items-center gap-1">
+                  <Cpu className="w-2.5 h-2.5" />
+                  {activeProvider}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -166,23 +225,41 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
             <button
               onClick={handleEnhanceText}
               disabled={isGenerating || !draftInput.trim()}
-              className="w-full py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 text-slate-950 font-bold text-xs rounded-lg shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all"
+              className="w-full py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 text-slate-950 font-bold text-xs rounded-lg shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all cursor-pointer"
             >
               <Wand2 className="w-3.5 h-3.5" />
-              <span>{isGenerating ? 'Aprimorando...' : 'Aprimorar Descrição Sensorial'}</span>
+              <span>{isGenerating ? 'Gerando Narração IA...' : 'Aprimorar com Gemini/OpenRouter'}</span>
             </button>
 
             {enhancedOutput && (
-              <div className="p-3 bg-[#0a0d14] border border-purple-500/30 rounded-xl relative group">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] uppercase font-bold text-purple-400">Pronto para Ler em Voz Alta:</span>
-                  <button
-                    onClick={() => copyToClipboard(enhancedOutput)}
-                    className="p-1 text-slate-400 hover:text-purple-300 rounded"
-                    title="Copiar texto"
-                  >
-                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
+              <div className="p-3 bg-[#0a0d14] border border-purple-500/30 rounded-xl relative group space-y-2">
+                <div className="flex items-center justify-between pb-1 border-b border-purple-500/20">
+                  <span className="text-[10px] uppercase font-bold text-purple-400 font-mono">
+                    PROVADO & PRONTO PARA LER:
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => copyToClipboard(enhancedOutput)}
+                      className="p-1 text-slate-400 hover:text-purple-300 rounded"
+                      title="Copiar texto"
+                    >
+                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                    {activeScene && (
+                      <button
+                        onClick={handleApplyToActiveScene}
+                        className={`px-2 py-0.5 text-[10px] font-bold rounded flex items-center gap-1 transition-all ${
+                          appliedToScene
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                            : 'bg-purple-500/20 text-purple-300 border border-purple-500/40 hover:bg-purple-500/40'
+                        }`}
+                        title="Salvar narração na cena atual"
+                      >
+                        <Save className="w-3 h-3" />
+                        <span>{appliedToScene ? 'Aplicado!' : 'Aplicar na Cena'}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <p className="text-xs text-slate-200 leading-relaxed italic whitespace-pre-wrap font-serif">
                   {enhancedOutput}
@@ -199,8 +276,11 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
             </p>
             <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => setDraftInput('taverna rústica no porto')}
-                className="p-3 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] hover:border-purple-500/40 rounded-xl text-left transition-all"
+                onClick={() => {
+                  setDraftInput('Descreva uma taverna rústica no porto com rumores locais');
+                  setActiveTab('refine');
+                }}
+                className="p-3 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] hover:border-purple-500/40 rounded-xl text-left transition-all cursor-pointer"
               >
                 <Compass className="w-4 h-4 text-amber-400 mb-1" />
                 <div className="text-xs font-bold text-slate-200">Gerar Taverna</div>
@@ -208,8 +288,11 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
               </button>
 
               <button
-                onClick={() => setDraftInput('castelo real de mármore')}
-                className="p-3 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] hover:border-purple-500/40 rounded-xl text-left transition-all"
+                onClick={() => {
+                  setDraftInput('Descreva um NPC nobre com segredo sombrio');
+                  setActiveTab('refine');
+                }}
+                className="p-3 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] hover:border-purple-500/40 rounded-xl text-left transition-all cursor-pointer"
               >
                 <Crown className="w-4 h-4 text-cyan-400 mb-1" />
                 <div className="text-xs font-bold text-slate-200">Gerar NPC Único</div>
@@ -247,10 +330,10 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
             <button
               onClick={handleGenerateLoot}
               disabled={isGenerating}
-              className="w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-lg shadow-md flex items-center justify-center gap-1.5 transition-all"
+              className="w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-lg shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer"
             >
               <Coins className="w-4 h-4" />
-              <span>Gerar Tesouro Contextual</span>
+              <span>{isGenerating ? 'Gerando Loot...' : 'Gerar Tesouro Contextual'}</span>
             </button>
 
             {(lootResultText || generatedLootResult) && (
