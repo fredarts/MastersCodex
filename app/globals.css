@@ -59,8 +59,28 @@ body {
 .glass-pane-glow {
   background: rgba(22, 28, 40, 0.9);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  box-shadow: 0 0 15px rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  box-shadow: 0 0 25px rgba(245, 158, 11, 0.1);
+}
+
+@keyframes bg3Shake {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  10%, 30%, 50%, 70%, 90% { transform: translate(-8px, 4px) rotate(-2deg); }
+  20%, 40%, 60%, 80% { transform: translate(8px, -4px) rotate(2deg); }
+}
+
+@keyframes bg3CritZoom {
+  0% { transform: scale(0.7); opacity: 0; }
+  50% { transform: scale(1.35); filter: brightness(1.8); }
+  100% { transform: scale(1); opacity: 1; filter: brightness(1); }
+}
+
+.animate-bg3-shake {
+  animation: bg3Shake 0.5s ease-in-out;
+}
+
+.animate-bg3-crit {
+  animation: bg3CritZoom 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 /* Glowing text effects */

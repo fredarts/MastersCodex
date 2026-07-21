@@ -13,13 +13,14 @@ import {
   Crown,
   Database
 } from 'lucide-react';
+import { BattleLog } from '@/components/BattleLog';
 
 interface AICoPilotProps {
   generatedLootResult?: string | null;
 }
 
 export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => {
-  const [activeTab, setActiveTab] = useState<'refine' | 'generator' | 'loot' | 'rag'>('refine');
+  const [activeTab, setActiveTab] = useState<'refine' | 'generator' | 'loot' | 'log'>('refine');
   const [draftInput, setDraftInput] = useState('');
   const [aesthetic, setAesthetic] = useState('Sword and Sorcery, Sombrio e Cru');
   const [enhancedOutput, setEnhancedOutput] = useState('');
@@ -93,17 +94,17 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
       <div className="flex border-b border-[#2a3449] bg-[#0a0d14]">
         <button
           onClick={() => setActiveTab('refine')}
-          className={`flex-1 py-2 text-[11px] font-semibold transition-all border-b-2 ${
+          className={`flex-1 py-2 text-[10px] font-semibold transition-all border-b-2 ${
             activeTab === 'refine'
               ? 'border-purple-400 text-purple-300 bg-[#161c28]'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
-          Refinar Texto
+          Refinar
         </button>
         <button
           onClick={() => setActiveTab('generator')}
-          className={`flex-1 py-2 text-[11px] font-semibold transition-all border-b-2 ${
+          className={`flex-1 py-2 text-[10px] font-semibold transition-all border-b-2 ${
             activeTab === 'generator'
               ? 'border-purple-400 text-purple-300 bg-[#161c28]'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -113,13 +114,23 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
         </button>
         <button
           onClick={() => setActiveTab('loot')}
-          className={`flex-1 py-2 text-[11px] font-semibold transition-all border-b-2 ${
+          className={`flex-1 py-2 text-[10px] font-semibold transition-all border-b-2 ${
             activeTab === 'loot'
               ? 'border-purple-400 text-purple-300 bg-[#161c28]'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
           Smart Loot
+        </button>
+        <button
+          onClick={() => setActiveTab('log')}
+          className={`flex-1 py-2 text-[10px] font-semibold transition-all border-b-2 ${
+            activeTab === 'log'
+              ? 'border-amber-400 text-amber-300 bg-[#161c28]'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Log Partida
         </button>
       </div>
 
@@ -249,6 +260,12 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
                 </p>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'log' && (
+          <div className="h-full -m-4">
+            <BattleLog logs={[]} />
           </div>
         )}
       </div>

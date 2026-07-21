@@ -30,13 +30,17 @@ import {
   X,
   Dices,
   Edit3,
-  Check
+  Check,
+  ScrollText
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { GameScene, SceneType, Combatant, ConditionType, CampaignMember } from '@/lib/types';
 import { INITIAL_MONSTERS, SFX_BUTTONS, CONDITIONS } from '@/lib/srd-data';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
+import { BattleLog } from '@/components/BattleLog';
+import { Dice3DCanvas, DieType } from '@/components/Dice3DCanvas';
+import { CombatLogEntry } from '@/lib/types';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
 
 interface LiveCockpitStudioProps {
@@ -98,6 +102,240 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const [customAc, setCustomAc] = useState(13);
   const [customInit, setCustomInit] = useState(10);
   const [customType, setCustomType] = useState<'player' | 'monster' | 'npc'>('monster');
+
+  
+  const [autoInit, setAutoInit] = useState(false);
+  const [hpInput, setHpInput] = useState<Record<string, string>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
+  const [diceResult, setDiceResult] = useState<{title: string; roll: number; total: number; isCrit: boolean; isFail: boolean} | null>(null);
+
+  useEffect(() => {
+    if (diceResult) {
+      const t = setTimeout(() => setDiceResult(null), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [diceResult]);
+
+  const [pendingAttack, setPendingAttack] = useState<{ title: string; mod: number; actorCombatant?: Combatant; actionDesc?: string } | null>(null);
+  
+  const [bg3DiceOverlay, setBg3DiceOverlay] = useState<{
+    title: string;
+    actorName?: string;
+    targetName?: string;
+    d20Roll: number;
+    modifier: number;
+    totalRoll: number;
+    targetAc?: number;
+    isHit?: boolean;
+    isCrit?: boolean;
+    isFail?: boolean;
+    damageDiceFormula?: string;
+    damageAmount?: number;
+    isRolling: boolean;
+    phase: 'd20' | 'damage';
+  } | null>(null);
+
+  const [animatedRollNumber, setAnimatedRollNumber] = useState<number>(1);
+
+  useEffect(() => {
+    if (!bg3DiceOverlay || !bg3DiceOverlay.isRolling) return;
+
+    const maxVal = bg3DiceOverlay.phase === 'd20' ? 20 : 8;
+    const interval = setInterval(() => {
+      setAnimatedRollNumber(Math.floor(Math.random() * maxVal) + 1);
+    }, 45);
+
+    return () => clearInterval(interval);
+  }, [bg3DiceOverlay?.isRolling, bg3DiceOverlay?.phase]);
+
+  const rollDice = (title: string, mod: number, actorCombatant?: Combatant, actionDesc?: string, forceNoTarget: boolean = false) => {
+    const currentActor = actorCombatant || combatants[currentTurnIndex];
+    const target = combatants.find(c => c.id === selectedTargetId);
+
+    // Validate target for Attack rolls unless forced (AoE)
+    if (title.startsWith('Ataque') && !target && !forceNoTarget) {
+      setPendingAttack({ title, mod, actorCombatant: currentActor, actionDesc });
+      return;
+    }
+
+    const roll = Math.floor(Math.random() * 20) + 1;
+    const total = roll + mod;
+    const isCrit = roll === 20;
+    const isFail = roll === 1;
+
+    setDiceResult({
+      title,
+      roll,
+      total,
+      isCrit,
+      isFail
+    });
+
+    const isAttack = title.startsWith('Ataque');
+    const isHit = isAttack && target ? (isCrit || total >= target.ac) : undefined;
+    let dmgAmount: number | undefined = undefined;
+
+    if (isAttack && target && isHit) {
+      dmgAmount = parseAndRollDamage(actionDesc, mod);
+    }
+
+    // Trigger BG3 Dice Overlay
+    setBg3DiceOverlay({
+      title,
+      actorName: currentActor?.name,
+      targetName: target?.name,
+      d20Roll: roll,
+      modifier: mod,
+      totalRoll: total,
+      targetAc: target?.ac,
+      isHit,
+      isCrit,
+      isFail,
+      damageDiceFormula: actionDesc || '1d8',
+      damageAmount: dmgAmount,
+      isRolling: true,
+      phase: 'd20'
+    });
+
+    // Animate rolling numbers then reveal final result
+    setTimeout(() => {
+      setBg3DiceOverlay(prev => prev ? { ...prev, isRolling: false } : null);
+
+      if (isHit && dmgAmount !== undefined) {
+        setTimeout(() => {
+          setBg3DiceOverlay(prev => prev ? { ...prev, phase: 'damage', isRolling: true } : null);
+          setTimeout(() => {
+            setBg3DiceOverlay(prev => prev ? { ...prev, isRolling: false } : null);
+          }, 600);
+        }, 1500);
+      }
+    }, 700);
+
+    if (title.startsWith('Ataque') && currentActor) {
+      if (target) {
+        const isHit = isCrit || total >= target.ac;
+        const resultText = isCrit ? '💥 ACERTO CRÍTICO!' : isHit ? '✓ ACERTOU!' : '✕ ERROU!';
+        const desc = `${currentActor.name} executou ${title} contra ${target.name} (d20: ${roll} + ${mod} = ${total} vs CA ${target.ac}) → ${resultText}`;
+        
+        addLogEntry({
+          actorId: currentActor.id,
+          actorName: currentActor.name,
+          targetId: target.id,
+          targetName: target.name,
+          eventType: 'attack',
+          actionName: title,
+          d20Roll: roll,
+          totalRoll: total,
+          targetAc: target.ac,
+          isHit,
+          isCrit,
+          isFail,
+          description: desc
+        });
+
+        // Automatic damage roll on Hit!
+        if (isHit) {
+          const dmg = parseAndRollDamage(actionDesc, mod);
+          const prevHp = target.hp;
+          handleHpChange(target.id, -dmg);
+          const newHp = Math.max(0, target.hp - dmg);
+          
+          addLogEntry({
+            actorId: currentActor.id,
+            actorName: currentActor.name,
+            targetId: target.id,
+            targetName: target.name,
+            eventType: 'damage',
+            amount: dmg,
+            description: `💥 ${currentActor.name} causou ${dmg} de dano em ${target.name} (HP: ${prevHp} → ${newHp})`
+          });
+
+          if (newHp === 0) {
+            addLogEntry({
+              actorId: target.id,
+              actorName: target.name,
+              eventType: 'death',
+              description: `💀 ${target.name} foi derrotado em combate!`
+            });
+          }
+        }
+      } else {
+        addLogEntry({
+          actorId: currentActor.id,
+          actorName: currentActor.name,
+          eventType: 'attack',
+          actionName: title,
+          d20Roll: roll,
+          totalRoll: total,
+          isCrit,
+          isFail,
+          description: `${currentActor.name} rolou ${title}: ${roll} + ${mod} = ${total}`
+        });
+      }
+    } else if (currentActor) {
+      addLogEntry({
+        actorId: currentActor.id,
+        actorName: currentActor.name,
+        eventType: 'save',
+        d20Roll: roll,
+        totalRoll: total,
+        description: `${currentActor.name} fez teste de ${title}: ${roll} + ${mod} = ${total}`
+      });
+    }
+  };
+
+  const getMod = (stat?: number) => stat ? Math.floor((stat - 10) / 2) : 0;
+
+  
+  const [selectedTargetId, setSelectedTargetId] = useState<string | undefined>(undefined);
+  const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>([]);
+  const [rightPanelTab, setRightPanelTab] = useState<'init' | 'log'>('init');
+
+  const addLogEntry = async (entry: Omit<CombatLogEntry, 'id' | 'timestamp' | 'round'>) => {
+    const newLog: CombatLogEntry = {
+      ...entry,
+      id: `log-${Date.now()}-${Math.random()}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      round: roundCount
+    };
+
+    setCombatLogs(prev => {
+      const next = [...prev, newLog];
+      broadcastToPlayerView({ combatLogs: next });
+      return next;
+    });
+
+    if (activeCampaign) {
+      await createFeedEvent({
+        campaignId: activeCampaign.id,
+        sessionId: activeSession?.id,
+        eventType: 'battle_summary',
+        title: entry.description,
+        summary: entry.description,
+        isPublic: true,
+      });
+    }
+  };
+
+  const parseAndRollDamage = (desc?: string, defaultMod: number = 0): number => {
+    if (!desc) return Math.floor(Math.random() * 8) + 1 + defaultMod;
+    
+    // Match patterns like 2d6+3, 1d8+2, 1d6
+    const match = desc.match(/([0-9]+)d([0-9]+)(?:\s*[\+\-]\s*([0-9]+))?/i);
+    if (match) {
+      const count = parseInt(match[1], 10);
+      const sides = parseInt(match[2], 10);
+      const bonus = match[3] ? parseInt(match[3], 10) : 0;
+      
+      let total = 0;
+      for (let i = 0; i < count; i++) {
+        total += Math.floor(Math.random() * sides) + 1;
+      }
+      return Math.max(1, total + bonus);
+    }
+    return Math.max(1, Math.floor(Math.random() * 8) + 1 + defaultMod);
+  };
 
   // Sync Combat Active status with current scene or combatants array
   useEffect(() => {
@@ -162,17 +400,39 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const handleNextTurn = () => {
     if (combatants.length === 0) return;
     const nextIdx = (currentTurnIndex + 1) % combatants.length;
+    let nextRoundCount = roundCount;
     if (nextIdx === 0) {
-      setRoundCount((r) => r + 1);
+      nextRoundCount += 1;
+      setRoundCount(nextRoundCount);
+      
+      if (autoInit) {
+        setCombatants(prev => {
+          const rolled = prev.map(c => {
+             const dexMod = c.dex ? Math.floor((c.dex - 10) / 2) : 0;
+             return { ...c, initiative: Math.floor(Math.random() * 20) + 1 + dexMod };
+          });
+          const sorted = rolled.sort((a,b) => b.initiative - a.initiative);
+          broadcastToPlayerView({ combatants: sorted });
+          return sorted;
+        });
+      }
     }
     setCurrentTurnIndex(nextIdx);
+    setSelectedTargetId(undefined);
     broadcastToPlayerView({
       currentTurnIndex: nextIdx,
-      roundCount: nextIdx === 0 ? roundCount + 1 : roundCount,
+      roundCount: nextRoundCount,
+      targetId: null,
     });
   };
 
   const handleHpChange = (id: string, delta: number) => {
+    if (delta !== 0) {
+      window.dispatchEvent(new CustomEvent('masters_codex_combat_text', {
+        detail: { combatantId: id, type: delta < 0 ? 'damage' : 'heal', amount: Math.abs(delta) }
+      }));
+    }
+
     setCombatants((prev) => {
       const next = prev.map((c) => {
         if (c.id === id) {
@@ -184,6 +444,13 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       broadcastToPlayerView({ combatants: next });
       return next;
     });
+  };
+
+  const handlePreciseHp = (id: string, isDamage: boolean) => {
+    const val = parseInt(hpInput[id] || '0', 10);
+    if (isNaN(val) || val <= 0) return;
+    handleHpChange(id, isDamage ? -val : val);
+    setHpInput(prev => ({...prev, [id]: ''}));
   };
 
   const handleToggleCondition = (id: string, cond: ConditionType) => {
@@ -332,9 +599,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const displayImageUrl = activeScene?.imageUrl ? normalizeImageUrl(activeScene.imageUrl) : null;
 
   return (
-    <div className="flex-1 bg-[#0a0d14] flex flex-col h-full overflow-hidden select-none">
+    <div className="flex-1 bg-[#0a0d14] flex flex-col h-full overflow-hidden select-none relative">
+      {statusMenuOpen && <div className="fixed inset-0 z-10" onClick={() => setStatusMenuOpen(null)} />}
+      
       {/* Top Cockpit Header Bar */}
-      <div className="bg-[#121824] border-b border-[#2a3449] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-md">
+      <div className="bg-[#121824] border-b border-[#2a3449] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-md relative z-20">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 shadow-inner">
             <Radio className="w-4 h-4 animate-pulse" />
@@ -545,6 +814,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                   <BattleGrid3D
                     combatants={combatants}
                     currentTurnIndex={currentTurnIndex}
+                    selectedTargetId={selectedTargetId}
+                    onSelectTarget={(target) => {
+                      setSelectedTargetId(target.id);
+                      broadcastToPlayerView({ targetId: target.id });
+                    }}
                     interactive={true}
                   />
                 ) : displayImageUrl ? (
@@ -616,25 +890,65 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
           </div>
         </div>
 
-        {/* Column 3: Painel de Iniciativa & Combate Ao Vivo (Right - 320px) */}
-        <div className="w-80 bg-[#0c0f17] flex flex-col justify-between overflow-hidden border-l border-[#2a3449]">
-          <div className="p-3 border-b border-[#2a3449] bg-[#121824]/50 flex items-center justify-between">
-            <span className="text-xs font-bold text-rose-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
-              <Swords className="w-4 h-4" />
-              Iniciativa & Combate
-            </span>
-            {isCombatActive || combatants.length > 0 ? (
-              <span className="text-xs font-mono font-bold text-amber-400 bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded">
-                RODADA {roundCount}
-              </span>
-            ) : (
-              <span className="text-[10px] font-mono font-bold text-slate-500 bg-[#121824] px-2 py-0.5 rounded border border-[#2a3449]">
-                SEM COMBATE
-              </span>
-            )}
+        {/* Column 3: Painel de Iniciativa & Combate Ao Vivo (Right - 380px) */}
+        <div className="w-[380px] bg-[#0c0f17] flex flex-col justify-between overflow-hidden border-l border-[#2a3449] relative">
+          
+          {/* Floating Dice Result */}
+          {diceResult && (
+            <div className="absolute top-16 right-4 z-50 animate-in slide-in-from-right-8 fade-in duration-300">
+              <div className={`bg-[#0f141d]/95 backdrop-blur-xl border-2 rounded-2xl p-4 shadow-2xl flex items-center gap-4 min-w-[250px]
+                ${diceResult.isCrit ? 'border-amber-500 shadow-amber-500/20' : diceResult.isFail ? 'border-rose-600 shadow-rose-900/20' : 'border-slate-600'}
+              `}>
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-black font-mono shadow-inner
+                  ${diceResult.isCrit ? 'bg-amber-500 text-slate-950' : diceResult.isFail ? 'bg-rose-600 text-slate-950' : 'bg-[#1e293b] text-slate-100'}
+                `}>
+                  {diceResult.roll}
+                </div>
+                <div className="flex-1">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{diceResult.title}</div>
+                  <div className="text-2xl font-black text-slate-100">Total: {diceResult.total}</div>
+                </div>
+                <button onClick={() => setDiceResult(null)} className="absolute -top-2 -right-2 w-6 h-6 bg-slate-800 rounded-full text-slate-400 hover:text-white border border-slate-600 flex items-center justify-center text-xs">×</button>
+              </div>
+            </div>
+          )}
+
+          {/* Header with Sub-tabs */}
+          <div className="p-2 border-b border-[#2a3449] bg-[#121824]/50 flex items-center justify-between gap-1">
+            <div className="flex bg-[#0a0d14] border border-[#2a3449] rounded-xl p-0.5 w-full">
+              <button
+                onClick={() => setRightPanelTab('init')}
+                className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
+                  rightPanelTab === 'init' ? 'bg-rose-600 text-slate-950 shadow font-black' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Swords className="w-3.5 h-3.5" />
+                <span>Iniciativa ({combatants.length})</span>
+              </button>
+              <button
+                onClick={() => setRightPanelTab('log')}
+                className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
+                  rightPanelTab === 'log' ? 'bg-amber-500 text-slate-950 shadow font-black' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <ScrollText className="w-3.5 h-3.5" />
+                <span>Log da Partida ({combatLogs.length})</span>
+              </button>
+            </div>
           </div>
 
-          {!isCombatActive && combatants.length === 0 ? (
+          {rightPanelTab === 'log' ? (
+            <BattleLog 
+              logs={combatLogs}
+              activeAttacker={combatants[currentTurnIndex]}
+              activeTarget={combatants.find(c => c.id === selectedTargetId)}
+              onClearLogs={() => setCombatLogs([])}
+              onSelectTarget={(target) => {
+                setSelectedTargetId(target.id);
+                broadcastToPlayerView({ targetId: target.id });
+              }}
+            />
+          ) : !isCombatActive && combatants.length === 0 ? (
             /* Clean Empty State when no combat active */
             <div className="flex-1 p-6 flex flex-col items-center justify-center text-center space-y-4 my-auto">
               <div className="w-14 h-14 rounded-2xl bg-[#121824] border border-[#2a3449] flex items-center justify-center shadow-inner">
@@ -669,13 +983,25 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
+                
+                <div className="flex items-center gap-3 mt-1 pl-1">
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${autoInit ? 'bg-amber-500 border-amber-500' : 'bg-[#0a0d14] border-[#2a3449] group-hover:border-amber-500/50'}`}>
+                      {autoInit && <Check className="w-3 h-3 text-slate-900" />}
+                    </div>
+                    <input type="checkbox" className="hidden" checked={autoInit} onChange={(e) => setAutoInit(e.target.checked)} />
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider group-hover:text-slate-300">
+                      Rolar Iniciativa todo turno
+                    </span>
+                  </label>
+                </div>
 
                 <button
                   onClick={() => setShowAddCombatantModal(true)}
-                  className="w-full py-1.5 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] text-amber-300 hover:text-amber-200 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5"
+                  className="w-full py-1.5 mt-1 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] text-amber-300 hover:text-amber-200 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5"
                 >
                   <UserPlus className="w-3.5 h-3.5 text-amber-400" />
-                  <span>+ Adicionar Combatentes (Busca / SRD)</span>
+                  <span>+ Adicionar Combatentes</span>
                 </button>
               </div>
 
@@ -683,71 +1009,216 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
               <div className="flex-1 p-3 space-y-2 overflow-y-auto">
                 {combatants.map((c, idx) => {
                   const isTurn = idx === currentTurnIndex;
+                  const isTarget = c.id === selectedTargetId;
+                  const hpPercent = Math.max(0, Math.min(100, (c.hp / c.maxHp) * 100));
+                  const isExpanded = expandedId === c.id;
+                  const isStatusOpen = statusMenuOpen === c.id;
+
                   return (
                     <div
                       key={`${c.id}-${idx}`}
-                      className={`p-3 rounded-xl border transition-all space-y-2 ${
+                      onClick={() => {
+                        setSelectedTargetId(c.id);
+                        broadcastToPlayerView({ targetId: c.id });
+                      }}
+                      className={`p-3 rounded-xl border transition-all flex flex-col gap-2 cursor-pointer ${
+                        isTarget
+                          ? 'ring-2 ring-rose-500 border-rose-500 shadow-rose-900/30'
+                          : ''
+                      } ${
                         isTurn
-                          ? 'bg-rose-950/60 border-rose-500 text-rose-200 font-bold shadow-md ring-1 ring-rose-500/40'
-                          : 'bg-[#161c28] border-[#2a3449] text-slate-300'
+                          ? 'bg-gradient-to-r from-rose-950/40 via-[#161c28] to-[#121824] border-rose-500/80 shadow-xl'
+                          : 'bg-[#121824] border-[#2a3449] opacity-90 hover:opacity-100'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 truncate">
-                          <span className="text-[10px] font-mono font-bold text-amber-400 bg-[#0a0d14] px-1.5 py-0.5 rounded border border-[#2a3449]">
-                            #{c.initiative}
-                          </span>
-                          <span className="text-xs font-bold truncate max-w-[120px]">{c.name}</span>
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        {/* Left Info */}
+                        <div className="flex items-start gap-3 min-w-[200px]">
+                          <div className="w-9 h-9 rounded-xl bg-[#0a0d14] border border-[#2a3449] flex flex-col items-center justify-center font-mono font-bold text-amber-400 shadow-inner">
+                            <span className="text-[8px] text-slate-500 font-sans">INIT</span>
+                            <span className="text-xs leading-none">{c.initiative}</span>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-slate-100 text-xs flex items-center gap-1">
+                                {c.name}
+                                {isTarget && <span className="text-[9px] text-rose-400 font-mono font-bold">(ALVO)</span>}
+                              </h4>
+                              {isTurn && (
+                                <span className="text-[8px] font-black uppercase bg-rose-500 text-slate-950 px-1.5 py-0.5 rounded animate-pulse">ATUAL</span>
+                              )}
+                            </div>
+
+                            {/* Condition Badges */}
+                            <div className="flex flex-wrap gap-1 mt-1 relative">
+                              {c.conditions.map((cond) => (
+                                <span key={cond} onClick={(e) => { e.stopPropagation(); handleToggleCondition(c.id, cond); }} className="text-[8px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-rose-500/40">
+                                  {cond} ×
+                                </span>
+                              ))}
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); setStatusMenuOpen(isStatusOpen ? null : c.id); }}
+                                className="text-[8px] font-bold text-slate-400 bg-[#0f141d] hover:bg-[#1e293b] border border-[#2a3449] px-1.5 py-0.5 rounded-full transition-colors flex items-center gap-1"
+                              >
+                                + Status
+                              </button>
+                              
+                              {/* Status Popover */}
+                              {isStatusOpen && (
+                                <div className="absolute top-full left-0 mt-2 w-48 bg-[#0f141d] border border-slate-700 rounded-xl shadow-2xl p-2 z-20 grid grid-cols-2 gap-1">
+                                  {CONDITIONS.map(cond => {
+                                    const active = c.conditions.includes(cond);
+                                    return (
+                                      <button
+                                        key={cond}
+                                        onClick={(e) => { e.stopPropagation(); handleToggleCondition(c.id, cond); }}
+                                        className={`text-[9px] text-left px-2 py-1 rounded ${active ? 'bg-rose-500/20 text-rose-300 font-bold' : 'text-slate-400 hover:bg-[#1e293b]'}`}
+                                      >
+                                        {active ? '✓ ' : ''}{cond}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/50 border border-cyan-500/30 px-1.5 py-0.5 rounded">
-                            CA {c.ac}
-                          </span>
-                          <button
-                            onClick={() => handleDeleteCombatant(c.id)}
-                            className="p-1 text-slate-500 hover:text-rose-400 rounded"
-                          >
-                            ×
+                        
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <button onClick={() => setExpandedId(isExpanded ? null : c.id)} className={`p-1.5 rounded-lg border transition-colors ${isExpanded ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-[#0f141d] border-[#2a3449] text-slate-400 hover:text-slate-200'}`} title="Ações e Rolagens">
+                            <Dices className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handleDeleteCombatant(c.id)} className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition-colors">
+                            <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
 
-                      {/* HP controls */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleHpChange(c.id, -5)}
-                            className="px-1.5 py-0.5 rounded bg-rose-950/80 border border-rose-800 text-rose-300 font-bold text-[10px]"
-                          >
-                            -5
-                          </button>
-                          <button
-                            onClick={() => handleHpChange(c.id, -1)}
-                            className="px-1.5 py-0.5 rounded bg-rose-950/80 border border-rose-800 text-rose-300 font-bold text-[10px]"
-                          >
-                            -1
-                          </button>
+                      {/* Precise HP System */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 mt-1 bg-[#0a0d14]/50 p-2 rounded-xl border border-[#2a3449]/50" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-2">
+                           <div className="bg-[#0a0d14] px-2 py-1 rounded-lg border border-cyan-900/50 shadow-inner">
+                             <div className="text-[8px] font-bold text-cyan-500/70 uppercase leading-none">CA</div>
+                             <div className="text-xs font-mono font-black text-cyan-300 leading-none">{c.ac}</div>
+                           </div>
+                           
+                           <div className="w-24">
+                              <div className="flex justify-between text-[10px] font-mono font-bold mb-1">
+                                <span className="text-rose-400 flex items-center gap-1">HP</span>
+                                <span className="text-slate-200">{c.hp}/{c.maxHp}</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-[#0a0d14] rounded-full overflow-hidden border border-[#2a3449]">
+                                <div className={`h-full transition-all duration-300 ${hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 20 ? 'bg-amber-500' : 'bg-rose-600'}`} style={{ width: `${hpPercent}%` }}></div>
+                              </div>
+                           </div>
                         </div>
 
-                        <div className="flex-1 text-center font-mono text-xs font-bold text-slate-200">
-                          {c.hp} / {c.maxHp} HP
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleHpChange(c.id, 1)}
-                            className="px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-800 text-emerald-300 font-bold text-[10px]"
-                          >
-                            +1
+                        <div className="flex items-center bg-[#0a0d14] rounded-lg border border-[#2a3449] overflow-hidden focus-within:border-amber-500/50">
+                          <input 
+                            type="number" 
+                            value={hpInput[c.id] || ''} 
+                            onChange={(e) => setHpInput(prev => ({...prev, [c.id]: e.target.value}))}
+                            placeholder="Val" 
+                            className="w-10 bg-transparent text-xs font-mono font-bold text-center text-slate-200 outline-none p-1 appearance-none"
+                          />
+                          <button onClick={() => handlePreciseHp(c.id, true)} className="px-2 py-1 bg-rose-950/40 hover:bg-rose-900 text-rose-400 border-l border-[#2a3449] transition-colors" title="Causar Dano">
+                            <Swords className="w-3 h-3" />
                           </button>
-                          <button
-                            onClick={() => handleHpChange(c.id, 5)}
-                            className="px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-800 text-emerald-300 font-bold text-[10px]"
-                          >
-                            +5
+                          <button onClick={() => handlePreciseHp(c.id, false)} className="px-2 py-1 bg-emerald-950/40 hover:bg-emerald-900 text-emerald-400 border-l border-[#2a3449] transition-colors" title="Curar Vida">
+                            <Heart className="w-3 h-3" />
                           </button>
                         </div>
                       </div>
+
+                      {/* Prominent Quick Attack Actions */}
+                      <div className="mt-2 pt-2 border-t border-[#2a3449]/60 flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-[9px] font-bold text-rose-400/80 uppercase font-mono tracking-wider mr-1">Ataques:</span>
+                        {c.actions && c.actions.length > 0 ? (
+                          c.actions.map(act => {
+                            const match = act.desc.match(/\+([0-9]+)/);
+                            const bonus = match ? parseInt(match[1]) : getMod(c.str);
+                            return (
+                              <button
+                                key={act.name}
+                                onClick={() => rollDice(`Ataque: ${act.name}`, bonus, c, act.desc)}
+                                className="px-2.5 py-1 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-slate-950 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border border-rose-400/40"
+                                title={act.desc}
+                              >
+                                <Swords className="w-3 h-3 text-slate-950" />
+                                <span>{act.name} (+{bonus})</span>
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <button
+                            onClick={() => rollDice(`Ataque: Corpo a Corpo`, getMod(c.str), c, '1d8')}
+                            className="px-2.5 py-1 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-slate-950 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border border-rose-400/40"
+                          >
+                            <Swords className="w-3 h-3 text-slate-950" />
+                            <span>Atacar (+{getMod(c.str) >= 0 ? '+' : ''}{getMod(c.str)})</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Expanded Action Panel */}
+                      {isExpanded && (
+                        <div className="mt-1 pt-2 border-t border-[#2a3449] animate-in slide-in-from-top-2 fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+                          
+                          {/* Saves & Skills */}
+                          <div className="mb-2">
+                            <h5 className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Rolagens (Salva-Guardas & Skills)</h5>
+                            <div className="flex flex-wrap gap-1">
+                              <button onClick={() => rollDice(`${c.name} - Percepção`, getMod(c.wis), c)} className="px-2 py-1 bg-[#1e293b] hover:bg-[#334155] border border-slate-700 rounded text-[9px] font-semibold text-slate-300">
+                                Percepção ({getMod(c.wis) >= 0 ? '+' : ''}{getMod(c.wis)})
+                              </button>
+                              <button onClick={() => rollDice(`${c.name} - Salva STR`, getMod(c.str), c)} className="px-2 py-1 bg-[#1e293b] hover:bg-[#334155] border border-slate-700 rounded text-[9px] font-semibold text-slate-300">
+                                STR ({getMod(c.str) >= 0 ? '+' : ''}{getMod(c.str)})
+                              </button>
+                              <button onClick={() => rollDice(`${c.name} - Salva DEX`, getMod(c.dex), c)} className="px-2 py-1 bg-[#1e293b] hover:bg-[#334155] border border-slate-700 rounded text-[9px] font-semibold text-slate-300">
+                                DEX ({getMod(c.dex) >= 0 ? '+' : ''}{getMod(c.dex)})
+                              </button>
+                              <button onClick={() => rollDice(`${c.name} - Salva CON`, getMod(c.con), c)} className="px-2 py-1 bg-[#1e293b] hover:bg-[#334155] border border-slate-700 rounded text-[9px] font-semibold text-slate-300">
+                                CON ({getMod(c.con) >= 0 ? '+' : ''}{getMod(c.con)})
+                              </button>
+                              <button onClick={() => rollDice(`${c.name} - Salva WIS`, getMod(c.wis), c)} className="px-2 py-1 bg-[#1e293b] hover:bg-[#334155] border border-slate-700 rounded text-[9px] font-semibold text-slate-300">
+                                WIS ({getMod(c.wis) >= 0 ? '+' : ''}{getMod(c.wis)})
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Attacks */}
+                          <div>
+                             <h5 className="text-[9px] font-bold text-rose-500/70 uppercase tracking-wider mb-1.5">Ações Ofensivas</h5>
+                             {c.actions && c.actions.length > 0 ? (
+                               <div className="space-y-1">
+                                 {c.actions.map(act => (
+                                   <div key={act.name} className="p-1.5 bg-[#0a0d14] border border-[#2a3449] rounded-lg">
+                                     <div className="flex justify-between items-start mb-1">
+                                       <strong className="text-[10px] text-amber-300">{act.name}</strong>
+                                       {(() => {
+                                          const match = act.desc.match(/\+([0-9]+)/);
+                                          if (match) {
+                                            const bonus = parseInt(match[1]);
+                                            return (
+                                              <button onClick={() => rollDice(`Ataque: ${act.name}`, bonus, c, act.desc)} className="text-[8px] px-1.5 py-0.5 bg-rose-600 hover:bg-rose-500 text-white rounded font-bold">
+                                                Atq +{bonus}
+                                              </button>
+                                            );
+                                          }
+                                          return null;
+                                       })()}
+                                     </div>
+                                     <p className="text-[9px] text-slate-400 leading-snug">{act.desc}</p>
+                                   </div>
+                                 ))}
+                               </div>
+                             ) : (
+                               <div className="text-[10px] text-slate-500 italic">Nenhuma ação listada.</div>
+                             )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -769,6 +1240,8 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       </div>
 
       {/* Add Combatants Search Modal */}
+
+
       {showAddCombatantModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-[#0c0f17] border border-[#2a3449] rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-fade-in">
@@ -1035,6 +1508,157 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                 Concluir
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Target Required Warning Modal */}
+      {pendingAttack && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0f141d] border-2 border-rose-500/50 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center font-black text-lg">🎯</div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-100">Selecione um Alvo no Grid</h4>
+                <p className="text-xs text-slate-400">Para realizar {pendingAttack.title}, você precisa definir o alvo primeiro.</p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-[#121824] border border-[#2a3449] rounded-xl text-xs text-slate-300 leading-relaxed">
+              💡 <strong>Como selecionar:</strong> Clique sobre qualquer criatura no <strong>Grid 3D</strong> ou na lista de combate. Um círculo de mira vermelho aparecerá sobre o alvo!
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                onClick={() => setPendingAttack(null)}
+                className="w-full py-2 bg-rose-600 hover:bg-rose-500 text-slate-950 font-black text-xs rounded-xl transition-all shadow"
+              >
+                🎯 Entendi, vou selecionar no Grid!
+              </button>
+
+              <button
+                onClick={() => {
+                  const att = pendingAttack;
+                  setPendingAttack(null);
+                  rollDice(att.title, att.mod, att.actorCombatant, att.actionDesc, true);
+                }}
+                className="w-full py-2 bg-[#161c28] hover:bg-[#232d40] border border-[#2a3449] text-slate-300 font-bold text-xs rounded-xl transition-all"
+              >
+                💥 Rolar como Ataque em Área / Sem Alvo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Baldur's Gate 3 Style Floating HUD Dice Roller (NO Dark Overlay!) */}
+      {bg3DiceOverlay && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-in slide-in-from-top-6 fade-in duration-300">
+          <div 
+            className={`pointer-events-auto min-w-[340px] max-w-md p-5 rounded-3xl backdrop-blur-2xl border-2 text-center transition-all duration-300 shadow-2xl flex flex-col items-center gap-4 ${
+              bg3DiceOverlay.isRolling
+                ? 'bg-[#0f141d]/95 border-amber-500/60 shadow-[0_0_40px_rgba(245,158,11,0.2)]'
+                : bg3DiceOverlay.isCrit
+                ? 'bg-[#181308]/98 border-amber-400 shadow-[0_0_60px_rgba(245,158,11,0.7)] animate-bg3-crit'
+                : bg3DiceOverlay.isFail
+                ? 'bg-[#1c080e]/98 border-rose-600 shadow-[0_0_60px_rgba(244,63,94,0.7)] animate-bg3-shake'
+                : bg3DiceOverlay.isHit
+                ? 'bg-[#181308]/98 border-amber-400 shadow-[0_0_50px_rgba(245,158,11,0.5)]'
+                : 'bg-[#1a0b10]/98 border-rose-600/80 shadow-[0_0_50px_rgba(244,63,94,0.4)]'
+            }`}
+          >
+            {/* Top Action Title Banner */}
+            <div className="space-y-0.5">
+              <div className="text-[10px] font-mono font-bold tracking-widest text-amber-400 uppercase">
+                {bg3DiceOverlay.actorName ? `${bg3DiceOverlay.actorName} • ` : ''}{bg3DiceOverlay.title}
+              </div>
+              {bg3DiceOverlay.targetName && (
+                <div className="text-xs text-slate-200 font-sans">
+                  Alvo: <span className="font-bold text-rose-400">{bg3DiceOverlay.targetName}</span> 
+                  {bg3DiceOverlay.targetAc !== undefined && <span className="font-mono text-slate-400"> (CA {bg3DiceOverlay.targetAc})</span>}
+                </div>
+              )}
+            </div>
+
+            {/* 3D WebGL Polyhedral Dice Display */}
+            {bg3DiceOverlay.phase === 'd20' ? (
+              <div className="relative flex items-center justify-center my-1">
+                <Dice3DCanvas
+                  dieType="d20"
+                  isRolling={bg3DiceOverlay.isRolling}
+                  isHit={bg3DiceOverlay.isHit}
+                  isFail={bg3DiceOverlay.isFail}
+                  isCrit={bg3DiceOverlay.isCrit}
+                  number={bg3DiceOverlay.isRolling ? animatedRollNumber : bg3DiceOverlay.d20Roll}
+                  modifier={bg3DiceOverlay.modifier}
+                />
+              </div>
+            ) : (
+              /* Phase 2: Damage Dice Visual (3D Polyhedra) */
+              <div className="relative flex items-center justify-center my-1 animate-in zoom-in-95 duration-200">
+                {(() => {
+                  const formula = (bg3DiceOverlay.damageDiceFormula || '').toLowerCase();
+                  let damageDieType: DieType = 'd8';
+                  if (formula.includes('d20')) damageDieType = 'd20';
+                  else if (formula.includes('d12')) damageDieType = 'd12';
+                  else if (formula.includes('d10')) damageDieType = 'd10';
+                  else if (formula.includes('d6')) damageDieType = 'd6';
+                  else if (formula.includes('d4')) damageDieType = 'd4';
+
+                  return (
+                    <Dice3DCanvas
+                      dieType={damageDieType}
+                      isRolling={bg3DiceOverlay.isRolling}
+                      isHit={true}
+                      number={bg3DiceOverlay.isRolling ? animatedRollNumber : (bg3DiceOverlay.damageAmount || 0)}
+                    />
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Outcome Result Text */}
+            {!bg3DiceOverlay.isRolling && (
+              <div className="space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                {bg3DiceOverlay.phase === 'd20' ? (
+                  <>
+                    <div className="text-2xl font-black text-slate-100 font-mono">
+                      TOTAL: <span className="text-amber-400">{bg3DiceOverlay.totalRoll}</span>
+                    </div>
+
+                    <div className="text-xs font-black uppercase tracking-wider">
+                      {bg3DiceOverlay.isCrit ? (
+                        <span className="text-amber-400 font-extrabold flex items-center justify-center gap-1">
+                          💥 ACERTO CRÍTICO! (20 NATURAL)
+                        </span>
+                      ) : bg3DiceOverlay.isFail ? (
+                        <span className="text-rose-500 font-extrabold flex items-center justify-center gap-1">
+                          💀 ERRO CRÍTICO! (1 NATURAL)
+                        </span>
+                      ) : bg3DiceOverlay.isHit ? (
+                        <span className="text-amber-400 font-bold">✓ ACERTOU O ALVO!</span>
+                      ) : (
+                        <span className="text-rose-400 font-bold">✕ ERROU O ALVO!</span>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xl font-black text-rose-400 font-mono">
+                    💥 {bg3DiceOverlay.damageAmount} PONTOS DE DANO!
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Quick Dismiss Button */}
+            {!bg3DiceOverlay.isRolling && (
+              <button
+                onClick={() => setBg3DiceOverlay(null)}
+                className="px-6 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-[11px] rounded-xl shadow-lg transition-all active:scale-95 border border-amber-300"
+              >
+                OK
+              </button>
+            )}
           </div>
         </div>
       )}

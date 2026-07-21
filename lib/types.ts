@@ -122,10 +122,38 @@ export interface Combatant {
   ac: number;
   initiative: number;
   conditions: ConditionType[];
+  str?: number;
+  dex?: number;
+  con?: number;
+  int?: number;
+  wis?: number;
+  cha?: number;
+  actions?: { name: string; desc: string }[];
   cr?: string;
   avatarUrl?: string;
   notes?: string;
   isCurrentTurn?: boolean;
+}
+
+export interface CombatLogEntry {
+  id: string;
+  timestamp: string;
+  round: number;
+  actorId: string;
+  actorName: string;
+  targetId?: string;
+  targetName?: string;
+  eventType: 'attack' | 'damage' | 'heal' | 'save' | 'status' | 'turn' | 'death' | 'system';
+  actionName?: string;
+  d20Roll?: number;
+  totalRoll?: number;
+  targetAc?: number;
+  isHit?: boolean;
+  isCrit?: boolean;
+  isFail?: boolean;
+  amount?: number;
+  damageType?: string;
+  description: string;
 }
 
 export interface SRDMonster {

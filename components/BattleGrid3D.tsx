@@ -10,6 +10,8 @@ import { useAuth } from '@/context/AuthContext';
 interface BattleGrid3DProps {
   combatants: Combatant[];
   currentTurnIndex?: number;
+  selectedTargetId?: string;
+  onSelectTarget?: (c: Combatant) => void;
   onSelectCombatant?: (c: Combatant) => void;
   interactive?: boolean;
 }
@@ -17,6 +19,8 @@ interface BattleGrid3DProps {
 export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   combatants,
   currentTurnIndex = 0,
+  selectedTargetId,
+  onSelectTarget,
   onSelectCombatant,
   interactive = true,
 }) => {
@@ -30,6 +34,9 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const combatantsRef = useRef<Combatant[]>(combatants);
   const positionsRef = useRef<Record<string, { x: number; z: number }>>(localPositions);
   const turnIdxRef = useRef<number>(currentTurnIndex);
+  const targetIdRef = useRef<string | undefined>(selectedTargetId);
+  const onSelectTargetRef = useRef(onSelectTarget);
+  const onSelectCombatantRef = useRef(onSelectCombatant);
 
   // Sync refs with latest props
   useEffect(() => {
@@ -39,6 +46,15 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   useEffect(() => {
     turnIdxRef.current = currentTurnIndex;
   }, [currentTurnIndex]);
+
+  useEffect(() => {
+    targetIdRef.current = selectedTargetId;
+  }, [selectedTargetId]);
+
+  useEffect(() => {
+    onSelectTargetRef.current = onSelectTarget;
+    onSelectCombatantRef.current = onSelectCombatant;
+  }, [onSelectTarget, onSelectCombatant]);
 
   // Initialize integer grid cell coordinates for each combatant id
   useEffect(() => {
@@ -266,6 +282,33 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       updateCameraPosition();
     };
 
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const onClickCanvas = (e: MouseEvent) => {
+      if (!interactive) return;
+      const rect = domElem.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(pinsGroup.children, true);
+
+      if (intersects.length > 0) {
+        let obj: THREE.Object3D | null = intersects[0].object;
+        while (obj && !obj.userData.combatantId && obj.parent && obj.parent !== pinsGroup) {
+          obj = obj.parent;
+        }
+        if (obj && obj.userData.combatantId) {
+          const found = combatantsRef.current.find((c) => c.id === obj!.userData.combatantId);
+          if (found) {
+            if (onSelectTargetRef.current) onSelectTargetRef.current(found);
+            if (onSelectCombatantRef.current) onSelectCombatantRef.current(found);
+          }
+        }
+      }
+    };
+
     const domElem = renderer.domElement;
     domElem.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
@@ -273,10 +316,12 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     domElem.addEventListener('wheel', onWheel, { passive: false });
     domElem.addEventListener('contextmenu', onContextMenu);
     domElem.addEventListener('dblclick', onDblClick);
+    domElem.addEventListener('click', onClickCanvas);
 
     // Dynamic Pin Mesh Generator
     const createPawnMesh = (c: Combatant) => {
       const pinGroup = new THREE.Group();
+      pinGroup.userData.combatantId = c.id;
       const isPlayer = c.type === 'player';
       const baseColor = isPlayer ? 0x0284c7 : 0xe11d48;
       const ringColor = isPlayer ? 0x38bdf8 : 0xf43f5e;
@@ -318,11 +363,16 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
             model.position.z = -center.z * scale;
             model.position.y = -box.min.y * scale;
 
-            // Standardize shadow
+            // Standardize shadow and clone material for isolated damage flash
             model.traverse((child: any) => {
               if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
+                if (child.material) {
+                  child.material = child.material.clone();
+                  if (child.material.color) child.userData.originalColor = child.material.color.clone();
+                  if (child.material.emissive) child.userData.originalEmissive = child.material.emissive.clone();
+                }
               }
             });
             pinGroup.add(model);
@@ -364,6 +414,45 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       return pinGroup;
     };
 
+    // HTML Overlay Container for Combat Text
+    const overlayDiv = document.createElement('div');
+    overlayDiv.style.position = 'absolute';
+    overlayDiv.style.top = '0';
+    overlayDiv.style.left = '0';
+    overlayDiv.style.width = '100%';
+    overlayDiv.style.height = '100%';
+    overlayDiv.style.pointerEvents = 'none';
+    overlayDiv.style.overflow = 'hidden';
+    container.appendChild(overlayDiv);
+
+    const combatEvents: { id: string, pinGroup: THREE.Group, type: 'damage'|'heal', amount: number, age: number, el: HTMLDivElement }[] = [];
+
+    const handleCombatText = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      const { combatantId, type, amount } = customEvt.detail;
+      const pinGroup = meshesMap[combatantId];
+      if (!pinGroup) return;
+
+      if (type === 'damage') {
+         pinGroup.userData.damageTimer = 1.0;
+      } else {
+         pinGroup.userData.healTimer = 1.0;
+      }
+
+      const el = document.createElement('div');
+      el.style.position = 'absolute';
+      el.style.fontWeight = '900';
+      el.style.fontFamily = 'monospace';
+      el.style.fontSize = '24px';
+      el.style.textShadow = '0 2px 4px rgba(0,0,0,0.8), 0 0 2px rgba(0,0,0,1)';
+      el.style.color = type === 'damage' ? '#f43f5e' : '#10b981';
+      el.textContent = (type === 'damage' ? '-' : '+') + amount;
+      overlayDiv.appendChild(el);
+
+      combatEvents.push({ id: Math.random().toString(), pinGroup, type, amount, age: 0, el });
+    };
+    window.addEventListener('masters_codex_combat_text', handleCombatText);
+
     // Animation Loop (60 FPS)
     let animationFrameId: number;
     const animate = () => {
@@ -401,6 +490,26 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
           pinGroup.remove(haloChild);
         }
 
+        // Dynamically update Target Reticle ring indicator on targeted combatant
+        const isTargeted = c.id === targetIdRef.current;
+        let targetReticle = pinGroup.getObjectByName('targetReticle') as THREE.Mesh;
+
+        if (isTargeted && !targetReticle) {
+          const reticleGeo = new THREE.RingGeometry(0.72, 0.85, 32);
+          const reticleMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e, side: THREE.DoubleSide });
+          targetReticle = new THREE.Mesh(reticleGeo, reticleMat);
+          targetReticle.name = 'targetReticle';
+          targetReticle.rotation.x = Math.PI / 2;
+          targetReticle.position.y = 0.03;
+          pinGroup.add(targetReticle);
+        } else if (!isTargeted && targetReticle) {
+          pinGroup.remove(targetReticle);
+        }
+
+        if (targetReticle) {
+          targetReticle.rotation.z += 0.02;
+        }
+
         // Smooth Lerp to cell center (gridX + 0.5) * cellSize
         const gridPos = currentPosMap[c.id] || (c.type === 'player' ? { x: (idx % 5) - 2, z: 2 } : { x: (idx % 4) - 2, z: -2 - Math.floor(idx / 4) });
         const targetX = (gridPos.x + 0.5) * cellSize;
@@ -408,7 +517,100 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
         pinGroup.position.x += (targetX - pinGroup.position.x) * 0.25;
         pinGroup.position.z += (targetZ - pinGroup.position.z) * 0.25;
+
+        // Visual Effects: Damage Shake & Red Flash Tint for ALL models (Procedural & GLTF/GLB)
+        if (pinGroup.userData.damageTimer > 0) {
+           pinGroup.userData.damageTimer -= 0.05;
+           const shake = Math.sin(pinGroup.userData.damageTimer * 20) * 0.15;
+           pinGroup.position.x += shake;
+
+           const flashFactor = Math.sin(pinGroup.userData.damageTimer * Math.PI);
+           const targetRed = new THREE.Color(0xff0000);
+
+           pinGroup.traverse((child: any) => {
+             if (child.isMesh && child.material) {
+               // Clone material on the fly if not cloned yet
+               if (!child.userData.isMaterialCloned) {
+                 child.material = child.material.clone();
+                 child.userData.isMaterialCloned = true;
+               }
+
+               if (!child.userData.originalColor && child.material.color) {
+                 child.userData.originalColor = child.material.color.clone();
+               }
+               if (!child.userData.originalEmissive && child.material.emissive) {
+                 child.userData.originalEmissive = child.material.emissive.clone();
+               }
+
+               // 1. Emissive glow for PBR/Standard materials (GLTF GLB)
+               if (child.material.emissive) {
+                 child.material.emissive.setRGB(0.9 * flashFactor, 0, 0);
+               }
+
+               // 2. Color lerp tint for Basic/Standard materials
+               if (child.material.color && child.userData.originalColor) {
+                 child.material.color.copy(child.userData.originalColor).lerp(targetRed, flashFactor * 0.75);
+               }
+             }
+           });
+        } else if (pinGroup.userData.damageTimer <= 0 && pinGroup.userData.damageTimer !== -999) {
+           pinGroup.userData.damageTimer = -999;
+           pinGroup.traverse((child: any) => {
+             if (child.isMesh && child.material) {
+               if (child.material.emissive && child.userData.originalEmissive) {
+                 child.material.emissive.copy(child.userData.originalEmissive);
+               }
+               if (child.material.color && child.userData.originalColor) {
+                 child.material.color.copy(child.userData.originalColor);
+               }
+             }
+           });
+        }
+
+        // Visual Effects: Heal Aura
+        if (pinGroup.userData.healTimer > 0) {
+           pinGroup.userData.healTimer -= 0.025;
+           let aura = pinGroup.getObjectByName('healAura') as THREE.Mesh;
+           if (!aura) {
+             const auraGeo = new THREE.CylinderGeometry(0.8, 0.8, 3, 32, 1, true);
+             const auraMat = new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+             aura = new THREE.Mesh(auraGeo, auraMat);
+             aura.name = 'healAura';
+             aura.position.y = 1.5;
+             pinGroup.add(aura);
+           }
+           const aMat = aura.material as THREE.MeshBasicMaterial;
+           aMat.opacity = pinGroup.userData.healTimer * 0.8;
+           aura.scale.setScalar(1 + (1 - pinGroup.userData.healTimer) * 0.5);
+        } else if (pinGroup.userData.healTimer <= 0) {
+           const aura = pinGroup.getObjectByName('healAura');
+           if (aura) {
+             pinGroup.remove(aura);
+           }
+        }
       });
+
+      // Handle Floating Texts
+      const tempV = new THREE.Vector3();
+      for (let i = combatEvents.length - 1; i >= 0; i--) {
+        const ev = combatEvents[i];
+        ev.age += 0.016; 
+        if (ev.age > 1.5) {
+          ev.el.remove();
+          combatEvents.splice(i, 1);
+          continue;
+        }
+
+        tempV.copy(ev.pinGroup.position);
+        tempV.y += 2.5 + ev.age * 2.5; 
+        tempV.project(camera);
+
+        const x = (tempV.x * .5 + .5) * container.clientWidth;
+        const y = (tempV.y * -.5 + .5) * container.clientHeight;
+
+        ev.el.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${1 + Math.sin(ev.age * Math.PI)*0.3})`;
+        ev.el.style.opacity = (1.5 - ev.age).toString();
+      }
 
       // Remove obsolete meshes
       Object.keys(meshesMap).forEach((id) => {
