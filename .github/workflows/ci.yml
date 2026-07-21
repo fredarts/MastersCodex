@@ -1,0 +1,41 @@
+name: Masters Codex CI/CD
+
+on:
+  push:
+    branches: [ main, master, dev ]
+  pull_request:
+    branches: [ main, master, dev ]
+
+jobs:
+  audit-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar Dependências NPM
+        run: npm ci
+
+      - name: Checagem de Tipagem TypeScript
+        run: npx tsc --noEmit
+
+      - name: Executar Testes Unitários (Vitest)
+        run: npm run test
+
+      - name: Executar Audit Script de Arquitetura (checklist.py)
+        run: python .agent/scripts/checklist.py .
+
+      - name: Validar Build de Produção Next.js
+        run: npm run build

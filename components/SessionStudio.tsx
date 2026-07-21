@@ -23,7 +23,9 @@ import {
   UserCheck,
   Shield
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useCampaign } from '@/lib/hooks/useCampaign';
+import { useSession } from '@/lib/hooks/useSession';
+import { useWorld } from '@/lib/hooks/useWorld';
 import { GameScene, SceneType, Combatant } from '@/lib/types';
 import { INITIAL_MONSTERS, SFX_BUTTONS } from '@/lib/srd-data';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
@@ -35,9 +37,8 @@ interface SessionStudioProps {
 }
 
 export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) => {
+  const { activeCampaign, campaignMembers } = useCampaign();
   const { 
-    activeCampaign, 
-    campaignMembers,
     sessions, 
     activeSession, 
     setActiveSession, 
@@ -46,9 +47,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
     activeScene, 
     setActiveScene,
     updateScene,
-    deleteScene,
-    worldEntities 
-  } = useAuth();
+    deleteScene 
+  } = useSession();
+  const { worldEntities } = useWorld();
 
   const [selectedScene, setSelectedScene] = useState<GameScene | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'image' | 'audio' | 'combat' | 'voice' | 'notes'>('image');

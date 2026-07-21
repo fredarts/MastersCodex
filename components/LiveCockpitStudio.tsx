@@ -33,16 +33,24 @@ import {
   Check,
   ScrollText
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useWorld } from '@/lib/hooks/useWorld';
+import { useCampaign } from '@/lib/hooks/useCampaign';
+import { useSession } from '@/lib/hooks/useSession';
+import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { GameScene, SceneType, Combatant, ConditionType, CampaignMember } from '@/lib/types';
 import { INITIAL_MONSTERS, SFX_BUTTONS, CONDITIONS } from '@/lib/srd-data';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
+import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { BattleLog } from '@/components/BattleLog';
 import { Dice3DCanvas, DieType } from '@/components/Dice3DCanvas';
 import { CombatLogEntry } from '@/lib/types';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
+import { LiveCockpitHeader } from '@/components/live-cockpit/LiveCockpitHeader';
+import { CombatInitiativeTracker } from '@/components/live-cockpit/CombatInitiativeTracker';
+import { AddCombatantModal } from '@/components/live-cockpit/AddCombatantModal';
+import { QuickAudioPanel } from '@/components/live-cockpit/QuickAudioPanel';
 
 interface LiveCockpitStudioProps {
   combatants: Combatant[];
@@ -65,23 +73,22 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   onGenerateLoot,
   onOpenPlayerView,
 }) => {
-  const {
-    activeWorld,
-    activeCampaign,
-    activeSession,
-    sessions,
-    setActiveSession,
-    scenes,
-    activeScene,
-    setActiveScene,
-    updateScene,
-    createFeedEvent,
-    liveDisplayMode,
-    setLiveDisplayMode,
-    broadcastToPlayerView,
-    campaignMembers,
-    worldEntities,
-  } = useAuth();
+  const { activeWorld, worldEntities } = useWorld();
+  const { activeCampaign, campaignMembers, createFeedEvent } = useCampaign();
+  const { 
+    activeSession, 
+    sessions, 
+    setActiveSession, 
+    scenes, 
+    activeScene, 
+    setActiveScene, 
+    updateScene 
+  } = useSession();
+  const { 
+    liveDisplayMode, 
+    setLiveDisplayMode, 
+    broadcastToPlayerView 
+  } = useLiveCockpit();
 
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
   const [playingNpcVoice, setPlayingNpcVoice] = useState(false);
@@ -912,16 +919,18 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
             <div className="flex-1 min-h-0 w-full flex items-center justify-center">
               <div className="h-full w-full max-h-full max-w-full aspect-square bg-black rounded-2xl border border-[#2a3449] overflow-hidden relative shadow-2xl flex items-center justify-center">
                 {liveDisplayMode === 'combat' || activeScene?.sceneType === 'combat' ? (
-                  <BattleGrid3D
-                    combatants={combatants}
-                    currentTurnIndex={currentTurnIndex}
-                    selectedTargetId={selectedTargetId}
-                    onSelectTarget={(target) => {
-                      setSelectedTargetId(target.id);
-                      broadcastToPlayerView({ targetId: target.id });
-                    }}
-                    interactive={true}
-                  />
+                  <ThreeErrorBoundary>
+                    <BattleGrid3D
+                      combatants={combatants}
+                      currentTurnIndex={currentTurnIndex}
+                      selectedTargetId={selectedTargetId}
+                      onSelectTarget={(target) => {
+                        setSelectedTargetId(target.id);
+                        broadcastToPlayerView({ targetId: target.id });
+                      }}
+                      interactive={true}
+                    />
+                  </ThreeErrorBoundary>
                 ) : displayImageUrl ? (
                   <div className="w-full h-full relative">
                     <img src={displayImageUrl} alt="Arte ao vivo" className="w-full h-full object-cover" />

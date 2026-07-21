@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Sparkles, User, MapPin, Shield, Zap, BookOpen } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useWorld } from '@/lib/hooks/useWorld';
 import { WorldEntityCategory } from '@/lib/types';
 
 interface WorldEntityModalProps {
@@ -16,7 +16,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   onClose,
   defaultCategory = 'npc',
 }) => {
-  const { activeWorld, createWorldEntity } = useAuth();
+  const { activeWorld, createWorldEntity } = useWorld();
   const [category, setCategory] = useState<WorldEntityCategory>(defaultCategory);
   const [name, setName] = useState('');
   const [subType, setSubType] = useState('');

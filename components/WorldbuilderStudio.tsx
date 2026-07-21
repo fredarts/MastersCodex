@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { Globe, Plus, Sparkles, Rocket, Compass, Layers, Crown, ArrowRight, Edit3, BookOpen, Play, Settings, Network, Check } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useWorld } from '@/lib/hooks/useWorld';
+import { useCampaign } from '@/lib/hooks/useCampaign';
 import { World, UserCampaign } from '@/lib/types';
 import { WorldEditor } from '@/components/WorldEditor';
 import { LoreGraph } from '@/components/LoreGraph';
@@ -16,7 +17,8 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
   onOpenCreateCampaignWithWorld,
   onSelectCampaign,
 }) => {
-  const { userWorlds, activeWorld, setActiveWorld, createWorld, updateWorld, userCampaigns, setActiveCampaign } = useAuth();
+  const { userWorlds, activeWorld, setActiveWorld, createWorld, updateWorld } = useWorld();
+  const { userCampaigns, setActiveCampaign } = useCampaign();
   const [showCreateWorldModal, setShowCreateWorldModal] = useState(false);
   const [isEditingActiveWorld, setIsEditingActiveWorld] = useState(false);
   const [subTab, setSubTab] = useState<'overview' | 'lore'>('overview');

@@ -18,15 +18,32 @@ export const LoreGraph: React.FC = () => {
   const [simulatedConsequence, setSimulatedConsequence] = useState<string | null>(null);
 
   // Drag and drop positions map
-  const [nodePositions, setNodePositions] = useState<Record<string, NodePosition>>({
-    'rei-aris': { x: 50, y: 40 },
-    'kraag-npc': { x: 300, y: 40 },
-    'valiria-city': { x: 175, y: 180 },
-    'guilda-sombras': { x: 175, y: 320 },
+  const [nodePositions, setNodePositions] = useState<Record<string, NodePosition>>(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('codex_lore_positions') : null;
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      'rei-aris': { x: 50, y: 40 },
+      'kraag-npc': { x: 300, y: 40 },
+      'valiria-city': { x: 175, y: 180 },
+      'guilda-sombras': { x: 175, y: 320 },
+    };
   });
 
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Persistir posições ao alterar
+  const updateAndSavePosition = (id: string, pos: NodePosition) => {
+    setNodePositions((prev) => {
+      const updated = { ...prev, [id]: pos };
+      try {
+        localStorage.setItem('codex_lore_positions', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
 
   // Merge dynamic world entities from WorldContext into graph nodes
   useEffect(() => {
@@ -121,10 +138,7 @@ export const LoreGraph: React.FC = () => {
     const newX = Math.max(10, Math.min(canvasRect.width - 200, e.clientX - dragOffset.x));
     const newY = Math.max(10, Math.min(canvasRect.height - 120, e.clientY - dragOffset.y));
 
-    setNodePositions((prev) => ({
-      ...prev,
-      [draggingNodeId]: { x: newX, y: newY },
-    }));
+    updateAndSavePosition(draggingNodeId, { x: newX, y: newY });
   };
 
   const handleMouseUp = () => {

@@ -19,7 +19,7 @@ import {
   Edit3,
   Check
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useWorld } from '@/lib/hooks/useWorld';
 import { WorldEntityCategory, WorldEntity } from '@/lib/types';
 import { WorldEntityModal } from '@/components/WorldEntityModal';
 import { LoreGraph } from '@/components/LoreGraph';
@@ -31,7 +31,7 @@ interface WorldEditorProps {
 export const WorldEditor: React.FC<WorldEditorProps> = ({
   onOpenCreateCampaignWithWorld,
 }) => {
-  const { activeWorld, updateWorld, worldEntities, deleteWorldEntity, createWorldEntity } = useAuth();
+  const { activeWorld, updateWorld, worldEntities, deleteWorldEntity, createWorldEntity } = useWorld();
   const [activeSubTab, setActiveSubTab] = useState<WorldEntityCategory | 'graph' | 'ai'>('npc');
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalCategory, setModalCategory] = useState<WorldEntityCategory>('npc');

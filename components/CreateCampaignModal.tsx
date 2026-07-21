@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Crown, Plus, Sparkles, Globe } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useCampaign } from '@/lib/hooks/useCampaign';
+import { useWorld } from '@/lib/hooks/useWorld';
 import { World } from '@/lib/types';
 
 interface CreateCampaignModalProps {
@@ -16,7 +17,8 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({
   onClose,
   selectedWorldForCampaign,
 }) => {
-  const { createCampaign, userWorlds, activeWorld } = useAuth();
+  const { createCampaign } = useCampaign();
+  const { userWorlds, activeWorld } = useWorld();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [worldId, setWorldId] = useState<string>('');

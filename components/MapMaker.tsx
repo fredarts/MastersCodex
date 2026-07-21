@@ -244,6 +244,19 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
             </button>
           )}
           <button
+            onClick={() => {
+              try {
+                localStorage.setItem('codex_custom_map', JSON.stringify(grid));
+                alert('Mapa tático salvo com sucesso!');
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+            className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1 transition-all"
+          >
+            <Download className="w-3.5 h-3.5" /> Salvar Mapa
+          </button>
+          <button
             onClick={revealAllFog}
             className="text-xs bg-[#161c28] hover:bg-[#1f2738] text-slate-300 border border-[#2a3449] px-2.5 py-1.5 rounded-lg font-medium"
           >

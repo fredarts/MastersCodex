@@ -16,7 +16,9 @@ import {
   Edit3,
   Check
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useWorld } from '@/lib/hooks/useWorld';
+import { useCampaign } from '@/lib/hooks/useCampaign';
+import { useSession } from '@/lib/hooks/useSession';
 import { GameScene, Combatant } from '@/lib/types';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
 
@@ -25,10 +27,9 @@ interface SessionNavigatorProps {
 }
 
 export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene }) => {
-  const { 
-    activeWorld,
-    updateWorld,
-    activeCampaign, 
+  const { activeWorld, updateWorld } = useWorld();
+  const { activeCampaign } = useCampaign();
+  const {
     sessions, 
     activeSession, 
     setActiveSession, 
@@ -38,7 +39,7 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
     activeScene, 
     setActiveScene,
     updateScene
-  } = useAuth();
+  } = useSession();
 
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
   const [showNewSessionInput, setShowNewSessionInput] = useState(false);
@@ -172,7 +173,7 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
             <select
               value={activeSession?.id || ''}
               onChange={(e) => {
-                const selected = sessions.find((s) => s.id === e.target.value);
+                const selected = sessions.find((s: any) => s.id === e.target.value);
                 if (selected) setActiveSession(selected);
               }}
               className="bg-transparent text-xs text-amber-300 font-bold focus:outline-none max-w-[180px] truncate"
@@ -180,7 +181,7 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
               {sessions.length === 0 ? (
                 <option value="" className="bg-[#161c28] text-slate-300">Nenhuma Sessão Criada</option>
               ) : (
-                sessions.map((s) => (
+                sessions.map((s: any) => (
                   <option key={s.id} value={s.id} className="bg-[#161c28] text-slate-200">
                     Sessão {s.sessionNumber}: {s.title}
                   </option>
@@ -249,7 +250,7 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
         {scenes.length === 0 ? (
           <span className="text-xs text-slate-500 italic">Nenhuma cena criada para esta sessão.</span>
         ) : (
-          scenes.map((sc) => {
+          scenes.map((sc: any) => {
             const isActive = activeScene?.id === sc.id;
             const isEditingThisScene = editingSceneId === sc.id;
 

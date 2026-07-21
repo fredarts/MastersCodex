@@ -1,122 +1,92 @@
 'use client';
 
 import React from 'react';
-import { Tv, Film, Map as MapIcon, Swords, Eye, Radio, Sparkles, Mic } from 'lucide-react';
+import { Tv, Play, Swords, Map as MapIcon, Image as ImageIcon, Sparkles, Radio } from 'lucide-react';
 import { GameScene } from '@/lib/types';
 
 interface LiveCockpitHeaderProps {
   activeScene: GameScene | null;
   liveDisplayMode: 'artwork' | 'map' | 'combat';
   setLiveDisplayMode: (mode: 'artwork' | 'map' | 'combat') => void;
-  broadcastToPlayerView: (payload: any) => void;
   onOpenPlayerView: () => void;
-  playingNpcVoice: boolean;
-  setPlayingNpcVoice: (playing: boolean) => void;
+  onOpenCreateScene: () => void;
 }
 
 export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
   activeScene,
   liveDisplayMode,
   setLiveDisplayMode,
-  broadcastToPlayerView,
   onOpenPlayerView,
-  playingNpcVoice,
-  setPlayingNpcVoice,
+  onOpenCreateScene,
 }) => {
   return (
-    <div className="p-3 bg-[#111622] border-b border-[#2a3449] flex items-center justify-between flex-wrap gap-2 select-none shadow-md">
-      {/* Active Scene Title & Type */}
+    <div className="bg-zinc-900/90 border-b border-zinc-800 p-4 flex flex-wrap items-center justify-between gap-4 backdrop-blur-md sticky top-0 z-30">
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+        <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold shadow-lg shadow-amber-500/5">
           <Tv className="w-5 h-5" />
         </div>
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold text-slate-100">
-              {activeScene ? activeScene.title : 'Nenhuma cena selecionada'}
-            </h2>
-            {activeScene?.sceneType && (
-              <span className="px-2 py-0.5 text-[10px] uppercase font-bold rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                {activeScene.sceneType}
-              </span>
-            )}
+            <h1 className="text-lg font-bold text-zinc-100 tracking-wide">Studio Live Cockpit</h1>
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+              <Radio className="w-3 h-3 animate-pulse" /> Ao Vivo
+            </span>
           </div>
-          <p className="text-[11px] text-slate-400">Cockpit em Tempo Real do Mestre</p>
+          <p className="text-xs text-zinc-400">
+            {activeScene ? `Cena Ativa: ${activeScene.title}` : 'Nenhuma cena equipada'}
+          </p>
         </div>
       </div>
 
-      {/* Projection Mode Selectors */}
-      <div className="flex items-center gap-1.5 bg-[#090d16] p-1 rounded-xl border border-[#2a3449]">
+      {/* Controles de Projeção */}
+      <div className="flex items-center gap-2 bg-zinc-950/80 p-1.5 rounded-xl border border-zinc-800">
         <button
-          onClick={() => {
-            setLiveDisplayMode('artwork');
-            broadcastToPlayerView({ mode: 'artwork', scene: activeScene });
-          }}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+          onClick={() => setLiveDisplayMode('artwork')}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             liveDisplayMode === 'artwork'
-              ? 'bg-amber-500 text-slate-950 font-bold shadow-lg'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-[#161c28]'
+              ? 'bg-amber-500 text-zinc-950 font-bold shadow-md shadow-amber-500/20'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
           }`}
         >
-          <Film className="w-3.5 h-3.5" />
-          Arte da Cena
+          <ImageIcon className="w-3.5 h-3.5" /> Ilustração
         </button>
 
         <button
-          onClick={() => {
-            setLiveDisplayMode('map');
-            broadcastToPlayerView({ mode: 'map', scene: activeScene });
-          }}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+          onClick={() => setLiveDisplayMode('map')}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             liveDisplayMode === 'map'
-              ? 'bg-cyan-500 text-slate-950 font-bold shadow-lg'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-[#161c28]'
+              ? 'bg-indigo-500 text-white font-bold shadow-md shadow-indigo-500/20'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
           }`}
         >
-          <MapIcon className="w-3.5 h-3.5" />
-          Mapa 2D
+          <MapIcon className="w-3.5 h-3.5" /> Mapa Tático
         </button>
 
         <button
-          onClick={() => {
-            setLiveDisplayMode('combat');
-            broadcastToPlayerView({ mode: 'combat', scene: activeScene });
-          }}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+          onClick={() => setLiveDisplayMode('combat')}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             liveDisplayMode === 'combat'
-              ? 'bg-rose-500 text-slate-950 font-bold shadow-lg'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-[#161c28]'
+              ? 'bg-rose-500 text-white font-bold shadow-md shadow-rose-500/20'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
           }`}
         >
-          <Swords className="w-3.5 h-3.5" />
-          BattleGrid 3D
+          <Swords className="w-3.5 h-3.5" /> Grid 3D / Combate
         </button>
       </div>
 
-      {/* Action Buttons */}
       <div className="flex items-center gap-2">
-        {/* NPC Voice Audio Trigger */}
         <button
-          onClick={() => {
-            setPlayingNpcVoice(!playingNpcVoice);
-          }}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
-            playingNpcVoice
-              ? 'bg-purple-600 text-white border-purple-400 animate-pulse'
-              : 'bg-[#182030] text-purple-300 border-purple-500/30 hover:bg-purple-950/40'
-          }`}
+          onClick={onOpenCreateScene}
+          className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold rounded-lg border border-zinc-700 transition-colors"
         >
-          <Mic className="w-3.5 h-3.5" />
-          {playingNpcVoice ? 'Voz NPC Tocando...' : 'Voz NPC Narrativa'}
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Nova Cena
         </button>
 
-        {/* Player View projection button */}
         <button
           onClick={onOpenPlayerView}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-lg shadow-md transition-all"
+          className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs rounded-lg shadow-lg shadow-amber-500/20 transition-all transform hover:scale-105 active:scale-95"
         >
-          <Eye className="w-3.5 h-3.5" />
-          Tela dos Jogadores
+          <Play className="w-3.5 h-3.5 fill-current" /> Tela dos Jogadores
         </button>
       </div>
     </div>

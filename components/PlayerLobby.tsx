@@ -19,7 +19,8 @@ import {
   LogOut,
   FileText
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useCampaign } from '@/lib/hooks/useCampaign';
+import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { UserCampaign, CharacterSheet } from '@/lib/types';
 import { CharacterSheetModal } from './character-sheet/CharacterSheetModal';
 import { CharacterManagerModal } from './character-sheet/CharacterManagerModal';
@@ -31,7 +32,8 @@ interface PlayerLobbyProps {
 }
 
 export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) => {
-  const { activeCampaign, setActiveCampaign, userCampaigns, joinCampaignByCode, leaveCampaign, feedEvents, tokenPositions3D, updateTokenPosition3D, updateCampaignMemberModelUrl } = useAuth();
+  const { activeCampaign, setActiveCampaign, userCampaigns, joinCampaignByCode, leaveCampaign, feedEvents, updateCampaignMemberModelUrl } = useCampaign();
+  const { tokenPositions3D, updateTokenPosition3D } = useLiveCockpit();
   
   // Navigation & Modal States
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(activeCampaign?.id || null);

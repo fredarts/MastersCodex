@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { useCampaign } from '@/lib/hooks/useCampaign';
 import { Header } from '@/components/Header';
 import { Sidebar, ActiveTab } from '@/components/Sidebar';
 import { SessionNavigator } from '@/components/SessionNavigator';
@@ -21,8 +22,10 @@ import { PlayerLobby } from '@/components/PlayerLobby';
 import { LiveCockpitStudio } from '@/components/LiveCockpitStudio';
 import { Combatant, Encounter, World, GameScene, UserCampaign } from '@/lib/types';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
+
 function MainApp() {
-  const { roleMode, loadDemoEverything, setActiveCampaign } = useAuth();
+  const { roleMode, loadDemoEverything } = useAuth();
+  const { setActiveCampaign } = useCampaign();
   const [activeTab, setActiveTab] = useState<ActiveTab>('live_cockpit');
   
   const [combatants, setCombatants] = useState<Combatant[]>([]);

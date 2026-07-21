@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, X, Plus, UserPlus, Shield, Heart } from 'lucide-react';
+import { X, Search, Plus, Swords, User, Shield, Sparkles } from 'lucide-react';
 import { Combatant, CampaignMember } from '@/lib/types';
 import { INITIAL_MONSTERS } from '@/lib/srd-data';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
@@ -9,23 +9,25 @@ import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 interface AddCombatantModalProps {
   isOpen: boolean;
   onClose: () => void;
-  combatants: Combatant[];
-  setCombatants: React.Dispatch<React.SetStateAction<Combatant[]>>;
   campaignMembers: CampaignMember[];
+  onAddCombatant: (c: Combatant) => void;
 }
 
 export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
   isOpen,
   onClose,
-  setCombatants,
   campaignMembers,
+  onAddCombatant,
 }) => {
   const [activeAddTab, setActiveAddTab] = useState<'monsters' | 'players' | 'custom'>('monsters');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Custom Form State
   const [customName, setCustomName] = useState('');
-  const [customHp, setCustomHp] = useState('10');
-  const [customAc, setCustomAc] = useState('12');
-  const [customInit, setCustomInit] = useState('10');
+  const [customHp, setCustomHp] = useState(15);
+  const [customAc, setCustomAc] = useState(13);
+  const [customInit, setCustomInit] = useState(10);
+  const [customType, setCustomType] = useState<'player' | 'monster' | 'npc'>('monster');
 
   if (!isOpen) return null;
 
@@ -33,140 +35,139 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
     m.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleAddMonster = (monster: (typeof INITIAL_MONSTERS)[0]) => {
+  const handleAddMonster = (monster: any) => {
+    const rollInit = Math.floor(Math.random() * 20) + 1;
     const newCombatant: Combatant = {
-      id: `mon-${Date.now()}-${Math.random()}`,
-      name: `${monster.name} #${Math.floor(1 + Math.random() * 9)}`,
-      type: 'monster',
+      id: `mon-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      name: monster.name,
       hp: monster.hp,
       maxHp: monster.hp,
       ac: monster.ac,
-      initiative: Math.floor(Math.random() * 20) + 1,
-      conditions: [],
+      initiative: rollInit,
+      type: 'monster',
       cr: monster.cr,
+      conditions: [],
       modelUrl: getModelUrlByNameOrPath(monster.name),
     };
-    setCombatants((prev) => [...prev, newCombatant].sort((a, b) => b.initiative - a.initiative));
+    onAddCombatant(newCombatant);
   };
 
   const handleAddPlayer = (member: CampaignMember) => {
-    const name = member.characterName || member.displayName || 'Jogador';
+    const rollInit = Math.floor(Math.random() * 20) + 1;
     const newCombatant: Combatant = {
-      id: `ply-${member.id}-${Date.now()}`,
-      name,
-      type: 'player',
-      hp: 30,
-      maxHp: 30,
+      id: `pc-${Date.now()}-${member.id}`,
+      name: member.characterName || member.displayName || 'Jogador',
+      hp: 25,
+      maxHp: 25,
       ac: 15,
-      initiative: Math.floor(Math.random() * 20) + 1,
+      initiative: rollInit,
+      type: 'player',
       conditions: [],
-      modelUrl: member.modelUrl || getModelUrlByNameOrPath(name),
+      modelUrl: member.modelUrl || getModelUrlByNameOrPath(member.characterName || ''),
     };
-    setCombatants((prev) => [...prev, newCombatant].sort((a, b) => b.initiative - a.initiative));
+    onAddCombatant(newCombatant);
   };
 
-  const handleAddCustom = (e: React.FormEvent) => {
+  const handleCreateCustom = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customName.trim()) return;
-    const hpVal = parseInt(customHp) || 10;
-    const acVal = parseInt(customAc) || 10;
-    const initVal = parseInt(customInit) || 10;
-
     const newCombatant: Combatant = {
-      id: `cust-${Date.now()}`,
-      name: customName,
-      type: 'npc',
-      hp: hpVal,
-      maxHp: hpVal,
-      ac: acVal,
-      initiative: initVal,
+      id: `custom-${Date.now()}`,
+      name: customName.trim(),
+      hp: customHp,
+      maxHp: customHp,
+      ac: customAc,
+      initiative: customInit,
+      type: customType,
       conditions: [],
       modelUrl: getModelUrlByNameOrPath(customName),
     };
-    setCombatants((prev) => [...prev, newCombatant].sort((a, b) => b.initiative - a.initiative));
+    onAddCombatant(newCombatant);
     setCustomName('');
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#111622] border border-[#2a3449] w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden select-none">
-        {/* Header */}
-        <div className="p-4 border-b border-[#2a3449] flex items-center justify-between bg-[#161c28]">
-          <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider flex items-center gap-2">
-            <Plus className="w-4 h-4 text-emerald-400" />
-            Adicionar Combatente ao Encontro
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-100">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/50">
+          <div className="flex items-center gap-2">
+            <Swords className="w-5 h-5 text-rose-500" />
+            <h2 className="text-base font-bold text-zinc-100">Adicionar Combatente ao Encontro</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-[#2a3449] bg-[#090d16]">
+        {/* Tab Selector */}
+        <div className="flex border-b border-zinc-800 bg-zinc-950/30 p-1">
           <button
             onClick={() => setActiveAddTab('monsters')}
-            className={`flex-1 py-2.5 text-xs font-bold transition-all border-b-2 ${
-              activeAddTab === 'monsters'
-                ? 'border-emerald-400 text-emerald-300 bg-[#161c28]'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
+              activeAddTab === 'monsters' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            👾 Monstros SRD
+            Monstros SRD (5e)
           </button>
           <button
             onClick={() => setActiveAddTab('players')}
-            className={`flex-1 py-2.5 text-xs font-bold transition-all border-b-2 ${
-              activeAddTab === 'players'
-                ? 'border-cyan-400 text-cyan-300 bg-[#161c28]'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
+              activeAddTab === 'players' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            🛡️ Jogadores da Campanha
+            Roster dos Jogadores
           </button>
           <button
             onClick={() => setActiveAddTab('custom')}
-            className={`flex-1 py-2.5 text-xs font-bold transition-all border-b-2 ${
-              activeAddTab === 'custom'
-                ? 'border-purple-400 text-purple-300 bg-[#161c28]'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
+              activeAddTab === 'custom' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            ✏️ Personalizado
+            Personalizado
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-4 max-h-[380px] overflow-y-auto custom-scrollbar">
+        <div className="p-4 max-h-[60vh] overflow-y-auto">
           {activeAddTab === 'monsters' && (
-            <div>
-              <div className="relative mb-3">
-                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-3 text-zinc-500" />
                 <input
                   type="text"
+                  placeholder="Buscar monstro no Bestiário (Ex: Goblin, Dragão, Esqueleto)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Buscar monstro (ex: Goblin, Hobgoblin)..."
-                  className="w-full pl-9 pr-3 py-2 bg-[#090d16] border border-[#2a3449] rounded-xl text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
+                  className="w-full pl-9 pr-4 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-200 focus:outline-none focus:border-rose-500/50"
                 />
               </div>
 
-              <div className="space-y-2">
-                {filteredMonsters.map((monster) => (
+              <div className="grid grid-cols-1 gap-2 max-h-72 overflow-y-auto pr-1">
+                {filteredMonsters.map((m) => (
                   <div
-                    key={monster.id}
-                    className="p-3 bg-[#161c28] border border-[#2a3449] rounded-xl flex items-center justify-between hover:border-emerald-500/50 transition-all"
+                    key={m.name}
+                    className="p-3 bg-zinc-950/60 hover:bg-zinc-800/80 border border-zinc-800/80 rounded-xl flex items-center justify-between transition-all"
                   >
                     <div>
-                      <h4 className="text-xs font-bold text-slate-100">{monster.name}</h4>
-                      <p className="text-[10px] text-slate-400">
-                        {monster.type} • CR {monster.cr} • HP {monster.hp} • CA {monster.ac}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm text-zinc-200">{m.name}</span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-500/10 text-rose-400 font-mono">
+                          CR {m.cr}
+                        </span>
+                      </div>
+                      <div className="text-xs text-zinc-400 mt-0.5 flex items-center gap-3 font-mono">
+                        <span>PV: {m.hp}</span>
+                        <span>CA: {m.ac}</span>
+                      </div>
                     </div>
+
                     <button
-                      onClick={() => handleAddMonster(monster)}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg shadow-sm"
+                      onClick={() => handleAddMonster(m)}
+                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-lg flex items-center gap-1 shadow-md shadow-rose-600/20 transition-all"
                     >
-                      Adicionar
+                      <Plus className="w-3.5 h-3.5" /> Adicionar
                     </button>
                   </div>
                 ))}
@@ -177,29 +178,32 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
           {activeAddTab === 'players' && (
             <div className="space-y-2">
               {campaignMembers.length === 0 ? (
-                <div className="text-center py-6 text-slate-500 text-xs">
-                  Nenhum jogador na campanha ativa.
+                <div className="p-8 text-center text-zinc-500 text-sm">
+                  Nenhum jogador registrado na campanha.
                 </div>
               ) : (
-                campaignMembers.map((member) => (
+                campaignMembers.map((mem) => (
                   <div
-                    key={member.id}
-                    className="p-3 bg-[#161c28] border border-[#2a3449] rounded-xl flex items-center justify-between hover:border-cyan-500/50 transition-all"
+                    key={mem.id}
+                    className="p-3 bg-zinc-950/60 hover:bg-zinc-800/80 border border-zinc-800/80 rounded-xl flex items-center justify-between"
                   >
-                    <div className="flex items-center gap-2">
-                      <UserPlus className="w-4 h-4 text-cyan-400" />
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                        <User className="w-4 h-4" />
+                      </div>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-100">
-                          {member.characterName || member.displayName}
-                        </h4>
-                        <p className="text-[10px] text-slate-400">Papel: {member.role?.toUpperCase()}</p>
+                        <div className="font-semibold text-sm text-zinc-200">
+                          {mem.characterName || mem.displayName}
+                        </div>
+                        <div className="text-xs text-zinc-500">{mem.role === 'dm' ? 'Mestre' : 'Jogador'}</div>
                       </div>
                     </div>
+
                     <button
-                      onClick={() => handleAddPlayer(member)}
-                      className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-lg shadow-sm"
+                      onClick={() => handleAddPlayer(mem)}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-lg flex items-center gap-1"
                     >
-                      Incluir no Combate
+                      <Plus className="w-3.5 h-3.5" /> Entrar no Combate
                     </button>
                   </div>
                 ))
@@ -208,54 +212,69 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
           )}
 
           {activeAddTab === 'custom' && (
-            <form onSubmit={handleAddCustom} className="space-y-3">
+            <form onSubmit={handleCreateCustom} className="space-y-4">
               <div>
-                <label className="text-[11px] font-bold text-slate-400 block mb-1">Nome do NPC/Inimigo</label>
+                <label className="block text-xs font-semibold text-zinc-400 mb-1">Nome do Combatente</label>
                 <input
                   type="text"
+                  required
+                  placeholder="Ex: Guardião das Sombras"
                   value={customName}
                   onChange={(e) => setCustomName(e.target.value)}
-                  placeholder="Ex: Mercenário Misterioso"
-                  required
-                  className="w-full px-3 py-2 bg-[#090d16] border border-[#2a3449] rounded-xl text-xs text-slate-100 focus:outline-none focus:border-purple-500"
+                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-100 focus:outline-none focus:border-amber-500"
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-[11px] font-bold text-slate-400 block mb-1">HP Máximo</label>
+                  <label className="block text-xs font-semibold text-zinc-400 mb-1">Pontos de Vida (PV)</label>
                   <input
                     type="number"
+                    min={1}
                     value={customHp}
-                    onChange={(e) => setCustomHp(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#090d16] border border-[#2a3449] rounded-xl text-xs text-slate-100"
+                    onChange={(e) => setCustomHp(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-100"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-slate-400 block mb-1">Classe de Armadura</label>
+                  <label className="block text-xs font-semibold text-zinc-400 mb-1">Classe de Armadura (CA)</label>
                   <input
                     type="number"
+                    min={1}
                     value={customAc}
-                    onChange={(e) => setCustomAc(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#090d16] border border-[#2a3449] rounded-xl text-xs text-slate-100"
+                    onChange={(e) => setCustomAc(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-100"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-slate-400 block mb-1">Iniciativa Inicial</label>
+                  <label className="block text-xs font-semibold text-zinc-400 mb-1">Iniciativa</label>
                   <input
                     type="number"
                     value={customInit}
-                    onChange={(e) => setCustomInit(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#090d16] border border-[#2a3449] rounded-xl text-xs text-slate-100"
+                    onChange={(e) => setCustomInit(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-100"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 mb-1">Tipo</label>
+                <select
+                  value={customType}
+                  onChange={(e) => setCustomType(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-100"
+                >
+                  <option value="monster">Monstro / Inimigo</option>
+                  <option value="player">Jogador (PC)</option>
+                  <option value="npc">NPC Aliado</option>
+                </select>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2.5 mt-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl shadow-md transition-all"
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-sm rounded-xl transition-all shadow-lg shadow-amber-500/10"
               >
-                Criar e Adicionar
+                Criar e Adicionar Combatente
               </button>
             </form>
           )}

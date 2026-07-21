@@ -26,14 +26,16 @@ import {
   Pencil
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useCampaign } from '@/lib/hooks/useCampaign';
+import { useWorld } from '@/lib/hooks/useWorld';
 import { CampaignFeedEventType, CampaignMember } from '@/lib/types';
 import { CreateCampaignModal } from '@/components/CreateCampaignModal';
 
 export const CampaignSettingsStudio: React.FC = () => {
+  const { user, loadDemoEverything } = useAuth();
+  const { userWorlds, activeWorld } = useWorld();
   const { 
     userCampaigns,
-    userWorlds,
-    activeWorld,
     activeCampaign, 
     setActiveCampaign,
     campaignMembers,
@@ -44,10 +46,8 @@ export const CampaignSettingsStudio: React.FC = () => {
     createFeedEvent, 
     toggleFeedEventVisibility, 
     deleteFeedEvent,
-    user,
-    loadDemoEverything,
     updateCampaign
-  } = useAuth();
+  } = useCampaign();
 
   const worldCampaigns = userCampaigns.filter((c) => {
     if (!activeWorld) return true;

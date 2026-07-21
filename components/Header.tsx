@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useCampaign } from '@/lib/hooks/useCampaign';
+import { useWorld } from '@/lib/hooks/useWorld';
 import logoImg from '@/app/logo.png';
 
 interface HeaderProps {
@@ -17,7 +19,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenPlayerView,
   onOpenAuthModal,
 }) => {
-  const { user, roleMode, setRoleMode, activeCampaign, activeWorld } = useAuth();
+  const { user, roleMode, setRoleMode } = useAuth();
+  const { activeCampaign } = useCampaign();
+  const { activeWorld } = useWorld();
   const [diceResult, setDiceResult] = useState<number | null>(null);
   const [lastDiceType, setLastDiceType] = useState<string>('');
 

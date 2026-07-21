@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { GameSession, GameScene } from '@/lib/types';
+import { sessionService } from '@/lib/services/sessionService';
 
 interface SessionContextType {
   sessions: GameSession[];
@@ -20,11 +20,6 @@ interface SessionContextType {
   deleteScene: (id: string) => Promise<void>;
 }
 
-const isValidUUID = (str?: string) => {
-  if (!str) return false;
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
-};
-
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -33,76 +28,25 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [scenes, setScenes] = useState<GameScene[]>([]);
   const [activeScene, setActiveSceneState] = useState<GameScene | null>(null);
 
-  // Load state from localStorage and Supabase
   useEffect(() => {
-    try {
-      const savedSessions = localStorage.getItem('codex_sessions');
-      const savedScenes = localStorage.getItem('codex_scenes');
-      const savedActiveSessionId = localStorage.getItem('codex_activeSessionId');
-      const savedActiveSceneId = localStorage.getItem('codex_activeSceneId');
+    sessionService.fetchSessions('camp-demo-1').then((fetchedSessions) => {
+      if (fetchedSessions.length > 0) {
+        setSessions(fetchedSessions);
+        const savedSessionId = typeof window !== 'undefined' ? localStorage.getItem('codex_activeSessionId') : null;
+        const found = savedSessionId ? fetchedSessions.find((s) => s.id === savedSessionId) : null;
+        const target = found || fetchedSessions[0];
+        setActiveSessionState(target);
 
-      if (savedSessions) {
-        const parsed: GameSession[] = JSON.parse(savedSessions);
-        setSessions(parsed);
-        if (savedActiveSessionId) {
-          const found = parsed.find((s) => s.id === savedActiveSessionId);
-          if (found) setActiveSessionState(found);
-        } else if (parsed.length > 0) {
-          setActiveSessionState(parsed[0]);
-        }
+        sessionService.fetchScenes(target.id).then((fetchedScenes) => {
+          if (fetchedScenes.length > 0) {
+            setScenes(fetchedScenes);
+            const savedSceneId = typeof window !== 'undefined' ? localStorage.getItem('codex_activeSceneId') : null;
+            const foundScene = savedSceneId ? fetchedScenes.find((sc) => sc.id === savedSceneId) : null;
+            setActiveSceneState(foundScene || fetchedScenes[0]);
+          }
+        });
       }
-
-      if (savedScenes) {
-        const parsed: GameScene[] = JSON.parse(savedScenes);
-        setScenes(parsed);
-        if (savedActiveSceneId) {
-          const found = parsed.find((sc) => sc.id === savedActiveSceneId);
-          if (found) setActiveSceneState(found);
-        } else if (parsed.length > 0) {
-          setActiveSceneState(parsed[0]);
-        }
-      }
-    } catch (e) {
-      console.error('Error loading SessionContext from localStorage:', e);
-    }
-
-    if (isSupabaseConfigured()) {
-      supabase.from('sessions').select('*').order('session_number', { ascending: true }).then(({ data, error }) => {
-        if (!error && data && data.length > 0) {
-          const mapped: GameSession[] = data.map((s: any) => ({
-            id: s.id,
-            campaignId: s.campaign_id,
-            sessionNumber: s.session_number,
-            title: s.title,
-            notes: s.notes,
-          }));
-          setSessions(mapped);
-          if (!activeSession) setActiveSessionState(mapped[0]);
-        }
-      });
-
-      supabase.from('scenes').select('*').order('order_index', { ascending: true }).then(({ data, error }) => {
-        if (!error && data && data.length > 0) {
-          const mapped: GameScene[] = data.map((sc: any) => ({
-            id: sc.id,
-            sessionId: sc.session_id,
-            orderIndex: sc.order_index,
-            title: sc.title,
-            sceneType: sc.scene_type,
-            npcName: sc.npc_name,
-            sensoryText: sc.sensory_text,
-            secretNotes: sc.secret_notes,
-            bgmCategory: sc.bgm_category,
-            imageUrl: sc.image_url,
-            npcAudioUrl: sc.npc_audio_url,
-            sfxShortcuts: sc.sfx_shortcuts,
-            combatants: sc.combatants,
-          }));
-          setScenes(mapped);
-          if (!activeScene) setActiveSceneState(mapped[0]);
-        }
-      });
-    }
+    });
   }, []);
 
   const setActiveSession = (session: GameSession | null) => {
@@ -110,6 +54,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       if (session) {
         localStorage.setItem('codex_activeSessionId', session.id);
+        sessionService.fetchScenes(session.id).then((fetchedScenes) => {
+          setScenes(fetchedScenes);
+          if (fetchedScenes.length > 0) setActiveSceneState(fetchedScenes[0]);
+        });
       } else {
         localStorage.removeItem('codex_activeSessionId');
       }
@@ -128,13 +76,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const createSession = async (title: string, notes = ''): Promise<GameSession> => {
-    const newSession: GameSession = {
-      id: `sess-${Date.now()}`,
-      campaignId: 'camp-demo-1',
-      sessionNumber: sessions.length + 1,
-      title,
-      notes,
-    };
+    const newSession = await sessionService.createSession(title, activeSession?.campaignId || 'camp-demo-1', sessions.length + 1, notes);
 
     setSessions((prev) => {
       const updated = [...prev, newSession];
@@ -144,22 +86,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return updated;
     });
 
-    if (isSupabaseConfigured() && isValidUUID(newSession.campaignId)) {
-      supabase.from('sessions').insert({
-        campaign_id: newSession.campaignId,
-        session_number: newSession.sessionNumber,
-        title: newSession.title,
-        notes: newSession.notes,
-      }).then(({ data, error }) => {
-        if (error) console.warn('Aviso ao inserir sessão no Supabase:', error.message);
-      });
-    }
-
     setActiveSession(newSession);
     return newSession;
   };
 
   const updateSession = async (updatedSession: GameSession) => {
+    await sessionService.updateSession(updatedSession);
     setSessions((prev) => {
       const updated = prev.map((s) => (s.id === updatedSession.id ? updatedSession : s));
       try {
@@ -171,24 +103,15 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (activeSession?.id === updatedSession.id) {
       setActiveSessionState(updatedSession);
     }
-
-    if (isSupabaseConfigured() && isValidUUID(updatedSession.id)) {
-      supabase.from('sessions').update({
-        title: updatedSession.title,
-        notes: updatedSession.notes,
-      }).eq('id', updatedSession.id).then(({ error }) => {
-        if (error) console.warn('Aviso ao atualizar sessão no Supabase:', error.message);
-      });
-    }
   };
 
   const createScene = async (sceneData: Omit<GameScene, 'id'>): Promise<GameScene> => {
-    const newScene: GameScene = {
+    const payload = {
       ...sceneData,
-      id: `sc-${Date.now()}`,
       sessionId: sceneData.sessionId || activeSession?.id || 'sess-demo-1',
       orderIndex: scenes.length + 1,
     };
+    const newScene = await sessionService.createScene(payload);
 
     setScenes((prev) => {
       const updated = [...prev, newScene];
@@ -198,30 +121,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return updated;
     });
 
-    if (isSupabaseConfigured() && isValidUUID(newScene.sessionId)) {
-      supabase.from('scenes').insert({
-        session_id: newScene.sessionId,
-        order_index: newScene.orderIndex,
-        title: newScene.title,
-        scene_type: newScene.sceneType,
-        npc_name: newScene.npcName,
-        sensory_text: newScene.sensoryText,
-        secret_notes: newScene.secretNotes,
-        bgm_category: newScene.bgmCategory,
-        image_url: newScene.imageUrl,
-        npc_audio_url: newScene.npcAudioUrl,
-        sfx_shortcuts: newScene.sfxShortcuts,
-        combatants: newScene.combatants,
-      }).then(({ error }) => {
-        if (error) console.warn('Aviso ao inserir cena no Supabase:', error.message);
-      });
-    }
-
     setActiveScene(newScene);
     return newScene;
   };
 
   const updateScene = async (updatedScene: GameScene) => {
+    await sessionService.updateScene(updatedScene);
     setScenes((prev) => {
       const updated = prev.map((sc) => (sc.id === updatedScene.id ? updatedScene : sc));
       try {
@@ -233,26 +138,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (activeScene?.id === updatedScene.id) {
       setActiveSceneState(updatedScene);
     }
-
-    if (isSupabaseConfigured() && isValidUUID(updatedScene.id)) {
-      supabase.from('scenes').update({
-        title: updatedScene.title,
-        scene_type: updatedScene.sceneType,
-        npc_name: updatedScene.npcName,
-        sensory_text: updatedScene.sensoryText,
-        secret_notes: updatedScene.secretNotes,
-        bgm_category: updatedScene.bgmCategory,
-        image_url: updatedScene.imageUrl,
-        npc_audio_url: updatedScene.npcAudioUrl,
-        sfx_shortcuts: updatedScene.sfxShortcuts,
-        combatants: updatedScene.combatants,
-      }).eq('id', updatedScene.id).then(({ error }) => {
-        if (error) console.warn('Aviso ao atualizar cena no Supabase:', error.message);
-      });
-    }
   };
 
   const deleteScene = async (id: string) => {
+    await sessionService.deleteScene(id);
     setScenes((prev) => {
       const updated = prev.filter((sc) => sc.id !== id);
       try {
@@ -263,12 +152,6 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (activeScene?.id === id) {
       setActiveScene(null);
-    }
-
-    if (isSupabaseConfigured() && isValidUUID(id)) {
-      supabase.from('scenes').delete().eq('id', id).then(({ error }) => {
-        if (error) console.warn('Aviso ao deletar cena no Supabase:', error.message);
-      });
     }
   };
 

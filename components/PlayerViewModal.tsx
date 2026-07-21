@@ -9,6 +9,7 @@ import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 
 import { BattleGrid3D } from '@/components/BattleGrid3D';
+import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
 
 interface PlayerViewModalProps {
   isOpen: boolean;
@@ -60,11 +61,13 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
         {/* Left Side: 3D Battle Grid OR Scene Artwork */}
         <div className="flex-1 bg-black flex items-center justify-center relative overflow-hidden">
           {isCombatMode ? (
-            <BattleGrid3D
-              combatants={combatants}
-              currentTurnIndex={currentTurnIndex}
-              interactive={false}
-            />
+            <ThreeErrorBoundary>
+              <BattleGrid3D
+                combatants={combatants}
+                currentTurnIndex={currentTurnIndex}
+                interactive={false}
+              />
+            </ThreeErrorBoundary>
           ) : activeScene?.imageUrl ? (
             <div className="w-full h-full relative flex items-center justify-center">
               <img

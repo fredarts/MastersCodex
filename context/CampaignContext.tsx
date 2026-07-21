@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { UserCampaign, CampaignMember, CampaignFeedEvent } from '@/lib/types';
+import { campaignService } from '@/lib/services/campaignService';
 
 interface CampaignContextType {
   userCampaigns: UserCampaign[];
@@ -38,35 +38,27 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   const [feedEvents, setFeedEvents] = useState<CampaignFeedEvent[]>([]);
 
   useEffect(() => {
-    try {
-      const savedCampaigns = localStorage.getItem('codex_campaigns');
-      const savedMembers = localStorage.getItem('codex_members');
-      const savedFeed = localStorage.getItem('codex_feed');
-      const savedActiveCampId = localStorage.getItem('codex_activeCampaignId');
+    campaignService.fetchUserCampaigns(currentUserId).then((camps) => {
+      if (camps.length > 0) {
+        setUserCampaigns(camps);
+        const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem('codex_activeCampaignId') : null;
+        const found = savedActiveId ? camps.find((c) => c.id === savedActiveId) : null;
+        const target = found || camps[0];
+        setActiveCampaignState(target);
 
-      if (savedCampaigns) {
-        const parsed: UserCampaign[] = JSON.parse(savedCampaigns);
-        setUserCampaigns(parsed);
-        if (savedActiveCampId) {
-          const found = parsed.find((c) => c.id === savedActiveCampId);
-          if (found) setActiveCampaignState(found);
-        } else if (parsed.length > 0) {
-          setActiveCampaignState(parsed[0]);
-        }
+        campaignService.fetchCampaignMembers(target.id).then(setCampaignMembers);
+        campaignService.fetchFeedEvents(target.id).then(setFeedEvents);
       }
-
-      if (savedMembers) setCampaignMembers(JSON.parse(savedMembers));
-      if (savedFeed) setFeedEvents(JSON.parse(savedFeed));
-    } catch (e) {
-      console.error('Error loading CampaignContext:', e);
-    }
-  }, []);
+    });
+  }, [currentUserId]);
 
   const setActiveCampaign = (camp: UserCampaign | null) => {
     setActiveCampaignState(camp);
     try {
       if (camp) {
         localStorage.setItem('codex_activeCampaignId', camp.id);
+        campaignService.fetchCampaignMembers(camp.id).then(setCampaignMembers);
+        campaignService.fetchFeedEvents(camp.id).then(setFeedEvents);
       } else {
         localStorage.removeItem('codex_activeCampaignId');
       }
@@ -74,24 +66,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   };
 
   const fetchCampaignMembers = async (campaignId: string) => {
-    if (isSupabaseConfigured()) {
-      const { data, error } = await supabase
-        .from('campaign_members')
-        .select('*')
-        .eq('campaign_id', campaignId);
-      if (!error && data) {
-        const mapped: CampaignMember[] = data.map((m: any) => ({
-          id: m.id,
-          campaignId: m.campaign_id,
-          userId: m.user_id,
-          characterName: m.character_name,
-          role: m.role,
-          joinedAt: m.joined_at,
-          modelUrl: m.model_url,
-        }));
-        setCampaignMembers(mapped);
-      }
-    }
+    const members = await campaignService.fetchCampaignMembers(campaignId);
+    setCampaignMembers(members);
   };
 
   const addCampaignMember = async (campaignId: string, characterName: string, role: 'dm' | 'player' = 'player') => {
@@ -136,17 +112,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   };
 
   const createCampaign = async (title: string, worldId?: string, description = ''): Promise<UserCampaign> => {
-    const code = `${title.slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
-    const newCamp: UserCampaign = {
-      id: `camp-${Date.now()}`,
-      dmId: currentUserId || 'demo-dm-user-123',
-      worldId,
-      title,
-      description,
-      inviteCode: code,
-      role: 'dm',
-    };
-
+    const newCamp = await campaignService.createCampaign(title, worldId, description, currentUserId);
     setUserCampaigns((prev) => {
       const updated = [...prev, newCamp];
       try {
@@ -195,11 +161,11 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   };
 
   const createFeedEvent = async (eventData: Omit<CampaignFeedEvent, 'id'>): Promise<CampaignFeedEvent> => {
-    const newEvent: CampaignFeedEvent = {
+    const payload = {
       ...eventData,
-      id: `ev-${Date.now()}`,
       campaignId: eventData.campaignId || activeCampaign?.id || 'camp-demo-1',
     };
+    const newEvent = await campaignService.createFeedEvent(payload);
     setFeedEvents((prev) => {
       const updated = [newEvent, ...prev];
       try {

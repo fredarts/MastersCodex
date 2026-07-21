@@ -21,7 +21,8 @@ import {
 } from 'lucide-react';
 import { Encounter } from '@/lib/types';
 import { INITIAL_ENCOUNTERS } from '@/lib/srd-data';
-import { useAuth } from '@/context/AuthContext';
+import { useCampaign } from '@/lib/hooks/useCampaign';
+import { useWorld } from '@/lib/hooks/useWorld';
 
 export type ActiveTab = 'worldbuilder' | 'session_studio' | 'campaign_settings' | 'live_cockpit' | 'combat' | 'map' | 'ai' | 'lore' | 'compendium' | 'audio';
 
@@ -40,7 +41,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenCreateCampaign,
   onLoadDemoEverything,
 }) => {
-  const { userCampaigns, userWorlds, activeCampaign, setActiveCampaign, activeWorld, updateWorld } = useAuth();
+  const { userCampaigns, activeCampaign, setActiveCampaign } = useCampaign();
+  const { userWorlds, activeWorld, updateWorld } = useWorld();
   const [isEditingWorld, setIsEditingWorld] = useState(false);
   const [editedWorldTitle, setEditedWorldTitle] = useState('');
 

@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { X, Plus, Sparkles, Swords, MessageSquare, Beer, Compass } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useSession } from '@/lib/hooks/useSession';
+import { useWorld } from '@/lib/hooks/useWorld';
 import { SceneType, Combatant } from '@/lib/types';
 
 interface CreateSceneModalProps {
@@ -14,7 +15,8 @@ export const CreateSceneModal: React.FC<CreateSceneModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { activeSession, createScene, worldEntities, scenes } = useAuth();
+  const { activeSession, createScene, scenes } = useSession();
+  const { worldEntities } = useWorld();
   const [sceneType, setSceneType] = useState<SceneType>('social');
   const [title, setTitle] = useState('');
   const [npcName, setNpcName] = useState('');

@@ -4,8 +4,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { HelpCircle, Sun, Moon, Sunrise, Sunset, CloudRain, CloudFog, Zap, Settings, X, RotateCcw, RotateCw } from 'lucide-react';
-import { Combatant } from '@/lib/types';
+import { Combatant, CampaignMember } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
+import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
+import { useCampaign } from '@/lib/hooks/useCampaign';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 
 interface BattleGrid3DProps {
@@ -72,15 +74,14 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   interactive = true,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const { roleMode, user } = useAuth();
+  const { campaignMembers } = useCampaign();
   const {
     tokenPositions3D,
     updateTokenPosition3D,
     tokenRotations3D,
     updateTokenRotation3D,
-    roleMode,
-    user,
-    campaignMembers,
-  } = useAuth();
+  } = useLiveCockpit();
 
   // Selected combatant for rotation anchors
   const [selectedCombatantId, setSelectedCombatantId] = useState<string | null>(null);
@@ -125,7 +126,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     if (userDispName && (combatantName.includes(userDispName) || userDispName.includes(combatantName))) return true;
 
     if (user?.id && campaignMembers && campaignMembers.length > 0) {
-      const myMember = campaignMembers.find((m) => m.userId === user.id);
+      const myMember = campaignMembers.find((m: CampaignMember) => m.userId === user.id);
       if (myMember) {
         if (myMember.role === 'dm') return true;
         if (

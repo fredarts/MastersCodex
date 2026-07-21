@@ -1,57 +1,72 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Volume2, Swords, Flame, Sparkles, Coins, DoorOpen, Skull, Music } from 'lucide-react';
-import { SFX_BUTTONS } from '@/lib/srd-data';
-import { SFXButton } from '@/lib/types';
+import React from 'react';
+import { Music, Volume2, Mic, Play, Pause } from 'lucide-react';
 
-export const QuickAudioPanel: React.FC = () => {
-  const [activeSfxId, setActiveSfxId] = useState<string | null>(null);
+interface QuickAudioPanelProps {
+  activeBgmCategory: string;
+  setActiveBgmCategory: (cat: string) => void;
+  playingNpcVoice: boolean;
+  setPlayingNpcVoice: (playing: boolean) => void;
+}
 
-  const playSfx = (sfx: SFXButton) => {
-    setActiveSfxId(sfx.id);
-    try {
-      const sound = new Audio(sfx.url);
-      sound.volume = 0.7;
-      sound.play().catch(() => {});
-    } catch (e) {}
-    setTimeout(() => setActiveSfxId(null), 1000);
-  };
+const BGM_CATEGORIES = [
+  { id: 'taverna', label: '🍺 Taverna' },
+  { id: 'combate', label: '⚔️ Combate' },
+  { id: 'masmorra', label: '🏰 Masmorra' },
+  { id: 'tensao', label: '👁️ Tensão' },
+  { id: 'exploracao', label: '🌲 Exploração' },
+];
 
-  const getSfxIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'Swords': return <Swords className="w-3.5 h-3.5 text-amber-400" />;
-      case 'Flame': return <Flame className="w-3.5 h-3.5 text-rose-500" />;
-      case 'Sparkles': return <Sparkles className="w-3.5 h-3.5 text-purple-400" />;
-      case 'Coins': return <Coins className="w-3.5 h-3.5 text-amber-300" />;
-      case 'DoorOpen': return <DoorOpen className="w-3.5 h-3.5 text-cyan-400" />;
-      case 'Skull': return <Skull className="w-3.5 h-3.5 text-emerald-400" />;
-      default: return <Music className="w-3.5 h-3.5 text-slate-300" />;
-    }
-  };
-
+export const QuickAudioPanel: React.FC<QuickAudioPanelProps> = ({
+  activeBgmCategory,
+  setActiveBgmCategory,
+  playingNpcVoice,
+  setPlayingNpcVoice,
+}) => {
   return (
-    <div className="p-3 bg-[#111622] border-t border-[#2a3449] select-none flex items-center justify-between gap-2 flex-wrap">
-      <div className="flex items-center gap-2 text-xs font-bold text-slate-300 uppercase tracking-wider">
-        <Volume2 className="w-4 h-4 text-pink-400" />
-        <span>Efeitos Sonoros Rápidos:</span>
+    <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-2xl p-4 space-y-3 shadow-xl backdrop-blur-md">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-zinc-100 font-bold text-sm">
+          <Music className="w-4 h-4 text-indigo-400" />
+          <span>Áudio Maestro Rápido</span>
+        </div>
+        <span className="text-[10px] text-zinc-500 font-mono">BGM Player</span>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        {SFX_BUTTONS.map((sfx) => (
+      <div className="grid grid-cols-5 gap-1.5">
+        {BGM_CATEGORIES.map((cat) => (
           <button
-            key={sfx.id}
-            onClick={() => playSfx(sfx)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border ${
-              activeSfxId === sfx.id
-                ? 'bg-pink-500 text-white border-pink-400 scale-105 shadow-md'
-                : 'bg-[#182030] text-slate-200 border-[#2a3449] hover:bg-[#202b40] hover:border-slate-500'
+            key={cat.id}
+            onClick={() => setActiveBgmCategory(cat.id)}
+            className={`py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
+              activeBgmCategory === cat.id
+                ? 'bg-indigo-500 text-white font-bold shadow-md shadow-indigo-500/20 scale-105'
+                : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
             }`}
           >
-            {getSfxIcon(sfx.iconName)}
-            {sfx.name}
+            {cat.label}
           </button>
         ))}
+      </div>
+
+      <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs text-zinc-400">
+          <Mic className="w-3.5 h-3.5 text-amber-400" />
+          <span>Voz Narração NPC:</span>
+        </div>
+
+        <button
+          onClick={() => setPlayingNpcVoice(!playingNpcVoice)}
+          className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+            playingNpcVoice
+              ? 'bg-rose-500 text-white animate-pulse'
+              : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+          }`}
+        >
+          {playingNpcVoice ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+          {playingNpcVoice ? 'Pausar Voz' : 'Tocar Voz NPC'}
+        </button>
       </div>
     </div>
   );

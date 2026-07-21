@@ -13,6 +13,9 @@ interface UseToken3DManagerOptions {
   tokenRotations: Record<string, number>;
 }
 
+// Global cache for loaded GLTF templates to prevent duplicate downloads
+const modelCache = new Map<string, THREE.Group>();
+
 export function useToken3DManager({
   scene,
   combatants,
@@ -28,6 +31,7 @@ export function useToken3DManager({
 
     combatants.forEach((c) => {
       const key = c.id || c.name;
+
       if (loadedModelsRef.current.has(key)) {
         // Update existing mesh position/rotation
         const mesh = loadedModelsRef.current.get(key)!;
@@ -40,36 +44,45 @@ export function useToken3DManager({
         return;
       }
 
-      // Load new model
+      // Load or clone from cache
       const modelUrl = c.modelUrl || getModelUrlByNameOrPath(c.name);
       if (!modelUrl) return;
 
-      loader.load(
-        modelUrl,
-        (gltf) => {
-          const modelGroup = gltf.scene;
-          modelGroup.scale.set(0.8, 0.8, 0.8);
-          const pos = tokenPositions[key] || { x: 0, z: 0 };
-          modelGroup.position.set(pos.x, 0, pos.z);
-          if (tokenRotations[key] !== undefined) {
-            modelGroup.rotation.y = THREE.MathUtils.degToRad(tokenRotations[key]);
-          }
-
-          modelGroup.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-            }
-          });
-
-          scene.add(modelGroup);
-          loadedModelsRef.current.set(key, modelGroup);
-        },
-        undefined,
-        (error) => {
-          console.warn(`Erro ao carregar modelo 3D para ${c.name}:`, error);
+      const placeModel = (cachedGroup: THREE.Group) => {
+        const clonedGroup = cachedGroup.clone(true);
+        clonedGroup.scale.set(0.8, 0.8, 0.8);
+        const pos = tokenPositions[key] || { x: 0, z: 0 };
+        clonedGroup.position.set(pos.x, 0, pos.z);
+        if (tokenRotations[key] !== undefined) {
+          clonedGroup.rotation.y = THREE.MathUtils.degToRad(tokenRotations[key]);
         }
-      );
+
+        clonedGroup.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+
+        scene.add(clonedGroup);
+        loadedModelsRef.current.set(key, clonedGroup);
+      };
+
+      if (modelCache.has(modelUrl)) {
+        placeModel(modelCache.get(modelUrl)!);
+      } else {
+        loader.load(
+          modelUrl,
+          (gltf) => {
+            modelCache.set(modelUrl, gltf.scene);
+            placeModel(gltf.scene);
+          },
+          undefined,
+          (error) => {
+            console.warn(`Erro ao carregar modelo 3D para ${c.name}:`, error);
+          }
+        );
+      }
     });
 
     // Cleanup models of removed combatants
@@ -83,6 +96,6 @@ export function useToken3DManager({
   }, [scene, combatants, tokenPositions, tokenRotations]);
 
   return {
-    loadedModels: loadedModelsRef.current,
+    getLoadedModels: () => loadedModelsRef.current,
   };
 }

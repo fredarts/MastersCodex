@@ -22,7 +22,8 @@ import {
 } from 'lucide-react';
 import { Combatant, ConditionType } from '@/lib/types';
 import { CONDITIONS, INITIAL_MONSTERS } from '@/lib/srd-data';
-import { useAuth } from '@/context/AuthContext';
+import { useCampaign } from '@/lib/hooks/useCampaign';
+import { useSession } from '@/lib/hooks/useSession';
 
 interface CombatTrackerProps {
   combatants: Combatant[];
@@ -45,7 +46,8 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
   onGenerateLoot,
   onLoadDemoEverything,
 }) => {
-  const { activeCampaign, activeSession, createFeedEvent } = useAuth();
+  const { activeCampaign, createFeedEvent } = useCampaign();
+  const { activeSession } = useSession();
   const [showAddModal, setShowAddModal] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState<'player' | 'monster' | 'npc'>('monster');
