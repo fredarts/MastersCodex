@@ -52,6 +52,7 @@ import { CombatInitiativeTracker } from '@/components/live-cockpit/CombatInitiat
 import { AddCombatantModal } from '@/components/live-cockpit/AddCombatantModal';
 import { QuickAudioPanel } from '@/components/live-cockpit/QuickAudioPanel';
 import { BattleSetupModal, BattleSetupMode } from '@/components/live-cockpit/BattleSetupModal';
+import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
 
 interface LiveCockpitStudioProps {
   combatants: Combatant[];
@@ -311,7 +312,8 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   
   const [selectedTargetId, setSelectedTargetId] = useState<string | undefined>(undefined);
   const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>([]);
-  const [rightPanelTab, setRightPanelTab] = useState<'init' | 'log'>('init');
+  const [rightPanelTab, setRightPanelTab] = useState<'init' | 'log' | 'teleprompter'>('init');
+  const [teleprompterFontSize, setTeleprompterFontSize] = useState<number>(18);
 
   const addLogEntry = async (entry: Omit<CombatLogEntry, 'id' | 'timestamp' | 'round'>) => {
     const newLog: CombatLogEntry = {
@@ -502,16 +504,44 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       setLiveDisplayMode('artwork');
     }
 
+    const activeIdx = scene.activeImageIndex ?? 0;
+    const activeSlide = scene.sceneImages?.[activeIdx];
+    const targetImageUrl = activeSlide ? activeSlide.imageUrl : scene.imageUrl;
+    const targetSensoryText = activeSlide ? (activeSlide.overlayText || scene.sensoryText) : scene.sensoryText;
+
     broadcastToPlayerView({
       sceneId: scene.id,
       title: scene.title,
-      imageUrl: scene.imageUrl ? normalizeImageUrl(scene.imageUrl) : undefined,
-      sensoryText: scene.sensoryText,
+      imageUrl: targetImageUrl ? normalizeImageUrl(targetImageUrl) : undefined,
+      sensoryText: targetSensoryText,
+      sceneImages: scene.sceneImages || [],
+      activeImageIndex: activeIdx,
       mode: scene.sceneType === 'combat' ? 'combat' : 'artwork',
       timeOfDay: scene.timeOfDay || 'day',
       timeOfDayHour: targetHour,
       hasFog: targetFog,
       hasRain: targetRain,
+    });
+  };
+
+  const handleSlideChange = async (index: number) => {
+    if (!activeScene || !activeScene.sceneImages) return;
+    const updatedScene = {
+      ...activeScene,
+      activeImageIndex: index,
+    };
+    await updateScene(updatedScene);
+    
+    // Broadcast updated slide to player view
+    const slide = activeScene.sceneImages[index];
+    broadcastToPlayerView({
+      sceneId: activeScene.id,
+      title: activeScene.title,
+      imageUrl: slide ? normalizeImageUrl(slide.imageUrl) : undefined,
+      sensoryText: slide ? (slide.overlayText || activeScene.sensoryText) : activeScene.sensoryText,
+      sceneImages: activeScene.sceneImages,
+      activeImageIndex: index,
+      mode: liveDisplayMode,
     });
   };
 
@@ -769,7 +799,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     }
   };
 
-  const displayImageUrl = activeScene?.imageUrl ? normalizeImageUrl(activeScene.imageUrl) : null;
+  const activeImageIndex = activeScene?.activeImageIndex ?? 0;
+  const activeSlideImage = activeScene?.sceneImages?.[activeImageIndex];
+  const displayImageUrl = activeSlideImage?.imageUrl 
+    ? normalizeImageUrl(activeSlideImage.imageUrl) 
+    : (activeScene?.imageUrl ? normalizeImageUrl(activeScene.imageUrl) : null);
 
   return (
     <div className="flex-1 bg-[#0a0d14] flex flex-col h-full overflow-hidden select-none relative">
@@ -983,7 +1017,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
             {/* Live Visual Mirror Display Container */}
             <div className="flex-1 min-h-0 w-full flex items-center justify-center">
               <div className="h-full w-full max-h-full max-w-full aspect-square bg-black rounded-2xl border border-[#2a3449] overflow-hidden relative shadow-2xl flex items-center justify-center">
-                {liveDisplayMode === 'combat' || activeScene?.sceneType === 'combat' ? (
+                {liveDisplayMode === 'combat' ? (
                   <ThreeErrorBoundary>
                     <BattleGrid3D
                       combatants={combatants}
@@ -1019,14 +1053,24 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                   </ThreeErrorBoundary>
                 ) : displayImageUrl ? (
                   <div className="w-full h-full relative">
-                    <img src={displayImageUrl} alt="Arte ao vivo" className="w-full h-full object-cover" />
+                    {activeScene?.sceneImages && activeScene.sceneImages.length > 0 ? (
+                      <MagicShaderSlideshow
+                        imageUrl={displayImageUrl}
+                        className="w-full h-full"
+                      />
+                    ) : (
+                      <img src={displayImageUrl} alt="Arte ao vivo" className="w-full h-full object-cover" />
+                    )}
                     <div className="absolute bottom-4 left-4 right-4 p-3 rounded-xl bg-black/80 backdrop-blur-md border border-amber-500/30">
                       <div className="text-xs font-bold text-amber-400 uppercase font-mono">{activeScene?.title}</div>
-                      {activeScene?.sensoryText && (
-                        <p className="text-xs text-slate-200 mt-1 italic font-serif leading-relaxed line-clamp-2">
-                          "{activeScene.sensoryText}"
-                        </p>
-                      )}
+                      {(() => {
+                        const txt = activeSlideImage?.overlayText || activeScene?.sensoryText;
+                        return txt ? (
+                          <p className="text-xs text-slate-200 mt-1 italic font-serif leading-relaxed line-clamp-2">
+                            "{txt}"
+                          </p>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                 ) : (
@@ -1037,6 +1081,58 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                 )}
               </div>
             </div>
+
+            {/* Slideshow DM Controls */}
+            {activeScene?.sceneImages && activeScene.sceneImages.length > 1 && (
+              <div className="bg-[#121824] border border-[#2a3449] rounded-xl p-2.5 flex flex-col gap-2 shadow mx-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase font-mono">
+                    Controle do Slideshow ({activeImageIndex + 1} de {activeScene.sceneImages.length})
+                  </span>
+                  <div className="flex gap-1.5 font-sans">
+                    <button
+                      onClick={async () => {
+                        const prevIdx = (activeImageIndex - 1 + activeScene.sceneImages!.length) % activeScene.sceneImages!.length;
+                        await handleSlideChange(prevIdx);
+                      }}
+                      className="px-2 py-0.5 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] rounded text-[10px] font-bold text-amber-400 cursor-pointer"
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const nextIdx = (activeImageIndex + 1) % activeScene.sceneImages!.length;
+                        await handleSlideChange(nextIdx);
+                      }}
+                      className="px-2 py-0.5 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] rounded text-[10px] font-bold text-amber-400 cursor-pointer"
+                    >
+                      Próximo
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Thumbnails strip */}
+                <div className="flex items-center gap-2 overflow-x-auto py-1 custom-scrollbar">
+                  {activeScene.sceneImages.map((imgObj, idx) => {
+                    const isSelected = idx === activeImageIndex;
+                    return (
+                      <button
+                        key={imgObj.id}
+                        onClick={async () => await handleSlideChange(idx)}
+                        className={`relative w-10 h-10 rounded border overflow-hidden shrink-0 transition-all cursor-pointer ${
+                          isSelected ? 'border-amber-400 ring-1 ring-amber-500/40 scale-105' : 'border-[#2a3449] hover:border-slate-500'
+                        }`}
+                      >
+                        <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" />
+                        <span className="absolute bottom-0.5 right-0.5 bg-black/70 text-[8px] font-bold px-1 rounded text-white font-mono">
+                          {idx + 1}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Quick DM Media & Soundboard Toolbar */}
             <div className="grid grid-cols-2 gap-3">
@@ -1111,29 +1207,126 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
 
           {/* Header with Sub-tabs */}
           <div className="p-2 border-b border-[#2a3449] bg-[#121824]/50 flex items-center justify-between gap-1">
-            <div className="flex bg-[#0a0d14] border border-[#2a3449] rounded-xl p-0.5 w-full">
+            <div className="flex bg-[#0a0d14] border border-[#2a3449] rounded-xl p-0.5 w-full gap-0.5">
               <button
                 onClick={() => setRightPanelTab('init')}
-                className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
+                className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
                   rightPanelTab === 'init' ? 'bg-rose-600 text-slate-950 shadow font-black' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <Swords className="w-3.5 h-3.5" />
+                <Swords className="w-3 h-3" />
                 <span>Iniciativa ({combatants.length})</span>
               </button>
+              
+              <button
+                onClick={() => setRightPanelTab('teleprompter')}
+                className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
+                  rightPanelTab === 'teleprompter' ? 'bg-purple-600 text-slate-950 shadow font-black' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <BookOpen className="w-3 h-3" />
+                <span>Teleprompter</span>
+              </button>
+
               <button
                 onClick={() => setRightPanelTab('log')}
-                className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
+                className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
                   rightPanelTab === 'log' ? 'bg-amber-500 text-slate-950 shadow font-black' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <ScrollText className="w-3.5 h-3.5" />
-                <span>Log da Partida ({combatLogs.length})</span>
+                <ScrollText className="w-3 h-3" />
+                <span>Logs ({combatLogs.length})</span>
               </button>
             </div>
           </div>
 
-          {rightPanelTab === 'log' ? (
+          {rightPanelTab === 'teleprompter' ? (
+            <div className="flex-1 flex flex-col justify-between p-4 overflow-hidden bg-[#0c0f17]">
+              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1">
+                <div className="flex items-center justify-between border-b border-[#2a3449] pb-2">
+                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5 text-amber-400" /> Teleprompter do Narrador
+                  </span>
+                  
+                  {/* Font Size controls */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setTeleprompterFontSize(prev => Math.max(12, prev - 2))}
+                      className="w-6 h-6 rounded bg-[#161c28] border border-[#2a3449] hover:border-slate-500 text-xs font-bold text-slate-300 flex items-center justify-center transition-all cursor-pointer"
+                      title="Diminuir Fonte"
+                    >
+                      A-
+                    </button>
+                    <span className="text-[10px] text-slate-400 font-bold font-mono">{teleprompterFontSize}px</span>
+                    <button
+                      onClick={() => setTeleprompterFontSize(prev => Math.min(32, prev + 2))}
+                      className="w-6 h-6 rounded bg-[#161c28] border border-[#2a3449] hover:border-slate-500 text-xs font-bold text-slate-300 flex items-center justify-center transition-all cursor-pointer"
+                      title="Aumentar Fonte"
+                    >
+                      A+
+                    </button>
+                  </div>
+                </div>
+
+                {/* Teleprompter text content */}
+                {activeScene ? (
+                  <div 
+                    className="font-serif leading-relaxed italic text-amber-200 select-text p-3 rounded-xl bg-[#121824]/40 border border-[#2a3449]/40 min-h-[120px] whitespace-pre-wrap"
+                    style={{ fontSize: `${teleprompterFontSize}px` }}
+                  >
+                    {(() => {
+                      const slideObj = activeScene.sceneImages?.[activeImageIndex];
+                      const targetText = slideObj ? (slideObj.secretNotes || slideObj.overlayText || activeScene.sensoryText) : activeScene.sensoryText;
+                      return targetText ? `"${targetText}"` : "Nenhum texto sensorial ou nota de teleprompter configurada para este slide.";
+                    })()}
+                  </div>
+                ) : (
+                  <div className="text-center p-6 text-slate-500 text-xs">
+                    Nenhuma cena ativa para exibir no teleprompter.
+                  </div>
+                )}
+                
+                {/* Notes visible only to DM */}
+                {activeScene?.secretNotes && (
+                  <div className="p-3 rounded-xl bg-purple-950/20 border border-purple-500/20 space-y-1">
+                    <div className="text-[9px] font-bold text-purple-400 uppercase tracking-widest font-mono">
+                      🔑 Notas Secretas da Cena (Apenas Narrador)
+                    </div>
+                    <p className="text-xs text-purple-200 leading-relaxed font-serif">
+                      {activeScene.secretNotes}
+                    </p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Bottom Quick slide switcher inside teleprompter */}
+              {activeScene?.sceneImages && activeScene.sceneImages.length > 1 && (
+                <div className="pt-3 border-t border-[#2a3449] flex items-center justify-between">
+                  <button
+                    onClick={async () => {
+                      const prevIdx = (activeImageIndex - 1 + activeScene.sceneImages!.length) % activeScene.sceneImages!.length;
+                      await handleSlideChange(prevIdx);
+                    }}
+                    className="flex-1 py-1.5 mr-1 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] text-xs font-bold text-slate-200 rounded-lg text-center cursor-pointer"
+                  >
+                    ◀ Anterior
+                  </button>
+                  <span className="text-[10px] text-slate-400 font-mono px-3 font-semibold">
+                    {activeImageIndex + 1} / {activeScene.sceneImages.length}
+                  </span>
+                  <button
+                    onClick={async () => {
+                      const nextIdx = (activeImageIndex + 1) % activeScene.sceneImages!.length;
+                      await handleSlideChange(nextIdx);
+                    }}
+                    className="flex-1 py-1.5 ml-1 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] text-xs font-bold text-slate-200 rounded-lg text-center cursor-pointer"
+                  >
+                    Próximo ▶
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : rightPanelTab === 'log' ? (
             <BattleLog 
               logs={combatLogs}
               activeAttacker={combatants[currentTurnIndex]}

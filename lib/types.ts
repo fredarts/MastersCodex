@@ -52,6 +52,13 @@ export interface WorldEntity {
   createdAt?: string;
 }
 
+export interface SceneImage {
+  id: string;
+  imageUrl: string;
+  overlayText?: string;
+  secretNotes?: string;
+}
+
 export interface GameScene {
   id: string;
   sessionId: string;
@@ -72,6 +79,8 @@ export interface GameScene {
   hasRain?: boolean; // Chuva e relâmpagos independentes
   battleSetupMode?: 'normal' | 'player_ambush' | 'player_surprised';
   placementZoneRadius?: number;
+  sceneImages?: SceneImage[];
+  activeImageIndex?: number;
   createdAt?: string;
   updatedAt?: string;
 }

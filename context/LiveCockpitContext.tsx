@@ -20,6 +20,8 @@ interface LiveCockpitContextType {
   roundCount: number;
   setRoundCount: React.Dispatch<React.SetStateAction<number>>;
   broadcastDiceRoll: (roll: { rollerName: string; rollType: string; diceFormula: string; result: number; isCrit?: boolean; isFail?: boolean }) => void;
+  projectedScene: any;
+  setProjectedScene: React.Dispatch<React.SetStateAction<any>>;
 }
 
 const LiveCockpitContext = createContext<LiveCockpitContextType | undefined>(undefined);
@@ -31,6 +33,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [combatants, setCombatants] = useState<Combatant[]>([]);
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
   const [roundCount, setRoundCount] = useState(1);
+  const [projectedScene, setProjectedScene] = useState<any>(null);
 
   // Active campaign ID for Supabase WebSocket channels
   const { activeCampaign } = useCampaign();
@@ -65,6 +68,16 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     },
     onLiveProjectionChange: (payload) => {
       if (payload.mode) setLiveDisplayModeState(payload.mode);
+      if (payload.sceneId !== undefined || payload.imageUrl !== undefined || payload.title !== undefined) {
+        setProjectedScene(payload.sceneId ? {
+          id: payload.sceneId,
+          title: payload.title,
+          imageUrl: payload.imageUrl,
+          sensoryText: payload.sensoryText,
+          sceneImages: payload.sceneImages || [],
+          activeImageIndex: payload.activeImageIndex ?? 0,
+        } : null);
+      }
     },
     onCombatUpdate: (payload) => {
       if (payload.combatants) setCombatants(payload.combatants);
@@ -138,6 +151,8 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         roundCount,
         setRoundCount,
         broadcastDiceRoll,
+        projectedScene,
+        setProjectedScene,
       }}
     >
       {children}

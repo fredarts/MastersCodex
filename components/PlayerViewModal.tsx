@@ -7,7 +7,7 @@ import { useSession } from '@/context/SessionContext';
 import { useCampaign } from '@/context/CampaignContext';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { normalizeImageUrl } from '@/lib/imageUtils';
-
+import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
 import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
 
@@ -28,10 +28,11 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
 }) => {
   const { activeScene } = useSession();
   const { activeCampaign } = useCampaign();
-  const { liveDisplayMode } = useLiveCockpit();
+  const { liveDisplayMode, projectedScene } = useLiveCockpit();
   if (!isOpen) return null;
 
-  const isCombatMode = liveDisplayMode === 'combat' || activeScene?.sceneType === 'combat' || combatants.length > 0;
+  const isCombatMode = liveDisplayMode === 'combat';
+  const currentScene = projectedScene || activeScene;
 
   return (
     <div className="fixed inset-0 bg-black/95 backdrop-blur-lg z-50 flex flex-col overflow-hidden select-none animate-fade-in">
@@ -72,19 +73,41 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 userRole="player"
               />
             </ThreeErrorBoundary>
-          ) : activeScene?.imageUrl ? (
+          ) : (currentScene?.sceneImages && currentScene.sceneImages.length > 0) || currentScene?.imageUrl ? (
             <div className="w-full h-full relative flex items-center justify-center">
-              <img
-                src={normalizeImageUrl(activeScene.imageUrl)}
-                alt="Arte da cena"
-                className="w-full h-full object-cover animate-fade-in"
-              />
-              <div className="absolute bottom-6 left-6 right-6 p-4 rounded-2xl bg-black/80 backdrop-blur-md border border-amber-500/30">
-                <div className="text-xs font-bold text-amber-400 uppercase font-mono">{activeScene.title}</div>
-                {activeScene.sensoryText && (
-                  <p className="text-xs text-slate-200 mt-1 font-serif leading-relaxed italic">{activeScene.sensoryText}</p>
-                )}
-              </div>
+              {currentScene.sceneImages && currentScene.sceneImages.length > 0 ? (
+                <MagicShaderSlideshow
+                  imageUrl={normalizeImageUrl(currentScene.sceneImages[currentScene.activeImageIndex ?? 0]?.imageUrl || '')}
+                  className="w-full h-full"
+                />
+              ) : (
+                <img
+                  src={normalizeImageUrl(currentScene.imageUrl)}
+                  alt="Arte da cena"
+                  className="w-full h-full object-cover animate-fade-in"
+                />
+              )}
+              {/* Legenda cinemática para jogadores */}
+              {(() => {
+                const activeImgObj = currentScene.sceneImages?.[currentScene.activeImageIndex ?? 0];
+                const captionText = activeImgObj ? activeImgObj.overlayText : currentScene.sensoryText;
+                const captionTitle = currentScene.title;
+                if (!captionText && !captionTitle) return null;
+                return (
+                  <div className="absolute bottom-8 left-12 right-12 p-5 rounded-2xl bg-[#0a0d14]/90 backdrop-blur-xl border border-amber-500/25 shadow-2xl max-w-4xl mx-auto text-center transition-all animate-fade-in">
+                    {captionTitle && (
+                      <div className="text-[10px] tracking-widest font-black text-amber-400 uppercase font-mono mb-1.5">
+                        — {captionTitle} —
+                      </div>
+                    )}
+                    {captionText && (
+                      <p className="text-sm text-slate-100 font-serif leading-relaxed italic px-4 select-text">
+                        "{captionText}"
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           ) : (
             <div className="text-center p-8 text-slate-600">

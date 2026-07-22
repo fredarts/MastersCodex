@@ -7,7 +7,16 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 export interface RealtimeSyncPayloads {
   TOKEN_MOVE_3D: { combatantId: string; characterName?: string; newX: number; newZ: number };
   TOKEN_ROTATE_3D: { combatantId: string; characterName?: string; angle: number };
-  LIVE_PROJECTION_UPDATE: { mode: 'artwork' | 'map' | 'combat'; scene?: any };
+  LIVE_PROJECTION_UPDATE: { 
+    mode?: 'artwork' | 'map' | 'combat'; 
+    sceneId?: string;
+    title?: string;
+    imageUrl?: string;
+    sensoryText?: string;
+    sceneImages?: any[];
+    activeImageIndex?: number;
+    combatants?: any[];
+  };
   DICE_ROLL: { rollerName: string; rollType: string; diceFormula: string; result: number; isCrit?: boolean; isFail?: boolean };
   COMBAT_UPDATE: { combatants: any[]; currentTurnIndex: number; roundCount: number };
 }
@@ -48,7 +57,10 @@ export function useRealtimeSync({
     } catch (e) {}
 
     return () => {
-      if (bcRef.current) bcRef.current.close();
+      if (bcRef.current) {
+        bcRef.current.close();
+        bcRef.current = null;
+      }
     };
   }, [onTokenMove, onTokenRotate, onLiveProjectionChange, onDiceRoll, onCombatUpdate]);
 
@@ -104,7 +116,17 @@ export function useRealtimeSync({
 
     // 2. Send via Local BroadcastChannel (Same-machine / cross-tab)
     if (bcRef.current) {
-      bcRef.current.postMessage({ type: event, ...payload });
+      try {
+        bcRef.current.postMessage({ type: event, ...payload });
+      } catch (err) {
+        console.warn('BroadcastChannel was closed, re-creating and sending: ', err);
+        try {
+          bcRef.current = new BroadcastChannel('masters_codex_sync');
+          bcRef.current.postMessage({ type: event, ...payload });
+        } catch (retryErr) {
+          console.error('Failed to send broadcast even after retry:', retryErr);
+        }
+      }
     }
   }, []);
 

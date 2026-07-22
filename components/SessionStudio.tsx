@@ -26,8 +26,10 @@ import {
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
 import { useWorld } from '@/lib/hooks/useWorld';
-import { GameScene, SceneType, Combatant } from '@/lib/types';
+import { GameScene, SceneType, Combatant, SceneImage } from '@/lib/types';
 import { INITIAL_MONSTERS, SFX_BUTTONS } from '@/lib/srd-data';
+import { storageService } from '@/lib/services/storageService';
+import { isSupabaseConfigured } from '@/lib/supabase';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
@@ -63,6 +65,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
   const [title, setTitle] = useState('');
   const [sceneType, setSceneType] = useState<SceneType>('social');
   const [imageUrl, setImageUrl] = useState('');
+  const [sceneImages, setSceneImages] = useState<SceneImage[]>([]);
   const [bgmCategory, setBgmCategory] = useState<'taverna' | 'combate' | 'masmorra' | 'tensao' | 'exploracao'>('taverna');
   const [sfxShortcuts, setSfxShortcuts] = useState<string[]>([]);
   const [npcName, setNpcName] = useState('');
@@ -100,6 +103,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       setTimeOfDayHour(selectedScene.timeOfDayHour ?? 12);
       setHasFog(selectedScene.hasFog ?? false);
       setHasRain(selectedScene.hasRain ?? false);
+      setSceneImages(selectedScene.sceneImages || []);
     } else {
       setTitle('');
       setSceneType('social');
@@ -114,6 +118,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       setTimeOfDayHour(12);
       setHasFog(false);
       setHasRain(false);
+      setSceneImages([]);
     }
   }, [selectedScene]);
 
@@ -154,6 +159,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       timeOfDayHour,
       hasFog,
       hasRain,
+      sceneImages,
     };
 
     await updateScene(updated);
@@ -484,53 +490,198 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
               {/* Sub-Tab Editor Content */}
               <div className="flex-1 overflow-y-auto p-6">
                 {activeSubTab === 'image' && (
-                  <div className="max-w-2xl mx-auto space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-400 mb-1">
-                        URL da Imagem / Arte do Cenário (Exibida no Player View / Discord):
-                      </label>
-                      <input
-                        type="url"
-                        value={imageUrl}
-                        onChange={(e) => {
-                          const normalized = normalizeImageUrl(e.target.value);
-                          setImageUrl(normalized);
-                        }}
-                        placeholder="https://images.unsplash.com/photo-..."
-                        className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-purple-500"
-                      />
-                      <p className="text-[11px] text-slate-500 mt-1">
-                        💡 Colou um link do Unsplash ou Imgur? Convertemos automaticamente para o link direto de imagem!
-                      </p>
+                  <div className="max-w-2xl mx-auto space-y-6">
+                    {/* Add Image Options */}
+                    <div className="bg-[#121824] p-4 rounded-xl border border-[#2a3449] space-y-4">
+                      <div className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        Adicionar Nova Arte/Imagem ao Slideshow
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Option 1: File Upload */}
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase">
+                            Upload de Arquivo (Supabase)
+                          </label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={!isSupabaseConfigured()}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                const publicUrl = await storageService.uploadAsset(file, 'scenes');
+                                const newImg: SceneImage = {
+                                  id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                                  imageUrl: publicUrl,
+                                  overlayText: '',
+                                  secretNotes: '',
+                                };
+                                setSceneImages(prev => [...prev, newImg]);
+                                if (!imageUrl) setImageUrl(publicUrl); // set primary fallback if empty
+                              } catch (err: any) {
+                                alert(err.message || 'Erro ao fazer upload da imagem.');
+                              }
+                            }}
+                            className={`w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2 py-1 text-xs text-slate-300 file:bg-purple-600/20 file:border-0 file:text-purple-300 file:px-3 file:py-1 file:rounded-md file:text-[10px] file:font-bold file:cursor-pointer ${
+                              !isSupabaseConfigured() ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                          />
+                          {!isSupabaseConfigured() && (
+                            <p className="text-[9px] text-rose-400 font-bold">
+                              ⚠️ Supabase não configurado. Upload desabilitado.
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Option 2: Image URL */}
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase">
+                            Ou Colar URL Direta da Imagem
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="url"
+                              placeholder="https://exemplo.com/imagem.png"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  const target = e.target as HTMLInputElement;
+                                  if (target.value.trim()) {
+                                    const normalized = normalizeImageUrl(target.value.trim());
+                                    const newImg: SceneImage = {
+                                      id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                                      imageUrl: normalized,
+                                      overlayText: '',
+                                      secretNotes: '',
+                                    };
+                                    setSceneImages(prev => [...prev, newImg]);
+                                    if (!imageUrl) setImageUrl(normalized);
+                                    target.value = '';
+                                  }
+                                }
+                              }}
+                              className="flex-1 bg-[#0a0d14] border border-[#2a3449] rounded-lg px-3 py-1 text-xs text-slate-100 font-mono focus:outline-none focus:border-purple-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                                if (input.value.trim()) {
+                                  const normalized = normalizeImageUrl(input.value.trim());
+                                  const newImg: SceneImage = {
+                                    id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                                    imageUrl: normalized,
+                                    overlayText: '',
+                                    secretNotes: '',
+                                  };
+                                  setSceneImages(prev => [...prev, newImg]);
+                                  if (!imageUrl) setImageUrl(normalized);
+                                  input.value = '';
+                                }
+                              }}
+                              className="px-3 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 font-bold text-xs rounded-lg cursor-pointer"
+                            >
+                              Adicionar
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* AI Mock button */}
+                      <div className="pt-2 border-t border-[#2a3449]/40 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => alert('Integração com Nano Banana/Gemini IA estará disponível em breve!')}
+                          className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow active:scale-95 cursor-pointer"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
+                          <span>Gerar Imagem com IA</span>
+                        </button>
+                      </div>
                     </div>
 
-                    {imageUrl ? (
-                      <div className="rounded-2xl overflow-hidden border border-[#2a3449] shadow-2xl relative max-h-80 bg-black flex flex-col items-center justify-center min-h-[160px]">
-                        <img 
-                          src={imageUrl} 
-                          alt="Arte da cena" 
-                          className="w-full h-full object-cover max-h-80" 
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
-                            const errDiv = (e.target as HTMLElement).nextElementSibling as HTMLElement;
-                            if (errDiv) errDiv.classList.remove('hidden');
-                          }}
-                        />
-                        <div className="hidden p-6 text-center text-amber-400/90 text-xs">
-                          <p className="font-bold mb-1">⚠️ Não foi possível carregar esta imagem diretamente.</p>
-                          <p className="text-[11px] text-slate-400">
-                            Dica: No Unsplash, clique com o botão direito na imagem e escolha <b>"Copiar endereço da imagem"</b> para obter o link direto.
-                          </p>
+                    {/* Scene Images List */}
+                    <div className="space-y-3">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">
+                        Slides Ativos na Cena ({sceneImages.length})
+                      </div>
+                      
+                      {sceneImages.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500 bg-[#161c28] border border-dashed border-[#2a3449] rounded-2xl text-xs">
+                          Nenhuma imagem ou slide adicionado a esta cena. Adicione um arquivo ou cole uma URL acima para começar.
                         </div>
-                        <span className="absolute top-2 right-2 bg-black/70 text-cyan-400 text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-cyan-500/30 flex items-center gap-1">
-                          <Tv className="w-3 h-3" /> Transmitida aos Jogadores
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="p-8 text-center text-slate-500 bg-[#161c28] border border-dashed border-[#2a3449] rounded-2xl">
-                        Nenhuma imagem definida para esta cena.
-                      </div>
-                    )}
+                      ) : (
+                        <div className="space-y-4">
+                          {sceneImages.map((imgObj, idx) => (
+                            <div key={imgObj.id} className="p-4 bg-[#121824] rounded-xl border border-[#2a3449] flex flex-col md:flex-row gap-4 shadow">
+                              {/* Preview Column */}
+                              <div className="relative w-full md:w-32 h-24 bg-black rounded-lg overflow-hidden border border-[#2a3449]/80 shrink-0">
+                                <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" />
+                                <span className="absolute top-1 left-1 bg-black/80 text-[9px] font-bold text-amber-400 px-1.5 py-0.5 rounded font-mono">
+                                  Slide {idx + 1}
+                                </span>
+                              </div>
+
+                              {/* Form Inputs Column */}
+                              <div className="flex-1 space-y-3">
+                                <div>
+                                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                                    Texto de Legenda (Visível para os jogadores na tela):
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={imgObj.overlayText || ''}
+                                    placeholder="Ex: O dragão ancestral emerge das cinzas do vulcão..."
+                                    onChange={(e) => {
+                                      const next = [...sceneImages];
+                                      next[idx] = { ...next[idx], overlayText: e.target.value };
+                                      setSceneImages(next);
+                                    }}
+                                    className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-purple-500 rounded-lg px-2.5 py-1 text-xs text-slate-200"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[9px] font-bold text-amber-400/80 uppercase mb-1 flex items-center gap-1">
+                                    <Lock className="w-3 h-3" /> Teleprompter do Narrador (Apenas você visualiza no Cockpit):
+                                  </label>
+                                  <textarea
+                                    rows={2}
+                                    value={imgObj.secretNotes || ''}
+                                    placeholder="Ex: Ler com tom grave. Os jogadores devem rolar salvaguarda de Destreza assim que o dragão rugir..."
+                                    onChange={(e) => {
+                                      const next = [...sceneImages];
+                                      next[idx] = { ...next[idx], secretNotes: e.target.value };
+                                      setSceneImages(next);
+                                    }}
+                                    className="w-full bg-[#0a0d14] border border-amber-500/20 focus:border-amber-500 rounded-lg p-2 text-xs text-amber-200 font-serif resize-none"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Delete button */}
+                              <div className="flex items-end justify-end md:justify-center md:items-center">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next = sceneImages.filter((_, i) => i !== idx);
+                                    setSceneImages(next);
+                                    if (imageUrl === imgObj.imageUrl) {
+                                      setImageUrl(next[0]?.imageUrl || '');
+                                    }
+                                  }}
+                                  className="p-2 bg-[#0a0d14] hover:bg-rose-950/20 border border-[#2a3449] hover:border-rose-500/30 text-slate-500 hover:text-rose-400 rounded-lg transition-all cursor-pointer"
+                                  title="Remover Slide"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 

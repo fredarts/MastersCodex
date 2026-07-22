@@ -87,6 +87,8 @@ export const sessionService = {
           timeOfDayHour: sc.time_of_day_hour,
           hasFog: sc.has_fog,
           hasRain: sc.has_rain,
+          sceneImages: sc.scene_images || [],
+          activeImageIndex: sc.active_image_index || 0,
         }));
       }
     }
@@ -122,6 +124,8 @@ export const sessionService = {
         time_of_day_hour: sceneData.timeOfDayHour,
         has_fog: sceneData.hasFog,
         has_rain: sceneData.hasRain,
+        scene_images: sceneData.sceneImages || [],
+        active_image_index: sceneData.activeImageIndex || 0,
       }).select().single();
 
       if (data) newScene.id = data.id;
@@ -147,6 +151,8 @@ export const sessionService = {
         time_of_day_hour: scene.timeOfDayHour,
         has_fog: scene.hasFog,
         has_rain: scene.hasRain,
+        scene_images: scene.sceneImages || [],
+        active_image_index: scene.activeImageIndex || 0,
       }).eq('id', scene.id);
     }
   },

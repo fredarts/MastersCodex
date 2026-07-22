@@ -4,6 +4,8 @@ import { DND_ALIGNMENTS, DND_BACKGROUNDS, DND_CLASSES, DND_RACES } from '@/lib/d
 import { applyClassPreset, applyLevelChange, applyRacePreset } from '@/lib/dnd5e-calculator';
 import { User, Shield, Sparkles, Award, Image as ImageIcon, Box, Check } from 'lucide-react';
 import { ALL_3D_MODELS, getModelUrlByNameOrPath } from '@/lib/3d-models';
+import { storageService } from '@/lib/services/storageService';
+import { isSupabaseConfigured } from '@/lib/supabase';
 
 interface GeneralSectionProps {
   sheet: CharacterSheet;
@@ -56,18 +58,54 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
           </div>
         </div>
 
-        <div>
+        <div className="space-y-2">
           <label className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase flex items-center gap-1.5 mb-1">
             <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
-            URL do Avatar / Foto (Opcional)
+            Avatar / Foto do Personagem
           </label>
-          <input
-            type="url"
-            value={sheet.avatarUrl || ''}
-            onChange={(e) => onChange({ ...sheet, avatarUrl: e.target.value })}
-            placeholder="https://exemplo.com/minha-foto.png"
-            className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-amber-500"
-          />
+          
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="url"
+              value={sheet.avatarUrl || ''}
+              onChange={(e) => onChange({ ...sheet, avatarUrl: e.target.value })}
+              placeholder="Cole a URL da imagem..."
+              className="flex-1 bg-[#0b0f19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-amber-500"
+            />
+            
+            <div className="relative">
+              <input
+                type="file"
+                accept="image/*"
+                disabled={!isSupabaseConfigured()}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    const publicUrl = await storageService.uploadAsset(file, 'avatars');
+                    onChange({ ...sheet, avatarUrl: publicUrl });
+                  } catch (err: any) {
+                    alert(err.message || 'Erro ao carregar avatar.');
+                  }
+                }}
+                className="hidden"
+                id="avatar-upload-input"
+              />
+              <label
+                htmlFor="avatar-upload-input"
+                className={`px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 h-full ${
+                  !isSupabaseConfigured() ? 'opacity-40 cursor-not-allowed text-slate-500' : 'text-slate-950'
+                }`}
+              >
+                <span>Fazer Upload</span>
+              </label>
+            </div>
+          </div>
+          {!isSupabaseConfigured() && (
+            <p className="text-[9px] text-rose-400 font-semibold mt-1">
+              ⚠️ Supabase não configurado. Upload de avatar desabilitado.
+            </p>
+          )}
         </div>
       </div>
 
