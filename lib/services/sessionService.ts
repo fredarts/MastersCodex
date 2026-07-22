@@ -116,6 +116,7 @@ export const sessionService = {
         time_of_day_hour: sceneData.timeOfDayHour,
         has_fog: sceneData.hasFog,
         has_rain: sceneData.hasRain,
+        floor_texture_url: sceneData.floorTextureUrl,
         scene_images: sceneData.sceneImages || [],
         active_image_index: sceneData.activeImageIndex || 0,
       }).select().single();
@@ -148,6 +149,7 @@ export const sessionService = {
         time_of_day_hour: scene.timeOfDayHour,
         has_fog: scene.hasFog,
         has_rain: scene.hasRain,
+        floor_texture_url: scene.floorTextureUrl,
         scene_images: scene.sceneImages || [],
         active_image_index: scene.activeImageIndex || 0,
       }).eq('id', scene.id);

@@ -29,10 +29,10 @@ function normalizeAndPrepareModel(modelScene: THREE.Group): THREE.Group {
     const scale = targetHeight / naturalHeight;
     modelScene.scale.set(scale, scale, scale);
     const boxMinY = box.min.y;
-    modelScene.position.y = 0.2 - boxMinY * scale;
+    modelScene.position.y = -boxMinY * scale;
   } else {
     modelScene.scale.set(0.85, 0.85, 0.85);
-    modelScene.position.y = 0.2;
+    modelScene.position.y = 0;
   }
 
   modelScene.traverse((child) => {
@@ -58,19 +58,7 @@ export function createTokenMesh(
   const isPlayer = options.combatant.type === 'player';
   const colorHex = isPlayer ? 0x38bdf8 : 0xe11d48; // sky-400 or rose-600
 
-  // 1. Base Cylinder Platform
-  const cylinderGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.2, 32);
-  const cylinderMat = new THREE.MeshStandardMaterial({
-    color: colorHex,
-    roughness: 0.3,
-    metalness: 0.2,
-  });
-  const baseMesh = new THREE.Mesh(cylinderGeo, cylinderMat);
-  baseMesh.name = 'baseMesh';
-  baseMesh.position.y = 0.1;
-  baseMesh.castShadow = true;
-  baseMesh.receiveShadow = true;
-  group.add(baseMesh);
+  // Removed Base Cylinder Platform
 
   // 2. Selection Ring
   const isSelected = options.isCurrentTurn || options.isSelectedForRotation || options.isSelectedTarget;
@@ -99,7 +87,7 @@ export function createTokenMesh(
   const arrowMesh = new THREE.Mesh(arrowGeo, arrowMat);
   arrowMesh.name = 'arrowMesh';
   arrowMesh.rotation.x = Math.PI / 2;
-  arrowMesh.position.set(0, 0.25, -0.6);
+  arrowMesh.position.set(0, 0.05, -0.6);
   group.add(arrowMesh);
 
   // 4. Determine Model GLB URL

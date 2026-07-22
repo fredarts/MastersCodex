@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sun,
   Moon,
@@ -34,6 +34,8 @@ export interface BattleControlsToolbarProps {
   onConfirmPlacement?: () => void;
   onAttackTarget?: (target: Combatant) => void;
   onToggleHelp?: () => void;
+  floorTextureUrl?: string;
+  onFloorTextureChange?: (url: string) => void;
 }
 
 export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
@@ -55,8 +57,24 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   onConfirmPlacement,
   onAttackTarget,
   onToggleHelp,
+  floorTextureUrl,
+  onFloorTextureChange,
 }) => {
   const [showEnvMenu, setShowEnvMenu] = useState(false);
+  const [availableTextures, setAvailableTextures] = useState<{name: string, url: string}[]>([]);
+
+  useEffect(() => {
+    if (isDm) {
+      fetch('/api/textures/floors')
+        .then(res => res.json())
+        .then(data => {
+          if (data.textures) {
+            setAvailableTextures(data.textures);
+          }
+        })
+        .catch(err => console.error('Failed to fetch floor textures:', err));
+    }
+  }, [isDm]);
 
   const handlePresetSelect = (preset: 'day' | 'sunset' | 'night' | 'fog' | 'storm') => {
     let hour = 12;
@@ -180,6 +198,21 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                       }}
                       className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
                     />
+                  </div>
+
+                  {/* Floor Texture Selector */}
+                  <div className="space-y-1 pt-1 border-t border-slate-800">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Textura do Chão:</label>
+                    <select
+                      value={floorTextureUrl || ''}
+                      onChange={(e) => onFloorTextureChange && onFloorTextureChange(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 text-slate-300 rounded p-1 text-xs outline-none focus:border-amber-500"
+                    >
+                      <option value="">Nenhuma (Cor sólida)</option>
+                      {availableTextures.map(tex => (
+                        <option key={tex.url} value={tex.url}>{tex.name}</option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Toggles */}

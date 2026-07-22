@@ -68,7 +68,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     },
     onLiveProjectionChange: (payload) => {
       if (payload.mode) setLiveDisplayModeState(payload.mode);
-      if (payload.sceneId !== undefined || payload.imageUrl !== undefined || payload.title !== undefined || payload.timeOfDayHour !== undefined || payload.timeOfDay !== undefined || payload.hasFog !== undefined || payload.hasRain !== undefined) {
+      if (payload.sceneId !== undefined || payload.imageUrl !== undefined || payload.title !== undefined || payload.timeOfDayHour !== undefined || payload.timeOfDay !== undefined || payload.hasFog !== undefined || payload.hasRain !== undefined || payload.floorTextureUrl !== undefined) {
         setProjectedScene((prev: any) => {
           if (payload.sceneId === null) return null;
           const base = (prev && prev.id === payload.sceneId) ? prev : {};
@@ -84,6 +84,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
             timeOfDayHour: payload.timeOfDayHour !== undefined ? payload.timeOfDayHour : base.timeOfDayHour,
             hasFog: payload.hasFog !== undefined ? payload.hasFog : base.hasFog,
             hasRain: payload.hasRain !== undefined ? payload.hasRain : base.hasRain,
+            floorTextureUrl: payload.floorTextureUrl !== undefined ? payload.floorTextureUrl : base.floorTextureUrl,
           };
         });
       }

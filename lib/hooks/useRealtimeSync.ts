@@ -20,6 +20,7 @@ export interface RealtimeSyncPayloads {
     timeOfDayHour?: number;
     hasFog?: boolean;
     hasRain?: boolean;
+    floorTextureUrl?: string;
   };
   DICE_ROLL: { rollerName: string; rollType: string; diceFormula: string; result: number; isCrit?: boolean; isFail?: boolean };
   COMBAT_UPDATE: { combatants: any[]; currentTurnIndex: number; roundCount: number };

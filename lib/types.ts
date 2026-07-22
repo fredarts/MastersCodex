@@ -78,6 +78,7 @@ export interface GameScene {
   timeOfDayHour?: number; // 0.0 - 24.0 horas
   hasFog?: boolean; // Neblina independente
   hasRain?: boolean; // Chuva e relâmpagos independentes
+  floorTextureUrl?: string; // Textura do chão 3D
   battleSetupMode?: 'normal' | 'player_ambush' | 'player_surprised';
   placementZoneRadius?: number;
   sceneImages?: SceneImage[];

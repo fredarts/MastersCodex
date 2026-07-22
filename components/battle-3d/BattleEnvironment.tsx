@@ -18,28 +18,28 @@ export const calculateEnvironmentSettings = (
   const isSunset = timeOfDayPreset === 'sunset' || (timeOfDayHour >= 17 && timeOfDayHour <= 19);
 
   let bgColor = '#0f172a'; // slate-900
-  let ambientIntensity = 0.6;
-  let sunIntensity = 1.0;
+  let ambientIntensity = 9.6;
+  let sunIntensity = 16.0;
   let sunColor = '#ffffff';
 
   if (isNight) {
     bgColor = '#020617'; // slate-950
-    ambientIntensity = 0.2;
-    sunIntensity = 0.3;
+    ambientIntensity = 3.2;
+    sunIntensity = 4.8;
     sunColor = '#38bdf8'; // moon blue
   } else if (isSunset) {
     bgColor = '#451a03';
-    ambientIntensity = 0.5;
-    sunIntensity = 0.8;
+    ambientIntensity = 8.0;
+    sunIntensity = 12.8;
     sunColor = '#f97316'; // orange sunset
   }
 
+  // Fog preset only changes bgColor (used as fog tint), NOT lighting
   if (hasFog || timeOfDayPreset === 'fog') {
     bgColor = '#1e293b';
-  } else if (hasRain || timeOfDayPreset === 'storm') {
-    bgColor = '#0f172a';
-    ambientIntensity = 0.3;
   }
+  // Rain/storm: NO ambient or sky darkening — the skydome handles sky appearance,
+  // rain is purely a particle overlay effect
 
   return {
     bgColor,
@@ -59,13 +59,15 @@ export const applySceneEnvironment = (
   hasRain = false
 ) => {
   const env = calculateEnvironmentSettings(timeOfDayHour, timeOfDayPreset, hasFog, hasRain);
-  // Opcional: scene.background pode ser nulo para dar lugar à Skysphere procedural 3D
+  // scene.background = null para dar lugar à Skysphere procedural 3D
   scene.background = null;
 
   if (hasFog || timeOfDayPreset === 'fog') {
-    scene.fog = new THREE.FogExp2(0x1e293b, 0.008);
+    // Densidade baixa (0.003) para manter o skydome visível atrás do nevoeiro
+    scene.fog = new THREE.FogExp2(0x1e293b, 0.003);
   } else {
-    scene.fog = new THREE.FogExp2(0x0f172a, 0.004);
+    // Sem fog: limpar completamente para nunca cobrir o skydome
+    scene.fog = null;
   }
 
   return env;

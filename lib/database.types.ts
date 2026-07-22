@@ -72,6 +72,7 @@ export interface SceneRow {
   time_of_day_hour?: number | null;
   has_fog?: boolean | null;
   has_rain?: boolean | null;
+  floor_texture_url?: string | null;
   scene_images?: any[] | null;
   active_image_index?: number | null;
   created_at?: string;

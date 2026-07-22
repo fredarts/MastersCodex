@@ -34,6 +34,8 @@ export interface BattleGrid3DProps {
   onEnvironmentChange?: (env: { timeOfDayHour: number; hasFog: boolean; hasRain: boolean }) => void;
   onConfirmPlacement?: () => void;
   userRole?: 'dm' | 'player';
+  floorTextureUrl?: string;
+  onFloorTextureChange?: (url: string) => void;
 }
 
 const getDirectionLabel = (angleDeg: number): string => {
@@ -66,6 +68,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   onEnvironmentChange,
   onConfirmPlacement,
   userRole,
+  floorTextureUrl,
+  onFloorTextureChange,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { roleMode, user } = useAuth();
@@ -118,6 +122,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const skyDomeRef = useRef<SkyDomeInstance | null>(null);
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
   const dirLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const floorMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
   
   // Environment ref to avoid stale closures in the animate loop
   const envRef = useRef({ timeOfDayHour, timeOfDayPreset, hasFog, hasRain });
@@ -129,6 +134,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   // Dragging state references
   const isDraggingRef = useRef(false);
   const draggedTokenKeyRef = useRef<string | null>(null);
+  const lastDragSnapRef = useRef<{ x: number; z: number } | null>(null);
   const groundPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
   const planeIntersectPoint = useRef(new THREE.Vector3());
 
@@ -175,7 +181,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     // Sync active combatants
     combatants.forEach((c, idx) => {
       const key = c.id || c.name;
-      const pos = localPositions[key] || { x: (idx % 5) * 2 - 4, z: Math.floor(idx / 5) * 2 - 4 };
+      const pos = localPositions[key] || { x: (idx % 5) * 2 - 5, z: Math.floor(idx / 5) * 2 - 5 };
       const rot = localRotations[key] || 0;
 
       const options: TokenMeshOptions = {
@@ -229,9 +235,26 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
     container.appendChild(renderer.domElement);
 
-    // Grid Floor Helper
-    const gridHelper = new THREE.GridHelper(20, 20, 0x38bdf8, 0x334155);
+    // Grid Floor Helper (40 total size, 20 divisions -> each square is 2x2 units)
+    const gridHelper = new THREE.GridHelper(40, 20, 0x38bdf8, 0x334155);
+    // Raise grid slightly above the floor
+    gridHelper.position.y = 0.01;
     scene.add(gridHelper);
+
+    // Floor Platform (same size as grid: 40x40)
+    const floorGeo = new THREE.PlaneGeometry(40, 40);
+    const floorMat = new THREE.MeshStandardMaterial({ 
+      color: 0x1e293b, 
+      roughness: 1.0, 
+      metalness: 0.0,
+      side: THREE.DoubleSide 
+    });
+    floorMatRef.current = floorMat;
+    const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+    floorMesh.rotation.x = -Math.PI / 2;
+    floorMesh.position.y = 0;
+    floorMesh.receiveShadow = true;
+    scene.add(floorMesh);
 
     // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
@@ -314,9 +337,13 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       raycaster.setFromCamera(mouse, camera);
       if (raycaster.ray.intersectPlane(groundPlane.current, planeIntersectPoint.current)) {
         const key = draggedTokenKeyRef.current;
-        // Snap ao grid 3D (passo de 1 unidade)
-        const snappedX = Math.round(planeIntersectPoint.current.x);
-        const snappedZ = Math.round(planeIntersectPoint.current.z);
+        // Snap ao centro do grid 3D (quadrados de 2x2 unidades)
+        const snappedX = Math.floor(planeIntersectPoint.current.x / 2) * 2 + 1;
+        const snappedZ = Math.floor(planeIntersectPoint.current.z / 2) * 2 + 1;
+
+        // Skip if snapped position hasn't changed — prevents infinite re-render loop
+        if (lastDragSnapRef.current?.x === snappedX && lastDragSnapRef.current?.z === snappedZ) return;
+        lastDragSnapRef.current = { x: snappedX, z: snappedZ };
 
         const group = tokenMeshMapRef.current.get(key);
         if (group) {
@@ -337,6 +364,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       if (isDraggingRef.current) {
         isDraggingRef.current = false;
         draggedTokenKeyRef.current = null;
+        lastDragSnapRef.current = null;
         controls.enabled = true; // Reativa a câmera OrbitControls
       }
     };
@@ -439,6 +467,29 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     }
   }, [timeOfDayHour, timeOfDayPreset, hasFog, hasRain]);
 
+  // Handle floor texture updates
+  useEffect(() => {
+    if (!floorMatRef.current) return;
+    
+    if (floorTextureUrl) {
+      const loader = new THREE.TextureLoader();
+      loader.load(floorTextureUrl, (texture) => {
+        // Texture covers the entire 40x40 plane without repeating
+        texture.colorSpace = THREE.SRGBColorSpace;
+        if (floorMatRef.current) {
+          floorMatRef.current.map = texture;
+          floorMatRef.current.emissive = new THREE.Color(0xffffff);
+          floorMatRef.current.emissiveMap = texture;
+          floorMatRef.current.emissiveIntensity = 0.6; // Acts like an emission shader
+          floorMatRef.current.needsUpdate = true;
+        }
+      });
+    } else {
+      floorMatRef.current.map = null;
+      floorMatRef.current.needsUpdate = true;
+    }
+  }, [floorTextureUrl]);
+
   // 3. Sync token meshes on state updates
   useEffect(() => {
     syncTokens();
@@ -485,6 +536,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         onSelectCameraPreset={handleSelectCameraPreset}
         onEnvironmentChange={onEnvironmentChange}
         onTimeOfDayChange={onTimeOfDayChange}
+        floorTextureUrl={floorTextureUrl}
+        onFloorTextureChange={onFloorTextureChange}
         onConfirmPlacement={onConfirmPlacement}
         onAttackTarget={(target) => {
           if (onSelectTarget) onSelectTarget(target);

@@ -91,11 +91,11 @@ export function createBattleSkyDome(scene: THREE.Scene): SkyDomeInstance {
     const isNight = timeOfDayPreset === 'night' || timeOfDayHour < 6 || timeOfDayHour > 19;
     const isSunset = timeOfDayPreset === 'sunset' || (timeOfDayHour >= 17 && timeOfDayHour <= 19);
 
-    if (hasFog || timeOfDayPreset === 'fog') {
+    if (timeOfDayPreset === 'fog') {
       uniforms.uTopColor.value.setHex(0x1e293b); // slate-800
       uniforms.uBottomColor.value.setHex(0x64748b); // slate-500
       uniforms.uStarIntensity.value = 0.0;
-    } else if (hasRain || timeOfDayPreset === 'storm') {
+    } else if (timeOfDayPreset === 'storm') {
       uniforms.uTopColor.value.setHex(0x0b1329); // storm dark navy
       uniforms.uBottomColor.value.setHex(0x334155); // slate-700
       uniforms.uStarIntensity.value = 0.0;

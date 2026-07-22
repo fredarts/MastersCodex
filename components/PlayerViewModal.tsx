@@ -70,6 +70,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 timeOfDayPreset={currentScene?.timeOfDay}
                 hasFog={currentScene?.hasFog}
                 hasRain={currentScene?.hasRain}
+                floorTextureUrl={currentScene?.floorTextureUrl}
                 interactive={true}
                 userRole="player"
               />

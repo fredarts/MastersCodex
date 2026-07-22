@@ -136,8 +136,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
   }, [showNpcDropdown]);
 
   const [timeOfDayHour, setTimeOfDayHour] = useState<number>(12);
-  const [hasFog, setHasFog] = useState<boolean>(false);
-  const [hasRain, setHasRain] = useState<boolean>(false);
+  const [hasFog, setHasFog] = useState(false);
+  const [hasRain, setHasRain] = useState(false);
+  const [floorTextureUrl, setFloorTextureUrl] = useState<string | undefined>(undefined);
   const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
@@ -166,6 +167,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       setTimeOfDayHour(selectedScene.timeOfDayHour ?? 12);
       setHasFog(selectedScene.hasFog ?? false);
       setHasRain(selectedScene.hasRain ?? false);
+      setFloorTextureUrl(selectedScene.floorTextureUrl || undefined);
       setSceneImages(selectedScene.sceneImages || []);
     } else {
       setTitle('');
@@ -182,6 +184,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       setTimeOfDayHour(12);
       setHasFog(false);
       setHasRain(false);
+      setFloorTextureUrl(undefined);
       setSceneImages([]);
     }
   }, [selectedScene]);
@@ -224,6 +227,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       timeOfDayHour,
       hasFog,
       hasRain,
+      floorTextureUrl,
       sceneImages,
     };
 
@@ -1187,6 +1191,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                                 setHasFog(env.hasFog);
                                 setHasRain(env.hasRain);
                               }}
+                              floorTextureUrl={floorTextureUrl}
+                              onFloorTextureChange={setFloorTextureUrl}
                               userRole="dm"
                             />
                           </ThreeErrorBoundary>

@@ -101,6 +101,7 @@ export function mapSceneRowToDomain(row: SceneRow): GameScene {
     timeOfDayHour: row.time_of_day_hour ?? undefined,
     hasFog: row.has_fog ?? false,
     hasRain: row.has_rain ?? false,
+    floorTextureUrl: row.floor_texture_url || undefined,
     sceneImages: row.scene_images || [],
     activeImageIndex: row.active_image_index || 0,
     createdAt: row.created_at,

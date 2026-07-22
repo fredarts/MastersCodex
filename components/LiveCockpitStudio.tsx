@@ -95,7 +95,8 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const { 
     liveDisplayMode, 
     setLiveDisplayMode, 
-    broadcastToPlayerView 
+    broadcastToPlayerView,
+    projectedScene
   } = useLiveCockpit();
 
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
@@ -554,6 +555,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       timeOfDayHour: targetHour,
       hasFog: targetFog,
       hasRain: targetRain,
+      floorTextureUrl: scene.floorTextureUrl,
     });
 
     // Iniciar a primeira música associada à cena em loop
@@ -1122,6 +1124,10 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                           hasFog: env.hasFog,
                           hasRain: env.hasRain,
                         });
+                      }}
+                      floorTextureUrl={projectedScene?.floorTextureUrl}
+                      onFloorTextureChange={(url) => {
+                        broadcastToPlayerView({ floorTextureUrl: url });
                       }}
                       onConfirmPlacement={() => {
                         setIsPlacementPhase(false);
