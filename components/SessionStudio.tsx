@@ -580,96 +580,125 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                 )}
 
                 {activeSubTab === 'combat' && (
-                  <div className="max-w-2xl mx-auto space-y-4">
-                    {/* Add Player Characters Section */}
-                    {campaignMembers.length > 0 && (
-                      <div className="p-3 bg-[#161c28] border border-cyan-500/30 rounded-xl space-y-2">
-                        <div className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
-                          <UserCheck className="w-3.5 h-3.5" /> Adicionar Jogadores Conectados ao Combate:
+                  <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                    {/* Left Column: Monster/Player Selection & Current Scene Combatants List */}
+                    <div className="lg:col-span-5 space-y-3.5 bg-[#121824]/90 p-4 rounded-2xl border border-[#2a3449] shadow-xl">
+                      {/* Add Player Characters Section */}
+                      {campaignMembers.length > 0 && (
+                        <div className="p-3 bg-[#161c28] border border-cyan-500/30 rounded-xl space-y-2">
+                          <div className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <UserCheck className="w-3.5 h-3.5" /> Adicionar Jogadores Conectados ao Combate:
+                          </div>
+                          <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto custom-scrollbar p-0.5">
+                            {campaignMembers.map((mem) => (
+                              <button
+                                key={mem.id}
+                                type="button"
+                                onClick={() => handleAddPlayerToScene(mem)}
+                                className="px-3 py-1.5 bg-[#0a0d14] hover:bg-[#121824] border border-cyan-500/40 rounded-xl text-xs font-bold text-cyan-300 hover:text-cyan-200 transition-all flex items-center gap-1 shadow-sm active:scale-95"
+                              >
+                                <Shield className="w-3.5 h-3.5 text-cyan-400" />
+                                <span>+ {mem.characterName || mem.displayName}</span>
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          {campaignMembers.map((mem) => (
+                      )}
+
+                      {/* Add SRD Monsters Section */}
+                      <div className="p-3 bg-[#161c28] border border-[#2a3449] rounded-xl space-y-2">
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                          <span>Adicionar Monstros do Compêndio SRD:</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto custom-scrollbar p-0.5">
+                          {INITIAL_MONSTERS.map((m) => (
                             <button
-                              key={mem.id}
+                              key={m.id}
                               type="button"
-                              onClick={() => handleAddPlayerToScene(mem)}
-                              className="px-3 py-1.5 bg-[#0a0d14] hover:bg-[#121824] border border-cyan-500/40 rounded-xl text-xs font-bold text-cyan-300 hover:text-cyan-200 transition-all flex items-center gap-1"
+                              onClick={() => handleAddMonsterToScene(m)}
+                              className="px-2.5 py-1 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] hover:border-rose-500/40 rounded-lg text-xs font-semibold text-slate-200 hover:text-rose-300 transition-all flex items-center gap-1 active:scale-95"
                             >
-                              <Shield className="w-3.5 h-3.5 text-cyan-400" />
-                              <span>+ {mem.characterName || mem.displayName}</span>
+                              <Skull className="w-3.5 h-3.5 text-rose-400" />
+                              <span>+ {m.name}</span>
                             </button>
                           ))}
                         </div>
                       </div>
-                    )}
 
-                    <div className="space-y-2">
-                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                        Adicionar Monstros do Compêndio SRD:
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {INITIAL_MONSTERS.map((m) => (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => handleAddMonsterToScene(m)}
-                            className="px-3 py-1.5 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] rounded-xl text-xs font-semibold text-slate-200 hover:text-amber-300 transition-all flex items-center gap-1"
-                          >
-                            <Skull className="w-3.5 h-3.5 text-rose-400" />
-                            <span>+ {m.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 pt-2">
-                      <div className="text-xs font-bold text-slate-200 uppercase tracking-wider">
-                        Combatentes da Cena ({sceneCombatants.length}):
-                      </div>
-
-                      {sceneCombatants.length === 0 ? (
-                        <div className="p-6 text-center text-slate-500 bg-[#161c28] border border-dashed border-[#2a3449] rounded-2xl text-xs">
-                          Nenhum combatente adicionado a esta cena.
-                        </div>
-                      ) : (
-                        sceneCombatants.map((c, idx) => (
-                          <div key={idx} className="p-3 bg-[#161c28] border border-[#2a3449] rounded-xl flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              {c.type === 'player' ? (
-                                <Shield className="w-4 h-4 text-cyan-400" />
-                              ) : (
-                                <Skull className="w-4 h-4 text-rose-400" />
-                              )}
-                              <span className="text-xs font-bold text-slate-100">{c.name}</span>
-                              <span className="text-[10px] text-slate-400 font-mono">HP: {c.hp} | CA: {c.ac}</span>
-                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                                c.type === 'player' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-rose-500/20 text-rose-300'
-                              }`}>
-                                {c.type === 'player' ? 'JOGADOR' : 'MONSTRO'}
-                              </span>
-                            </div>
-                            <button
-                              onClick={() => setSceneCombatants((prev) => prev.filter((_, i) => i !== idx))}
-                              className="text-slate-500 hover:text-rose-400"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    {/* Interactive 3D Grid Pre-configuration Preview */}
-                    {sceneCombatants.length > 0 && (
-                      <div className="space-y-2 pt-3 border-t border-[#2a3449]">
+                      {/* Scene Combatants List */}
+                      <div className="space-y-2">
                         <div className="flex items-center justify-between text-xs font-bold text-slate-200 uppercase tracking-wider">
-                          <span>Pré-configuração e Posicionamento 3D no Grid:</span>
-                          <span className="text-[10px] text-amber-400 font-mono font-normal">
-                            Posicione os bonecos, ajuste rotação, horas, nevoeiro e chuva diretamente no painel 3D
-                          </span>
+                          <span>Combatentes da Cena ({sceneCombatants.length}):</span>
+                          {sceneCombatants.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setSceneCombatants([])}
+                              className="text-[10px] text-rose-400 hover:underline font-normal"
+                            >
+                              Limpar Todos
+                            </button>
+                          )}
                         </div>
 
-                        <div className="w-full h-[400px] bg-black rounded-2xl border border-amber-500/30 overflow-hidden relative shadow-xl">
+                        <div className="space-y-1.5 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                          {sceneCombatants.length === 0 ? (
+                            <div className="p-4 text-center text-slate-500 bg-[#161c28] border border-dashed border-[#2a3449] rounded-xl text-xs">
+                              Nenhum combatente nesta cena. Clique nos monstros ou jogadores acima para incluir no encontro!
+                            </div>
+                          ) : (
+                            sceneCombatants.map((c, idx) => (
+                              <div key={idx} className="p-2.5 bg-[#161c28] border border-[#2a3449] hover:border-slate-600 rounded-xl flex items-center justify-between shadow-sm transition-all">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {c.type === 'player' ? (
+                                    <Shield className="w-4 h-4 text-cyan-400 shrink-0" />
+                                  ) : (
+                                    <Skull className="w-4 h-4 text-rose-400 shrink-0" />
+                                  )}
+                                  <span className="text-xs font-bold text-slate-100 truncate">{c.name}</span>
+                                  <span className="text-[10px] text-slate-400 font-mono shrink-0">HP: {c.hp} | CA: {c.ac}</span>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${
+                                    c.type === 'player' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-rose-500/20 text-rose-300'
+                                  }`}>
+                                    {c.type === 'player' ? 'JOGADOR' : 'MONSTRO'}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setSceneCombatants((prev) => prev.filter((_, i) => i !== idx))}
+                                  className="text-slate-500 hover:text-rose-400 p-1 rounded transition-colors"
+                                  title="Remover combatente"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right Column: 3D Battle Grid Interactive Preview */}
+                    <div className="lg:col-span-7 space-y-2.5 bg-[#121824]/90 p-4 rounded-2xl border border-amber-500/30 shadow-xl">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-200 uppercase tracking-wider">
+                        <span className="flex items-center gap-2">
+                          <Swords className="w-4 h-4 text-amber-400" />
+                          <span>Pré-configuração e Posicionamento 3D no Grid:</span>
+                        </span>
+                        <span className="text-[10px] text-amber-400 font-mono font-normal">
+                          Arraste & posicione no painel 3D
+                        </span>
+                      </div>
+
+                      <div className="w-full h-[490px] bg-black rounded-2xl border border-amber-500/30 overflow-hidden relative shadow-2xl">
+                        {sceneCombatants.length === 0 ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center text-slate-400 bg-slate-950/80 backdrop-blur-sm">
+                            <Swords className="w-12 h-12 text-amber-500/40 mb-3 animate-pulse" />
+                            <p className="text-sm font-bold text-slate-200">Grid 3D Aguardando Combatentes</p>
+                            <p className="text-xs text-slate-400 max-w-xs mt-1.5">
+                              Adicione monstros do compêndio ou jogadores no painel ao lado para ativar a pré-visualização e posicionamento 3D!
+                            </p>
+                          </div>
+                        ) : (
                           <ThreeErrorBoundary>
                             <BattleGrid3D
                               combatants={sceneCombatants}
@@ -687,9 +716,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                               userRole="dm"
                             />
                           </ThreeErrorBoundary>
-                        </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 )}
 
