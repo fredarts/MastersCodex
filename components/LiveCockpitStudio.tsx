@@ -987,6 +987,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                   <ThreeErrorBoundary>
                     <BattleGrid3D
                       combatants={combatants}
+                      onUpdateCombatants={(updated) => setCombatants(updated)}
                       currentTurnIndex={currentTurnIndex}
                       selectedTargetId={selectedTargetId}
                       onSelectTarget={(target) => {

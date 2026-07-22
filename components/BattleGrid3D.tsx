@@ -189,6 +189,17 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
   canUserControlCombatantRef.current = canUserControlCombatant;
 
+  const notifyCombatantUpdate = (combatantId: string, updates: Partial<Combatant>) => {
+    if (!onUpdateCombatants) return;
+    const nextList = combatantsRef.current.map((c) => {
+      if (c.id === combatantId) {
+        return { ...c, ...updates };
+      }
+      return c;
+    });
+    onUpdateCombatants(nextList);
+  };
+
   const handleRotatePawn = (combatantId: string, deltaDeg: number) => {
     const currentDeg = rotationsRef.current[combatantId] ?? tokenRotations3DRef.current[combatantId] ?? 0;
     const nextDeg = ((currentDeg + deltaDeg) % 360 + 360) % 360;
@@ -198,6 +209,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     if (updateTokenRotation3DRef.current) {
       updateTokenRotation3DRef.current(combatantId, nextDeg);
     }
+    notifyCombatantUpdate(combatantId, { rotation: nextDeg });
   };
 
   const handleSetPawnAngle = (combatantId: string, targetDeg: number) => {
@@ -207,6 +219,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     if (updateTokenRotation3DRef.current) {
       updateTokenRotation3DRef.current(combatantId, nextDeg);
     }
+    notifyCombatantUpdate(combatantId, { rotation: nextDeg });
   };
 
   // Environmental Control State (0 to 24 hours + independent Fog & Rain toggles)
@@ -315,26 +328,39 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     onSelectCombatantRef.current = onSelectCombatant;
   }, [onSelectTarget, onSelectCombatant]);
 
-  // Initialize integer grid cell coordinates for each combatant id
+  // Initialize integer grid cell coordinates and rotations for each combatant id
   useEffect(() => {
     const nextPositions: Record<string, { x: number; z: number }> = {};
+    const nextRotations: Record<string, number> = {};
 
     combatants.forEach((c, idx) => {
       const globalPos = tokenPositions3D[c.id];
       if (globalPos) {
         nextPositions[c.id] = globalPos;
+      } else if (c.x !== undefined && c.z !== undefined) {
+        nextPositions[c.id] = { x: c.x, z: c.z };
       } else {
         const initPos =
           c.type === 'player'
             ? { x: (idx % 5) - 2, z: 2 }
             : { x: (idx % 4) - 2, z: -2 - Math.floor(idx / 4) };
         nextPositions[c.id] = initPos;
-        updateTokenPosition3D(c.id, undefined, undefined, initPos.x, initPos.z);
+      }
+
+      const globalRot = tokenRotations3D[c.id];
+      if (globalRot !== undefined) {
+        nextRotations[c.id] = globalRot;
+      } else if (c.rotation !== undefined) {
+        nextRotations[c.id] = c.rotation;
+      } else {
+        nextRotations[c.id] = 0;
       }
     });
 
     setLocalPositions(nextPositions);
     positionsRef.current = nextPositions;
+    setLocalRotations(nextRotations);
+    rotationsRef.current = nextRotations;
   }, [combatants, tokenPositions3D]);
 
   // Listen to movement and rotation events via BroadcastChannel & window events
@@ -821,6 +847,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
           if (updateTokenRotation3DRef.current) {
             updateTokenRotation3DRef.current(combatantId, nextDeg);
           }
+          notifyCombatantUpdate(combatantId, { rotation: nextDeg });
           return;
         }
 
@@ -851,6 +878,9 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
           const gridX = Math.max(-5, Math.min(5, Math.floor(hitPt.x / cellSize)));
           const gridZ = Math.max(-5, Math.min(5, Math.floor(hitPt.z / cellSize)));
           updateTokenPosition3D(selCombatant.id, undefined, undefined, gridX, gridZ);
+          setLocalPositions((prev) => ({ ...prev, [selCombatant.id]: { x: gridX, z: gridZ } }));
+          positionsRef.current[selCombatant.id] = { x: gridX, z: gridZ };
+          notifyCombatantUpdate(selCombatant.id, { x: gridX, z: gridZ });
           return;
         }
       }
@@ -1375,6 +1405,9 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     const nextZ = Math.max(-5, Math.min(5, curPos.z + dz));
 
     updateTokenPosition3D(combatantId, undefined, undefined, nextX, nextZ);
+    setLocalPositions((prev) => ({ ...prev, [combatantId]: { x: nextX, z: nextZ } }));
+    positionsRef.current[combatantId] = { x: nextX, z: nextZ };
+    notifyCombatantUpdate(combatantId, { x: nextX, z: nextZ });
   };
 
   return (

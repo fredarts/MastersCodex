@@ -673,6 +673,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                           <ThreeErrorBoundary>
                             <BattleGrid3D
                               combatants={sceneCombatants}
+                              onUpdateCombatants={(updated) => setSceneCombatants(updated)}
                               interactive={true}
                               isPlacementPhase={true}
                               timeOfDayHour={timeOfDayHour}
