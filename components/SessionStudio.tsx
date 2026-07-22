@@ -21,12 +21,15 @@ import {
   MessageSquare,
   Compass,
   UserCheck,
-  Shield
+  Shield,
+  Search,
+  Users,
+  User
 } from 'lucide-react';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
 import { useWorld } from '@/lib/hooks/useWorld';
-import { GameScene, SceneType, Combatant, SceneImage } from '@/lib/types';
+import { GameScene, SceneType, Combatant, SceneImage, WorldEntity } from '@/lib/types';
 import { INITIAL_MONSTERS, SFX_BUTTONS, BGM_TRACKS } from '@/lib/srd-data';
 import { storageService } from '@/lib/services/storageService';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -114,6 +117,24 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
   const favoriteBgmTracks = allBgmTracks.filter(t => favorites.includes(t.id));
   const favoriteSfxTracks = allSfxTracks.filter(s => favorites.includes(s.id));
   const [sceneCombatants, setSceneCombatants] = useState<Combatant[]>([]);
+  const [npcSearchQuery, setNpcSearchQuery] = useState('');
+  const [showNpcDropdown, setShowNpcDropdown] = useState(false);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.npc-dropdown-container')) {
+        setShowNpcDropdown(false);
+      }
+    };
+    if (showNpcDropdown) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [showNpcDropdown]);
+
   const [timeOfDayHour, setTimeOfDayHour] = useState<number>(12);
   const [hasFog, setHasFog] = useState<boolean>(false);
   const [hasRain, setHasRain] = useState<boolean>(false);
@@ -234,6 +255,32 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
     };
     setSceneCombatants((prev) => [...prev, newC]);
   };
+
+  const handleAddNpcToScene = (npc: WorldEntity) => {
+    const hp = Number(npc.attributes?.hp || npc.attributes?.pv || npc.attributes?.PV || 20);
+    const ac = Number(npc.attributes?.ac || npc.attributes?.ca || npc.attributes?.CA || 12);
+
+    const newC: Combatant = {
+      id: `c-npc-${Date.now()}-${Math.random()}`,
+      name: npc.name,
+      type: 'npc',
+      hp: hp,
+      maxHp: hp,
+      ac: ac,
+      initiative: Math.floor(Math.random() * 20) + 1,
+      conditions: [],
+      modelUrl: getModelUrlByNameOrPath(npc.name),
+    };
+    setSceneCombatants((prev) => [...prev, newC]);
+  };
+
+  const filteredNpcs = worldEntities
+    .filter((e) => e.category === 'npc')
+    .filter(
+      (npc) =>
+        npc.name.toLowerCase().includes(npcSearchQuery.toLowerCase()) ||
+        (npc.subType && npc.subType.toLowerCase().includes(npcSearchQuery.toLowerCase()))
+    );
 
   const handleAddPlayerToScene = (mem: typeof campaignMembers[0]) => {
     const pName = mem.characterName || mem.displayName || 'Jogador';
@@ -967,6 +1014,82 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                         </div>
                       </div>
 
+                      {/* Add World NPCs Section */}
+                      <div className="p-3 bg-[#161c28] border border-[#2a3449] hover:border-amber-500/20 rounded-xl space-y-2 relative npc-dropdown-container transition-all">
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <User className="w-3.5 h-3.5 text-amber-400" />
+                            Adicionar NPCs do Mundo:
+                          </span>
+                        </div>
+                        
+                        <div className="relative">
+                          <div className="relative">
+                            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                            <input
+                              type="text"
+                              value={npcSearchQuery}
+                              onChange={(e) => {
+                                setNpcSearchQuery(e.target.value);
+                                setShowNpcDropdown(true);
+                              }}
+                              onFocus={() => setShowNpcDropdown(true)}
+                              placeholder="Buscar NPC por nome ou subtipo..."
+                              className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-xl pl-9 pr-8 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/40 font-sans"
+                            />
+                            {npcSearchQuery && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setNpcSearchQuery('');
+                                  setShowNpcDropdown(false);
+                                }}
+                                className="absolute right-3 top-2 text-xs text-slate-400 hover:text-slate-200"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                          
+                          {/* Floating Dropdown List */}
+                          {showNpcDropdown && (
+                            <div className="absolute left-0 right-0 mt-1.5 bg-[#121824] border border-[#2a3449] rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto custom-scrollbar divide-y divide-slate-800/60">
+                              {filteredNpcs.length === 0 ? (
+                                <div className="p-3 text-center text-slate-500 text-xs">
+                                  Nenhum NPC encontrado
+                                </div>
+                              ) : (
+                                filteredNpcs.map((npc) => (
+                                  <button
+                                    key={npc.id}
+                                    type="button"
+                                    onClick={() => {
+                                      handleAddNpcToScene(npc);
+                                      setNpcSearchQuery('');
+                                      setShowNpcDropdown(false);
+                                    }}
+                                    className="w-full px-3 py-2 text-left hover:bg-[#1c2436] flex items-center justify-between text-xs transition-colors group"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <User className="w-3.5 h-3.5 text-amber-400 group-hover:text-amber-300" />
+                                      <span className="font-bold text-slate-200 group-hover:text-slate-100">{npc.name}</span>
+                                      {npc.subType && (
+                                        <span className="text-[10px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded">
+                                          {npc.subType}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] text-amber-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                                      + Adicionar
+                                    </span>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       {/* Scene Combatants List */}
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-xs font-bold text-slate-200 uppercase tracking-wider">
@@ -993,15 +1116,21 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                                 <div className="flex items-center gap-2 min-w-0">
                                   {c.type === 'player' ? (
                                     <Shield className="w-4 h-4 text-cyan-400 shrink-0" />
+                                  ) : c.type === 'npc' ? (
+                                    <User className="w-4 h-4 text-amber-400 shrink-0" />
                                   ) : (
                                     <Skull className="w-4 h-4 text-rose-400 shrink-0" />
                                   )}
                                   <span className="text-xs font-bold text-slate-100 truncate">{c.name}</span>
                                   <span className="text-[10px] text-slate-400 font-mono shrink-0">HP: {c.hp} | CA: {c.ac}</span>
                                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${
-                                    c.type === 'player' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-rose-500/20 text-rose-300'
+                                    c.type === 'player' 
+                                      ? 'bg-cyan-500/20 text-cyan-300' 
+                                      : c.type === 'npc'
+                                      ? 'bg-amber-500/20 text-amber-300'
+                                      : 'bg-rose-500/20 text-rose-300'
                                   }`}>
-                                    {c.type === 'player' ? 'JOGADOR' : 'MONSTRO'}
+                                    {c.type === 'player' ? 'JOGADOR' : c.type === 'npc' ? 'NPC' : 'MONSTRO'}
                                   </span>
                                 </div>
                                 <button
@@ -1048,6 +1177,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                               interactive={true}
                               isPlacementPhase={true}
                               timeOfDayHour={timeOfDayHour}
+                              timeOfDayPreset={
+                                hasRain ? 'storm' : hasFog ? 'fog' : (timeOfDayHour >= 21 || timeOfDayHour <= 4 ? 'night' : timeOfDayHour >= 16.5 ? 'sunset' : 'day')
+                              }
                               hasFog={hasFog}
                               hasRain={hasRain}
                               onEnvironmentChange={(env) => {

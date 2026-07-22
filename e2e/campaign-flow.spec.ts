@@ -1,22 +1,36 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Masters Codex - Fluxo da Aplicação', () => {
-  test('deve carregar a aplicação e navegar pelas abas do Studio', async ({ page }) => {
-    // 1. Acessar a aplicação
+test.describe('Masters Codex - Fluxos Críticos de E2E', () => {
+  test.beforeEach(async ({ page }) => {
     await page.goto('/');
+  });
 
-    // 2. Verificar título do documento
+  test('deve carregar o Studio e exibir o cabeçalho do Live Cockpit', async ({ page }) => {
     await expect(page).toHaveTitle(/Masters Codex/i);
-
-    // 3. Verificar presença da barra de navegação principal (Live Cockpit)
     const headerTitle = page.locator('h1');
     await expect(headerTitle).toContainText(/Studio Live Cockpit/i);
+  });
 
-    // 4. Testar clique em alternância de abas de exibição (Mapa Tático / Grid 3D)
+  test('deve alternar entre os modos de exibição de Projeção (Ilustração, Mapa Tático e Grid 3D)', async ({ page }) => {
     const mapButton = page.getByRole('button', { name: /Mapa Tático/i });
-    if (await mapButton.isVisible()) {
-      await mapButton.click();
-      await expect(mapButton).toHaveClass(/bg-indigo-500/);
+    await expect(mapButton).toBeVisible();
+    await mapButton.click();
+    await expect(mapButton).toHaveClass(/bg-indigo-500/);
+
+    const combatButton = page.getByRole('button', { name: /Grid 3D \/ Combate/i });
+    await expect(combatButton).toBeVisible();
+    await combatButton.click();
+    await expect(combatButton).toHaveClass(/bg-rose-500/);
+  });
+
+  test('deve permitir abrir o modal de ajuda do Grid 3D', async ({ page }) => {
+    const combatButton = page.getByRole('button', { name: /Grid 3D \/ Combate/i });
+    await combatButton.click();
+
+    const helpButton = page.locator('button[title="Ajuda e Controles"]');
+    if (await helpButton.isVisible()) {
+      await helpButton.click();
+      await expect(page.getByText('Controles do Grid 3D')).toBeVisible();
     }
   });
 });

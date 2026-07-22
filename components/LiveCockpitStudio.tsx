@@ -26,6 +26,7 @@ import {
   Beer,
   Search,
   Users,
+  User,
   UserPlus,
   X,
   Dices,
@@ -37,7 +38,7 @@ import { useWorld } from '@/lib/hooks/useWorld';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
-import { GameScene, SceneType, Combatant, ConditionType, CampaignMember } from '@/lib/types';
+import { GameScene, SceneType, Combatant, ConditionType, CampaignMember, WorldEntity } from '@/lib/types';
 import { INITIAL_MONSTERS, SFX_BUTTONS, CONDITIONS, BGM_TRACKS } from '@/lib/srd-data';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 import { useAudio } from '@/context/AudioContext';
@@ -50,11 +51,14 @@ import { Dice3DCanvas, DieType } from '@/components/Dice3DCanvas';
 import { CombatLogEntry } from '@/lib/types';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
 import { LiveCockpitHeader } from '@/components/live-cockpit/LiveCockpitHeader';
+import { SceneProjectionSelector } from '@/components/live-cockpit/SceneProjectionSelector';
+import { CombatTurnOrderPanel } from '@/components/live-cockpit/CombatTurnOrderPanel';
+import { QuickAudioPanel } from '@/components/live-cockpit/QuickAudioPanel';
 import { CombatInitiativeTracker } from '@/components/live-cockpit/CombatInitiativeTracker';
 import { AddCombatantModal } from '@/components/live-cockpit/AddCombatantModal';
-import { QuickAudioPanel } from '@/components/live-cockpit/QuickAudioPanel';
 import { BattleSetupModal, BattleSetupMode } from '@/components/live-cockpit/BattleSetupModal';
 import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
+
 
 interface LiveCockpitStudioProps {
   combatants: Combatant[];
@@ -133,7 +137,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   // Combat State & Search Modal
   const [isCombatActive, setIsCombatActive] = useState<boolean>(false);
   const [showAddCombatantModal, setShowAddCombatantModal] = useState<boolean>(false);
-  const [activeAddTab, setActiveAddTab] = useState<'monsters' | 'players' | 'custom'>('monsters');
+  const [activeAddTab, setActiveAddTab] = useState<'monsters' | 'players' | 'custom' | 'npcs'>('monsters');
   const [combatantSearchQuery, setCombatantSearchQuery] = useState<string>('');
 
   // Battle Setup & 3D Placement Phase State
@@ -687,6 +691,31 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     setIsCombatActive(true);
   };
 
+  const handleAddNpcToCombat = (npc: WorldEntity) => {
+    setCombatants((prev) => {
+      const hp = Number(npc.attributes?.hp || npc.attributes?.pv || npc.attributes?.PV || 20);
+      const ac = Number(npc.attributes?.ac || npc.attributes?.ca || npc.attributes?.CA || 12);
+
+      const newC: Combatant = {
+        id: `c-npc-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+        name: npc.name,
+        type: 'npc',
+        hp: hp,
+        maxHp: hp,
+        ac: ac,
+        initiative: Math.floor(Math.random() * 20) + 1,
+        conditions: [],
+        modelUrl: getModelUrlByNameOrPath(npc.name),
+      };
+
+      const next = [...prev, newC];
+      next.sort((a, b) => b.initiative - a.initiative);
+      broadcastToPlayerView({ combatants: next });
+      return next;
+    });
+    setIsCombatActive(true);
+  };
+
   const handleAddPlayerMember = (member: CampaignMember) => {
     const charName = member.characterName || member.displayName || 'Jogador';
     const alreadyIn = combatants.some((c) => c.name.toLowerCase() === charName.toLowerCase());
@@ -1075,8 +1104,15 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                       isPlacementPhase={isPlacementPhase}
                       setupMode={battleSetupMode}
                       timeOfDayHour={liveTimeOfDayHour}
+                      timeOfDayPreset={selectedTimeOfDay}
                       hasFog={liveHasFog}
                       hasRain={liveHasRain}
+                      onTimeOfDayChange={(preset) => {
+                        setSelectedTimeOfDay(preset);
+                        broadcastToPlayerView({
+                          timeOfDay: preset,
+                        });
+                      }}
                       onEnvironmentChange={(env) => {
                         setLiveTimeOfDayHour(env.timeOfDayHour);
                         setLiveHasFog(env.hasFog);
@@ -1752,7 +1788,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                 }`}
               >
                 <Skull className="w-3.5 h-3.5" />
-                <span>Monstros & NPCs (Com Busca)</span>
+                <span>Monstros (Compêndio SRD)</span>
               </button>
 
               <button
@@ -1768,10 +1804,22 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
               </button>
 
               <button
+                onClick={() => setActiveAddTab('npcs')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  activeAddTab === 'npcs'
+                    ? 'bg-[#1e293b] text-amber-400 border border-amber-500/40 shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>NPCs do Mundo</span>
+              </button>
+
+              <button
                 onClick={() => setActiveAddTab('custom')}
                 className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                   activeAddTab === 'custom'
-                    ? 'bg-[#1e293b] text-amber-400 border border-amber-500/40 shadow'
+                    ? 'bg-[#1e293b] text-[#c084fc] border border-purple-500/40 shadow'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -1896,6 +1944,89 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                       );
                     })
                   )}
+                </div>
+              )}
+
+              {/* Tab 4: NPCs do Mundo */}
+              {activeAddTab === 'npcs' && (
+                <div className="space-y-3">
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      value={combatantSearchQuery}
+                      onChange={(e) => setCombatantSearchQuery(e.target.value)}
+                      placeholder="Buscar NPC por nome ou subtipo (ex: Gandalf, Estalajadeiro)..."
+                      className="w-full bg-[#121824] border border-[#2a3449] rounded-xl pl-9 pr-4 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 font-sans"
+                    />
+                    {combatantSearchQuery && (
+                      <button
+                        onClick={() => setCombatantSearchQuery('')}
+                        className="absolute right-3 top-2.5 text-xs text-slate-500 hover:text-slate-300"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Filtered NPC List */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[45vh] overflow-y-auto pr-1">
+                    {worldEntities
+                      .filter((e) => e.category === 'npc')
+                      .filter(
+                        (npc) =>
+                          npc.name.toLowerCase().includes(combatantSearchQuery.toLowerCase()) ||
+                          (npc.subType && npc.subType.toLowerCase().includes(combatantSearchQuery.toLowerCase()))
+                      )
+                      .map((npc) => {
+                        const hp = Number(npc.attributes?.hp || npc.attributes?.pv || npc.attributes?.PV || 20);
+                        const ac = Number(npc.attributes?.ac || npc.attributes?.ca || npc.attributes?.CA || 12);
+                        const isAlreadyIn = combatants.some((c) => c.name.toLowerCase() === npc.name.toLowerCase());
+                        
+                        return (
+                          <div
+                            key={npc.id}
+                            className="p-3 bg-[#121824] border border-[#2a3449] hover:border-slate-600 rounded-xl flex items-center justify-between transition-all"
+                          >
+                            <div>
+                              <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                                <User className="w-3.5 h-3.5 text-amber-400" />
+                                <span>{npc.name}</span>
+                                {npc.subType && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] bg-slate-800 text-slate-300 font-mono">
+                                    {npc.subType}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono mt-0.5 flex items-center gap-2">
+                                <span>CA {ac}</span>
+                                <span>•</span>
+                                <span>{hp} HP</span>
+                                {npc.status && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="capitalize text-slate-500">{npc.status}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            <button
+                              disabled={isAlreadyIn}
+                              onClick={() => handleAddNpcToCombat(npc)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                isAlreadyIn
+                                  ? 'bg-[#161c28] text-slate-500 border border-[#2a3449] cursor-not-allowed'
+                                  : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/10'
+                              }`}
+                            >
+                              {isAlreadyIn ? 'Já na Batalha' : '+ Adicionar'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                  </div>
                 </div>
               )}
 

@@ -1,29 +1,29 @@
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
 import { GameSession, GameScene } from '@/lib/types';
+import { SessionRow, SceneRow } from '@/lib/database.types';
+import { mapSessionRowToDomain, mapSceneRowToDomain } from '@/lib/mappers';
+import { toast } from 'sonner';
 
 export const sessionService = {
   async fetchSessions(campaignId: string): Promise<GameSession[]> {
-    if (isSupabaseConfigured() && !campaignId.startsWith('camp-')) {
+    if (isSupabaseConfigured() && isValidUuid(campaignId)) {
       const { data, error } = await supabase
         .from('sessions')
         .select('*')
         .eq('campaign_id', campaignId)
         .order('session_number', { ascending: true });
 
-      if (!error && data) {
-        return data.map((s: any) => ({
-          id: s.id,
-          campaignId: s.campaign_id,
-          sessionNumber: s.session_number,
-          title: s.title,
-          notes: s.notes,
-        }));
+      if (error) {
+        toast.error(`Erro ao carregar sessões: ${error.message}`);
+      } else if (data) {
+        return (data as SessionRow[]).map(mapSessionRowToDomain);
       }
     }
     try {
       const saved = localStorage.getItem('codex_sessions');
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
+      toast.error('Erro ao carregar sessões salvas localmente.');
       return [];
     }
   },
@@ -37,66 +37,56 @@ export const sessionService = {
       notes,
     };
 
-    if (isSupabaseConfigured() && !campaignId.startsWith('camp-')) {
-      const { data } = await supabase.from('sessions').insert({
+    if (isSupabaseConfigured() && isValidUuid(campaignId)) {
+      const { data, error } = await supabase.from('sessions').insert({
         campaign_id: campaignId,
         session_number: sessionNumber,
         title,
         notes,
       }).select().single();
 
-      if (data) newSession.id = data.id;
+      if (error) {
+        toast.error(`Erro ao criar sessão no banco: ${error.message}`);
+      } else if (data) {
+        return mapSessionRowToDomain(data as SessionRow);
+      }
     }
 
     return newSession;
   },
 
   async updateSession(session: GameSession): Promise<void> {
-    if (isSupabaseConfigured() && !session.id.startsWith('sess-')) {
-      await supabase.from('sessions').update({
+    if (isSupabaseConfigured() && isValidUuid(session.id)) {
+      const { error } = await supabase.from('sessions').update({
         title: session.title,
         notes: session.notes,
       }).eq('id', session.id);
+
+      if (error) {
+        toast.error(`Erro ao atualizar sessão: ${error.message}`);
+      }
     }
   },
 
   async fetchScenes(sessionId: string): Promise<GameScene[]> {
-    if (isSupabaseConfigured() && !sessionId.startsWith('sess-')) {
+    if (isSupabaseConfigured() && isValidUuid(sessionId)) {
       const { data, error } = await supabase
         .from('scenes')
         .select('*')
         .eq('session_id', sessionId)
         .order('order_index', { ascending: true });
 
-      if (!error && data) {
-        return data.map((sc: any) => ({
-          id: sc.id,
-          sessionId: sc.session_id,
-          orderIndex: sc.order_index,
-          title: sc.title,
-          sceneType: sc.scene_type,
-          npcName: sc.npc_name,
-          sensoryText: sc.sensory_text,
-          secretNotes: sc.secret_notes,
-          bgmCategory: sc.bgm_category,
-          bgmTracks: sc.bgm_tracks || [],
-          imageUrl: sc.image_url,
-          npcAudioUrl: sc.npc_audio_url,
-          sfxShortcuts: sc.sfx_shortcuts,
-          combatants: sc.combatants,
-          timeOfDay: sc.time_of_day,
-          timeOfDayHour: sc.time_of_day_hour,
-          hasFog: sc.has_fog,
-          hasRain: sc.has_rain,
-          sceneImages: sc.scene_images || [],
-          activeImageIndex: sc.active_image_index || 0,
-        }));
+      if (error) {
+        toast.error(`Erro ao carregar cenas: ${error.message}`);
+      } else if (data) {
+        return (data as SceneRow[]).map(mapSceneRowToDomain);
       }
     }
     try {
       const saved = localStorage.getItem('codex_scenes');
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
+      toast.error('Erro ao carregar cenas salvas localmente.');
       return [];
     }
   },
@@ -107,8 +97,8 @@ export const sessionService = {
       id: `sc-${Date.now()}`,
     };
 
-    if (isSupabaseConfigured() && sceneData.sessionId && !sceneData.sessionId.startsWith('sess-')) {
-      const { data } = await supabase.from('scenes').insert({
+    if (isSupabaseConfigured() && isValidUuid(sceneData.sessionId)) {
+      const { data, error } = await supabase.from('scenes').insert({
         session_id: sceneData.sessionId,
         order_index: sceneData.orderIndex,
         title: sceneData.title,
@@ -130,15 +120,19 @@ export const sessionService = {
         active_image_index: sceneData.activeImageIndex || 0,
       }).select().single();
 
-      if (data) newScene.id = data.id;
+      if (error) {
+        toast.error(`Erro ao criar cena: ${error.message}`);
+      } else if (data) {
+        return mapSceneRowToDomain(data as SceneRow);
+      }
     }
 
     return newScene;
   },
 
   async updateScene(scene: GameScene): Promise<void> {
-    if (isSupabaseConfigured() && !scene.id.startsWith('sc-')) {
-      await supabase.from('scenes').update({
+    if (isSupabaseConfigured() && isValidUuid(scene.id)) {
+      const { error } = await supabase.from('scenes').update({
         title: scene.title,
         scene_type: scene.sceneType,
         npc_name: scene.npcName,
@@ -157,12 +151,19 @@ export const sessionService = {
         scene_images: scene.sceneImages || [],
         active_image_index: scene.activeImageIndex || 0,
       }).eq('id', scene.id);
+
+      if (error) {
+        toast.error(`Erro ao atualizar cena: ${error.message}`);
+      }
     }
   },
 
   async deleteScene(id: string): Promise<void> {
-    if (isSupabaseConfigured() && !id.startsWith('sc-')) {
-      await supabase.from('scenes').delete().eq('id', id);
+    if (isSupabaseConfigured() && isValidUuid(id)) {
+      const { error } = await supabase.from('scenes').delete().eq('id', id);
+      if (error) {
+        toast.error(`Erro ao remover cena: ${error.message}`);
+      }
     }
   },
 };

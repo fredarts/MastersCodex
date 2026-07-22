@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { Toaster } from 'sonner';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { WorldProvider } from '@/context/WorldContext';
 import { CampaignProvider } from '@/context/CampaignContext';
@@ -26,7 +27,9 @@ function InnerProviders({ children }: { children: React.ReactNode }) {
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
+      <Toaster position="bottom-right" richColors theme="dark" />
       <InnerProviders>{children}</InnerProviders>
     </AuthProvider>
   );
 }
+

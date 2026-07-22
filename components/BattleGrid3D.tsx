@@ -1,16 +1,22 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { HelpCircle, Sun, Moon, Sunrise, Sunset, CloudRain, CloudFog, Zap, Settings, X, RotateCcw, RotateCw } from 'lucide-react';
-import { Combatant, CampaignMember } from '@/lib/types';
+import { Combatant } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { useCampaign } from '@/lib/hooks/useCampaign';
-import { getModelUrlByNameOrPath } from '@/lib/3d-models';
+import { useBattleGridState } from '@/lib/hooks/useBattleGridState';
+import { applySceneEnvironment } from './battle-3d/BattleEnvironment';
+import { setupCameraAndOrbit, DEFAULT_CAMERA_PRESETS } from './battle-3d/BattleCameraControls';
+import { createTokenMesh, updateTokenMeshState, TokenMeshOptions } from './battle-3d/Token3DMesh';
+import { createBattleSkyDome, SkyDomeInstance } from './battle-3d/BattleSkyDome';
+import { createRainParticleSystem } from './battle-3d/WeatherEffects';
+import { BattleControlsToolbar } from './battle-3d/BattleControlsToolbar';
+import { disposeHierarchy } from '@/lib/3d-asset-manager';
+import { HelpCircle, X } from 'lucide-react';
 
-interface BattleGrid3DProps {
+export interface BattleGrid3DProps {
   combatants: Combatant[];
   currentTurnIndex?: number;
   selectedTargetId?: string;
@@ -42,54 +48,20 @@ const getDirectionLabel = (angleDeg: number): string => {
   return 'Noroeste ↖';
 };
 
-const getMonsterModelUrl = (name: string): string | null => {
-  const norm = name
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-
-  // Goblin Arqueiro / Goblin Archer / Arqueiro
-  if (norm.includes('arqueiro') || norm.includes('archer')) {
-    return '/assets/3d/monsters/Goblin Arqueiro/Goblin Arqueiro.glb';
-  }
-
-  // Líder Goblin / Líder Hobgoblin / Goblin Boss / Lider / Chefe
-  if (
-    norm.includes('lider') ||
-    norm.includes('boss') ||
-    norm.includes('hobgoblin') ||
-    norm.includes('chefe')
-  ) {
-    return '/assets/3d/monsters/Líder Hobgoblin/Líder Hobgoblin.glb';
-  }
-
-  // Goblin padrão
-  if (norm.includes('goblin')) {
-    return '/assets/3d/monsters/Goblin/Goblin.glb';
-  }
-
-  // Esqueleto / Skeleton
-  if (norm.includes('esqueleto') || norm.includes('skeleton')) {
-    return '/assets/3d/monsters/Esqueleto/Esqueleto.glb';
-  }
-
-  return null;
-};
-
 export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   combatants,
   currentTurnIndex = 0,
-  selectedTargetId,
+  selectedTargetId: propSelectedTargetId,
   onSelectTarget,
   onSelectCombatant,
   onUpdateCombatants,
   interactive = true,
   isPlacementPhase = false,
   setupMode = 'normal',
-  timeOfDayPreset,
-  timeOfDayHour,
-  hasFog: hasFogProp,
-  hasRain: hasRainProp,
+  timeOfDayPreset = 'day',
+  timeOfDayHour = 12,
+  hasFog = false,
+  hasRain = false,
   onTimeOfDayChange,
   onEnvironmentChange,
   onConfirmPlacement,
@@ -105,353 +77,138 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     updateTokenRotation3D,
   } = useLiveCockpit();
 
-  // Selected combatant for rotation anchors
-  const [selectedCombatantId, setSelectedCombatantId] = useState<string | null>(null);
+  const isDm = roleMode === 'dm' || userRole === 'dm';
+  const userMember = campaignMembers.find((m) => m.userId === user?.id);
+  const userCharacterName = userMember?.characterName;
 
-  // Local state for integer grid cell coordinates { x: gridX, z: gridZ }
-  const [localPositions, setLocalPositions] = useState<Record<string, { x: number; z: number }>>({});
+  const {
+    selectedCombatantId,
+    setSelectedCombatantId,
+    localPositions,
+    setLocalPositions,
+    localRotations,
+    canUserControlCombatant,
+    handleRotateSelected,
+  } = useBattleGridState(
+    combatants,
+    tokenPositions3D,
+    tokenRotations3D,
+    updateTokenPosition3D,
+    updateTokenRotation3D,
+    isDm,
+    isPlacementPhase,
+    setupMode,
+    userCharacterName
+  );
 
-  // Local state for token rotations in degrees
-  const [localRotations, setLocalRotations] = useState<Record<string, number>>({});
-  const rotationsRef = useRef<Record<string, number>>(localRotations);
-  const selectedIdRef = useRef<string | null>(selectedCombatantId);
-  const tokenRotations3DRef = useRef<Record<string, number>>(tokenRotations3D);
-  const updateTokenRotation3DRef = useRef(updateTokenRotation3D);
-  const canUserControlCombatantRef = useRef<(c: Combatant | undefined) => boolean>(() => false);
+  const [targetIdState, setTargetIdState] = useState<string | undefined>(propSelectedTargetId);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
-  // Sync rotation refs with latest state
   useEffect(() => {
-    rotationsRef.current = localRotations;
-  }, [localRotations]);
+    setTargetIdState(propSelectedTargetId);
+  }, [propSelectedTargetId]);
+
+  // Three.js persistent references
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const controlsRef = useRef<any>(null);
+  const tokenGroupRef = useRef<THREE.Group | null>(null);
+  const tokenMeshMapRef = useRef<Map<string, THREE.Group>>(new Map());
+  const rainSysRef = useRef<ReturnType<typeof createRainParticleSystem> | null>(null);
+  const skyDomeRef = useRef<SkyDomeInstance | null>(null);
+  const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
+  const dirLightRef = useRef<THREE.DirectionalLight | null>(null);
+  
+  // Environment ref to avoid stale closures in the animate loop
+  const envRef = useRef({ timeOfDayHour, timeOfDayPreset, hasFog, hasRain });
 
   useEffect(() => {
-    selectedIdRef.current = selectedCombatantId;
-  }, [selectedCombatantId]);
+    envRef.current = { timeOfDayHour, timeOfDayPreset, hasFog, hasRain };
+  }, [timeOfDayHour, timeOfDayPreset, hasFog, hasRain]);
+
+  // Dragging state references
+  const isDraggingRef = useRef(false);
+  const draggedTokenKeyRef = useRef<string | null>(null);
+  const groundPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
+  const planeIntersectPoint = useRef(new THREE.Vector3());
+
+  const callbacksRef = useRef({
+    combatants,
+    setSelectedCombatantId,
+    onSelectCombatant,
+    onSelectTarget,
+    canUserControlCombatant,
+    updateTokenPosition3D,
+    onUpdateCombatants,
+    setLocalPositions,
+  });
 
   useEffect(() => {
-    tokenRotations3DRef.current = tokenRotations3D;
-  }, [tokenRotations3D]);
+    callbacksRef.current = {
+      combatants,
+      setSelectedCombatantId,
+      onSelectCombatant,
+      onSelectTarget,
+      canUserControlCombatant,
+      updateTokenPosition3D,
+      onUpdateCombatants,
+      setLocalPositions,
+    };
+  });
 
-  useEffect(() => {
-    updateTokenRotation3DRef.current = updateTokenRotation3D;
-  }, [updateTokenRotation3D]);
+  // Sync token meshes to current combatant state
+  const syncTokens = useCallback(() => {
+    const tokenGroup = tokenGroupRef.current;
+    if (!tokenGroup) return;
 
-  // Permission Check: Mestre pode girar/mover todos, Player apenas o seu próprio personagem (se não for surpreendido)
-  const canUserControlCombatant = (c: Combatant | undefined): boolean => {
-    if (!c) return false;
-    const isDm = roleMode === 'dm' || userRole === 'dm';
-    if (isDm) return true;
+    const activeKeys = new Set(combatants.map((c) => c.id || c.name));
 
-    // Se estiver na fase de posicionamento e os jogadores foram surpreendidos, o jogador NÃO pode mover ninguém
-    if (isPlacementPhase && setupMode === 'player_surprised') {
-      return false;
-    }
-
-    if (c.type !== 'player') return false;
-
-    const userDispName = (user?.displayName || '').toLowerCase().trim();
-    const combatantName = (c.name || '').toLowerCase().trim();
-
-    if (userDispName && (combatantName.includes(userDispName) || userDispName.includes(combatantName))) return true;
-
-    if (user?.id && campaignMembers && campaignMembers.length > 0) {
-      const myMember = campaignMembers.find((m: CampaignMember) => m.userId === user.id);
-      if (myMember) {
-        if (myMember.role === 'dm') return true;
-        if (
-          myMember.displayName &&
-          (combatantName.includes(myMember.displayName.toLowerCase()) ||
-            myMember.displayName.toLowerCase().includes(combatantName))
-        ) {
-          return true;
-        }
+    // Remove deleted tokens
+    for (const [key, group] of tokenMeshMapRef.current.entries()) {
+      if (!activeKeys.has(key)) {
+        tokenGroup.remove(group);
+        disposeHierarchy(group);
+        tokenMeshMapRef.current.delete(key);
       }
     }
 
-    try {
-      const saved =
-        localStorage.getItem('masters_codex_character_sheets_v1') ||
-        localStorage.getItem('codex_character_sheets_v1');
-      if (saved) {
-        const sheets = JSON.parse(saved);
-        if (Array.isArray(sheets) && sheets.length > 0) {
-          const matches = sheets.some((s: any) => {
-            const sName = (s.characterName || '').toLowerCase().trim();
-            return sName && (combatantName.includes(sName) || sName.includes(combatantName));
-          });
-          if (matches) return true;
-        }
-      }
-    } catch (e) {}
-
-    return true;
-  };
-
-  canUserControlCombatantRef.current = canUserControlCombatant;
-
-  const notifyCombatantUpdate = (combatantId: string, updates: Partial<Combatant>) => {
-    if (!onUpdateCombatants) return;
-    const nextList = combatantsRef.current.map((c) => {
-      if (c.id === combatantId) {
-        return { ...c, ...updates };
-      }
-      return c;
-    });
-    onUpdateCombatants(nextList);
-  };
-
-  const handleRotatePawn = (combatantId: string, deltaDeg: number) => {
-    const currentDeg = rotationsRef.current[combatantId] ?? tokenRotations3DRef.current[combatantId] ?? 0;
-    const nextDeg = ((currentDeg + deltaDeg) % 360 + 360) % 360;
-
-    setLocalRotations((prev) => ({ ...prev, [combatantId]: nextDeg }));
-    rotationsRef.current[combatantId] = nextDeg;
-    if (updateTokenRotation3DRef.current) {
-      updateTokenRotation3DRef.current(combatantId, nextDeg);
-    }
-    notifyCombatantUpdate(combatantId, { rotation: nextDeg });
-  };
-
-  const handleSetPawnAngle = (combatantId: string, targetDeg: number) => {
-    const nextDeg = ((targetDeg % 360) + 360) % 360;
-    setLocalRotations((prev) => ({ ...prev, [combatantId]: nextDeg }));
-    rotationsRef.current[combatantId] = nextDeg;
-    if (updateTokenRotation3DRef.current) {
-      updateTokenRotation3DRef.current(combatantId, nextDeg);
-    }
-    notifyCombatantUpdate(combatantId, { rotation: nextDeg });
-  };
-
-  // Environmental Control State (0 to 24 hours + independent Fog & Rain toggles)
-  const [timeOfDay, setTimeOfDay] = useState<number>(timeOfDayHour ?? 12);
-  const [hasFog, setHasFog] = useState<boolean>(hasFogProp ?? false);
-  const [hasRain, setHasRain] = useState<boolean>(hasRainProp ?? false);
-  const [isEnvMenuOpen, setIsEnvMenuOpen] = useState<boolean>(false);
-
-  const timeOfDayRef = useRef<number>(timeOfDay);
-  const hasFogRef = useRef<boolean>(hasFog);
-  const hasRainRef = useRef<boolean>(hasRain);
-
-  const handleUpdateEnv = (newTime: number, newFog: boolean, newRain: boolean) => {
-    setTimeOfDay(newTime);
-    setHasFog(newFog);
-    setHasRain(newRain);
-
-    if (onEnvironmentChange) {
-      onEnvironmentChange({ timeOfDayHour: newTime, hasFog: newFog, hasRain: newRain });
-    }
-
-    if (onTimeOfDayChange) {
-      const preset: 'day' | 'sunset' | 'night' | 'fog' | 'storm' =
-        newTime >= 21 || newTime <= 4
-          ? 'night'
-          : newTime >= 16.5
-          ? 'sunset'
-          : newTime >= 4.5 && newTime < 7
-          ? 'fog'
-          : 'day';
-      onTimeOfDayChange(preset);
-    }
-  };
-
-  useEffect(() => {
-    if (timeOfDayHour !== undefined) setTimeOfDay(timeOfDayHour);
-  }, [timeOfDayHour]);
-
-  useEffect(() => {
-    if (hasFogProp !== undefined) setHasFog(hasFogProp);
-  }, [hasFogProp]);
-
-  useEffect(() => {
-    if (hasRainProp !== undefined) setHasRain(hasRainProp);
-  }, [hasRainProp]);
-
-  useEffect(() => {
-    if (!timeOfDayPreset || timeOfDayHour !== undefined) return;
-    switch (timeOfDayPreset) {
-      case 'night':
-        setTimeOfDay(24);
-        break;
-      case 'sunset':
-        setTimeOfDay(18);
-        break;
-      case 'fog':
-        setTimeOfDay(6);
-        setHasFog(true);
-        break;
-      case 'storm':
-        setTimeOfDay(2);
-        setHasRain(true);
-        break;
-      case 'day':
-      default:
-        setTimeOfDay(12);
-        break;
-    }
-  }, [timeOfDayPreset]);
-
-  useEffect(() => {
-    timeOfDayRef.current = timeOfDay;
-  }, [timeOfDay]);
-
-  useEffect(() => {
-    hasFogRef.current = hasFog;
-  }, [hasFog]);
-
-  useEffect(() => {
-    hasRainRef.current = hasRain;
-  }, [hasRain]);
-
-  // Refs for WebGL animation loop without re-creating WebGL Context
-  const combatantsRef = useRef<Combatant[]>(combatants);
-  const positionsRef = useRef<Record<string, { x: number; z: number }>>(localPositions);
-  const turnIdxRef = useRef<number>(currentTurnIndex);
-  const targetIdRef = useRef<string | undefined>(selectedTargetId);
-  const onSelectTargetRef = useRef(onSelectTarget);
-  const onSelectCombatantRef = useRef(onSelectCombatant);
-
-  // Sync refs with latest props
-  useEffect(() => {
-    combatantsRef.current = combatants;
-  }, [combatants]);
-
-  useEffect(() => {
-    turnIdxRef.current = currentTurnIndex;
-  }, [currentTurnIndex]);
-
-  useEffect(() => {
-    targetIdRef.current = selectedTargetId;
-  }, [selectedTargetId]);
-
-  useEffect(() => {
-    onSelectTargetRef.current = onSelectTarget;
-    onSelectCombatantRef.current = onSelectCombatant;
-  }, [onSelectTarget, onSelectCombatant]);
-
-  // Initialize integer grid cell coordinates and rotations for each combatant id
-  useEffect(() => {
-    const nextPositions: Record<string, { x: number; z: number }> = {};
-    const nextRotations: Record<string, number> = {};
-
+    // Sync active combatants
     combatants.forEach((c, idx) => {
-      const globalPos = tokenPositions3D[c.id];
-      if (globalPos) {
-        nextPositions[c.id] = globalPos;
-      } else if (c.x !== undefined && c.z !== undefined) {
-        nextPositions[c.id] = { x: c.x, z: c.z };
-      } else {
-        const initPos =
-          c.type === 'player'
-            ? { x: (idx % 5) - 2, z: 2 }
-            : { x: (idx % 4) - 2, z: -2 - Math.floor(idx / 4) };
-        nextPositions[c.id] = initPos;
-      }
+      const key = c.id || c.name;
+      const pos = localPositions[key] || { x: (idx % 5) * 2 - 4, z: Math.floor(idx / 5) * 2 - 4 };
+      const rot = localRotations[key] || 0;
 
-      const globalRot = tokenRotations3D[c.id];
-      if (globalRot !== undefined) {
-        nextRotations[c.id] = globalRot;
-      } else if (c.rotation !== undefined) {
-        nextRotations[c.id] = c.rotation;
+      const options: TokenMeshOptions = {
+        combatant: c,
+        isCurrentTurn: idx === currentTurnIndex,
+        isSelectedTarget: targetIdState === c.id,
+        isSelectedForRotation: selectedCombatantId === key,
+        isControlledByUser: canUserControlCombatant(c),
+        positionX: pos.x,
+        positionZ: pos.z,
+        rotationAngleDeg: rot,
+      };
+
+      const existingGroup = tokenMeshMapRef.current.get(key);
+      if (existingGroup) {
+        updateTokenMeshState(existingGroup, options);
       } else {
-        nextRotations[c.id] = 0;
+        const tokenMesh = createTokenMesh(options);
+        tokenGroup.add(tokenMesh);
+        tokenMeshMapRef.current.set(key, tokenMesh);
       }
     });
+  }, [
+    combatants,
+    currentTurnIndex,
+    targetIdState,
+    selectedCombatantId,
+    localPositions,
+    localRotations,
+    canUserControlCombatant,
+  ]);
 
-    setLocalPositions(nextPositions);
-    positionsRef.current = nextPositions;
-    setLocalRotations(nextRotations);
-    rotationsRef.current = nextRotations;
-  }, [combatants, tokenPositions3D]);
-
-  // Listen to movement and rotation events via BroadcastChannel & window events
-  useEffect(() => {
-    const applyTokenMove = (data: any) => {
-      if (!data || data.type !== 'TOKEN_MOVE_3D') return;
-
-      const { combatantId, characterName, deltaX, deltaZ, newX, newZ } = data;
-      const curCombatants = combatantsRef.current;
-
-      let targetId = combatantId;
-      if (curCombatants.length > 0 && !curCombatants.some((c) => c.id === targetId)) {
-        const found = curCombatants.find(
-          (c) =>
-            (characterName && c.name.toLowerCase() === characterName.toLowerCase()) ||
-            (combatantId && c.name.toLowerCase() === combatantId.toLowerCase())
-        );
-        if (found) {
-          targetId = found.id;
-        }
-      }
-
-      if (!targetId) return;
-
-      setLocalPositions((prev) => {
-        const current = prev[targetId] || { x: 0, z: 0 };
-        const nextX = newX !== undefined ? newX : Math.max(-5, Math.min(5, current.x + (deltaX || 0)));
-        const nextZ = newZ !== undefined ? newZ : Math.max(-5, Math.min(5, current.z + (deltaZ || 0)));
-        const updated = { ...prev, [targetId]: { x: nextX, z: nextZ } };
-        positionsRef.current = updated;
-        return updated;
-      });
-    };
-
-    const applyTokenRotate = (data: any) => {
-      if (!data || data.type !== 'TOKEN_ROTATE_3D') return;
-
-      const { combatantId, characterName, angle } = data;
-      const curCombatants = combatantsRef.current;
-
-      let targetId = combatantId;
-      if (curCombatants.length > 0 && !curCombatants.some((c) => c.id === targetId)) {
-        const found = curCombatants.find(
-          (c) =>
-            (characterName && c.name.toLowerCase() === characterName.toLowerCase()) ||
-            (combatantId && c.name.toLowerCase() === combatantId.toLowerCase())
-        );
-        if (found) {
-          targetId = found.id;
-        }
-      }
-
-      if (!targetId || angle === undefined) return;
-
-      setLocalRotations((prev) => {
-        const updated = { ...prev, [targetId]: angle };
-        rotationsRef.current = updated;
-        return updated;
-      });
-    };
-
-    let bc: BroadcastChannel | null = null;
-    try {
-      bc = new BroadcastChannel('masters_codex_sync');
-      bc.onmessage = (event) => {
-        applyTokenMove(event.data);
-        applyTokenRotate(event.data);
-      };
-    } catch (e) { }
-
-    const handleLocalMoveEvent = (e: Event) => {
-      const customEvt = e as CustomEvent;
-      applyTokenMove(customEvt.detail);
-    };
-
-    const handleLocalRotateEvent = (e: Event) => {
-      const customEvt = e as CustomEvent;
-      applyTokenRotate(customEvt.detail);
-    };
-
-    window.addEventListener('masters_codex_token_move_3d', handleLocalMoveEvent);
-    window.addEventListener('masters_codex_token_rotate_3d', handleLocalRotateEvent);
-
-    return () => {
-      if (bc) bc.close();
-      window.removeEventListener('masters_codex_token_move_3d', handleLocalMoveEvent);
-      window.removeEventListener('masters_codex_token_rotate_3d', handleLocalRotateEvent);
-    };
-  }, []);
-
-  // Three.js Render Loop & WebGL Setup (Created ONCE per mount to prevent WebGL Context exhaustion!)
+  // 1. Setup Three.js Scene ONCE on mount
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -459,1345 +216,308 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 500;
 
-    // Scene, Camera, Renderer
     const scene = new THREE.Scene();
-    scene.background = null; // Allows Sky Sphere 3D to show through seamlessly
-    scene.fog = new THREE.FogExp2(0xbae6fd, 0.005);
+    sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(0, 11, 13);
-    camera.lookAt(0, 0, 0);
+    const { camera, controls } = setupCameraAndOrbit(container, width, height);
+    cameraRef.current = camera;
+    controlsRef.current = controls;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
 
-    while (container.firstChild) {
-      container.removeChild(container.firstChild);
-    }
     container.appendChild(renderer.domElement);
 
-    // 3D Game Sky Dome (Dynamic Canvas Texture with Horizon Clouds)
-    const skyCanvas = document.createElement('canvas');
-    skyCanvas.width = 512;
-    skyCanvas.height = 512;
-    const skyCtx = skyCanvas.getContext('2d')!;
-
-    const skyTexture = new THREE.CanvasTexture(skyCanvas);
-    const skyGeo = new THREE.SphereGeometry(450, 32, 16);
-    const skyMat = new THREE.MeshBasicMaterial({
-      map: skyTexture,
-      side: THREE.BackSide,
-      depthWrite: false,
-      fog: false, // Ensures Three.js fog NEVER washes out or recolors the sky texture!
-    });
-    const skyMesh = new THREE.Mesh(skyGeo, skyMat);
-    scene.add(skyMesh);
-
-    const ambientLight = new THREE.AmbientLight(0xffffff, 4.6);
-    scene.add(ambientLight);
-
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444477, 3.0);
-    hemiLight.position.set(0, 20, 0);
-    scene.add(hemiLight);
-
-    const dirLight = new THREE.DirectionalLight(0xffeedd, 5.0);
-    dirLight.position.set(10, 20, 10);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 1024;
-    dirLight.shadow.mapSize.height = 1024;
-    scene.add(dirLight);
-
-    const pointLight = new THREE.PointLight(0x38bdf8, 2, 15);
-    pointLight.position.set(0, 5, 0);
-    scene.add(pointLight);
-
-    let lastRenderedTime = -1;
-
-    const getSkyGradientColors = (t: number) => {
-      // t is 0..24
-      if (t >= 4 && t < 7) {
-        // Alvorada / Early Morning (04:00 - 07:00)
-        // Transição: Azul noturno no topo -> Azul royal no meio -> Dourado quente no horizonte
-        const p = (t - 4) / 3;
-        return {
-          zenith: '#090d16',
-          midSky: '#1e3a8a',
-          horizon: p > 0.5 ? '#ea580c' : '#d97706',
-          horizonLine: '#fef08a',
-        };
-      } else if (t >= 7 && t < 10) {
-        // Manhã (07:00 - 10:00)
-        // Transição: Azul celestial -> Azul ciano radiante -> Névoa azul clara
-        return {
-          zenith: '#1e40af',
-          midSky: '#0284c7',
-          horizon: '#38bdf8',
-          horizonLine: '#bae6fd',
-        };
-      } else if (t >= 10 && t < 16.5) {
-        // Dia Pleno (10:00 - 16:30)
-        // Céu azul radiante cristalino de jogo RPG 3D
-        return {
-          zenith: '#1d4ed8',
-          midSky: '#2563eb',
-          horizon: '#38bdf8',
-          horizonLine: '#e0f2fe',
-        };
-      } else if (t >= 16.5 && t < 19.5) {
-        // Pôr do Sol (16:30 - 19:30)
-        // Azul noite no topo -> Carmesim/Âmbar no meio -> Dourado radiante no horizonte
-        return {
-          zenith: '#0f172a',
-          midSky: '#1e3a8a',
-          horizon: '#c2410c',
-          horizonLine: '#f97316',
-        };
-      } else {
-        // Noite (19:30 - 04:00) - CÉU AZUL ESCURO NOTURNO (Zero Roxo!)
-        return {
-          zenith: '#020617',
-          midSky: '#090d16',
-          horizon: '#0f172a',
-          horizonLine: '#1e3a8a',
-        };
-      }
-    };
-
-    const updateEnvironment = (time: number, fogOn: boolean, rainOn: boolean) => {
-      const sunAngle = ((time - 6) / 12) * Math.PI;
-      const sunX = Math.cos(sunAngle) * 80;
-      const sunY = Math.sin(sunAngle) * 80;
-      const sunZ = -30;
-
-      // Redraw sky texture only when time changes significantly
-      if (Math.abs(time - lastRenderedTime) > 0.1) {
-        lastRenderedTime = time;
-        const colors = getSkyGradientColors(time);
-
-        const gradient = skyCtx.createLinearGradient(0, 0, 0, skyCanvas.height);
-        gradient.addColorStop(0, colors.zenith);
-        gradient.addColorStop(0.4, colors.midSky);
-        gradient.addColorStop(0.75, colors.horizon);
-        gradient.addColorStop(1.0, colors.horizonLine);
-        skyCtx.fillStyle = gradient;
-        skyCtx.fillRect(0, 0, skyCanvas.width, skyCanvas.height);
-
-        // Clouds or stars
-        if (time >= 4 && time < 20) {
-          const cloudColor = time >= 16.5 ? 'rgba(15, 23, 42,' : 'rgba(255, 255, 255,';
-          skyCtx.fillStyle = cloudColor + '0.5)';
-          const cloudY = skyCanvas.height * 0.55;
-          const clouds = [
-            { x: 80, y: cloudY - 10, rx: 100, ry: 28 },
-            { x: 180, y: cloudY - 25, rx: 75, ry: 20 },
-            { x: 255, y: cloudY - 18, rx: 115, ry: 30 },
-            { x: 355, y: cloudY - 12, rx: 90, ry: 22 },
-            { x: 450, y: cloudY - 14, rx: 100, ry: 26 },
-            { x: 85, y: cloudY - 35, rx: 55, ry: 15 },
-            { x: 235, y: cloudY - 40, rx: 80, ry: 20 },
-          ];
-
-          clouds.forEach((c) => {
-            skyCtx.beginPath();
-            skyCtx.ellipse(c.x, c.y, c.rx, c.ry, 0, 0, Math.PI * 2);
-            skyCtx.fill();
-          });
-        }
-
-        skyTexture.needsUpdate = true;
-      }
-
-      // Lighting and Fog parameters - based ONLY on time of day (hour slider)
-      const lightColor = new THREE.Color();
-      const ambientColor = new THREE.Color();
-      const fogColor = new THREE.Color();
-      let lightIntensity = 5.5;
-      let ambientIntensity = 4.0;
-      let fogDensity = 0.003;
-
-      if (time >= 4 && time < 7) {
-        // Alvorada
-        lightColor.set(0xffa726);
-        ambientColor.set(0xffcc80);
-        fogColor.set(0x1e3a8a);
-        lightIntensity = 3.5;
-        ambientIntensity = 2.5;
-        fogDensity = 0.005;
-      } else if (time >= 7 && time < 16.5) {
-        // Dia
-        lightColor.set(0xffffff);
-        ambientColor.set(0xe2e8f0);
-        fogColor.set(0xbae6fd);
-        lightIntensity = 5.5;
-        ambientIntensity = 4.0;
-        fogDensity = 0.003;
-      } else if (time >= 16.5 && time < 19.5) {
-        // Pôr do Sol
-        lightColor.set(0xe11d48);
-        ambientColor.set(0x9a3412);
-        fogColor.set(0x1e1b4b);
-        lightIntensity = 3.0;
-        ambientIntensity = 2.0;
-        fogDensity = 0.006;
-      } else {
-        // Noite
-        lightColor.set(0x3b82f6);
-        ambientColor.set(0x1e293b);
-        fogColor.set(0x090d16);
-        lightIntensity = 1.2;
-        ambientIntensity = 1.2;
-        fogDensity = 0.008;
-      }
-
-      // Fog override: if fog toggle is ON, dramatically increase density
-      if (fogOn) {
-        fogDensity = Math.max(fogDensity, 0.035);
-        fogColor.lerp(new THREE.Color(0x334155), 0.6);
-        lightIntensity *= 0.6;
-        ambientIntensity *= 0.7;
-      }
-
-      // Rain darkening: if rain toggle is ON, darken sky slightly
-      if (rainOn) {
-        fogDensity = Math.max(fogDensity, 0.015);
-        fogColor.lerp(new THREE.Color(0x020617), 0.4);
-        lightIntensity *= 0.7;
-        ambientIntensity *= 0.6;
-      }
-
-      scene.background = null;
-      if (scene.fog && scene.fog instanceof THREE.FogExp2) {
-        scene.fog.color.copy(fogColor);
-        scene.fog.density = fogDensity;
-      }
-
-      dirLight.position.set(sunX, Math.max(-20, sunY), sunZ);
-      dirLight.color.copy(lightColor);
-      dirLight.intensity = lightIntensity;
-
-      ambientLight.color.copy(ambientColor);
-      ambientLight.intensity = ambientIntensity;
-    };
-
-    // Grid Floor (1.5m per cell)
-    const gridSize = 12;
-    const cellSize = 1.5;
-    const gridTotalSize = gridSize * cellSize;
-
-    const floorGeo = new THREE.PlaneGeometry(gridTotalSize, gridTotalSize);
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x121824,
-      roughness: 0.8,
-      metalness: 0.2,
-    });
-    const floorMesh = new THREE.Mesh(floorGeo, floorMat);
-    floorMesh.rotation.x = -Math.PI / 2;
-    floorMesh.receiveShadow = true;
-    scene.add(floorMesh);
-
-    const gridHelper = new THREE.GridHelper(gridTotalSize, gridSize, 0xf59e0b, 0x2a3449);
-    gridHelper.position.y = 0.01;
+    // Grid Floor Helper
+    const gridHelper = new THREE.GridHelper(20, 20, 0x38bdf8, 0x334155);
     scene.add(gridHelper);
 
-    // 3D Rain Particle System for Tempestade
-    const rainParticleCount = 800;
-    const rainGeo = new THREE.BufferGeometry();
-    const rainPositions = new Float32Array(rainParticleCount * 3);
-    const rainSpeeds = new Float32Array(rainParticleCount);
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
+    ambientLightRef.current = ambientLight;
 
-    for (let i = 0; i < rainParticleCount; i++) {
-      rainPositions[i * 3] = (Math.random() - 0.5) * 30;
-      rainPositions[i * 3 + 1] = Math.random() * 18;
-      rainPositions[i * 3 + 2] = (Math.random() - 0.5) * 30;
-      rainSpeeds[i] = 0.35 + Math.random() * 0.3;
-    }
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight.position.set(10, 20, 10);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+    dirLightRef.current = dirLight;
 
-    rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
-    const rainMat = new THREE.PointsMaterial({
-      color: 0x38bdf8,
-      size: 0.15,
-      transparent: true,
-      opacity: 0.75,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    const rainParticles = new THREE.Points(rainGeo, rainMat);
-    rainParticles.visible = false;
-    scene.add(rainParticles);
+    // Token Group Container
+    const tokenGroup = new THREE.Group();
+    scene.add(tokenGroup);
+    tokenGroupRef.current = tokenGroup;
 
-    let lightningCounter = 0;
+    // Skysphere Dome
+    const skyDome = createBattleSkyDome(scene);
+    skyDomeRef.current = skyDome;
+    skyDome.update(timeOfDayHour, timeOfDayPreset, hasFog, hasRain);
 
-    // Pins Container Group
-    const pinsGroup = new THREE.Group();
-    scene.add(pinsGroup);
+    // Immediately sync tokens upon scene creation
+    syncTokens();
 
-    const meshesMap: { [id: string]: THREE.Group } = {};
-
-    // Orbit & Pan Camera Controls (Blender / Unreal style)
-    let isDragging = false;
-    let dragMode: 'orbit' | 'pan' = 'orbit';
-    let previousMousePosition = { x: 0, y: 0 };
-    let cameraAngleX = 0;
-    let cameraAngleY = Math.PI / 4;
-    let cameraDistance = 15;
-    let targetPos = { x: 0, y: 0, z: 0 };
-
-    const updateCameraPosition = () => {
-      camera.position.x = targetPos.x + cameraDistance * Math.sin(cameraAngleX) * Math.cos(cameraAngleY);
-      camera.position.z = targetPos.z + cameraDistance * Math.cos(cameraAngleX) * Math.cos(cameraAngleY);
-      camera.position.y = targetPos.y + cameraDistance * Math.sin(cameraAngleY);
-      camera.lookAt(targetPos.x, targetPos.y + 0.5, targetPos.z);
-    };
-    updateCameraPosition();
-
-    const onMouseDown = (e: MouseEvent) => {
-      isDragging = true;
-      previousMousePosition = { x: e.clientX, y: e.clientY };
-
-      // Button 1 (Middle Mouse / Scroll wheel click) or Shift + Left Click -> Pan scenario
-      if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
-        dragMode = 'pan';
-        e.preventDefault();
-      } else {
-        dragMode = 'orbit';
-      }
-    };
-
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-      const deltaX = e.clientX - previousMousePosition.x;
-      const deltaY = e.clientY - previousMousePosition.y;
-
-      if (dragMode === 'pan') {
-        const rightX = Math.cos(cameraAngleX);
-        const rightZ = -Math.sin(cameraAngleX);
-        const forwardX = -Math.sin(cameraAngleX);
-        const forwardZ = -Math.cos(cameraAngleX);
-
-        const panSpeed = cameraDistance * 0.002;
-
-        targetPos.x -= (rightX * deltaX - forwardX * deltaY) * panSpeed;
-        targetPos.z -= (rightZ * deltaX - forwardZ * deltaY) * panSpeed;
-
-        targetPos.x = Math.max(-25, Math.min(25, targetPos.x));
-        targetPos.z = Math.max(-25, Math.min(25, targetPos.z));
-      } else {
-        cameraAngleX -= deltaX * 0.008;
-        cameraAngleY = Math.max(0.1, Math.min(Math.PI / 2.2, cameraAngleY + deltaY * 0.008));
-      }
-
-      previousMousePosition = { x: e.clientX, y: e.clientY };
-      updateCameraPosition();
-    };
-
-    const onMouseUp = () => {
-      isDragging = false;
-    };
-
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      cameraDistance = Math.max(2, Math.min(50, cameraDistance + e.deltaY * 0.01));
-      updateCameraPosition();
-    };
-
-    const onContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-    };
-
-    const onDblClick = () => {
-      targetPos.x = 0;
-      targetPos.y = 0;
-      targetPos.z = 0;
-      updateCameraPosition();
-    };
-
+    // Raycasting & 3D Drag-and-Drop Handlers
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    const onClickCanvas = (e: MouseEvent) => {
-      if (!interactive) return;
-      const rect = domElem.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!containerRef.current || !tokenGroupRef.current || !interactive) return;
+
+      const rect = containerRef.current.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObjects(pinsGroup.children, true);
+      const intersects = raycaster.intersectObjects(tokenGroupRef.current.children, true);
 
       if (intersects.length > 0) {
-        // 1. Direct hit on 3D rotation anchor handle
-        let hitAnchor: THREE.Object3D | null = null;
-        for (const hit of intersects) {
-          if (hit.object.userData && hit.object.userData.isRotationAnchor) {
-            hitAnchor = hit.object;
-            break;
-          }
-        }
-
-        if (hitAnchor) {
-          const { action, combatantId } = hitAnchor.userData;
-          const currentDeg = rotationsRef.current[combatantId] ?? tokenRotations3DRef.current[combatantId] ?? 0;
-          const delta = action === 'rotate_left' ? -45 : 45;
-          const nextDeg = ((currentDeg + delta) % 360 + 360) % 360;
-
-          setLocalRotations((prev) => ({ ...prev, [combatantId]: nextDeg }));
-          rotationsRef.current[combatantId] = nextDeg;
-          if (updateTokenRotation3DRef.current) {
-            updateTokenRotation3DRef.current(combatantId, nextDeg);
-          }
-          notifyCombatantUpdate(combatantId, { rotation: nextDeg });
-          return;
-        }
-
-        // 2. Click on combatant pawn
         let obj: THREE.Object3D | null = intersects[0].object;
-        while (obj && !obj.userData.combatantId && obj.parent && obj.parent !== pinsGroup) {
+        while (obj && !obj.name.startsWith('token-')) {
           obj = obj.parent;
         }
-        if (obj && obj.userData.combatantId) {
-          const found = combatantsRef.current.find((c) => c.id === obj!.userData.combatantId);
-          if (found) {
-            setSelectedCombatantId(found.id);
-            selectedIdRef.current = found.id;
-            if (onSelectTargetRef.current) onSelectTargetRef.current(found);
-            if (onSelectCombatantRef.current) onSelectCombatantRef.current(found);
-            return;
+        if (obj) {
+          const targetKey = obj.name.replace('token-', '');
+          const {
+            combatants: activeCombatants,
+            setSelectedCombatantId: setSel,
+            onSelectCombatant: onSelC,
+            onSelectTarget: onSelT,
+            canUserControlCombatant: canControl
+          } = callbacksRef.current;
+
+          const clicked = activeCombatants.find((c) => (c.id || c.name) === targetKey);
+          if (clicked) {
+            setSel(targetKey);
+            if (onSelC) onSelC(clicked);
+
+            if (canControl(clicked)) {
+              isDraggingRef.current = true;
+              draggedTokenKeyRef.current = targetKey;
+              controls.enabled = false; // Desativa a rotação da câmera durante o arrasto do token
+            } else {
+              setTargetIdState(clicked.id);
+              if (onSelT) onSelT(clicked);
+            }
           }
         }
       }
+    };
 
-      // 3. Click on empty ground / floor mesh -> move selected combatant to clicked grid cell!
-      const activeSelId = selectedIdRef.current;
-      const selCombatant = combatantsRef.current.find((c) => c.id === activeSelId);
-      if (selCombatant && canUserControlCombatantRef.current(selCombatant)) {
-        const floorIntersects = raycaster.intersectObject(floorMesh);
-        if (floorIntersects.length > 0) {
-          const hitPt = floorIntersects[0].point;
-          const gridX = Math.max(-5, Math.min(5, Math.floor(hitPt.x / cellSize)));
-          const gridZ = Math.max(-5, Math.min(5, Math.floor(hitPt.z / cellSize)));
-          updateTokenPosition3D(selCombatant.id, undefined, undefined, gridX, gridZ);
-          setLocalPositions((prev) => ({ ...prev, [selCombatant.id]: { x: gridX, z: gridZ } }));
-          positionsRef.current[selCombatant.id] = { x: gridX, z: gridZ };
-          notifyCombatantUpdate(selCombatant.id, { x: gridX, z: gridZ });
-          return;
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!isDraggingRef.current || !draggedTokenKeyRef.current || !containerRef.current) return;
+
+      const rect = containerRef.current.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      if (raycaster.ray.intersectPlane(groundPlane.current, planeIntersectPoint.current)) {
+        const key = draggedTokenKeyRef.current;
+        // Snap ao grid 3D (passo de 1 unidade)
+        const snappedX = Math.round(planeIntersectPoint.current.x);
+        const snappedZ = Math.round(planeIntersectPoint.current.z);
+
+        const group = tokenMeshMapRef.current.get(key);
+        if (group) {
+          group.position.x = snappedX;
+          group.position.z = snappedZ;
         }
-      }
 
-      // Deselect rotation anchors when clicking empty background
-      setSelectedCombatantId(null);
-      selectedIdRef.current = null;
+        callbacksRef.current.setLocalPositions((prev) => ({
+          ...prev,
+          [key]: { x: snappedX, z: snappedZ },
+        }));
+
+        callbacksRef.current.updateTokenPosition3D(key, undefined, undefined, snappedX, snappedZ);
+      }
+    };
+
+    const handlePointerUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        draggedTokenKeyRef.current = null;
+        controls.enabled = true; // Reativa a câmera OrbitControls
+      }
     };
 
     const domElem = renderer.domElement;
-    domElem.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-    domElem.addEventListener('wheel', onWheel, { passive: false });
-    domElem.addEventListener('contextmenu', onContextMenu);
-    domElem.addEventListener('dblclick', onDblClick);
-    domElem.addEventListener('click', onClickCanvas);
+    domElem.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
 
-    const resolveCombatantModelUrl = (c: Combatant): string | null => {
-      // Para monstros: usar modelUrl direta ou detectar por nome
-      if (c.type !== 'player') {
-        if (c.modelUrl) return c.modelUrl;
-        return getMonsterModelUrl(c.name);
-      }
-
-      // 1. Se o combatente de jogador já possui modelUrl definido (ex: vindo de member.modelUrl do Supabase/membro)
-      if (c.modelUrl && (c.modelUrl.startsWith('/') || c.modelUrl.endsWith('.glb'))) {
-        return c.modelUrl;
-      }
-
-      // 2. Para jogadores sem modelUrl no combatente: consultar a ficha salva localmente
-      try {
-        const saved =
-          localStorage.getItem('masters_codex_character_sheets_v1') ||
-          localStorage.getItem('codex_character_sheets_v1');
-        if (saved) {
-          const sheets: any[] = JSON.parse(saved);
-          const cClean = c.name.split('(')[0].trim().toLowerCase();
-          const found = sheets.find((s: any) => {
-            if (!s.characterName) return false;
-            const sClean = s.characterName.split('(')[0].trim().toLowerCase();
-            return (
-              sClean === cClean ||
-              c.name.toLowerCase().includes(sClean) ||
-              s.characterName.toLowerCase().includes(cClean)
-            );
-          });
-          if (found?.modelUrl) return found.modelUrl;
-          if (found?.className) return getModelUrlByNameOrPath(found.className);
-        }
-      } catch (e) {}
-
-      // 3. Fallback: resolver por nome do personagem/classe
-      return getModelUrlByNameOrPath(c.name);
-    };
-
-    // Dynamic Pin Mesh Generator
-    const createPawnMesh = (c: Combatant) => {
-      const pinGroup = new THREE.Group();
-      pinGroup.userData.combatantId = c.id;
-      const isPlayer = c.type === 'player';
-      const baseColor = isPlayer ? 0x0284c7 : 0xe11d48;
-      const ringColor = isPlayer ? 0x38bdf8 : 0xf43f5e;
-
-      const modelUrl = resolveCombatantModelUrl(c);
-      if (modelUrl) {
-        // Ring indicator
-        const ringGeo = new THREE.TorusGeometry(0.58, 0.04, 16, 32);
-        const ringMat = new THREE.MeshBasicMaterial({ color: ringColor });
-        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-        ringMesh.rotation.x = Math.PI / 2;
-        ringMesh.position.y = 0.02;
-        pinGroup.add(ringMesh);
-
-        // Adjust scales
-        const isLeader = modelUrl.includes('Líder');
-        const isArcher = modelUrl.includes('Arqueiro');
-        let targetSize = 2.4; // default size
-        if (isLeader) targetSize = 2.1;
-        else if (isArcher) targetSize = 1.8;
-
-        // Load 3D model
-        const loader = new GLTFLoader();
-        const safeUrl = encodeURI(modelUrl);
-        loader.load(
-          safeUrl,
-          (gltf) => {
-            const model = gltf.scene;
-
-            // Auto-scale based on bounding box
-            const box = new THREE.Box3().setFromObject(model);
-            const size = box.getSize(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z);
-
-            const scale = maxDim > 0 ? (targetSize / maxDim) : 1;
-            model.scale.setScalar(scale);
-
-            // Center the model horizontally, and sit it on the floor
-            const center = box.getCenter(new THREE.Vector3());
-            model.position.x = -center.x * scale;
-            model.position.z = -center.z * scale;
-            model.position.y = -box.min.y * scale;
-
-            // Standardize shadow and clone material for isolated damage flash
-            model.traverse((child: any) => {
-              if (child.isMesh) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-                if (child.material) {
-                  child.material = child.material.clone();
-                  if (child.material.color) child.userData.originalColor = child.material.color.clone();
-                  if (child.material.emissive) child.userData.originalEmissive = child.material.emissive.clone();
-                }
-              }
-            });
-            pinGroup.add(model);
-          },
-          undefined,
-          (error) => console.error('Error loading model:', safeUrl, error)
-        );
-
-        return pinGroup;
-      }
-
-      const baseGeo = new THREE.CylinderGeometry(0.55, 0.6, 0.15, 32);
-      const baseMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.3, roughness: 0.8 });
-      const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-      baseMesh.position.y = 0.075;
-      baseMesh.castShadow = true;
-      pinGroup.add(baseMesh);
-
-      const ringGeo = new THREE.TorusGeometry(0.58, 0.04, 16, 32);
-      const ringMat = new THREE.MeshBasicMaterial({ color: ringColor });
-      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-      ringMesh.rotation.x = Math.PI / 2;
-      ringMesh.position.y = 0.15;
-      pinGroup.add(ringMesh);
-
-      const bodyGeo = new THREE.ConeGeometry(0.35, 0.9, 32);
-      const bodyMat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.7, metalness: 0.2 });
-      const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-      bodyMesh.position.y = 0.6;
-      bodyMesh.castShadow = true;
-      pinGroup.add(bodyMesh);
-
-      const headGeo = new THREE.SphereGeometry(0.25, 32, 32);
-      const headMesh = new THREE.Mesh(headGeo, bodyMat);
-      headMesh.position.y = 1.15;
-      headMesh.castShadow = true;
-      pinGroup.add(headMesh);
-
-      return pinGroup;
-    };
-
-    // HTML Overlay Container for Combat Text
-    const overlayDiv = document.createElement('div');
-    overlayDiv.style.position = 'absolute';
-    overlayDiv.style.top = '0';
-    overlayDiv.style.left = '0';
-    overlayDiv.style.width = '100%';
-    overlayDiv.style.height = '100%';
-    overlayDiv.style.pointerEvents = 'none';
-    overlayDiv.style.overflow = 'hidden';
-    container.appendChild(overlayDiv);
-
-    const combatEvents: { id: string, pinGroup: THREE.Group, type: 'damage'|'heal', amount: number, age: number, el: HTMLDivElement }[] = [];
-
-    const handleCombatText = (e: Event) => {
-      const customEvt = e as CustomEvent;
-      const { combatantId, type, amount } = customEvt.detail;
-      const pinGroup = meshesMap[combatantId];
-      if (!pinGroup) return;
-
-      if (type === 'damage') {
-         pinGroup.userData.damageTimer = 1.0;
-      } else {
-         pinGroup.userData.healTimer = 1.0;
-      }
-
-      const el = document.createElement('div');
-      el.style.position = 'absolute';
-      el.style.fontWeight = '900';
-      el.style.fontFamily = 'monospace';
-      el.style.fontSize = '24px';
-      el.style.textShadow = '0 2px 4px rgba(0,0,0,0.8), 0 0 2px rgba(0,0,0,1)';
-      el.style.color = type === 'damage' ? '#f43f5e' : '#10b981';
-      el.textContent = (type === 'damage' ? '-' : '+') + amount;
-      overlayDiv.appendChild(el);
-
-      combatEvents.push({ id: Math.random().toString(), pinGroup, type, amount, age: 0, el });
-    };
-    window.addEventListener('masters_codex_combat_text', handleCombatText);
-
-    // Animation Loop (60 FPS)
-    let animationFrameId: number;
+    // Animation loop
+    let animId: number;
     const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
-
-      const currentList = combatantsRef.current;
-      const currentPosMap = positionsRef.current;
-      const turnIdx = turnIdxRef.current;
-
-      // Update Sky Sphere & Environmental Lighting based on timeOfDay + fog/rain toggles
-      updateEnvironment(timeOfDayRef.current, hasFogRef.current, hasRainRef.current);
-
-      // Weather FX Animation (Rain + Lightning) - driven by hasRain toggle
-      const isRainOn = hasRainRef.current;
-      rainParticles.visible = isRainOn;
-
-      if (isRainOn) {
-        const posAttr = rainGeo.attributes.position as THREE.BufferAttribute;
-        const arr = posAttr.array as Float32Array;
-
-        for (let i = 0; i < rainParticleCount; i++) {
-          arr[i * 3 + 1] -= rainSpeeds[i];
-          arr[i * 3 + 2] += 0.04;
-          if (arr[i * 3 + 1] < 0) {
-            arr[i * 3 + 1] = 18;
-            arr[i * 3] = (Math.random() - 0.5) * 30;
-            arr[i * 3 + 2] = (Math.random() - 0.5) * 30;
-          }
-        }
-        posAttr.needsUpdate = true;
-
-        // Random Lightning Flash (Relâmpago)
-        lightningCounter++;
-        if (lightningCounter > 180 + Math.random() * 200) {
-          lightningCounter = 0;
-          dirLight.intensity = 16.0;
-          dirLight.color.set(0xe0f2fe);
-          ambientLight.intensity = 10.0;
-          setTimeout(() => {
-            dirLight.intensity = 1.0;
-            dirLight.color.set(0x38bdf8);
-            ambientLight.intensity = 1.0;
-          }, 75);
-        }
+      animId = requestAnimationFrame(animate);
+      controls.update();
+      if (skyDomeRef.current) {
+        const { timeOfDayHour: h, timeOfDayPreset: p, hasFog: f, hasRain: r } = envRef.current;
+        skyDomeRef.current.update(h, p, f, r);
       }
-
-      // Sync 3D Pin Meshes with current combatants
-      currentList.forEach((c, idx) => {
-        let pinGroup = meshesMap[c.id];
-
-        const targetModelUrl = resolveCombatantModelUrl(c);
-
-        // Se o peão 3D já existia mas o modelo foi alterado pelo jogador, remove o peão antigo e recarrega o novo
-        let previousPosition: THREE.Vector3 | null = null;
-        if (pinGroup && pinGroup.userData.loadedModelUrl !== targetModelUrl) {
-          previousPosition = pinGroup.position.clone();
-          pinsGroup.remove(pinGroup);
-          delete meshesMap[c.id];
-          pinGroup = undefined as any;
-        }
-
-        if (!pinGroup) {
-          pinGroup = createPawnMesh(c);
-          pinGroup.userData.loadedModelUrl = targetModelUrl;
-          if (previousPosition) {
-            pinGroup.position.copy(previousPosition);
-          } else {
-            const gridPos = currentPosMap[c.id] || (c.type === 'player' ? { x: (idx % 5) - 2, z: 2 } : { x: (idx % 4) - 2, z: -2 - Math.floor(idx / 4) });
-            // Center inside cell: (gridX + 0.5) * cellSize
-            pinGroup.position.set((gridPos.x + 0.5) * cellSize, 0, (gridPos.z + 0.5) * cellSize);
-          }
-          pinsGroup.add(pinGroup);
-          meshesMap[c.id] = pinGroup;
-        }
-
-        // Dynamically update Turn Halo Ring indicator on active turn combatant
-        const isCurrentTurn = idx === turnIdx;
-        let haloChild = pinGroup.getObjectByName('turnHalo');
-
-        if (isCurrentTurn && !haloChild) {
-          const haloGeo = new THREE.RingGeometry(0.65, 0.75, 32);
-          const haloMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, side: THREE.DoubleSide });
-          haloChild = new THREE.Mesh(haloGeo, haloMat);
-          haloChild.name = 'turnHalo';
-          haloChild.rotation.x = Math.PI / 2;
-          haloChild.position.y = 0.02;
-          pinGroup.add(haloChild);
-        } else if (!isCurrentTurn && haloChild) {
-          pinGroup.remove(haloChild);
-        }
-
-        // Dynamically update Target Reticle ring indicator on targeted combatant
-        const isTargeted = c.id === targetIdRef.current;
-        let targetReticle = pinGroup.getObjectByName('targetReticle') as THREE.Mesh;
-
-        if (isTargeted && !targetReticle) {
-          const reticleGeo = new THREE.RingGeometry(0.72, 0.85, 32);
-          const reticleMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e, side: THREE.DoubleSide });
-          targetReticle = new THREE.Mesh(reticleGeo, reticleMat);
-          targetReticle.name = 'targetReticle';
-          targetReticle.rotation.x = Math.PI / 2;
-          targetReticle.position.y = 0.03;
-          pinGroup.add(targetReticle);
-        } else if (!isTargeted && targetReticle) {
-          pinGroup.remove(targetReticle);
-        }
-
-        if (targetReticle) {
-          targetReticle.rotation.z += 0.02;
-        }
-
-        // Dynamically update 3D Rotation Anchors if selected and user has permission
-        const isSelected = selectedIdRef.current === c.id;
-        const canControl = canUserControlCombatantRef.current(c);
-        let rotationAnchors = pinGroup.getObjectByName('rotationAnchorsGroup');
-
-        if (isSelected && canControl && !rotationAnchors) {
-          rotationAnchors = new THREE.Group();
-          rotationAnchors.name = 'rotationAnchorsGroup';
-
-          // Base glowing rotation ring
-          const ringGeo = new THREE.TorusGeometry(0.85, 0.04, 16, 64);
-          const ringMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, side: THREE.DoubleSide });
-          const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-          ringMesh.rotation.x = Math.PI / 2;
-          ringMesh.position.y = 0.04;
-          rotationAnchors.add(ringMesh);
-
-          // Left Anchor Handle (CCW ↺ -45°)
-          const anchorGeo = new THREE.ConeGeometry(0.14, 0.32, 16);
-          const anchorMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
-          const leftAnchor = new THREE.Mesh(anchorGeo, anchorMat);
-          leftAnchor.position.set(-0.85, 0.08, 0);
-          leftAnchor.rotation.z = Math.PI / 2;
-          leftAnchor.userData = { isRotationAnchor: true, action: 'rotate_left', combatantId: c.id };
-          rotationAnchors.add(leftAnchor);
-
-          // Right Anchor Handle (CW ↻ +45°)
-          const rightAnchor = new THREE.Mesh(anchorGeo, anchorMat);
-          rightAnchor.position.set(0.85, 0.08, 0);
-          rightAnchor.rotation.z = -Math.PI / 2;
-          rightAnchor.userData = { isRotationAnchor: true, action: 'rotate_right', combatantId: c.id };
-          rotationAnchors.add(rightAnchor);
-
-          // Front Direction Pointer (Arrow pointing forward in pawn heading)
-          const pointerGeo = new THREE.ConeGeometry(0.12, 0.28, 16);
-          const pointerMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
-          const pointerMesh = new THREE.Mesh(pointerGeo, pointerMat);
-          pointerMesh.name = 'frontPointer';
-          pointerMesh.position.set(0, 0.08, 0.9);
-          pointerMesh.rotation.x = Math.PI / 2;
-          rotationAnchors.add(pointerMesh);
-
-          pinGroup.add(rotationAnchors);
-        } else if ((!isSelected || !canControl) && rotationAnchors) {
-          pinGroup.remove(rotationAnchors);
-        }
-
-        if (rotationAnchors) {
-          const pointer = rotationAnchors.getObjectByName('frontPointer');
-          if (pointer) {
-            pointer.scale.setScalar(1 + Math.sin(Date.now() * 0.007) * 0.15);
-          }
-        }
-
-        // Smoothly lerp pawn rotation.y towards target angle
-        const targetDeg = rotationsRef.current[c.id] ?? tokenRotations3DRef.current[c.id] ?? 0;
-        const targetRad = THREE.MathUtils.degToRad(targetDeg);
-
-        let radDiff = targetRad - pinGroup.rotation.y;
-        radDiff = Math.atan2(Math.sin(radDiff), Math.cos(radDiff));
-        pinGroup.rotation.y += radDiff * 0.25;
-
-        // Smooth Lerp to cell center (gridX + 0.5) * cellSize
-        const gridPos = currentPosMap[c.id] || (c.type === 'player' ? { x: (idx % 5) - 2, z: 2 } : { x: (idx % 4) - 2, z: -2 - Math.floor(idx / 4) });
-        const targetX = (gridPos.x + 0.5) * cellSize;
-        const targetZ = (gridPos.z + 0.5) * cellSize;
-
-        pinGroup.position.x += (targetX - pinGroup.position.x) * 0.25;
-        pinGroup.position.z += (targetZ - pinGroup.position.z) * 0.25;
-
-        // Visual Effects: Damage Shake & Red Flash Tint for ALL models (Procedural & GLTF/GLB)
-        if (pinGroup.userData.damageTimer > 0) {
-           pinGroup.userData.damageTimer -= 0.05;
-           const shake = Math.sin(pinGroup.userData.damageTimer * 20) * 0.15;
-           pinGroup.position.x += shake;
-
-           const flashFactor = Math.sin(pinGroup.userData.damageTimer * Math.PI);
-           const targetRed = new THREE.Color(0xff0000);
-
-           pinGroup.traverse((child: any) => {
-             if (child.isMesh && child.material) {
-               // Clone material on the fly if not cloned yet
-               if (!child.userData.isMaterialCloned) {
-                 child.material = child.material.clone();
-                 child.userData.isMaterialCloned = true;
-               }
-
-               if (!child.userData.originalColor && child.material.color) {
-                 child.userData.originalColor = child.material.color.clone();
-               }
-               if (!child.userData.originalEmissive && child.material.emissive) {
-                 child.userData.originalEmissive = child.material.emissive.clone();
-               }
-
-               // 1. Emissive glow for PBR/Standard materials (GLTF GLB)
-               if (child.material.emissive) {
-                 child.material.emissive.setRGB(0.9 * flashFactor, 0, 0);
-               }
-
-               // 2. Color lerp tint for Basic/Standard materials
-               if (child.material.color && child.userData.originalColor) {
-                 child.material.color.copy(child.userData.originalColor).lerp(targetRed, flashFactor * 0.75);
-               }
-             }
-           });
-        } else if (pinGroup.userData.damageTimer <= 0 && pinGroup.userData.damageTimer !== -999) {
-           pinGroup.userData.damageTimer = -999;
-           pinGroup.traverse((child: any) => {
-             if (child.isMesh && child.material) {
-               if (child.material.emissive && child.userData.originalEmissive) {
-                 child.material.emissive.copy(child.userData.originalEmissive);
-               }
-               if (child.material.color && child.userData.originalColor) {
-                 child.material.color.copy(child.userData.originalColor);
-               }
-             }
-           });
-        }
-
-        // Visual Effects: Heal Aura
-        if (pinGroup.userData.healTimer > 0) {
-           pinGroup.userData.healTimer -= 0.025;
-           let aura = pinGroup.getObjectByName('healAura') as THREE.Mesh;
-           if (!aura) {
-             const auraGeo = new THREE.CylinderGeometry(0.8, 0.8, 3, 32, 1, true);
-             const auraMat = new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
-             aura = new THREE.Mesh(auraGeo, auraMat);
-             aura.name = 'healAura';
-             aura.position.y = 1.5;
-             pinGroup.add(aura);
-           }
-           const aMat = aura.material as THREE.MeshBasicMaterial;
-           aMat.opacity = pinGroup.userData.healTimer * 0.8;
-           aura.scale.setScalar(1 + (1 - pinGroup.userData.healTimer) * 0.5);
-        } else if (pinGroup.userData.healTimer <= 0) {
-           const aura = pinGroup.getObjectByName('healAura');
-           if (aura) {
-             pinGroup.remove(aura);
-           }
-        }
-      });
-
-      // Handle Floating Texts
-      const tempV = new THREE.Vector3();
-      for (let i = combatEvents.length - 1; i >= 0; i--) {
-        const ev = combatEvents[i];
-        ev.age += 0.016; 
-        if (ev.age > 1.5) {
-          ev.el.remove();
-          combatEvents.splice(i, 1);
-          continue;
-        }
-
-        tempV.copy(ev.pinGroup.position);
-        tempV.y += 2.5 + ev.age * 2.5; 
-        tempV.project(camera);
-
-        const x = (tempV.x * .5 + .5) * container.clientWidth;
-        const y = (tempV.y * -.5 + .5) * container.clientHeight;
-
-        ev.el.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${1 + Math.sin(ev.age * Math.PI)*0.3})`;
-        ev.el.style.opacity = (1.5 - ev.age).toString();
-      }
-
-      // Remove obsolete meshes
-      Object.keys(meshesMap).forEach((id) => {
-        if (!currentList.some((c) => c.id === id)) {
-          pinsGroup.remove(meshesMap[id]);
-          delete meshesMap[id];
-        }
-      });
-
+      if (rainSysRef.current) rainSysRef.current.update();
       renderer.render(scene, camera);
     };
     animate();
 
-    const handleResize = () => {
-      if (!containerRef.current) return;
-      const w = containerRef.current.clientWidth;
-      const h = containerRef.current.clientHeight;
-      if (w === 0 || h === 0) return;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    };
-    window.addEventListener('resize', handleResize);
-
-    const resizeObserver = new ResizeObserver(() => handleResize());
+    // Resize Observer para responsividade em modais e abas
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (!entries || entries.length === 0) return;
+      const entry = entries[0];
+      const w = entry.contentRect.width;
+      const h = entry.contentRect.height;
+      if (w > 0 && h > 0) {
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      }
+    });
     resizeObserver.observe(container);
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      cancelAnimationFrame(animId);
       resizeObserver.disconnect();
-      domElem.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-      domElem.removeEventListener('wheel', onWheel);
-      domElem.removeEventListener('contextmenu', onContextMenu);
-      domElem.removeEventListener('dblclick', onDblClick);
-      window.removeEventListener('resize', handleResize);
-
-      if (container.contains(renderer.domElement)) {
-        container.removeChild(renderer.domElement);
+      domElem.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      controls.dispose();
+      if (skyDomeRef.current) {
+        skyDomeRef.current.dispose();
+        skyDomeRef.current = null;
       }
-
-      renderer.forceContextLoss();
+      if (rainSysRef.current) {
+        rainSysRef.current.dispose();
+        rainSysRef.current = null;
+      }
       renderer.dispose();
+      disposeHierarchy(scene);
+      tokenMeshMapRef.current.clear();
+      tokenGroupRef.current = null;
+      sceneRef.current = null;
+      cameraRef.current = null;
+      controlsRef.current = null;
+      if (container && domElem && container.contains(domElem)) {
+        container.removeChild(domElem);
+      }
     };
   }, []);
 
-  const activeCombatant = combatants[currentTurnIndex];
-  const selectedCombatant = combatants.find((c) => c.id === selectedCombatantId);
-  const targetCombatantForMove = selectedCombatant || activeCombatant;
+  // 2. Update Scene Environment (Lighting / Fog / Rain / SkyDome) dynamically
+  useEffect(() => {
+    if (!sceneRef.current) return;
 
-  const handleManualMove = (combatantId: string, dx: number, dz: number) => {
-    const curPos = positionsRef.current[combatantId] || { x: 0, z: 0 };
-    const nextX = Math.max(-5, Math.min(5, curPos.x + dx));
-    const nextZ = Math.max(-5, Math.min(5, curPos.z + dz));
+    const env = applySceneEnvironment(sceneRef.current, timeOfDayHour, timeOfDayPreset, hasFog, hasRain);
 
-    updateTokenPosition3D(combatantId, undefined, undefined, nextX, nextZ);
-    setLocalPositions((prev) => ({ ...prev, [combatantId]: { x: nextX, z: nextZ } }));
-    positionsRef.current[combatantId] = { x: nextX, z: nextZ };
-    notifyCombatantUpdate(combatantId, { x: nextX, z: nextZ });
+    // Dynamically adjust ambient light intensity and color
+    if (ambientLightRef.current) {
+      ambientLightRef.current.intensity = env.ambientIntensity;
+    }
+
+    // Dynamically adjust directional light intensity, color, and sun angle
+    if (dirLightRef.current) {
+      dirLightRef.current.intensity = env.sunIntensity;
+      dirLightRef.current.color.set(env.sunColor);
+
+      // Procedural Sun angle position based on the timeOfDayHour prop
+      const angle = ((timeOfDayHour - 6) % 24) * (Math.PI / 12); // peak at 12pm, sunrise at 6am
+      const x = 18 * Math.cos(angle);
+      const y = 18 * Math.sin(angle);
+      dirLightRef.current.position.set(x, Math.max(3, y), 10);
+    }
+
+    if (skyDomeRef.current) {
+      skyDomeRef.current.update(timeOfDayHour, timeOfDayPreset, hasFog, hasRain);
+    }
+
+    if (hasRain || timeOfDayPreset === 'storm') {
+      if (!rainSysRef.current) {
+        rainSysRef.current = createRainParticleSystem(sceneRef.current);
+      }
+    } else if (rainSysRef.current) {
+      rainSysRef.current.dispose();
+      rainSysRef.current = null;
+    }
+  }, [timeOfDayHour, timeOfDayPreset, hasFog, hasRain]);
+
+  // 3. Sync token meshes on state updates
+  useEffect(() => {
+    syncTokens();
+  }, [syncTokens]);
+
+  // Camera preset switcher
+  const handleSelectCameraPreset = (presetKey: 'tactical' | 'cinematic' | 'topDown') => {
+    const preset = DEFAULT_CAMERA_PRESETS[presetKey];
+    if (preset && cameraRef.current && controlsRef.current) {
+      cameraRef.current.position.set(...preset.position);
+      controlsRef.current.target.set(...preset.lookAt);
+      controlsRef.current.update();
+    }
   };
 
+  const selectedCombatant = combatants.find(
+    (c) => (c.id || c.name) === selectedCombatantId
+  );
+  const selectedTarget = combatants.find(
+    (c) => c.id === targetIdState
+  );
+  const selectedRotation = selectedCombatantId
+    ? localRotations[selectedCombatantId] || 0
+    : 0;
+
   return (
-    <div className="w-full h-full relative bg-[#0a0d14] flex flex-col overflow-hidden select-none">
-      {/* Top Left Grid Metric Badge */}
-      <div className="absolute top-3 left-3 z-20 pointer-events-auto bg-[#0f172a]/90 backdrop-blur-md border border-[#2a3449] px-3 py-1.5 rounded-xl text-xs font-mono font-bold text-amber-400 flex items-center gap-2 shadow-lg">
-        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-        <span>GRID 3D (1,5m / 5ft)</span>
-      </div>
+    <div className="relative w-full h-full min-h-[450px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800 select-none">
+      <div ref={containerRef} className="w-full h-full absolute inset-0 cursor-grab active:cursor-grabbing" />
 
-      {/* Placement Phase Top Banner */}
-      {isPlacementPhase && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex items-center gap-3 px-4 py-2 bg-slate-950/90 backdrop-blur-md border border-amber-500/50 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-top-3 duration-300 max-w-xl">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-amber-300 uppercase tracking-wider font-mono">
-                {setupMode === 'player_ambush'
-                  ? 'Fase de Posicionamento - Emboscada dos Jogadores 🏹'
-                  : setupMode === 'player_surprised'
-                  ? 'Fase de Posicionamento - Surpresa ⚡'
-                  : 'Fase de Posicionamento Inicial ⚔️'}
-              </span>
-              <span className="text-[10px] text-slate-400">
-                {setupMode === 'player_ambush'
-                  ? 'Jogadores: Escolham suas posições de spawn no grid!'
-                  : setupMode === 'player_surprised'
-                  ? 'Jogadores surpreendidos! O Mestre está organizando as peças.'
-                  : 'Arraste os personagens e monstros para ajustar o encontro.'}
-              </span>
-            </div>
-          </div>
+      {/* Modular Battle Controls Toolbar (Top & Bottom HUD Overlay) */}
+      <BattleControlsToolbar
+        isDm={isDm}
+        isPlacementPhase={isPlacementPhase}
+        selectedCombatant={selectedCombatant}
+        selectedTarget={selectedTarget}
+        selectedRotation={selectedRotation}
+        directionLabel={getDirectionLabel(selectedRotation)}
+        canControlSelected={selectedCombatant ? canUserControlCombatant(selectedCombatant) : false}
+        timeOfDayHour={timeOfDayHour}
+        timeOfDayPreset={timeOfDayPreset}
+        hasFog={hasFog}
+        hasRain={hasRain}
+        onRotateSelected={handleRotateSelected}
+        onSelectCameraPreset={handleSelectCameraPreset}
+        onEnvironmentChange={onEnvironmentChange}
+        onTimeOfDayChange={onTimeOfDayChange}
+        onConfirmPlacement={onConfirmPlacement}
+        onAttackTarget={(target) => {
+          if (onSelectTarget) onSelectTarget(target);
+        }}
+        onToggleHelp={() => setShowHelpModal(true)}
+      />
 
-          {(roleMode === 'dm' || userRole === 'dm') && onConfirmPlacement && (
-            <button
-              type="button"
-              onClick={onConfirmPlacement}
-              className="ml-2 px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer whitespace-nowrap"
-            >
-              Confirmar e Iniciar Rodada 1
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Rotation Anchors HUD Overlay for Selected Combatant */}
-      {interactive && selectedCombatant && canUserControlCombatant(selectedCombatant) && (
-        <div className="absolute top-14 left-3 z-30 pointer-events-auto bg-[#0f141d]/95 backdrop-blur-md border border-amber-500/40 p-3 rounded-2xl flex flex-col gap-2.5 shadow-2xl animate-in fade-in slide-in-from-left-2 duration-200 min-w-[270px]">
-          <div className="flex items-center justify-between gap-3 border-b border-[#2a3449] pb-2">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-              <span className="text-xs font-bold text-amber-300 font-mono uppercase tracking-wider">
-                Girar: <span className="text-white font-black">{selectedCombatant.name}</span>
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSelectedCombatantId(null)}
-              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-[#1e293b] transition-all cursor-pointer"
-              title="Fechar Controle de Rotação"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between text-xs font-mono bg-[#161d2f]/90 px-2.5 py-1.5 rounded-xl border border-[#2a3449]">
-            <span className="text-slate-400 font-semibold">Orientação Atual:</span>
-            <span className="font-bold text-cyan-300">
-              {Math.round(localRotations[selectedCombatant.id] ?? tokenRotations3D[selectedCombatant.id] ?? 0)}° (
-              {getDirectionLabel(localRotations[selectedCombatant.id] ?? tokenRotations3D[selectedCombatant.id] ?? 0)})
-            </span>
-          </div>
-
-          <div className="grid grid-cols-4 gap-1.5 pt-0.5">
-            <button
-              type="button"
-              onClick={() => handleRotatePawn(selectedCombatant.id, -45)}
-              className="p-2 rounded-xl bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] hover:border-amber-400 text-amber-300 text-xs font-bold font-mono transition-all flex flex-col items-center justify-center gap-1 cursor-pointer"
-              title="Girar 45° para Esquerda (Anti-Horário)"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span className="text-[10px]">-45°</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleRotatePawn(selectedCombatant.id, 45)}
-              className="p-2 rounded-xl bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] hover:border-amber-400 text-amber-300 text-xs font-bold font-mono transition-all flex flex-col items-center justify-center gap-1 cursor-pointer"
-              title="Girar 45° para Direita (Horário)"
-            >
-              <RotateCw className="w-4 h-4" />
-              <span className="text-[10px]">+45°</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSetPawnAngle(selectedCombatant.id, 180)}
-              className="p-2 rounded-xl bg-[#161c28] hover:bg-cyan-500 hover:text-slate-950 border border-[#2a3449] hover:border-cyan-400 text-cyan-300 text-xs font-bold font-mono transition-all flex flex-col items-center justify-center gap-1 cursor-pointer"
-              title="Inverter direção (180°)"
-            >
-              <span className="text-xs">🔄</span>
-              <span className="text-[10px]">180°</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSetPawnAngle(selectedCombatant.id, 0)}
-              className="p-2 rounded-xl bg-[#161c28] hover:bg-emerald-500 hover:text-slate-950 border border-[#2a3449] hover:border-emerald-400 text-emerald-300 text-xs font-bold font-mono transition-all flex flex-col items-center justify-center gap-1 cursor-pointer"
-              title="Resetar para Frente / Norte (0°)"
-            >
-              <span className="text-xs">▲</span>
-              <span className="text-[10px]">0° (N)</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Top Right Environmental Control Menu (Gear Button + Collapsible Panel) */}
-      <div className="absolute top-3 right-3 z-30 pointer-events-auto flex flex-col items-end">
-        {/* Gear Toggle Button (Catraca) */}
-        <button
-          type="button"
-          onClick={() => setIsEnvMenuOpen(!isEnvMenuOpen)}
-          className={`p-2 px-3 rounded-xl border backdrop-blur-md shadow-xl flex items-center gap-2 transition-all cursor-pointer ${
-            isEnvMenuOpen
-              ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold'
-              : 'bg-[#0f172a]/90 hover:bg-[#1e293b] text-amber-400 border-[#2a3449] hover:border-amber-400/60'
-          }`}
-          title="Configurações de Ambiente (Clima & Hora do Dia)"
-        >
-          <Settings className={`w-4 h-4 transition-transform duration-300 ${isEnvMenuOpen ? 'rotate-90 text-slate-950' : ''}`} />
-          <span className="text-xs font-mono font-bold">Clima & Hora</span>
-        </button>
-
-        {/* Collapsible Environmental Settings Card */}
-        {isEnvMenuOpen && (
-          <div className="mt-2 p-3.5 bg-[#0f172a]/95 backdrop-blur-md border border-amber-500/40 rounded-2xl shadow-2xl flex flex-col gap-3 min-w-[290px] sm:min-w-[330px] animate-in fade-in slide-in-from-top-2 duration-200">
-            {/* Card Header */}
-            <div className="flex items-center justify-between border-b border-[#2a3449] pb-2">
-              <span className="text-xs font-bold text-amber-400 uppercase font-mono tracking-wider flex items-center gap-1.5">
-                <Sun className="w-3.5 h-3.5 text-amber-400" />
-                Controle de Ambiente
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsEnvMenuOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-[#1e293b] transition-all cursor-pointer"
-                title="Fechar"
-              >
+      {/* Help Modal */}
+      {showHelpModal && (
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-md w-full text-slate-200 space-y-3 shadow-2xl animate-fade-in">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h3 className="font-bold text-sm text-sky-400 flex items-center gap-2">
+                <HelpCircle className="w-4 h-4" /> Controles do Grid 3D Tático
+              </h3>
+              <button onClick={() => setShowHelpModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Time of Day Section (Hours Slider) */}
-            <div className="flex flex-col gap-2.5 bg-[#161d2f]/90 p-2.5 rounded-xl border border-[#2a3449]">
-              <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-slate-400 font-semibold flex items-center gap-1">
-                  Hora do Dia:
-                </span>
-                <span className="font-bold text-amber-300 flex items-center gap-1">
-                  {timeOfDay >= 6 && timeOfDay < 18 ? (
-                    <Sun className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                  ) : (
-                    <Moon className="w-3.5 h-3.5 text-cyan-300" />
-                  )}
-                  {Math.floor(timeOfDay).toString().padStart(2, '0')}:
-                  {Math.floor((timeOfDay % 1) * 60).toString().padStart(2, '0')}h
-                </span>
-              </div>
-
-              <input
-                type="range"
-                min="0"
-                max="24"
-                step="0.25"
-                value={timeOfDay}
-                onChange={(e) => handleUpdateEnv(parseFloat(e.target.value), hasFog, hasRain)}
-                className="w-full h-1.5 bg-[#1e293b] rounded-lg appearance-none cursor-pointer accent-amber-500 hover:accent-amber-400 transition-all"
-                title="Ajustar Hora do Dia (0h às 24h)"
-              />
-
-              {/* Time Presets (Apenas atalhos de hora) */}
-              <div className="grid grid-cols-4 gap-1 pt-1">
-                <button
-                  type="button"
-                  onClick={() => handleUpdateEnv(6, hasFog, hasRain)}
-                  className={`p-1.5 rounded-lg text-[11px] font-semibold transition-all flex flex-col items-center justify-center gap-1 ${
-                    timeOfDay === 6
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#20293d] border border-transparent'
-                  }`}
-                  title="Alvorada (06:00)"
-                >
-                  <Sunrise className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-[10px]">06:00</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleUpdateEnv(12, hasFog, hasRain)}
-                  className={`p-1.5 rounded-lg text-[11px] font-semibold transition-all flex flex-col items-center justify-center gap-1 ${
-                    timeOfDay === 12
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#20293d] border border-transparent'
-                  }`}
-                  title="Meio-Dia (12:00)"
-                >
-                  <Sun className="w-3.5 h-3.5 text-yellow-400" />
-                  <span className="text-[10px]">12:00</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleUpdateEnv(18, hasFog, hasRain)}
-                  className={`p-1.5 rounded-lg text-[11px] font-semibold transition-all flex flex-col items-center justify-center gap-1 ${
-                    timeOfDay === 18
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#20293d] border border-transparent'
-                  }`}
-                  title="Pôr do Sol (18:00)"
-                >
-                  <Sunset className="w-3.5 h-3.5 text-orange-400" />
-                  <span className="text-[10px]">18:00</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleUpdateEnv(24, hasFog, hasRain)}
-                  className={`p-1.5 rounded-lg text-[11px] font-semibold transition-all flex flex-col items-center justify-center gap-1 ${
-                    timeOfDay === 24 || timeOfDay === 0
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#20293d] border border-transparent'
-                  }`}
-                  title="Noite (24:00)"
-                >
-                  <Moon className="w-3.5 h-3.5 text-cyan-300" />
-                  <span className="text-[10px]">24:00</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Weather & FX Independent Toggles */}
-            <div className="flex flex-col gap-2 border-t border-[#2a3449] pt-2.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase font-mono tracking-wider">
-                Efeitos Climáticos Independentes:
-              </span>
-              <div className="grid grid-cols-2 gap-2">
-                {/* Fog Toggle */}
-                <button
-                  type="button"
-                  onClick={() => handleUpdateEnv(timeOfDay, !hasFog, hasRain)}
-                  className={`p-2 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
-                    hasFog
-                      ? 'bg-slate-700/50 border-slate-400 text-slate-100 font-bold shadow-md'
-                      : 'bg-[#161d2f]/80 border-[#2a3449] text-slate-400 hover:bg-[#20293d]'
-                  }`}
-                  title="Ativar/Desativar Neblina Volumétrica"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <CloudFog className={`w-4 h-4 ${hasFog ? 'text-slate-200 animate-pulse' : 'text-slate-500'}`} />
-                    <span className="text-xs font-mono">Nevoeiro</span>
-                  </div>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono ${
-                    hasFog ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-500'
-                  }`}>
-                    {hasFog ? 'LIGADO' : 'DESLIGADO'}
-                  </span>
-                </button>
-
-                {/* Rain & Lightning Toggle */}
-                <button
-                  type="button"
-                  onClick={() => handleUpdateEnv(timeOfDay, hasFog, !hasRain)}
-                  className={`p-2 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
-                    hasRain
-                      ? 'bg-cyan-950/60 border-cyan-400 text-cyan-200 font-bold shadow-md'
-                      : 'bg-[#161d2f]/80 border-[#2a3449] text-slate-400 hover:bg-[#20293d]'
-                  }`}
-                  title="Ativar/Desativar Chuva 3D & Relâmpagos"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <CloudRain className={`w-4 h-4 ${hasRain ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}`} />
-                    <span className="text-xs font-mono">Chuva ⚡</span>
-                  </div>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono ${
-                    hasRain ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-slate-800 text-slate-500'
-                  }`}>
-                    {hasRain ? 'LIGADO' : 'DESLIGADO'}
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 3D WebGL Canvas Container */}
-      <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
-
-      {/* Bottom Manual Move Overlay for Selected or Active Combatant */}
-      {interactive && targetCombatantForMove && canUserControlCombatant(targetCombatantForMove) && (
-        <div className="absolute bottom-3 left-3 z-10 bg-[#0f141d]/90 backdrop-blur-md border border-amber-500/30 p-2.5 rounded-2xl flex items-center gap-3 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200">
-          <div className="text-[11px] font-bold text-slate-300 font-mono pl-1">
-            Mover <span className="text-amber-400 font-black">{targetCombatantForMove.name}</span> (1,5m):
-          </div>
-
-          <div className="grid grid-cols-3 gap-1 w-24">
-            <div />
-            <button
-              type="button"
-              onClick={() => handleManualMove(targetCombatantForMove.id, 0, -1)}
-              className="p-1.5 bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] hover:border-amber-400 rounded-lg text-slate-200 text-xs font-bold transition-all text-center cursor-pointer"
-              title="Mover 1,5m Norte (Frente)"
-            >
-              ▲
-            </button>
-            <div />
-            <button
-              type="button"
-              onClick={() => handleManualMove(targetCombatantForMove.id, -1, 0)}
-              className="p-1.5 bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] hover:border-amber-400 rounded-lg text-slate-200 text-xs font-bold transition-all text-center cursor-pointer"
-              title="Mover 1,5m Oeste (Esquerda)"
-            >
-              ◀
-            </button>
-            <button
-              type="button"
-              onClick={() => handleManualMove(targetCombatantForMove.id, 0, 1)}
-              className="p-1.5 bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] hover:border-amber-400 rounded-lg text-slate-200 text-xs font-bold transition-all text-center cursor-pointer"
-              title="Mover 1,5m Sul (Trás)"
-            >
-              ▼
-            </button>
-            <button
-              type="button"
-              onClick={() => handleManualMove(targetCombatantForMove.id, 1, 0)}
-              className="p-1.5 bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] hover:border-amber-400 rounded-lg text-slate-200 text-xs font-bold transition-all text-center cursor-pointer"
-              title="Mover 1,5m Leste (Direita)"
-            >
-              ▶
-            </button>
+            <ul className="text-xs space-y-2 text-slate-300">
+              <li>• <strong className="text-white">Arrastar Personagem:</strong> Clique no token do seu personagem e arraste para posicionar no grid 3D.</li>
+              <li>• <strong className="text-white">Girar Direção:</strong> Selecione o personagem e use os botões 45° no painel inferior para definir a direção de frente.</li>
+              <li>• <strong className="text-white">Selecionar Alvo de Ataque:</strong> Clique na miniatura de um inimigo para marcá-lo como alvo e ativar ações de combate.</li>
+              <li>• <strong className="text-white">Mover Câmera:</strong> Arraste o mouse no espaço vazio do grid para girar a câmera.</li>
+              <li>• <strong className="text-white">Zoom:</strong> Use a roda do mouse (scroll) para aproximar ou afastar.</li>
+              <li>• <strong className="text-white">Presets de Câmera & Clima:</strong> Alterne entre visão Tática, Cinemática ou Top-Down e mude a iluminação/chuva pelo menu superior.</li>
+            </ul>
           </div>
         </div>
       )}
-
-      {/* Bottom Right Help / Controls Tooltip */}
-      <div className="absolute bottom-3 right-3 z-20 group flex flex-col items-end">
-        {/* Hover Controls Card */}
-        <div className="hidden group-hover:flex flex-col gap-2 p-3.5 mb-2 bg-[#0f141d]/95 backdrop-blur-md border border-amber-500/40 rounded-2xl shadow-2xl text-xs w-64 animate-in fade-in slide-in-from-bottom-2 duration-200 pointer-events-none">
-          <div className="text-[11px] font-bold text-amber-400 uppercase font-mono tracking-wider border-b border-[#2a3449] pb-1.5 flex items-center justify-between">
-            <span>🎮 Controles da Câmera 3D</span>
-          </div>
-
-          <ul className="space-y-2 text-slate-200 text-[11px] font-sans">
-            <li className="flex items-start gap-2">
-              <span className="bg-[#1e293b] border border-[#334155] text-amber-300 font-mono px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap">
-                Botão Scroll / Shift+LMB
-              </span>
-              <span>Arrastar para <strong>mover o cenário</strong> (Pan)</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="bg-[#1e293b] border border-[#334155] text-cyan-300 font-mono px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap">
-                Clique Esquerdo
-              </span>
-              <span>Arrastar para <strong>rotacionar visão</strong> (Orbit)</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="bg-[#1e293b] border border-[#334155] text-emerald-300 font-mono px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap">
-                Rolar Scroll
-              </span>
-              <span>Aproximar / Afastar (Zoom)</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="bg-[#1e293b] border border-[#334155] text-purple-300 font-mono px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap">
-                Clique Duplo
-              </span>
-              <span><strong>Recentralizar</strong> mapa ao meio</span>
-            </li>
-          </ul>
-        </div>
-
-        {/* Question Mark Icon Button */}
-        <button
-          type="button"
-          className="w-8 h-8 rounded-full bg-[#0f141d]/90 hover:bg-amber-500 hover:text-slate-950 text-amber-400 border border-[#2a3449] hover:border-amber-400 backdrop-blur-md shadow-xl flex items-center justify-center transition-all cursor-help"
-          title="Controles da Câmera 3D"
-        >
-          <HelpCircle className="w-4 h-4" />
-        </button>
-      </div>
     </div>
   );
 };
+
+
+

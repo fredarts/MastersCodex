@@ -5,6 +5,7 @@ import { X, Search, Plus, Swords, User, Shield, Sparkles } from 'lucide-react';
 import { Combatant, CampaignMember } from '@/lib/types';
 import { INITIAL_MONSTERS } from '@/lib/srd-data';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
+import { useWorld } from '@/lib/hooks/useWorld';
 
 interface AddCombatantModalProps {
   isOpen: boolean;
@@ -19,7 +20,8 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
   campaignMembers,
   onAddCombatant,
 }) => {
-  const [activeAddTab, setActiveAddTab] = useState<'monsters' | 'players' | 'custom'>('monsters');
+  const { worldEntities } = useWorld();
+  const [activeAddTab, setActiveAddTab] = useState<'monsters' | 'players' | 'custom' | 'npcs'>('monsters');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Custom Form State
@@ -121,9 +123,17 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
             Roster dos Jogadores
           </button>
           <button
+            onClick={() => setActiveAddTab('npcs')}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
+              activeAddTab === 'npcs' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            NPCs do Mundo
+          </button>
+          <button
             onClick={() => setActiveAddTab('custom')}
             className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
-              activeAddTab === 'custom' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-zinc-400 hover:text-zinc-200'
+              activeAddTab === 'custom' ? 'bg-zinc-800 text-zinc-300 border border-zinc-700/50' : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
             Personalizado
@@ -208,6 +218,76 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
                   </div>
                 ))
               )}
+            </div>
+          )}
+
+          {activeAddTab === 'npcs' && (
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-3 text-zinc-500" />
+                <input
+                  type="text"
+                  placeholder="Buscar NPC do mundo..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-200 focus:outline-none focus:border-amber-500/50 font-sans"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 max-h-72 overflow-y-auto pr-1 animate-in fade-in duration-200">
+                {worldEntities
+                  .filter((e) => e.category === 'npc')
+                  .filter(
+                    (npc) =>
+                      npc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      (npc.subType && npc.subType.toLowerCase().includes(searchQuery.toLowerCase()))
+                  )
+                  .map((npc) => {
+                    const hp = Number(npc.attributes?.hp || npc.attributes?.pv || npc.attributes?.PV || 20);
+                    const ac = Number(npc.attributes?.ac || npc.attributes?.ca || npc.attributes?.CA || 12);
+                    return (
+                      <div
+                        key={npc.id}
+                        className="p-3 bg-zinc-950/60 hover:bg-zinc-800/80 border border-zinc-800/80 rounded-xl flex items-center justify-between transition-all"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm text-zinc-200">{npc.name}</span>
+                            {npc.subType && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-zinc-850 text-zinc-400">
+                                {npc.subType}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-zinc-400 mt-0.5 flex items-center gap-3 font-mono">
+                            <span>PV: {hp}</span>
+                            <span>CA: {ac}</span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            const rollInit = Math.floor(Math.random() * 20) + 1;
+                            onAddCombatant({
+                              id: `npc-${Date.now()}-${npc.id}`,
+                              name: npc.name,
+                              hp,
+                              maxHp: hp,
+                              ac,
+                              initiative: rollInit,
+                              type: 'npc',
+                              conditions: [],
+                              modelUrl: getModelUrlByNameOrPath(npc.name),
+                            });
+                          }}
+                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs rounded-lg flex items-center gap-1 shadow-md shadow-amber-600/20 transition-all active:scale-95"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Adicionar
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
           )}
 

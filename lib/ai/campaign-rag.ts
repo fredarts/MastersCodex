@@ -1,4 +1,5 @@
 import { World, GameScene, WorldEntity, Combatant } from '@/lib/types';
+import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
 
 export interface CampaignRAGInput {
   world?: World | null;
@@ -9,7 +10,47 @@ export interface CampaignRAGInput {
   userPrompt: string;
 }
 
-export function buildCampaignPromptContext(input: CampaignRAGInput): string {
+export interface VectorSearchResult {
+  id: string;
+  content: string;
+  similarity: number;
+}
+
+/**
+ * Consulta a busca por similaridade de cosseno vetorial no Supabase Postgres via pgvector (RPC match_lore_documents)
+ */
+export async function fetchVectorLoreSimilarity(
+  queryEmbedding: number[],
+  worldId?: string,
+  matchThreshold = 0.5,
+  matchCount = 5
+): Promise<VectorSearchResult[]> {
+  if (!isSupabaseConfigured()) return [];
+
+  try {
+    const { data, error } = await supabase.rpc('match_lore_documents', {
+      query_embedding: queryEmbedding,
+      match_threshold: matchThreshold,
+      match_count: matchCount,
+      filter_world_id: isValidUuid(worldId) ? worldId : null,
+    });
+
+    if (error) {
+      console.warn('Busca vetorial pgvector não disponível ou sem suporte no Postgres:', error.message);
+      return [];
+    }
+
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      content: row.content,
+      similarity: row.similarity,
+    }));
+  } catch (e) {
+    return [];
+  }
+}
+
+export function buildCampaignPromptContext(input: CampaignRAGInput, vectorContext: VectorSearchResult[] = []): string {
   const { world, scene, entities = [], combatants = [], actionType, userPrompt } = input;
 
   let ragContext = `=== CONTEXTO RAG DA MESA DE RPG (MASTERS CODEX) ===\n`;
@@ -33,7 +74,15 @@ export function buildCampaignPromptContext(input: CampaignRAGInput): string {
     if (scene.bgmCategory) ragContext += `Clima Sonoro/Trilha: ${scene.bgmCategory}\n`;
   }
 
-  // 3. Entidades de Lore Relevantes (NPCs, Locais, Facções)
+  // 3. Resultados de Busca Vetorial pgvector (Se Houver)
+  if (vectorContext.length > 0) {
+    ragContext += `\nCONTEXTO DE LORE RECUPERADO VIA VETORES (pgvector):\n`;
+    vectorContext.forEach((doc, idx) => {
+      ragContext += `[Doc #${idx + 1} - Relevância: ${(doc.similarity * 100).toFixed(0)}%]: ${doc.content}\n`;
+    });
+  }
+
+  // 4. Entidades de Lore Relevantes
   if (entities.length > 0) {
     ragContext += `\nENTIDADES DE LORE DO MUNDO:\n`;
     entities.slice(0, 5).forEach((e) => {
@@ -41,7 +90,7 @@ export function buildCampaignPromptContext(input: CampaignRAGInput): string {
     });
   }
 
-  // 4. Combatentes / Personagens em Mesa
+  // 5. Combatentes / Personagens em Mesa
   if (combatants.length > 0) {
     ragContext += `\nPERSONAGENS E CRIATURAS NO COMBATE AVALIADO:\n`;
     combatants.forEach((c) => {
@@ -51,7 +100,6 @@ export function buildCampaignPromptContext(input: CampaignRAGInput): string {
 
   ragContext += `===================================================\n\n`;
 
-  // Instruções específicas dependendo do tipo de requisição
   let systemInstruction = '';
   switch (actionType) {
     case 'narrate':

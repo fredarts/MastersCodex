@@ -1,40 +1,31 @@
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
 import { UserCampaign, CampaignMember, CampaignFeedEvent } from '@/lib/types';
+import { CampaignRow, CampaignMemberRow, CampaignFeedEventRow } from '@/lib/database.types';
+import { mapCampaignRowToDomain, mapCampaignMemberRowToDomain, mapFeedEventRowToDomain } from '@/lib/mappers';
+import { toast } from 'sonner';
 
 export const campaignService = {
   async fetchUserCampaigns(userId?: string): Promise<UserCampaign[]> {
-    if (isSupabaseConfigured() && userId) {
-      const { data: dmCamps } = await supabase.from('campaigns').select('*').eq('dm_id', userId);
-      const { data: memCamps } = await supabase
+    if (isSupabaseConfigured() && userId && isValidUuid(userId)) {
+      const { data: dmCamps, error: dmErr } = await supabase.from('campaigns').select('*').eq('dm_id', userId);
+      const { data: memCamps, error: memErr } = await supabase
         .from('campaign_members')
         .select('campaign_id, role, campaigns(*)')
         .eq('user_id', userId);
 
+      if (dmErr || memErr) {
+        toast.error(`Erro ao carregar campanhas: ${dmErr?.message || memErr?.message}`);
+      }
+
       let allCamps: UserCampaign[] = [];
       if (dmCamps) {
-        allCamps = dmCamps.map((c: any) => ({
-          id: c.id,
-          dmId: c.dm_id,
-          worldId: c.world_id,
-          title: c.title,
-          description: c.description,
-          inviteCode: c.invite_code,
-          role: 'dm',
-        }));
+        allCamps = (dmCamps as CampaignRow[]).map((c) => mapCampaignRowToDomain(c, 'dm'));
       }
 
       if (memCamps) {
-        memCamps.forEach((m: any) => {
+        memCamps.forEach((m: Record<string, any>) => {
           if (m.campaigns && !allCamps.some((c) => c.id === m.campaigns.id)) {
-            allCamps.push({
-              id: m.campaigns.id,
-              dmId: m.campaigns.dm_id,
-              worldId: m.campaigns.world_id,
-              title: m.campaigns.title,
-              description: m.campaigns.description,
-              inviteCode: m.campaigns.invite_code,
-              role: m.role || 'player',
-            });
+            allCamps.push(mapCampaignRowToDomain(m.campaigns as CampaignRow, m.role || 'player'));
           }
         });
       }
@@ -46,6 +37,7 @@ export const campaignService = {
       const saved = localStorage.getItem('codex_campaigns');
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
+      toast.error('Erro ao ler campanhas salvas localmente.');
       return [];
     }
   },
@@ -62,65 +54,57 @@ export const campaignService = {
       role: 'dm',
     };
 
-    if (isSupabaseConfigured() && userId) {
-      const insertPayload: any = { dm_id: userId, title, description, invite_code: code };
-      if (worldId && !worldId.startsWith('world-')) insertPayload.world_id = worldId;
+    if (isSupabaseConfigured() && userId && isValidUuid(userId)) {
+      const insertPayload: Record<string, any> = { dm_id: userId, title, description, invite_code: code };
+      if (worldId && isValidUuid(worldId)) insertPayload.world_id = worldId;
 
-      const { data } = await supabase.from('campaigns').insert(insertPayload).select().single();
-      if (data) newCamp.id = data.id;
+      const { data, error } = await supabase.from('campaigns').insert(insertPayload).select().single();
+      if (error) {
+        toast.error(`Erro ao criar campanha: ${error.message}`);
+      } else if (data) {
+        return mapCampaignRowToDomain(data as CampaignRow, 'dm');
+      }
     }
 
     return newCamp;
   },
 
   async fetchCampaignMembers(campaignId: string): Promise<CampaignMember[]> {
-    if (isSupabaseConfigured() && !campaignId.startsWith('camp-')) {
+    if (isSupabaseConfigured() && isValidUuid(campaignId)) {
       const { data, error } = await supabase.from('campaign_members').select('*').eq('campaign_id', campaignId);
-      if (!error && data) {
-        return data.map((m: any) => ({
-          id: m.id,
-          campaignId: m.campaign_id,
-          userId: m.user_id,
-          characterName: m.character_name,
-          role: m.role,
-          joinedAt: m.joined_at,
-          modelUrl: m.model_url,
-        }));
+      if (error) {
+        toast.error(`Erro ao buscar membros da campanha: ${error.message}`);
+      } else if (data) {
+        return (data as CampaignMemberRow[]).map(mapCampaignMemberRowToDomain);
       }
     }
     try {
       const saved = localStorage.getItem('codex_members');
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
+      toast.error('Erro ao ler membros salvos localmente.');
       return [];
     }
   },
 
   async fetchFeedEvents(campaignId: string): Promise<CampaignFeedEvent[]> {
-    if (isSupabaseConfigured() && !campaignId.startsWith('camp-')) {
+    if (isSupabaseConfigured() && isValidUuid(campaignId)) {
       const { data, error } = await supabase
         .from('campaign_feed_events')
         .select('*')
         .eq('campaign_id', campaignId)
         .order('created_at', { ascending: false });
-      if (!error && data) {
-        return data.map((e: any) => ({
-          id: e.id,
-          campaignId: e.campaign_id,
-          sessionId: e.session_id,
-          eventType: e.event_type,
-          title: e.title,
-          summary: e.summary,
-          details: e.details,
-          isPublic: e.is_public,
-          createdAt: e.created_at,
-        }));
+      if (error) {
+        toast.error(`Erro ao buscar eventos do feed: ${error.message}`);
+      } else if (data) {
+        return (data as CampaignFeedEventRow[]).map(mapFeedEventRowToDomain);
       }
     }
     try {
       const saved = localStorage.getItem('codex_feed');
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
+      toast.error('Erro ao ler feed salvo localmente.');
       return [];
     }
   },
@@ -131,10 +115,10 @@ export const campaignService = {
       id: `ev-${Date.now()}`,
     };
 
-    if (isSupabaseConfigured() && newEvent.campaignId && !newEvent.campaignId.startsWith('camp-')) {
-      const { data } = await supabase.from('campaign_feed_events').insert({
+    if (isSupabaseConfigured() && isValidUuid(newEvent.campaignId)) {
+      const { data, error } = await supabase.from('campaign_feed_events').insert({
         campaign_id: newEvent.campaignId,
-        session_id: newEvent.sessionId,
+        session_id: isValidUuid(newEvent.sessionId) ? newEvent.sessionId : null,
         event_type: newEvent.eventType,
         title: newEvent.title,
         summary: newEvent.summary,
@@ -142,7 +126,11 @@ export const campaignService = {
         is_public: newEvent.isPublic ?? true,
       }).select().single();
 
-      if (data) newEvent.id = data.id;
+      if (error) {
+        toast.error(`Erro ao registrar evento no feed: ${error.message}`);
+      } else if (data) {
+        return mapFeedEventRowToDomain(data as CampaignFeedEventRow);
+      }
     }
 
     return newEvent;

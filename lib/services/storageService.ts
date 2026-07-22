@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 export const storageService = {
   /**
@@ -7,7 +8,9 @@ export const storageService = {
    */
   async uploadAsset(file: File, folder: 'avatars' | 'scenes' | 'audio' = 'scenes'): Promise<string> {
     if (!isSupabaseConfigured()) {
-      throw new Error('Supabase is not configured. Upload requires a connected database.');
+      const errMsg = 'Supabase não está configurado. O upload de arquivo requer uma conexão ativa.';
+      toast.error(errMsg);
+      throw new Error(errMsg);
     }
 
     const fileExt = file.name.split('.').pop();
@@ -15,7 +18,7 @@ export const storageService = {
     const fileName = `${Date.now()}-${uniqueId}.${fileExt}`;
     const filePath = `${folder}/${fileName}`;
 
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from('campaign-assets')
       .upload(filePath, file, {
         cacheControl: '3600',
@@ -23,6 +26,7 @@ export const storageService = {
       });
 
     if (error) {
+      toast.error(`Falha no upload do arquivo: ${error.message}`);
       throw error;
     }
 
@@ -31,9 +35,12 @@ export const storageService = {
       .getPublicUrl(filePath);
 
     if (!publicUrlData || !publicUrlData.publicUrl) {
-      throw new Error('Could not obtain public URL for uploaded asset.');
+      const errMsg = 'Não foi possível obter a URL pública para o asset enviado.';
+      toast.error(errMsg);
+      throw new Error(errMsg);
     }
 
+    toast.success('Arquivo enviado com sucesso!');
     return publicUrlData.publicUrl;
   },
 };

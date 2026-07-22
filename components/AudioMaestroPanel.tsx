@@ -7,7 +7,7 @@ import {
 import { useCampaign } from '@/context/CampaignContext';
 import { useAudio } from '@/context/AudioContext';
 import { storageService } from '@/lib/services/storageService';
-import { supabase } from '@/lib/supabase';
+import { supabase, isValidUuid } from '@/lib/supabase';
 import { BGM_TRACKS, SFX_BUTTONS } from '@/lib/srd-data';
 
 export const AudioMaestroPanel: React.FC = () => {
@@ -38,7 +38,7 @@ export const AudioMaestroPanel: React.FC = () => {
   }, [campaignId]);
 
   const loadCustomAudios = async () => {
-    if (!campaignId) return;
+    if (!campaignId || !isValidUuid(campaignId)) return;
     const { data, error } = await supabase
       .from('campaign_audio_assets')
       .select('*')
@@ -49,7 +49,7 @@ export const AudioMaestroPanel: React.FC = () => {
   };
 
   const loadFavorites = async () => {
-    if (!campaignId) return;
+    if (!campaignId || !isValidUuid(campaignId)) return;
     const { data, error } = await supabase
       .from('campaign_audio_favorites')
       .select('audio_id')
@@ -57,6 +57,7 @@ export const AudioMaestroPanel: React.FC = () => {
 
     if (data) setFavorites(data.map((f: any) => f.audio_id));
   };
+
 
   const handleToggleFavorite = async (audioId: string, isCustom: boolean) => {
     if (!campaignId) return;

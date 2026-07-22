@@ -66,9 +66,10 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               <BattleGrid3D
                 combatants={combatants}
                 currentTurnIndex={currentTurnIndex}
-                timeOfDayHour={activeScene?.timeOfDayHour}
-                hasFog={activeScene?.hasFog}
-                hasRain={activeScene?.hasRain}
+                timeOfDayHour={currentScene?.timeOfDayHour}
+                timeOfDayPreset={currentScene?.timeOfDay}
+                hasFog={currentScene?.hasFog}
+                hasRain={currentScene?.hasRain}
                 interactive={true}
                 userRole="player"
               />

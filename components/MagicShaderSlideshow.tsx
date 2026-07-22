@@ -138,6 +138,8 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
       canvas,
       antialias: true,
       alpha: true,
+      depth: false,
+      stencil: false,
       powerPreference: 'high-performance',
     });
     renderer.setSize(width, height);
@@ -215,14 +217,15 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
 
     // 7. Animation Loop
     let animationId: number;
-    const clock = new THREE.Clock();
+    const loopStartTime = performance.now();
 
     const animate = () => {
       animationId = requestAnimationFrame(animate);
-      uniforms.uTime.value = clock.getElapsedTime();
+      const currentTime = (performance.now() - loopStartTime) / 1000;
+      uniforms.uTime.value = currentTime;
 
       if (state.isTransitioning) {
-        const elapsed = clock.getElapsedTime() - state.startTime;
+        const elapsed = currentTime - state.startTime;
         const duration = 1.2; // 1.2 seconds for magic transition
         const progress = Math.min(elapsed / duration, 1.0);
         state.transition = progress;

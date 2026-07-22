@@ -68,15 +68,24 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     },
     onLiveProjectionChange: (payload) => {
       if (payload.mode) setLiveDisplayModeState(payload.mode);
-      if (payload.sceneId !== undefined || payload.imageUrl !== undefined || payload.title !== undefined) {
-        setProjectedScene(payload.sceneId ? {
-          id: payload.sceneId,
-          title: payload.title,
-          imageUrl: payload.imageUrl,
-          sensoryText: payload.sensoryText,
-          sceneImages: payload.sceneImages || [],
-          activeImageIndex: payload.activeImageIndex ?? 0,
-        } : null);
+      if (payload.sceneId !== undefined || payload.imageUrl !== undefined || payload.title !== undefined || payload.timeOfDayHour !== undefined || payload.timeOfDay !== undefined || payload.hasFog !== undefined || payload.hasRain !== undefined) {
+        setProjectedScene((prev: any) => {
+          if (payload.sceneId === null) return null;
+          const base = (prev && prev.id === payload.sceneId) ? prev : {};
+          return {
+            ...base,
+            id: payload.sceneId !== undefined ? payload.sceneId : base.id,
+            title: payload.title !== undefined ? payload.title : base.title,
+            imageUrl: payload.imageUrl !== undefined ? payload.imageUrl : base.imageUrl,
+            sensoryText: payload.sensoryText !== undefined ? payload.sensoryText : base.sensoryText,
+            sceneImages: payload.sceneImages !== undefined ? payload.sceneImages : base.sceneImages || [],
+            activeImageIndex: payload.activeImageIndex !== undefined ? payload.activeImageIndex : base.activeImageIndex ?? 0,
+            timeOfDay: payload.timeOfDay !== undefined ? payload.timeOfDay : base.timeOfDay,
+            timeOfDayHour: payload.timeOfDayHour !== undefined ? payload.timeOfDayHour : base.timeOfDayHour,
+            hasFog: payload.hasFog !== undefined ? payload.hasFog : base.hasFog,
+            hasRain: payload.hasRain !== undefined ? payload.hasRain : base.hasRain,
+          };
+        });
       }
     },
     onCombatUpdate: (payload) => {

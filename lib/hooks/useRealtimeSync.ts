@@ -16,6 +16,10 @@ export interface RealtimeSyncPayloads {
     sceneImages?: any[];
     activeImageIndex?: number;
     combatants?: any[];
+    timeOfDay?: 'day' | 'sunset' | 'night' | 'fog' | 'storm';
+    timeOfDayHour?: number;
+    hasFog?: boolean;
+    hasRain?: boolean;
   };
   DICE_ROLL: { rollerName: string; rollType: string; diceFormula: string; result: number; isCrit?: boolean; isFail?: boolean };
   COMBAT_UPDATE: { combatants: any[]; currentTurnIndex: number; roundCount: number };
