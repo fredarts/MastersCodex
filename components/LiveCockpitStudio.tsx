@@ -38,8 +38,10 @@ import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { GameScene, SceneType, Combatant, ConditionType, CampaignMember } from '@/lib/types';
-import { INITIAL_MONSTERS, SFX_BUTTONS, CONDITIONS } from '@/lib/srd-data';
+import { INITIAL_MONSTERS, SFX_BUTTONS, CONDITIONS, BGM_TRACKS } from '@/lib/srd-data';
 import { normalizeImageUrl } from '@/lib/imageUtils';
+import { useAudio } from '@/context/AudioContext';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
 import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
@@ -95,6 +97,33 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
   const [playingNpcVoice, setPlayingNpcVoice] = useState(false);
   const [activeBgmCategory, setActiveBgmCategory] = useState<string>('taverna');
+
+  const { playBgm, pauseBgm, activeBgm, isPlayingBgm, playSfx } = useAudio();
+  const [customAudios, setCustomAudios] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (activeCampaign?.id && isSupabaseConfigured()) {
+      supabase
+        .from('campaign_audio_assets')
+        .select('*')
+        .eq('campaign_id', activeCampaign.id)
+        .then(({ data }) => {
+          if (data) setCustomAudios(data);
+        });
+    }
+  }, [activeCampaign?.id]);
+
+  const srdBgms = BGM_TRACKS.map(t => ({ ...t, isCustom: false }));
+  const customBgms = customAudios
+    .filter(a => a.type === 'bgm')
+    .map(a => ({ id: a.id, name: a.name, url: a.url, category: a.category, isLoop: a.is_loop, isCustom: true }));
+  const allBgmTracks = [...srdBgms, ...customBgms];
+
+  const srdSfxs = SFX_BUTTONS.map(s => ({ ...s, isLoop: false, isCustom: false }));
+  const customSfxs = customAudios
+    .filter(a => a.type === 'sfx')
+    .map(a => ({ id: a.id, name: a.name, iconName: a.icon_name || 'Music', url: a.url, category: a.category, isCustom: true }));
+  const allSfxTracks = [...srdSfxs, ...customSfxs];
 
   // Scene inline editing state
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
@@ -522,6 +551,20 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       hasFog: targetFog,
       hasRain: targetRain,
     });
+
+    // Iniciar a primeira música associada à cena em loop
+    if (scene.bgmTracks && scene.bgmTracks.length > 0) {
+      const firstTrackId = scene.bgmTracks[0];
+      const track = allBgmTracks.find(t => t.id === firstTrackId);
+      if (track) {
+        playBgm(track);
+      }
+    } else if (scene.bgmCategory) {
+      const track = allBgmTracks.find(t => t.id === `bgm-${scene.bgmCategory}`);
+      if (track) {
+        playBgm(track);
+      }
+    }
   };
 
   const handleSlideChange = async (index: number) => {
@@ -1160,23 +1203,71 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                 </button>
               </div>
 
-              {/* BGM Category Switcher */}
-              <div className="p-3 bg-[#121824] border border-[#2a3449] rounded-xl flex items-center justify-between">
-                <div>
-                  <div className="text-[10px] font-bold text-pink-400 uppercase font-mono flex items-center gap-1">
-                    <Music className="w-3 h-3" /> BGM Ambiente
-                  </div>
-                  <select
-                    value={activeBgmCategory}
-                    onChange={(e) => setActiveBgmCategory(e.target.value)}
-                    className="bg-[#0a0d14] text-xs font-bold text-slate-200 border border-[#2a3449] rounded px-2 py-0.5 mt-0.5"
-                  >
-                    <option value="taverna">🍺 Taverna</option>
-                    <option value="combate">⚔️ Combate</option>
-                    <option value="masmorra">🏰 Masmorra</option>
-                    <option value="tensao">⚡ Tensão</option>
-                  </select>
+              {/* BGM Active Scene Playlist */}
+              <div className="p-3 bg-[#121824] border border-[#2a3449] rounded-xl space-y-2">
+                <div className="text-[10px] font-bold text-pink-400 uppercase font-mono flex items-center gap-1">
+                  <Music className="w-3.5 h-3.5" /> BGM da Cena Ativa
                 </div>
+                
+                {(!activeScene?.bgmTracks || activeScene.bgmTracks.length === 0) ? (
+                  <div className="text-[10px] text-slate-500 italic">Nenhuma música configurada.</div>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {activeScene.bgmTracks.map(trackId => {
+                      const track = allBgmTracks.find(t => t.id === trackId);
+                      if (!track) return null;
+                      const isActive = activeBgm?.id === track.id;
+                      return (
+                        <button
+                          key={trackId}
+                          onClick={() => {
+                            if (isActive && isPlayingBgm) {
+                              pauseBgm();
+                            } else {
+                              playBgm(track);
+                            }
+                          }}
+                          className={`w-full py-1 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
+                            isActive && isPlayingBgm
+                              ? 'bg-pink-600 text-slate-950 font-bold shadow-md animate-pulse'
+                              : 'bg-[#0a0d14] hover:bg-[#1a2233] text-slate-300 border border-[#2a3449]'
+                          }`}
+                        >
+                          <span className="truncate mr-2">{track.name}</span>
+                          <span className="shrink-0 text-[10px] font-bold">{isActive && isPlayingBgm ? 'PAUSAR' : 'TOCAR'}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Soundboard SFX da Cena */}
+              <div className="p-3 bg-[#121824] border border-[#2a3449] rounded-xl space-y-2">
+                <div className="text-[10px] font-bold text-amber-400 uppercase font-mono flex items-center gap-1">
+                  <Volume2 className="w-3.5 h-3.5" /> SFX Rápidos da Cena
+                </div>
+                
+                {(!activeScene?.sfxShortcuts || activeScene.sfxShortcuts.length === 0) ? (
+                  <div className="text-[10px] text-slate-500 italic">Nenhum efeito configurado.</div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {activeScene.sfxShortcuts.map(sfxId => {
+                      const sfx = allSfxTracks.find(s => s.id === sfxId);
+                      if (!sfx) return null;
+                      return (
+                        <button
+                          key={sfxId}
+                          onClick={() => playSfx(sfx.url)}
+                          className="py-1 px-2 rounded-lg text-[10px] font-bold bg-[#0a0d14] hover:bg-amber-500/20 hover:text-amber-300 text-slate-300 border border-[#2a3449] transition-all truncate text-center cursor-pointer"
+                          title={`Disparar Efeito: ${sfx.name}`}
+                        >
+                          {sfx.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>

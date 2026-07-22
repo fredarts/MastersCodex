@@ -69,6 +69,7 @@ export interface GameScene {
   sensoryText?: string;
   secretNotes?: string;
   bgmCategory?: 'taverna' | 'combate' | 'masmorra' | 'tensao' | 'exploracao';
+  bgmTracks?: string[]; // Múltiplas trilhas associadas à cena
   imageUrl?: string;
   npcAudioUrl?: string;
   sfxShortcuts?: string[]; // IDs dos botões SFX
@@ -239,7 +240,7 @@ export interface LoreNode {
 export interface BGMTrack {
   id: string;
   name: string;
-  category: 'taverna' | 'combate' | 'masmorra' | 'tensao' | 'exploracao';
+  category: string; // Permitir categorias customizadas além das padrão
   url: string;
   isLoop: boolean;
 }
@@ -249,7 +250,27 @@ export interface SFXButton {
   name: string;
   iconName: string;
   url: string;
-  category: 'combat' | 'magic' | 'environment';
+  category: string;
+}
+
+export interface CampaignAudio {
+  id: string;
+  campaignId: string;
+  name: string;
+  url: string;
+  type: 'bgm' | 'sfx';
+  category: string;
+  isLoop: boolean;
+  iconName?: string;
+  createdAt?: string;
+}
+
+export interface CampaignAudioFavorite {
+  id: string;
+  campaignId: string;
+  audioId: string;
+  isCustom: boolean;
+  createdAt?: string;
 }
 
 // ==========================================

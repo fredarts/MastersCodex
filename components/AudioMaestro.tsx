@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { 
   Volume2, 
   VolumeX, 
@@ -13,61 +13,57 @@ import {
   DoorOpen, 
   Skull,
   Music,
-  Radio
+  Radio,
+  Heart,
+  Shield,
+  Zap,
+  XCircle,
+  Smile,
+  Sun,
+  Hand,
+  Wind,
+  Moon,
+  EyeOff,
+  ShieldAlert,
+  Hammer,
+  Sword,
+  Target,
+  Gem,
+  Footprints,
+  Users,
+  Megaphone,
+  MessageSquare
 } from 'lucide-react';
 import { BGMTrack, SFXButton } from '@/lib/types';
 import { BGM_TRACKS, SFX_BUTTONS } from '@/lib/srd-data';
+import { useAudio } from '@/context/AudioContext';
 
 export const AudioMaestro: React.FC = () => {
-  const [activeBgm, setActiveBgm] = useState<BGMTrack | null>(null);
-  const [isPlayingBgm, setIsPlayingBgm] = useState(false);
-  const [volume, setVolume] = useState(0.6);
-  const [isMuted, setIsMuted] = useState(false);
+  const { 
+    activeBgm, 
+    isPlayingBgm, 
+    volume, 
+    isMuted, 
+    setVolume, 
+    setIsMuted, 
+    playBgm, 
+    pauseBgm, 
+    playSfx 
+  } = useAudio();
+
   const [activeSfxId, setActiveSfxId] = useState<string | null>(null);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    if (activeBgm) {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-      const audio = new Audio(activeBgm.url);
-      audio.loop = activeBgm.isLoop;
-      audio.volume = isMuted ? 0 : volume;
-      audioRef.current = audio;
-      if (isPlayingBgm) {
-        audio.play().catch(() => setIsPlayingBgm(false));
-      }
-    }
-  }, [activeBgm]);
-
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume;
-    }
-  }, [volume, isMuted]);
-
   const togglePlayBgm = (track: BGMTrack) => {
-    if (activeBgm?.id === track.id) {
-      if (isPlayingBgm) {
-        audioRef.current?.pause();
-        setIsPlayingBgm(false);
-      } else {
-        audioRef.current?.play().catch(() => {});
-        setIsPlayingBgm(true);
-      }
+    if (activeBgm?.id === track.id && isPlayingBgm) {
+      pauseBgm();
     } else {
-      setActiveBgm(track);
-      setIsPlayingBgm(true);
+      playBgm(track);
     }
   };
 
-  const playSfx = (sfx: SFXButton) => {
+  const handlePlaySfx = (sfx: SFXButton) => {
     setActiveSfxId(sfx.id);
-    const sound = new Audio(sfx.url);
-    sound.volume = isMuted ? 0 : volume;
-    sound.play().catch(() => {});
+    playSfx(sfx.url);
     setTimeout(() => setActiveSfxId(null), 1000);
   };
 
@@ -79,6 +75,25 @@ export const AudioMaestro: React.FC = () => {
       case 'Coins': return <Coins className="w-4 h-4 text-amber-300" />;
       case 'DoorOpen': return <DoorOpen className="w-4 h-4 text-cyan-400" />;
       case 'Skull': return <Skull className="w-4 h-4 text-emerald-400" />;
+      case 'Heart': return <Heart className="w-4 h-4 text-rose-400" />;
+      case 'Shield': return <Shield className="w-4 h-4 text-blue-400" />;
+      case 'Zap': return <Zap className="w-4 h-4 text-yellow-400" />;
+      case 'XCircle': return <XCircle className="w-4 h-4 text-red-500" />;
+      case 'Smile': return <Smile className="w-4 h-4 text-amber-400" />;
+      case 'Sun': return <Sun className="w-4 h-4 text-yellow-300" />;
+      case 'Hand': return <Hand className="w-4 h-4 text-purple-300" />;
+      case 'Wind': return <Wind className="w-4 h-4 text-sky-400" />;
+      case 'Moon': return <Moon className="w-4 h-4 text-indigo-300" />;
+      case 'EyeOff': return <EyeOff className="w-4 h-4 text-slate-400" />;
+      case 'ShieldAlert': return <ShieldAlert className="w-4 h-4 text-orange-400" />;
+      case 'Hammer': return <Hammer className="w-4 h-4 text-slate-400" />;
+      case 'Sword': return <Sword className="w-4 h-4 text-slate-300" />;
+      case 'Target': return <Target className="w-4 h-4 text-red-400" />;
+      case 'Gem': return <Gem className="w-4 h-4 text-teal-400" />;
+      case 'Footprints': return <Footprints className="w-4 h-4 text-amber-600" />;
+      case 'Users': return <Users className="w-4 h-4 text-sky-300" />;
+      case 'Megaphone': return <Megaphone className="w-4 h-4 text-orange-500" />;
+      case 'MessageSquare': return <MessageSquare className="w-4 h-4 text-slate-400" />;
       default: return <Music className="w-4 h-4 text-slate-300" />;
     }
   };
@@ -143,12 +158,12 @@ export const AudioMaestro: React.FC = () => {
       {/* Instant SFX Soundboard Matrix */}
       <div className="flex items-center gap-1.5 bg-[#161c28] border border-[#2a3449] p-1 rounded-xl">
         <span className="text-[10px] font-bold text-slate-400 uppercase px-2 hidden lg:inline">Soundboard SFX:</span>
-        {SFX_BUTTONS.map((sfx) => {
+        {SFX_BUTTONS.slice(0, 6).map((sfx) => {
           const isTriggered = activeSfxId === sfx.id;
           return (
             <button
               key={sfx.id}
-              onClick={() => playSfx(sfx)}
+              onClick={() => handlePlaySfx(sfx)}
               className={`p-1.5 md:px-2.5 md:py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
                 isTriggered
                   ? 'bg-amber-400 text-slate-950 scale-110 shadow-lg'

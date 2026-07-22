@@ -348,14 +348,62 @@ export const BGM_TRACKS: BGMTrack[] = [
   { id: 'bgm-taverna', name: 'Taverna Rústica & Cerveja', category: 'taverna', url: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=medieval-tavern-113540.mp3', isLoop: true },
   { id: 'bgm-combate', name: 'Combate Épico dos Dragões', category: 'combate', url: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8724778.mp3?filename=epic-cinematic-trailer-110035.mp3', isLoop: true },
   { id: 'bgm-masmorra', name: 'Masmorra Sombria & Ecos', category: 'masmorra', url: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=dark-ambient-10903.mp3', isLoop: true },
-  { id: 'bgm-tensao', name: 'Tensão & Perigo Iminente', category: 'tensao', url: 'https://cdn.pixabay.com/download/audio/2021/08/09/audio_8835848e02.mp3?filename=tension-suspense-movie-trailer-8610.mp3', isLoop: true }
+  { id: 'bgm-tensao', name: 'Tensão & Perigo Iminente', category: 'tensao', url: 'https://cdn.pixabay.com/download/audio/2021/08/09/audio_8835848e02.mp3?filename=tension-suspense-movie-trailer-8610.mp3', isLoop: true },
+  { id: 'bgm-floresta', name: 'Exploração Florestal', category: 'exploracao', url: '/audio/bgm/floresta.mp3', isLoop: true },
+  { id: 'bgm-templo', name: 'Templo Celestial', category: 'exploracao', url: '/audio/bgm/templo.mp3', isLoop: true },
+  { id: 'bgm-pantano', name: 'Pântano da Agonia', category: 'tensao', url: '/audio/bgm/pantano.mp3', isLoop: true },
+  { id: 'bgm-cidade', name: 'Cidade Vibrante & Feira', category: 'taverna', url: '/audio/bgm/cidade.mp3', isLoop: true },
+  { id: 'bgm-deserto', name: 'Deserto de Areias Quentes', category: 'exploracao', url: '/audio/bgm/deserto.mp3', isLoop: true },
+  { id: 'bgm-castelo', name: 'Castelo Real & Realeza', category: 'exploracao', url: '/audio/bgm/castelo.mp3', isLoop: true }
 ];
 
 export const SFX_BUTTONS: SFXButton[] = [
+  // Clássicos Iniciais
   { id: 'sfx-espada', name: 'Espada', iconName: 'Swords', category: 'combat', url: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c31f47a469.mp3?filename=sword-slash-101188.mp3' },
   { id: 'sfx-dragao', name: 'Rugido', iconName: 'Flame', category: 'combat', url: 'https://cdn.pixabay.com/download/audio/2021/08/04/audio_b4860a5e8f.mp3?filename=monster-roar-6984.mp3' },
   { id: 'sfx-magia', name: 'Magia', iconName: 'Sparkles', category: 'magic', url: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c1c110398f.mp3?filename=magic-spell-6005.mp3' },
   { id: 'sfx-moedas', name: 'Moedas', iconName: 'Coins', category: 'environment', url: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_a340798150.mp3?filename=coins-handling-4-88480.mp3' },
   { id: 'sfx-porta', name: 'Porta', iconName: 'DoorOpen', category: 'environment', url: 'https://cdn.pixabay.com/download/audio/2022/03/24/audio_348425d576.mp3?filename=wooden-door-open-98835.mp3' },
-  { id: 'sfx-risada', name: 'Risada Maligna', iconName: 'Skull', category: 'magic', url: 'https://cdn.pixabay.com/download/audio/2022/10/30/audio_51744d0ec3.mp3?filename=evil-laugh-124040.mp3' }
+  { id: 'sfx-risada', name: 'Risada Maligna', iconName: 'Skull', category: 'magic', url: 'https://cdn.pixabay.com/download/audio/2022/10/30/audio_51744d0ec3.mp3?filename=evil-laugh-124040.mp3' },
+
+  // Magias Conhecidas (20 Magias)
+  { id: 'sfx-fireball', name: 'Bola de Fogo (Fireball)', iconName: 'Flame', category: 'magic', url: '/audio/sfx/fireball.mp3' },
+  { id: 'sfx-magic-missile', name: 'Mísseis Mágicos', iconName: 'Sparkles', category: 'magic', url: '/audio/sfx/magic-missile.mp3' },
+  { id: 'sfx-cure-wounds', name: 'Curar Ferimentos', iconName: 'Heart', category: 'magic', url: '/audio/sfx/cure-wounds.mp3' },
+  { id: 'sfx-shield', name: 'Escudo Arcano (Shield)', iconName: 'Shield', category: 'magic', url: '/audio/sfx/shield.mp3' },
+  { id: 'sfx-thunderwave', name: 'Onda de Trovão', iconName: 'Zap', category: 'magic', url: '/audio/sfx/thunderwave.mp3' },
+  { id: 'sfx-counterspell', name: 'Contramágica', iconName: 'XCircle', category: 'magic', url: '/audio/sfx/counterspell.mp3' },
+  { id: 'sfx-tasha-laugh', name: 'Gargalhada de Tasha', iconName: 'Smile', category: 'magic', url: '/audio/sfx/tasha-laugh.mp3' },
+  { id: 'sfx-light', name: 'Luz (Light)', iconName: 'Sun', category: 'magic', url: '/audio/sfx/light.mp3' },
+  { id: 'sfx-mage-hand', name: 'Mão Arcana', iconName: 'Hand', category: 'magic', url: '/audio/sfx/mage-hand.mp3' },
+  { id: 'sfx-misty-step', name: 'Passo Nebuloso (Misty Step)', iconName: 'Wind', category: 'magic', url: '/audio/sfx/misty-step.mp3' },
+  { id: 'sfx-haste', name: 'Velocidade (Haste)', iconName: 'Zap', category: 'magic', url: '/audio/sfx/haste.mp3' },
+  { id: 'sfx-sleep', name: 'Sono (Sleep)', iconName: 'Moon', category: 'magic', url: '/audio/sfx/sleep.mp3' },
+  { id: 'sfx-bless', name: 'Bênção (Bless)', iconName: 'Sparkles', category: 'magic', url: '/audio/sfx/bless.mp3' },
+  { id: 'sfx-banishment', name: 'Banimento', iconName: 'XCircle', category: 'magic', url: '/audio/sfx/banishment.mp3' },
+  { id: 'sfx-teleport', name: 'Teletransporte', iconName: 'Zap', category: 'magic', url: '/audio/sfx/teleport.mp3' },
+  { id: 'sfx-invisibility', name: 'Invisibilidade', iconName: 'EyeOff', category: 'magic', url: '/audio/sfx/invisibility.mp3' },
+  { id: 'sfx-fly', name: 'Voo (Fly)', iconName: 'Wind', category: 'magic', url: '/audio/sfx/fly.mp3' },
+  { id: 'sfx-command', name: 'Comando (Command)', iconName: 'Volume2', category: 'magic', url: '/audio/sfx/command.mp3' },
+  { id: 'sfx-sanctuary', name: 'Santuário (Sanctuary)', iconName: 'ShieldAlert', category: 'magic', url: '/audio/sfx/sanctuary.mp3' },
+  { id: 'sfx-divine-smite', name: 'Destruição Divina', iconName: 'Swords', category: 'magic', url: '/audio/sfx/divine-smite.mp3' },
+
+  // Ataques Físicos
+  { id: 'sfx-melee-mace', name: 'Golpe de Maça', iconName: 'Hammer', category: 'combat', url: '/audio/sfx/melee-mace.mp3' },
+  { id: 'sfx-melee-dagger', name: 'Apunhalada de Adaga', iconName: 'Sword', category: 'combat', url: '/audio/sfx/melee-dagger.mp3' },
+  { id: 'sfx-ranged-bow', name: 'Tiro de Arco (Ranged)', iconName: 'Target', category: 'combat', url: '/audio/sfx/ranged-bow.mp3' },
+  { id: 'sfx-ranged-crossbow', name: 'Tiro de Besta', iconName: 'Target', category: 'combat', url: '/audio/sfx/ranged-crossbow.mp3' },
+  { id: 'sfx-ranged-firebolt', name: 'Raio de Fogo (Fire Bolt)', iconName: 'Flame', category: 'combat', url: '/audio/sfx/ranged-firebolt.mp3' },
+
+  // SFX Miscelâneos & Narrativos
+  { id: 'sfx-misc-gem', name: 'Gemas & Cristais', iconName: 'Gem', category: 'environment', url: '/audio/sfx/misc-gem.mp3' },
+  { id: 'sfx-animal-wolf', name: 'Uivo de Lobo', iconName: 'Footprints', category: 'environment', url: '/audio/sfx/animal-wolf.mp3' },
+  { id: 'sfx-animal-cat', name: 'Miado de Gato', iconName: 'Footprints', category: 'environment', url: '/audio/sfx/animal-cat.mp3' },
+  { id: 'sfx-animal-dog', name: 'Latido de Cão', iconName: 'Footprints', category: 'environment', url: '/audio/sfx/animal-dog.mp3' },
+  { id: 'sfx-animal-horse', name: 'Relincho de Cavalo', iconName: 'Footprints', category: 'environment', url: '/audio/sfx/animal-horse.mp3' },
+  { id: 'sfx-animal-dragon', name: 'Rosnar de Dragão', iconName: 'Flame', category: 'environment', url: '/audio/sfx/animal-dragon.mp3' },
+  { id: 'sfx-crowd-tavern', name: 'Festa na Taverna (Crowd)', iconName: 'Users', category: 'environment', url: '/audio/sfx/crowd-tavern.mp3' },
+  { id: 'sfx-crowd-screams', name: 'Gritos de Pânico', iconName: 'Megaphone', category: 'environment', url: '/audio/sfx/crowd-screams.mp3' },
+  { id: 'sfx-crowd-whispers', name: 'Sussurros', iconName: 'MessageSquare', category: 'environment', url: '/audio/sfx/crowd-whispers.mp3' }
 ];
+

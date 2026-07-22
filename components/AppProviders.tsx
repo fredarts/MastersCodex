@@ -6,6 +6,7 @@ import { WorldProvider } from '@/context/WorldContext';
 import { CampaignProvider } from '@/context/CampaignContext';
 import { SessionProvider } from '@/context/SessionContext';
 import { LiveCockpitProvider } from '@/context/LiveCockpitContext';
+import { AudioProvider } from '@/context/AudioContext';
 
 function InnerProviders({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -13,7 +14,9 @@ function InnerProviders({ children }: { children: React.ReactNode }) {
     <WorldProvider currentUserId={user?.id}>
       <CampaignProvider currentUserId={user?.id}>
         <SessionProvider>
-          <LiveCockpitProvider>{children}</LiveCockpitProvider>
+          <AudioProvider>
+            <LiveCockpitProvider>{children}</LiveCockpitProvider>
+          </AudioProvider>
         </SessionProvider>
       </CampaignProvider>
     </WorldProvider>

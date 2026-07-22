@@ -27,9 +27,9 @@ import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { GameScene, SceneType, Combatant, SceneImage } from '@/lib/types';
-import { INITIAL_MONSTERS, SFX_BUTTONS } from '@/lib/srd-data';
+import { INITIAL_MONSTERS, SFX_BUTTONS, BGM_TRACKS } from '@/lib/srd-data';
 import { storageService } from '@/lib/services/storageService';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
@@ -67,11 +67,52 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
   const [imageUrl, setImageUrl] = useState('');
   const [sceneImages, setSceneImages] = useState<SceneImage[]>([]);
   const [bgmCategory, setBgmCategory] = useState<'taverna' | 'combate' | 'masmorra' | 'tensao' | 'exploracao'>('taverna');
+  const [bgmTracks, setBgmTracks] = useState<string[]>([]);
+  const [customAudios, setCustomAudios] = useState<any[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
   const [sfxShortcuts, setSfxShortcuts] = useState<string[]>([]);
   const [npcName, setNpcName] = useState('');
   const [npcAudioUrl, setNpcAudioUrl] = useState('');
   const [sensoryText, setSensoryText] = useState('');
   const [secretNotes, setSecretNotes] = useState('');
+
+  useEffect(() => {
+    if (activeCampaign?.id && isSupabaseConfigured()) {
+      supabase
+        .from('campaign_audio_assets')
+        .select('*')
+        .eq('campaign_id', activeCampaign.id)
+        .then(({ data }) => {
+          if (data) setCustomAudios(data);
+        });
+
+      supabase
+        .from('campaign_audio_favorites')
+        .select('audio_id')
+        .eq('campaign_id', activeCampaign.id)
+        .then(({ data }) => {
+          if (data) setFavorites(data.map((f: any) => f.audio_id));
+        });
+    }
+  }, [activeCampaign?.id, selectedScene?.id]);
+
+  // Formatar todas as músicas BGM (SRD + Custom)
+  const srdBgms = BGM_TRACKS.map(t => ({ ...t, isCustom: false }));
+  const customBgms = customAudios
+    .filter(a => a.type === 'bgm')
+    .map(a => ({ id: a.id, name: a.name, url: a.url, category: a.category, isLoop: a.is_loop, isCustom: true }));
+  const allBgmTracks = [...srdBgms, ...customBgms];
+
+  // Formatar todos os efeitos SFX (SRD + Custom)
+  const srdSfxs = SFX_BUTTONS.map(s => ({ ...s, isLoop: false, isCustom: false }));
+  const customSfxs = customAudios
+    .filter(a => a.type === 'sfx')
+    .map(a => ({ id: a.id, name: a.name, iconName: a.icon_name || 'Music', url: a.url, category: a.category, isCustom: true }));
+  const allSfxTracks = [...srdSfxs, ...customSfxs];
+
+  // Identificar favoritos
+  const favoriteBgmTracks = allBgmTracks.filter(t => favorites.includes(t.id));
+  const favoriteSfxTracks = allSfxTracks.filter(s => favorites.includes(s.id));
   const [sceneCombatants, setSceneCombatants] = useState<Combatant[]>([]);
   const [timeOfDayHour, setTimeOfDayHour] = useState<number>(12);
   const [hasFog, setHasFog] = useState<boolean>(false);
@@ -94,6 +135,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       setSceneType(selectedScene.sceneType || 'social');
       setImageUrl(selectedScene.imageUrl || '');
       setBgmCategory(selectedScene.bgmCategory || 'taverna');
+      setBgmTracks(selectedScene.bgmTracks || []);
       setSfxShortcuts(selectedScene.sfxShortcuts || []);
       setNpcName(selectedScene.npcName || '');
       setNpcAudioUrl(selectedScene.npcAudioUrl || '');
@@ -109,6 +151,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       setSceneType('social');
       setImageUrl('');
       setBgmCategory('taverna');
+      setBgmTracks([]);
       setSfxShortcuts([]);
       setNpcName('');
       setNpcAudioUrl('');
@@ -149,6 +192,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       sceneType,
       imageUrl: imageUrl || undefined,
       bgmCategory,
+      bgmTracks,
       sfxShortcuts,
       npcName: npcName || undefined,
       npcAudioUrl: npcAudioUrl || undefined,
@@ -684,47 +728,194 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                     </div>
                   </div>
                 )}
-
                 {activeSubTab === 'audio' && (
                   <div className="max-w-2xl mx-auto space-y-6">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-400 mb-1">Trilha Sonora BGM Pré-Carregada:</label>
-                      <select
-                        value={bgmCategory}
-                        onChange={(e) => setBgmCategory(e.target.value as any)}
-                        className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
-                      >
-                        <option value="taverna">🍺 Taverna Rústica & Cerveja</option>
-                        <option value="combate">⚔️ Combate Épico dos Dragões</option>
-                        <option value="masmorra">🏰 Masmorra Sombria & Ecos</option>
-                        <option value="tensao">⚡ Tensão & Perigo Iminente</option>
-                        <option value="exploracao">🌲 Exploração da Natureza</option>
-                      </select>
+                    {/* Trilhas BGM Selecionadas */}
+                    <div className="space-y-2">
+                      <label className="block text-xs font-semibold text-slate-400">Trilhas de Música Selecionadas para esta Cena (BGM):</label>
+                      {bgmTracks.length === 0 ? (
+                        <div className="text-xs text-slate-500 italic p-3 bg-[#0a0d14] rounded-xl border border-dashed border-[#2a3449]">
+                          Nenhuma música associada a esta cena. Selecione abaixo para adicionar.
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5 p-2 bg-[#0a0d14] rounded-xl border border-[#2a3449]">
+                          {bgmTracks.map(trackId => {
+                            const track = allBgmTracks.find(t => t.id === trackId);
+                            return (
+                              <span key={trackId} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-pink-950/40 text-pink-300 text-xs font-bold rounded-lg border border-pink-500/20">
+                                <span>{track ? track.name : 'Trilha Customizada'}</span>
+                                <button 
+                                  type="button" 
+                                  onClick={() => setBgmTracks(bgmTracks.filter(id => id !== trackId))}
+                                  className="text-pink-500 hover:text-pink-300 font-bold ml-1"
+                                >
+                                  &times;
+                                </button>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-400 mb-2">
-                        Atalhos Especiais de SFX (Selecione até 3 efeitos sonoros rápidos):
-                      </label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {SFX_BUTTONS.map((sfx) => {
-                          const isSelected = sfxShortcuts.includes(sfx.id);
+                    {/* Sugestões de Músicas Favoritas */}
+                    {favoriteBgmTracks.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] uppercase font-bold text-pink-400 tracking-wider flex items-center gap-1">⭐ Sugestões Favoritas (BGM)</span>
+                        <div className="grid grid-cols-2 gap-2">
+                          {favoriteBgmTracks.map(track => {
+                            const isSelected = bgmTracks.includes(track.id);
+                            return (
+                              <button
+                                key={track.id}
+                                type="button"
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setBgmTracks(bgmTracks.filter(id => id !== track.id));
+                                  } else {
+                                    setBgmTracks([...bgmTracks, track.id]);
+                                  }
+                                }}
+                                className={`p-2.5 rounded-xl border text-left text-xs font-bold transition-all flex items-center justify-between ${
+                                  isSelected
+                                    ? 'bg-pink-500/20 border-pink-500 text-pink-300'
+                                    : 'bg-[#0a0d14] border-[#2a3449] text-slate-400 hover:text-slate-200'
+                                }`}
+                              >
+                                <span className="truncate">{track.name}</span>
+                                <span>{isSelected ? '✓' : '+'}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Todas as Trilhas de Música */}
+                    <div className="space-y-2">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Todas as Músicas (SRD & Uploads)</span>
+                      <div className="max-h-40 overflow-y-auto pr-1 space-y-1.5 border border-[#2a3449] rounded-xl p-2 bg-[#0a0d14]">
+                        {allBgmTracks.map(track => {
+                          const isSelected = bgmTracks.includes(track.id);
                           return (
                             <button
-                              key={sfx.id}
+                              key={track.id}
                               type="button"
-                              onClick={() => handleToggleSfxShortcut(sfx.id)}
-                              className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between ${
+                              onClick={() => {
+                                  if (isSelected) {
+                                    setBgmTracks(bgmTracks.filter(id => id !== track.id));
+                                  } else {
+                                    setBgmTracks([...bgmTracks, track.id]);
+                                  }
+                              }}
+                              className={`w-full p-2 rounded-lg text-left text-xs transition-all flex items-center justify-between ${
                                 isSelected
-                                  ? 'bg-purple-500/20 border-purple-500 text-purple-300 font-bold'
-                                  : 'bg-[#0a0d14] border-[#2a3449] text-slate-400 hover:text-slate-200'
+                                  ? 'bg-pink-900/30 text-pink-300 font-bold'
+                                  : 'hover:bg-[#121824] text-slate-400 hover:text-slate-200'
                               }`}
                             >
-                              <span className="text-xs">{sfx.name}</span>
-                              {isSelected && <Volume2 className="w-3.5 h-3.5 text-purple-400" />}
+                              <span className="truncate">{track.name}</span>
+                              <span className="text-[10px] font-mono text-slate-500">
+                                {track.isCustom ? 'Upload' : 'Padrão'}
+                              </span>
                             </button>
                           );
                         })}
+                      </div>
+                    </div>
+
+                    {/* SFX Section */}
+                    <div className="pt-4 border-t border-slate-800 space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-400 mb-2">
+                          Atalhos de Efeitos Sonoros SFX Selecionados:
+                        </label>
+                        {sfxShortcuts.length === 0 ? (
+                          <div className="text-xs text-slate-500 italic p-3 bg-[#0a0d14] rounded-xl border border-dashed border-[#2a3449]">
+                            Nenhum efeito sonoro rápido associado a esta cena.
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5 p-2 bg-[#0a0d14] rounded-xl border border-[#2a3449]">
+                            {sfxShortcuts.map(sfxId => {
+                              const sfx = allSfxTracks.find(s => s.id === sfxId);
+                              return (
+                                <span key={sfxId} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-950/40 text-amber-300 text-xs font-bold rounded-lg border border-amber-500/20">
+                                  <span>{sfx ? sfx.name : 'Efeito Customizado'}</span>
+                                  <button 
+                                    type="button" 
+                                    onClick={() => setSfxShortcuts(sfxShortcuts.filter(id => id !== sfxId))}
+                                    className="text-amber-500 hover:text-amber-300 font-bold ml-1"
+                                  >
+                                    &times;
+                                  </button>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Sugestões de SFX Favoritos */}
+                      {favoriteSfxTracks.length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1">⭐ Sugestões Favoritas (SFX)</span>
+                          <div className="grid grid-cols-3 gap-2">
+                            {favoriteSfxTracks.map(sfx => {
+                              const isSelected = sfxShortcuts.includes(sfx.id);
+                              return (
+                                <button
+                                  key={sfx.id}
+                                  type="button"
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      setSfxShortcuts(sfxShortcuts.filter(id => id !== sfx.id));
+                                    } else {
+                                      setSfxShortcuts([...sfxShortcuts, sfx.id]);
+                                    }
+                                  }}
+                                  className={`p-2 rounded-xl border text-center text-xs transition-all flex flex-col items-center gap-1 ${
+                                    isSelected
+                                      ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold'
+                                      : 'bg-[#0a0d14] border-[#2a3449] text-slate-400 hover:text-slate-200'
+                                  }`}
+                                >
+                                  <span className="text-[10px] truncate">{sfx.name}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Todos os Efeitos SFX */}
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1.5">Todos os Efeitos Sonoros</span>
+                        <div className="grid grid-cols-3 gap-2">
+                          {allSfxTracks.map((sfx) => {
+                            const isSelected = sfxShortcuts.includes(sfx.id);
+                            return (
+                              <button
+                                key={sfx.id}
+                                type="button"
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSfxShortcuts(sfxShortcuts.filter((id) => id !== sfx.id));
+                                  } else {
+                                    setSfxShortcuts([...sfxShortcuts, sfx.id]);
+                                  }
+                                }}
+                                className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center gap-1 ${
+                                  isSelected
+                                    ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold shadow-inner'
+                                    : 'bg-[#0a0d14] border-[#2a3449] text-slate-400 hover:text-slate-200'
+                                }`}
+                              >
+                                <span className="text-xs truncate">{sfx.name}</span>
+                                <span className="text-[8px] font-mono text-slate-500 uppercase">{sfx.isCustom ? 'Upload' : sfx.category}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   </div>

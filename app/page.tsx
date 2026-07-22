@@ -14,6 +14,7 @@ import { MapMaker } from '@/components/MapMaker';
 import { AICoPilot } from '@/components/AICoPilot';
 import { LoreGraph } from '@/components/LoreGraph';
 import { AudioMaestro } from '@/components/AudioMaestro';
+import { AudioMaestroPanel } from '@/components/AudioMaestroPanel';
 import { CompendiumModal } from '@/components/CompendiumModal';
 import { PlayerViewModal } from '@/components/PlayerViewModal';
 import { AuthModal } from '@/components/AuthModal';
@@ -261,12 +262,7 @@ function MainApp() {
               )}
 
               {activeTab === 'audio' && (
-                <div className="flex-1 p-6 bg-[#0a0d14]">
-                  <h2 className="text-lg font-bold text-slate-100 mb-2">Painel Maestro de Áudio & Soundboard</h2>
-                  <p className="text-xs text-slate-400">
-                    Utilize os controles na barra inferior para alternar trilhas de fundo BGM ou disparar efeitos sonoros SFX instantâneos durante a sessão.
-                  </p>
-                </div>
+                <AudioMaestroPanel />
               )}
 
               {/* Right Panel AI Assistant always accessible on desktop when not on AI, Worldbuilder, SessionStudio or Campaign Settings tab */}

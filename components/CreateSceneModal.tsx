@@ -50,6 +50,7 @@ export const CreateSceneModal: React.FC<CreateSceneModalProps> = ({
       npcName: npcName || undefined,
       sensoryText: sensoryText || undefined,
       bgmCategory,
+      bgmTracks: [`bgm-${bgmCategory}`],
       combatants: defaultCombatants,
     });
 
