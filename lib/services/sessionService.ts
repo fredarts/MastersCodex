@@ -83,6 +83,10 @@ export const sessionService = {
           npcAudioUrl: sc.npc_audio_url,
           sfxShortcuts: sc.sfx_shortcuts,
           combatants: sc.combatants,
+          timeOfDay: sc.time_of_day,
+          timeOfDayHour: sc.time_of_day_hour,
+          hasFog: sc.has_fog,
+          hasRain: sc.has_rain,
         }));
       }
     }
@@ -114,6 +118,10 @@ export const sessionService = {
         npc_audio_url: sceneData.npcAudioUrl,
         sfx_shortcuts: sceneData.sfxShortcuts,
         combatants: sceneData.combatants,
+        time_of_day: sceneData.timeOfDay,
+        time_of_day_hour: sceneData.timeOfDayHour,
+        has_fog: sceneData.hasFog,
+        has_rain: sceneData.hasRain,
       }).select().single();
 
       if (data) newScene.id = data.id;
@@ -135,6 +143,10 @@ export const sessionService = {
         npc_audio_url: scene.npcAudioUrl,
         sfx_shortcuts: scene.sfxShortcuts,
         combatants: scene.combatants,
+        time_of_day: scene.timeOfDay,
+        time_of_day_hour: scene.timeOfDayHour,
+        has_fog: scene.hasFog,
+        has_rain: scene.hasRain,
       }).eq('id', scene.id);
     }
   },

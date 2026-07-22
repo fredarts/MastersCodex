@@ -103,6 +103,10 @@ CREATE TABLE IF NOT EXISTS public.scenes (
   npc_audio_url TEXT,
   sfx_shortcuts JSONB DEFAULT '[]'::jsonb,
   combatants JSONB DEFAULT '[]'::jsonb,
+  time_of_day TEXT,
+  time_of_day_hour REAL DEFAULT 12,
+  has_fog BOOLEAN DEFAULT false,
+  has_rain BOOLEAN DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -115,6 +119,10 @@ ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS npc_audio_url TEXT;
 ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS sfx_shortcuts JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS combatants JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS time_of_day TEXT;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS time_of_day_hour REAL DEFAULT 12;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS has_fog BOOLEAN DEFAULT false;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS has_rain BOOLEAN DEFAULT false;
 
 -- 1.8 Tabela Campaign Feed Events
 CREATE TABLE IF NOT EXISTS public.campaign_feed_events (
@@ -156,6 +164,21 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+-- 1.9 Tabela Character Sheets (Fichas de Personagens em Tempo Real)
+CREATE TABLE IF NOT EXISTS public.character_sheets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL,
+  campaign_id UUID REFERENCES public.campaigns(id) ON DELETE CASCADE,
+  character_name TEXT NOT NULL,
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Garantir colunas e índices
+ALTER TABLE public.character_sheets ADD COLUMN IF NOT EXISTS data JSONB NOT NULL DEFAULT '{}'::jsonb;
+CREATE INDEX IF NOT EXISTS idx_character_sheets_user_campaign ON public.character_sheets(user_id, campaign_id);
 
 -- ==============================================================================
 -- LIMPEZA DE POLÍTICAS RLS ANTIGAS (PREVINE ERRO: infinite recursion detected)
@@ -206,6 +229,8 @@ CREATE POLICY "Allow_All_Character_Sheets" ON public.character_sheets FOR ALL US
 -- VIEW SEGURA DE CENAS PARA JOGADORES (OMITE NOTAS SECRETAS DO MESTRE)
 -- ==============================================================================
 
+DROP VIEW IF EXISTS public.scenes_player_view CASCADE;
+
 CREATE OR REPLACE VIEW public.scenes_player_view AS
 SELECT 
   id,
@@ -220,23 +245,12 @@ SELECT
   npc_audio_url,
   sfx_shortcuts,
   combatants,
+  time_of_day,
+  time_of_day_hour,
+  has_fog,
+  has_rain,
   created_at
 FROM public.scenes;
-
--- 1.9 Tabela Character Sheets (Fichas de Personagens em Tempo Real)
-CREATE TABLE IF NOT EXISTS public.character_sheets (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT NOT NULL,
-  campaign_id UUID REFERENCES public.campaigns(id) ON DELETE CASCADE,
-  character_name TEXT NOT NULL,
-  data JSONB NOT NULL DEFAULT '{}'::jsonb,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- Garantir colunas e índices
-ALTER TABLE public.character_sheets ADD COLUMN IF NOT EXISTS data JSONB NOT NULL DEFAULT '{}'::jsonb;
-CREATE INDEX IF NOT EXISTS idx_character_sheets_user_campaign ON public.character_sheets(user_id, campaign_id);
 
 -- ==============================================================================
 -- PUBLICAÇÃO SUPABASE REALTIME (HABILITA WEBSOCKETS NAS TABELAS)

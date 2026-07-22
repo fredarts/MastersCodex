@@ -16,7 +16,18 @@ interface BattleGrid3DProps {
   selectedTargetId?: string;
   onSelectTarget?: (c: Combatant) => void;
   onSelectCombatant?: (c: Combatant) => void;
+  onUpdateCombatants?: (updated: Combatant[]) => void;
   interactive?: boolean;
+  isPlacementPhase?: boolean;
+  setupMode?: 'normal' | 'player_ambush' | 'player_surprised';
+  timeOfDayPreset?: 'day' | 'sunset' | 'night' | 'fog' | 'storm';
+  timeOfDayHour?: number;
+  hasFog?: boolean;
+  hasRain?: boolean;
+  onTimeOfDayChange?: (time: 'day' | 'sunset' | 'night' | 'fog' | 'storm') => void;
+  onEnvironmentChange?: (env: { timeOfDayHour: number; hasFog: boolean; hasRain: boolean }) => void;
+  onConfirmPlacement?: () => void;
+  userRole?: 'dm' | 'player';
 }
 
 const getDirectionLabel = (angleDeg: number): string => {
@@ -71,7 +82,18 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   selectedTargetId,
   onSelectTarget,
   onSelectCombatant,
+  onUpdateCombatants,
   interactive = true,
+  isPlacementPhase = false,
+  setupMode = 'normal',
+  timeOfDayPreset,
+  timeOfDayHour,
+  hasFog: hasFogProp,
+  hasRain: hasRainProp,
+  onTimeOfDayChange,
+  onEnvironmentChange,
+  onConfirmPlacement,
+  userRole,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { roleMode, user } = useAuth();
@@ -114,10 +136,17 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     updateTokenRotation3DRef.current = updateTokenRotation3D;
   }, [updateTokenRotation3D]);
 
-  // Permission Check: Mestre pode girar todos, Player apenas o seu próprio personagem
+  // Permission Check: Mestre pode girar/mover todos, Player apenas o seu próprio personagem (se não for surpreendido)
   const canUserControlCombatant = (c: Combatant | undefined): boolean => {
     if (!c) return false;
-    if (roleMode === 'dm') return true;
+    const isDm = roleMode === 'dm' || userRole === 'dm';
+    if (isDm) return true;
+
+    // Se estiver na fase de posicionamento e os jogadores foram surpreendidos, o jogador NÃO pode mover ninguém
+    if (isPlacementPhase && setupMode === 'player_surprised') {
+      return false;
+    }
+
     if (c.type !== 'player') return false;
 
     const userDispName = (user?.displayName || '').toLowerCase().trim();
@@ -180,14 +209,85 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     }
   };
 
-  // Environmental Control State (0 to 24 hours)
-  const [timeOfDay, setTimeOfDay] = useState<number>(12); // Default noon
-  const [isEnvMenuOpen, setIsEnvMenuOpen] = useState<boolean>(false); // Collapsed by default
+  // Environmental Control State (0 to 24 hours + independent Fog & Rain toggles)
+  const [timeOfDay, setTimeOfDay] = useState<number>(timeOfDayHour ?? 12);
+  const [hasFog, setHasFog] = useState<boolean>(hasFogProp ?? false);
+  const [hasRain, setHasRain] = useState<boolean>(hasRainProp ?? false);
+  const [isEnvMenuOpen, setIsEnvMenuOpen] = useState<boolean>(false);
+
   const timeOfDayRef = useRef<number>(timeOfDay);
+  const hasFogRef = useRef<boolean>(hasFog);
+  const hasRainRef = useRef<boolean>(hasRain);
+
+  const handleUpdateEnv = (newTime: number, newFog: boolean, newRain: boolean) => {
+    setTimeOfDay(newTime);
+    setHasFog(newFog);
+    setHasRain(newRain);
+
+    if (onEnvironmentChange) {
+      onEnvironmentChange({ timeOfDayHour: newTime, hasFog: newFog, hasRain: newRain });
+    }
+
+    if (onTimeOfDayChange) {
+      const preset: 'day' | 'sunset' | 'night' | 'fog' | 'storm' =
+        newTime >= 21 || newTime <= 4
+          ? 'night'
+          : newTime >= 16.5
+          ? 'sunset'
+          : newTime >= 4.5 && newTime < 7
+          ? 'fog'
+          : 'day';
+      onTimeOfDayChange(preset);
+    }
+  };
+
+  useEffect(() => {
+    if (timeOfDayHour !== undefined) setTimeOfDay(timeOfDayHour);
+  }, [timeOfDayHour]);
+
+  useEffect(() => {
+    if (hasFogProp !== undefined) setHasFog(hasFogProp);
+  }, [hasFogProp]);
+
+  useEffect(() => {
+    if (hasRainProp !== undefined) setHasRain(hasRainProp);
+  }, [hasRainProp]);
+
+  useEffect(() => {
+    if (!timeOfDayPreset || timeOfDayHour !== undefined) return;
+    switch (timeOfDayPreset) {
+      case 'night':
+        setTimeOfDay(24);
+        break;
+      case 'sunset':
+        setTimeOfDay(18);
+        break;
+      case 'fog':
+        setTimeOfDay(6);
+        setHasFog(true);
+        break;
+      case 'storm':
+        setTimeOfDay(2);
+        setHasRain(true);
+        break;
+      case 'day':
+      default:
+        setTimeOfDay(12);
+        break;
+    }
+  }, [timeOfDayPreset]);
 
   useEffect(() => {
     timeOfDayRef.current = timeOfDay;
   }, [timeOfDay]);
+
+  useEffect(() => {
+    hasFogRef.current = hasFog;
+  }, [hasFog]);
+
+  useEffect(() => {
+    hasRainRef.current = hasRain;
+  }, [hasRain]);
 
   // Refs for WebGL animation loop without re-creating WebGL Context
   const combatantsRef = useRef<Combatant[]>(combatants);
@@ -440,56 +540,38 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       }
     };
 
-    const updateEnvironment = (time: number) => {
-      const sunAngle = ((time - 6) / 24) * Math.PI * 2;
+    const updateEnvironment = (time: number, fogOn: boolean, rainOn: boolean) => {
+      const sunAngle = ((time - 6) / 12) * Math.PI;
       const sunX = Math.cos(sunAngle) * 80;
       const sunY = Math.sin(sunAngle) * 80;
-      const sunZ = 30;
+      const sunZ = -30;
 
-      // Redraw sky canvas texture if time changed (> 0.05h or initial render)
-      if (Math.abs(time - lastRenderedTime) > 0.05) {
+      // Redraw sky texture only when time changes significantly
+      if (Math.abs(time - lastRenderedTime) > 0.1) {
         lastRenderedTime = time;
-
-        skyCtx.clearRect(0, 0, 512, 512);
-        const grad = skyCtx.createLinearGradient(0, 0, 0, 512);
         const colors = getSkyGradientColors(time);
 
-        // Top half (Zenith to Horizon): Rich Sky Gradient
-        grad.addColorStop(0.0, colors.zenith);      // Topo (Zênite)
-        grad.addColorStop(0.22, colors.midSky);     // Meio do céu
-        grad.addColorStop(0.44, colors.horizon);    // Próximo ao horizonte
-        grad.addColorStop(0.49, colors.horizonLine); // Linha do horizonte
+        const gradient = skyCtx.createLinearGradient(0, 0, 0, skyCanvas.height);
+        gradient.addColorStop(0, colors.zenith);
+        gradient.addColorStop(0.4, colors.midSky);
+        gradient.addColorStop(0.75, colors.horizon);
+        gradient.addColorStop(1.0, colors.horizonLine);
+        skyCtx.fillStyle = gradient;
+        skyCtx.fillRect(0, 0, skyCanvas.width, skyCanvas.height);
 
-        // Bottom half (Below Horizon): Transition to Black
-        grad.addColorStop(0.52, '#090d16'); // Logo abaixo do horizonte
-        grad.addColorStop(1.0, '#000000');  // Preto absoluto na base da esfera
-
-        skyCtx.fillStyle = grad;
-        skyCtx.fillRect(0, 0, 512, 512);
-
-        // Nuvens no horizonte para o Dia, Alvorada e Pôr do Sol
-        if (time >= 4.5 && time < 19.5) {
-          const isDay = time >= 7 && time < 16.5;
-          const isSunrise = time >= 4.5 && time < 7;
-          const cloudColor = isDay
-            ? 'rgba(255, 255, 255, '
-            : isSunrise
-            ? 'rgba(254, 215, 170, '
-            : 'rgba(251, 146, 60, ';
-
-          const cloudY = 245; // Exatamente na linha do horizonte (centro do canvas)
-
-          skyCtx.fillStyle = cloudColor + '0.45)';
+        // Clouds or stars
+        if (time >= 4 && time < 20) {
+          const cloudColor = time >= 16.5 ? 'rgba(15, 23, 42,' : 'rgba(255, 255, 255,';
+          skyCtx.fillStyle = cloudColor + '0.5)';
+          const cloudY = skyCanvas.height * 0.55;
           const clouds = [
-            { x: 30, y: cloudY - 12, rx: 75, ry: 20 },
-            { x: 95, y: cloudY - 16, rx: 95, ry: 26 },
-            { x: 175, y: cloudY - 8, rx: 65, ry: 16 },
+            { x: 80, y: cloudY - 10, rx: 100, ry: 28 },
+            { x: 180, y: cloudY - 25, rx: 75, ry: 20 },
             { x: 255, y: cloudY - 18, rx: 115, ry: 30 },
             { x: 355, y: cloudY - 12, rx: 90, ry: 22 },
             { x: 450, y: cloudY - 14, rx: 100, ry: 26 },
             { x: 85, y: cloudY - 35, rx: 55, ry: 15 },
             { x: 235, y: cloudY - 40, rx: 80, ry: 20 },
-            { x: 395, y: cloudY - 36, rx: 70, ry: 16 },
           ];
 
           clouds.forEach((c) => {
@@ -497,32 +579,12 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
             skyCtx.ellipse(c.x, c.y, c.rx, c.ry, 0, 0, Math.PI * 2);
             skyCtx.fill();
           });
-
-          skyCtx.fillStyle = cloudColor + '0.7)';
-          clouds.slice(0, 5).forEach((c) => {
-            skyCtx.beginPath();
-            skyCtx.ellipse(c.x + 8, c.y - 6, c.rx * 0.65, c.ry * 0.55, 0, 0, Math.PI * 2);
-            skyCtx.fill();
-          });
-        } else {
-          // Estrelas brilhantes na Noite no topo da esfera
-          skyCtx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-          const stars = [
-            [50, 40], [120, 80], [200, 30], [280, 90], [350, 45], [420, 110], [480, 25],
-            [90, 150], [160, 120], [240, 170], [310, 130], [390, 160], [460, 140],
-            [30, 200], [110, 210], [190, 180], [270, 220], [360, 190], [440, 205],
-          ];
-          stars.forEach(([sx, sy]) => {
-            skyCtx.beginPath();
-            skyCtx.arc(sx, sy, 1.2, 0, Math.PI * 2);
-            skyCtx.fill();
-          });
         }
 
         skyTexture.needsUpdate = true;
       }
 
-      // Lighting and Fog parameters
+      // Lighting and Fog parameters - based ONLY on time of day (hour slider)
       const lightColor = new THREE.Color();
       const ambientColor = new THREE.Color();
       const fogColor = new THREE.Color();
@@ -531,13 +593,15 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       let fogDensity = 0.003;
 
       if (time >= 4 && time < 7) {
+        // Alvorada
         lightColor.set(0xffa726);
         ambientColor.set(0xffcc80);
         fogColor.set(0x1e3a8a);
         lightIntensity = 3.5;
         ambientIntensity = 2.5;
+        fogDensity = 0.005;
       } else if (time >= 7 && time < 16.5) {
-        // Dia: Iluminação limpa e neblina sutil azul
+        // Dia
         lightColor.set(0xffffff);
         ambientColor.set(0xe2e8f0);
         fogColor.set(0xbae6fd);
@@ -545,19 +609,37 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         ambientIntensity = 4.0;
         fogDensity = 0.003;
       } else if (time >= 16.5 && time < 19.5) {
+        // Pôr do Sol
         lightColor.set(0xe11d48);
         ambientColor.set(0x9a3412);
         fogColor.set(0x1e1b4b);
         lightIntensity = 3.0;
         ambientIntensity = 2.0;
+        fogDensity = 0.006;
       } else {
-        // Noite: Luz e neblina azul noturno escuro (Zero Roxo!)
+        // Noite
         lightColor.set(0x3b82f6);
         ambientColor.set(0x1e293b);
         fogColor.set(0x090d16);
         lightIntensity = 1.2;
         ambientIntensity = 1.2;
         fogDensity = 0.008;
+      }
+
+      // Fog override: if fog toggle is ON, dramatically increase density
+      if (fogOn) {
+        fogDensity = Math.max(fogDensity, 0.035);
+        fogColor.lerp(new THREE.Color(0x334155), 0.6);
+        lightIntensity *= 0.6;
+        ambientIntensity *= 0.7;
+      }
+
+      // Rain darkening: if rain toggle is ON, darken sky slightly
+      if (rainOn) {
+        fogDensity = Math.max(fogDensity, 0.015);
+        fogColor.lerp(new THREE.Color(0x020617), 0.4);
+        lightIntensity *= 0.7;
+        ambientIntensity *= 0.6;
       }
 
       scene.background = null;
@@ -593,6 +675,34 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     const gridHelper = new THREE.GridHelper(gridTotalSize, gridSize, 0xf59e0b, 0x2a3449);
     gridHelper.position.y = 0.01;
     scene.add(gridHelper);
+
+    // 3D Rain Particle System for Tempestade
+    const rainParticleCount = 800;
+    const rainGeo = new THREE.BufferGeometry();
+    const rainPositions = new Float32Array(rainParticleCount * 3);
+    const rainSpeeds = new Float32Array(rainParticleCount);
+
+    for (let i = 0; i < rainParticleCount; i++) {
+      rainPositions[i * 3] = (Math.random() - 0.5) * 30;
+      rainPositions[i * 3 + 1] = Math.random() * 18;
+      rainPositions[i * 3 + 2] = (Math.random() - 0.5) * 30;
+      rainSpeeds[i] = 0.35 + Math.random() * 0.3;
+    }
+
+    rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
+    const rainMat = new THREE.PointsMaterial({
+      color: 0x38bdf8,
+      size: 0.15,
+      transparent: true,
+      opacity: 0.75,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const rainParticles = new THREE.Points(rainGeo, rainMat);
+    rainParticles.visible = false;
+    scene.add(rainParticles);
+
+    let lightningCounter = 0;
 
     // Pins Container Group
     const pinsGroup = new THREE.Group();
@@ -723,14 +833,31 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
           const found = combatantsRef.current.find((c) => c.id === obj!.userData.combatantId);
           if (found) {
             setSelectedCombatantId(found.id);
+            selectedIdRef.current = found.id;
             if (onSelectTargetRef.current) onSelectTargetRef.current(found);
             if (onSelectCombatantRef.current) onSelectCombatantRef.current(found);
+            return;
           }
         }
-      } else {
-        // Deselect rotation anchors when clicking empty background
-        setSelectedCombatantId(null);
       }
+
+      // 3. Click on empty ground / floor mesh -> move selected combatant to clicked grid cell!
+      const activeSelId = selectedIdRef.current;
+      const selCombatant = combatantsRef.current.find((c) => c.id === activeSelId);
+      if (selCombatant && canUserControlCombatantRef.current(selCombatant)) {
+        const floorIntersects = raycaster.intersectObject(floorMesh);
+        if (floorIntersects.length > 0) {
+          const hitPt = floorIntersects[0].point;
+          const gridX = Math.max(-5, Math.min(5, Math.floor(hitPt.x / cellSize)));
+          const gridZ = Math.max(-5, Math.min(5, Math.floor(hitPt.z / cellSize)));
+          updateTokenPosition3D(selCombatant.id, undefined, undefined, gridX, gridZ);
+          return;
+        }
+      }
+
+      // Deselect rotation anchors when clicking empty background
+      setSelectedCombatantId(null);
+      selectedIdRef.current = null;
     };
 
     const domElem = renderer.domElement;
@@ -926,8 +1053,42 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       const currentPosMap = positionsRef.current;
       const turnIdx = turnIdxRef.current;
 
-      // Update Sky Sphere & Environmental Lighting based on timeOfDay
-      updateEnvironment(timeOfDayRef.current);
+      // Update Sky Sphere & Environmental Lighting based on timeOfDay + fog/rain toggles
+      updateEnvironment(timeOfDayRef.current, hasFogRef.current, hasRainRef.current);
+
+      // Weather FX Animation (Rain + Lightning) - driven by hasRain toggle
+      const isRainOn = hasRainRef.current;
+      rainParticles.visible = isRainOn;
+
+      if (isRainOn) {
+        const posAttr = rainGeo.attributes.position as THREE.BufferAttribute;
+        const arr = posAttr.array as Float32Array;
+
+        for (let i = 0; i < rainParticleCount; i++) {
+          arr[i * 3 + 1] -= rainSpeeds[i];
+          arr[i * 3 + 2] += 0.04;
+          if (arr[i * 3 + 1] < 0) {
+            arr[i * 3 + 1] = 18;
+            arr[i * 3] = (Math.random() - 0.5) * 30;
+            arr[i * 3 + 2] = (Math.random() - 0.5) * 30;
+          }
+        }
+        posAttr.needsUpdate = true;
+
+        // Random Lightning Flash (Relâmpago)
+        lightningCounter++;
+        if (lightningCounter > 180 + Math.random() * 200) {
+          lightningCounter = 0;
+          dirLight.intensity = 16.0;
+          dirLight.color.set(0xe0f2fe);
+          ambientLight.intensity = 10.0;
+          setTimeout(() => {
+            dirLight.intensity = 1.0;
+            dirLight.color.set(0x38bdf8);
+            ambientLight.intensity = 1.0;
+          }, 75);
+        }
+      }
 
       // Sync 3D Pin Meshes with current combatants
       currentList.forEach((c, idx) => {
@@ -1206,6 +1367,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
   const activeCombatant = combatants[currentTurnIndex];
   const selectedCombatant = combatants.find((c) => c.id === selectedCombatantId);
+  const targetCombatantForMove = selectedCombatant || activeCombatant;
 
   const handleManualMove = (combatantId: string, dx: number, dz: number) => {
     const curPos = positionsRef.current[combatantId] || { x: 0, z: 0 };
@@ -1222,6 +1384,41 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
         <span>GRID 3D (1,5m / 5ft)</span>
       </div>
+
+      {/* Placement Phase Top Banner */}
+      {isPlacementPhase && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex items-center gap-3 px-4 py-2 bg-slate-950/90 backdrop-blur-md border border-amber-500/50 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-top-3 duration-300 max-w-xl">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-amber-300 uppercase tracking-wider font-mono">
+                {setupMode === 'player_ambush'
+                  ? 'Fase de Posicionamento - Emboscada dos Jogadores 🏹'
+                  : setupMode === 'player_surprised'
+                  ? 'Fase de Posicionamento - Surpresa ⚡'
+                  : 'Fase de Posicionamento Inicial ⚔️'}
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {setupMode === 'player_ambush'
+                  ? 'Jogadores: Escolham suas posições de spawn no grid!'
+                  : setupMode === 'player_surprised'
+                  ? 'Jogadores surpreendidos! O Mestre está organizando as peças.'
+                  : 'Arraste os personagens e monstros para ajustar o encontro.'}
+              </span>
+            </div>
+          </div>
+
+          {(roleMode === 'dm' || userRole === 'dm') && onConfirmPlacement && (
+            <button
+              type="button"
+              onClick={onConfirmPlacement}
+              className="ml-2 px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer whitespace-nowrap"
+            >
+              Confirmar e Iniciar Rodada 1
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Rotation Anchors HUD Overlay for Selected Combatant */}
       {interactive && selectedCombatant && canUserControlCombatant(selectedCombatant) && (
@@ -1331,7 +1528,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
               </button>
             </div>
 
-            {/* Time of Day Section */}
+            {/* Time of Day Section (Hours Slider) */}
             <div className="flex flex-col gap-2.5 bg-[#161d2f]/90 p-2.5 rounded-xl border border-[#2a3449]">
               <div className="flex items-center justify-between text-xs font-mono">
                 <span className="text-slate-400 font-semibold flex items-center gap-1">
@@ -1344,7 +1541,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
                     <Moon className="w-3.5 h-3.5 text-cyan-300" />
                   )}
                   {Math.floor(timeOfDay).toString().padStart(2, '0')}:
-                  {Math.floor((timeOfDay % 1) * 60).toString().padStart(2, '0')}
+                  {Math.floor((timeOfDay % 1) * 60).toString().padStart(2, '0')}h
                 </span>
               </div>
 
@@ -1354,16 +1551,16 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
                 max="24"
                 step="0.25"
                 value={timeOfDay}
-                onChange={(e) => setTimeOfDay(parseFloat(e.target.value))}
+                onChange={(e) => handleUpdateEnv(parseFloat(e.target.value), hasFog, hasRain)}
                 className="w-full h-1.5 bg-[#1e293b] rounded-lg appearance-none cursor-pointer accent-amber-500 hover:accent-amber-400 transition-all"
-                title="Ajustar Hora do Dia"
+                title="Ajustar Hora do Dia (0h às 24h)"
               />
 
-              {/* Time Presets */}
+              {/* Time Presets (Apenas atalhos de hora) */}
               <div className="grid grid-cols-4 gap-1 pt-1">
                 <button
                   type="button"
-                  onClick={() => setTimeOfDay(6)}
+                  onClick={() => handleUpdateEnv(6, hasFog, hasRain)}
                   className={`p-1.5 rounded-lg text-[11px] font-semibold transition-all flex flex-col items-center justify-center gap-1 ${
                     timeOfDay === 6
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
@@ -1372,12 +1569,12 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
                   title="Alvorada (06:00)"
                 >
                   <Sunrise className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-[10px]">Alvorada</span>
+                  <span className="text-[10px]">06:00</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setTimeOfDay(12)}
+                  onClick={() => handleUpdateEnv(12, hasFog, hasRain)}
                   className={`p-1.5 rounded-lg text-[11px] font-semibold transition-all flex flex-col items-center justify-center gap-1 ${
                     timeOfDay === 12
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
@@ -1386,12 +1583,12 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
                   title="Meio-Dia (12:00)"
                 >
                   <Sun className="w-3.5 h-3.5 text-yellow-400" />
-                  <span className="text-[10px]">Dia</span>
+                  <span className="text-[10px]">12:00</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setTimeOfDay(18)}
+                  onClick={() => handleUpdateEnv(18, hasFog, hasRain)}
                   className={`p-1.5 rounded-lg text-[11px] font-semibold transition-all flex flex-col items-center justify-center gap-1 ${
                     timeOfDay === 18
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
@@ -1400,12 +1597,12 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
                   title="Pôr do Sol (18:00)"
                 >
                   <Sunset className="w-3.5 h-3.5 text-orange-400" />
-                  <span className="text-[10px]">Ocaso</span>
+                  <span className="text-[10px]">18:00</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setTimeOfDay(24)}
+                  onClick={() => handleUpdateEnv(24, hasFog, hasRain)}
                   className={`p-1.5 rounded-lg text-[11px] font-semibold transition-all flex flex-col items-center justify-center gap-1 ${
                     timeOfDay === 24 || timeOfDay === 0
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
@@ -1414,51 +1611,61 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
                   title="Noite (24:00)"
                 >
                   <Moon className="w-3.5 h-3.5 text-cyan-300" />
-                  <span className="text-[10px]">Noite</span>
+                  <span className="text-[10px]">24:00</span>
                 </button>
               </div>
             </div>
 
-            {/* Weather & FX Placeholders Section */}
-            <div className="grid grid-cols-3 gap-1.5 border-t border-[#2a3449] pt-2">
-              <button
-                type="button"
-                disabled
-                className="p-1.5 rounded-xl bg-[#161d2f]/50 border border-[#2a3449]/60 text-slate-500 flex flex-col items-center justify-center gap-1 cursor-not-allowed opacity-70"
-                title="Mecânica de Chuva em Breve"
-              >
-                <CloudRain className="w-3.5 h-3.5 text-slate-500" />
-                <span className="text-[10px] font-mono">Chuva</span>
-                <span className="text-[8px] bg-slate-800 text-slate-400 px-1 rounded uppercase font-sans">
-                  Em breve
-                </span>
-              </button>
+            {/* Weather & FX Independent Toggles */}
+            <div className="flex flex-col gap-2 border-t border-[#2a3449] pt-2.5">
+              <span className="text-[10px] font-bold text-slate-400 uppercase font-mono tracking-wider">
+                Efeitos Climáticos Independentes:
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                {/* Fog Toggle */}
+                <button
+                  type="button"
+                  onClick={() => handleUpdateEnv(timeOfDay, !hasFog, hasRain)}
+                  className={`p-2 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
+                    hasFog
+                      ? 'bg-slate-700/50 border-slate-400 text-slate-100 font-bold shadow-md'
+                      : 'bg-[#161d2f]/80 border-[#2a3449] text-slate-400 hover:bg-[#20293d]'
+                  }`}
+                  title="Ativar/Desativar Neblina Volumétrica"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <CloudFog className={`w-4 h-4 ${hasFog ? 'text-slate-200 animate-pulse' : 'text-slate-500'}`} />
+                    <span className="text-xs font-mono">Nevoeiro</span>
+                  </div>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono ${
+                    hasFog ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-500'
+                  }`}>
+                    {hasFog ? 'LIGADO' : 'DESLIGADO'}
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                disabled
-                className="p-1.5 rounded-xl bg-[#161d2f]/50 border border-[#2a3449]/60 text-slate-500 flex flex-col items-center justify-center gap-1 cursor-not-allowed opacity-70"
-                title="Mecânica de Neblina em Breve"
-              >
-                <CloudFog className="w-3.5 h-3.5 text-slate-500" />
-                <span className="text-[10px] font-mono">Neblina</span>
-                <span className="text-[8px] bg-slate-800 text-slate-400 px-1 rounded uppercase font-sans">
-                  Em breve
-                </span>
-              </button>
-
-              <button
-                type="button"
-                disabled
-                className="p-1.5 rounded-xl bg-[#161d2f]/50 border border-[#2a3449]/60 text-slate-500 flex flex-col items-center justify-center gap-1 cursor-not-allowed opacity-70"
-                title="Efeitos Especiais (Tempestade, Raios) em Breve"
-              >
-                <Zap className="w-3.5 h-3.5 text-slate-500" />
-                <span className="text-[10px] font-mono">Efeitos</span>
-                <span className="text-[8px] bg-slate-800 text-slate-400 px-1 rounded uppercase font-sans">
-                  Em breve
-                </span>
-              </button>
+                {/* Rain & Lightning Toggle */}
+                <button
+                  type="button"
+                  onClick={() => handleUpdateEnv(timeOfDay, hasFog, !hasRain)}
+                  className={`p-2 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
+                    hasRain
+                      ? 'bg-cyan-950/60 border-cyan-400 text-cyan-200 font-bold shadow-md'
+                      : 'bg-[#161d2f]/80 border-[#2a3449] text-slate-400 hover:bg-[#20293d]'
+                  }`}
+                  title="Ativar/Desativar Chuva 3D & Relâmpagos"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <CloudRain className={`w-4 h-4 ${hasRain ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}`} />
+                    <span className="text-xs font-mono">Chuva ⚡</span>
+                  </div>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono ${
+                    hasRain ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-slate-800 text-slate-500'
+                  }`}>
+                    {hasRain ? 'LIGADO' : 'DESLIGADO'}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1467,40 +1674,44 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       {/* 3D WebGL Canvas Container */}
       <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
-      {/* Bottom DM Manual Nudge & Selection Overlay */}
-      {interactive && activeCombatant && (
-        <div className="absolute bottom-3 left-3 z-10 bg-[#0f141d]/90 backdrop-blur-md border border-[#2a3449] p-2 rounded-2xl flex items-center gap-3 shadow-2xl">
+      {/* Bottom Manual Move Overlay for Selected or Active Combatant */}
+      {interactive && targetCombatantForMove && canUserControlCombatant(targetCombatantForMove) && (
+        <div className="absolute bottom-3 left-3 z-10 bg-[#0f141d]/90 backdrop-blur-md border border-amber-500/30 p-2.5 rounded-2xl flex items-center gap-3 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200">
           <div className="text-[11px] font-bold text-slate-300 font-mono pl-1">
-            Mover <span className="text-amber-400 font-black">{activeCombatant.name}</span> (1,5m):
+            Mover <span className="text-amber-400 font-black">{targetCombatantForMove.name}</span> (1,5m):
           </div>
 
           <div className="grid grid-cols-3 gap-1 w-24">
             <div />
             <button
-              onClick={() => handleManualMove(activeCombatant.id, 0, -1)}
-              className="p-1 bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] rounded text-slate-200 text-xs font-bold transition-all text-center"
+              type="button"
+              onClick={() => handleManualMove(targetCombatantForMove.id, 0, -1)}
+              className="p-1.5 bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] hover:border-amber-400 rounded-lg text-slate-200 text-xs font-bold transition-all text-center cursor-pointer"
               title="Mover 1,5m Norte (Frente)"
             >
               ▲
             </button>
             <div />
             <button
-              onClick={() => handleManualMove(activeCombatant.id, -1, 0)}
-              className="p-1 bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] rounded text-slate-200 text-xs font-bold transition-all text-center"
+              type="button"
+              onClick={() => handleManualMove(targetCombatantForMove.id, -1, 0)}
+              className="p-1.5 bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] hover:border-amber-400 rounded-lg text-slate-200 text-xs font-bold transition-all text-center cursor-pointer"
               title="Mover 1,5m Oeste (Esquerda)"
             >
               ◀
             </button>
             <button
-              onClick={() => handleManualMove(activeCombatant.id, 0, 1)}
-              className="p-1 bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] rounded text-slate-200 text-xs font-bold transition-all text-center"
+              type="button"
+              onClick={() => handleManualMove(targetCombatantForMove.id, 0, 1)}
+              className="p-1.5 bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] hover:border-amber-400 rounded-lg text-slate-200 text-xs font-bold transition-all text-center cursor-pointer"
               title="Mover 1,5m Sul (Trás)"
             >
               ▼
             </button>
             <button
-              onClick={() => handleManualMove(activeCombatant.id, 1, 0)}
-              className="p-1 bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] rounded text-slate-200 text-xs font-bold transition-all text-center"
+              type="button"
+              onClick={() => handleManualMove(targetCombatantForMove.id, 1, 0)}
+              className="p-1.5 bg-[#161c28] hover:bg-amber-500 hover:text-slate-950 border border-[#2a3449] hover:border-amber-400 rounded-lg text-slate-200 text-xs font-bold transition-all text-center cursor-pointer"
               title="Mover 1,5m Leste (Direita)"
             >
               ▶

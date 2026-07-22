@@ -65,7 +65,11 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               <BattleGrid3D
                 combatants={combatants}
                 currentTurnIndex={currentTurnIndex}
-                interactive={false}
+                timeOfDayHour={activeScene?.timeOfDayHour}
+                hasFog={activeScene?.hasFog}
+                hasRain={activeScene?.hasRain}
+                interactive={true}
+                userRole="player"
               />
             </ThreeErrorBoundary>
           ) : activeScene?.imageUrl ? (

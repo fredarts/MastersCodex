@@ -31,6 +31,8 @@ import { INITIAL_MONSTERS, SFX_BUTTONS } from '@/lib/srd-data';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
+import { BattleGrid3D } from '@/components/BattleGrid3D';
+import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
 
 interface SessionStudioProps {
   onEquipScene: (scene: GameScene) => void;
@@ -68,6 +70,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
   const [sensoryText, setSensoryText] = useState('');
   const [secretNotes, setSecretNotes] = useState('');
   const [sceneCombatants, setSceneCombatants] = useState<Combatant[]>([]);
+  const [timeOfDayHour, setTimeOfDayHour] = useState<number>(12);
+  const [hasFog, setHasFog] = useState<boolean>(false);
+  const [hasRain, setHasRain] = useState<boolean>(false);
   const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
@@ -92,6 +97,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       setSensoryText(selectedScene.sensoryText || '');
       setSecretNotes(selectedScene.secretNotes || '');
       setSceneCombatants(selectedScene.combatants || []);
+      setTimeOfDayHour(selectedScene.timeOfDayHour ?? 12);
+      setHasFog(selectedScene.hasFog ?? false);
+      setHasRain(selectedScene.hasRain ?? false);
     } else {
       setTitle('');
       setSceneType('social');
@@ -103,6 +111,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       setSensoryText('');
       setSecretNotes('');
       setSceneCombatants([]);
+      setTimeOfDayHour(12);
+      setHasFog(false);
+      setHasRain(false);
     }
   }, [selectedScene]);
 
@@ -120,6 +131,13 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
 
   const handleSaveSceneChanges = async () => {
     if (!selectedScene) return;
+    const computedPreset: 'day' | 'sunset' | 'night' | 'fog' | 'storm' =
+      timeOfDayHour >= 21 || timeOfDayHour <= 4
+        ? 'night'
+        : timeOfDayHour >= 16.5
+        ? 'sunset'
+        : 'day';
+
     const updated: GameScene = {
       ...selectedScene,
       title,
@@ -132,9 +150,14 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       sensoryText: sensoryText || undefined,
       secretNotes: secretNotes || undefined,
       combatants: sceneCombatants,
+      timeOfDay: computedPreset,
+      timeOfDayHour,
+      hasFog,
+      hasRain,
     };
 
     await updateScene(updated);
+    setSelectedScene(updated);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
   };
@@ -635,6 +658,37 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                         ))
                       )}
                     </div>
+
+                    {/* Interactive 3D Grid Pre-configuration Preview */}
+                    {sceneCombatants.length > 0 && (
+                      <div className="space-y-2 pt-3 border-t border-[#2a3449]">
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-200 uppercase tracking-wider">
+                          <span>Pré-configuração e Posicionamento 3D no Grid:</span>
+                          <span className="text-[10px] text-amber-400 font-mono font-normal">
+                            Posicione os bonecos, ajuste rotação, horas, nevoeiro e chuva diretamente no painel 3D
+                          </span>
+                        </div>
+
+                        <div className="w-full h-[400px] bg-black rounded-2xl border border-amber-500/30 overflow-hidden relative shadow-xl">
+                          <ThreeErrorBoundary>
+                            <BattleGrid3D
+                              combatants={sceneCombatants}
+                              interactive={true}
+                              isPlacementPhase={true}
+                              timeOfDayHour={timeOfDayHour}
+                              hasFog={hasFog}
+                              hasRain={hasRain}
+                              onEnvironmentChange={(env) => {
+                                setTimeOfDayHour(env.timeOfDayHour);
+                                setHasFog(env.hasFog);
+                                setHasRain(env.hasRain);
+                              }}
+                              userRole="dm"
+                            />
+                          </ThreeErrorBoundary>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

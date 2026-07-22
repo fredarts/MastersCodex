@@ -51,6 +51,7 @@ import { LiveCockpitHeader } from '@/components/live-cockpit/LiveCockpitHeader';
 import { CombatInitiativeTracker } from '@/components/live-cockpit/CombatInitiativeTracker';
 import { AddCombatantModal } from '@/components/live-cockpit/AddCombatantModal';
 import { QuickAudioPanel } from '@/components/live-cockpit/QuickAudioPanel';
+import { BattleSetupModal, BattleSetupMode } from '@/components/live-cockpit/BattleSetupModal';
 
 interface LiveCockpitStudioProps {
   combatants: Combatant[];
@@ -104,6 +105,17 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const [showAddCombatantModal, setShowAddCombatantModal] = useState<boolean>(false);
   const [activeAddTab, setActiveAddTab] = useState<'monsters' | 'players' | 'custom'>('monsters');
   const [combatantSearchQuery, setCombatantSearchQuery] = useState<string>('');
+
+  // Battle Setup & 3D Placement Phase State
+  const [showBattleSetupModal, setShowBattleSetupModal] = useState<boolean>(false);
+  const [isPlacementPhase, setIsPlacementPhase] = useState<boolean>(false);
+  const [battleSetupMode, setBattleSetupMode] = useState<BattleSetupMode>('normal');
+  const [selectedTimeOfDay, setSelectedTimeOfDay] = useState<'day' | 'sunset' | 'night' | 'fog' | 'storm'>('day');
+
+  // Live Environment Override State (syncs from scene, can be modified live by DM)
+  const [liveTimeOfDayHour, setLiveTimeOfDayHour] = useState<number>(12);
+  const [liveHasFog, setLiveHasFog] = useState<boolean>(false);
+  const [liveHasRain, setLiveHasRain] = useState<boolean>(false);
 
   // Custom Combatant Form
   const [customName, setCustomName] = useState('');
@@ -362,6 +374,18 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       setActiveBgmCategory(activeScene.bgmCategory);
     }
 
+    const targetHour = activeScene.timeOfDayHour ?? (activeScene.timeOfDay === 'night' ? 24 : activeScene.timeOfDay === 'sunset' ? 18 : 12);
+    const targetFog = activeScene.hasFog ?? (activeScene.timeOfDay === 'fog');
+    const targetRain = activeScene.hasRain ?? (activeScene.timeOfDay === 'storm');
+
+    setLiveTimeOfDayHour(targetHour);
+    setLiveHasFog(targetFog);
+    setLiveHasRain(targetRain);
+
+    if (activeScene.timeOfDay) {
+      setSelectedTimeOfDay(activeScene.timeOfDay);
+    }
+
     const sceneVersionKey = `${activeScene.id}_${activeScene.updatedAt || ''}_${JSON.stringify(
       activeScene.combatants || []
     )}`;
@@ -443,6 +467,18 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const handleFireSceneLive = (scene: GameScene) => {
     setActiveScene(scene);
 
+    const targetHour = scene.timeOfDayHour ?? (scene.timeOfDay === 'night' ? 24 : scene.timeOfDay === 'sunset' ? 18 : 12);
+    const targetFog = scene.hasFog ?? (scene.timeOfDay === 'fog');
+    const targetRain = scene.hasRain ?? (scene.timeOfDay === 'storm');
+
+    setLiveTimeOfDayHour(targetHour);
+    setLiveHasFog(targetFog);
+    setLiveHasRain(targetRain);
+
+    if (scene.timeOfDay) {
+      setSelectedTimeOfDay(scene.timeOfDay);
+    }
+
     // Auto-load scene's pre-programmed combatants
     if (scene.combatants && scene.combatants.length > 0) {
       setCombatants((prev) => {
@@ -472,6 +508,10 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       imageUrl: scene.imageUrl ? normalizeImageUrl(scene.imageUrl) : undefined,
       sensoryText: scene.sensoryText,
       mode: scene.sceneType === 'combat' ? 'combat' : 'artwork',
+      timeOfDay: scene.timeOfDay || 'day',
+      timeOfDayHour: targetHour,
+      hasFog: targetFog,
+      hasRain: targetRain,
     });
   };
 
@@ -658,9 +698,34 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   };
 
   const handleStartImpromptuCombat = () => {
+    setShowBattleSetupModal(true);
+  };
+
+  const handleConfirmBattleSetup = (mode: BattleSetupMode, timeOfDay: 'day' | 'sunset' | 'night' | 'fog' | 'storm') => {
+    setBattleSetupMode(mode);
+    setSelectedTimeOfDay(timeOfDay);
+
+    const presetHours: Record<string, number> = { day: 12, sunset: 18, night: 24, fog: 6, storm: 2 };
+    const hour = presetHours[timeOfDay] ?? 12;
+    setLiveTimeOfDayHour(hour);
+    if (timeOfDay === 'fog') setLiveHasFog(true);
+    if (timeOfDay === 'storm') setLiveHasRain(true);
+
+    setIsPlacementPhase(true);
     setIsCombatActive(true);
     setLiveDisplayMode('combat');
+    setShowBattleSetupModal(false);
     setShowAddCombatantModal(true);
+
+    broadcastToPlayerView({
+      mode: 'combat',
+      isPlacementPhase: true,
+      setupMode: mode,
+      timeOfDay,
+      timeOfDayHour: hour,
+      hasFog: timeOfDay === 'fog',
+      hasRain: timeOfDay === 'storm',
+    });
   };
 
   const handleEndCombat = async () => {
@@ -929,6 +994,26 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                         broadcastToPlayerView({ targetId: target.id });
                       }}
                       interactive={true}
+                      isPlacementPhase={isPlacementPhase}
+                      setupMode={battleSetupMode}
+                      timeOfDayHour={liveTimeOfDayHour}
+                      hasFog={liveHasFog}
+                      hasRain={liveHasRain}
+                      onEnvironmentChange={(env) => {
+                        setLiveTimeOfDayHour(env.timeOfDayHour);
+                        setLiveHasFog(env.hasFog);
+                        setLiveHasRain(env.hasRain);
+                        broadcastToPlayerView({
+                          timeOfDayHour: env.timeOfDayHour,
+                          hasFog: env.hasFog,
+                          hasRain: env.hasRain,
+                        });
+                      }}
+                      onConfirmPlacement={() => {
+                        setIsPlacementPhase(false);
+                        broadcastToPlayerView({ isPlacementPhase: false });
+                      }}
+                      userRole="dm"
                     />
                   </ThreeErrorBoundary>
                 ) : displayImageUrl ? (
@@ -1776,6 +1861,12 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       <CreateSceneModal
         isOpen={showCreateSceneModal}
         onClose={() => setShowCreateSceneModal(false)}
+      />
+
+      <BattleSetupModal
+        isOpen={showBattleSetupModal}
+        onClose={() => setShowBattleSetupModal(false)}
+        onConfirmSetup={handleConfirmBattleSetup}
       />
     </div>
   );

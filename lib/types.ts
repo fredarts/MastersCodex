@@ -66,6 +66,12 @@ export interface GameScene {
   npcAudioUrl?: string;
   sfxShortcuts?: string[]; // IDs dos botões SFX
   combatants?: Combatant[];
+  timeOfDay?: 'day' | 'sunset' | 'night' | 'fog' | 'storm';
+  timeOfDayHour?: number; // 0.0 - 24.0 horas
+  hasFog?: boolean; // Neblina independente
+  hasRain?: boolean; // Chuva e relâmpagos independentes
+  battleSetupMode?: 'normal' | 'player_ambush' | 'player_surprised';
+  placementZoneRadius?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -136,6 +142,9 @@ export interface Combatant {
   modelUrl?: string;
   notes?: string;
   isCurrentTurn?: boolean;
+  x?: number;
+  z?: number;
+  rotation?: number; // em graus (0-360)
 }
 
 export interface CombatLogEntry {
