@@ -20,7 +20,7 @@ export type WorldEntityCategory = 'npc' | 'location' | 'faction' | 'religion' | 
 
 export type SceneType = 'combat' | 'dialogue' | 'social' | 'exploration';
 
-export type CampaignFeedEventType = 'battle_summary' | 'npc_encounter' | 'session_recap' | 'milestone' | 'house_rule';
+export type CampaignFeedEventType = 'battle_summary' | 'npc_encounter' | 'session_recap' | 'milestone' | 'house_rule' | 'chat_message';
 
 export interface UserProfile {
   id: string;

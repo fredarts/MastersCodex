@@ -182,13 +182,35 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     };
   });
 
+  const getCombatantPos = useCallback((idOrName: string | null | undefined): { x: number; z: number } => {
+    if (!idOrName) return { x: 0, z: 0 };
+
+    if (localPositions[idOrName]) return localPositions[idOrName];
+
+    const idx = combatants.findIndex(
+      (c) => (c.id || c.name) === idOrName || c.id === idOrName || c.name === idOrName
+    );
+
+    if (idx !== -1) {
+      const c = combatants[idx];
+      const key = c.id || c.name;
+      if (localPositions[key]) return localPositions[key];
+      if (c.id && localPositions[c.id]) return localPositions[c.id];
+      if (c.name && localPositions[c.name]) return localPositions[c.name];
+      if (c.x !== undefined && c.z !== undefined) return { x: c.x, z: c.z };
+      return { x: (idx % 5) * 2 - 5, z: Math.floor(idx / 5) * 2 - 5 };
+    }
+
+    return { x: 0, z: 0 };
+  }, [combatants, localPositions]);
+
   const isCombatantInSpellArea = useCallback((c: Combatant, cPos: { x: number; z: number }): boolean => {
     if (!activeSpellTargeting || !casterTokenKey || !spellTargetPosition) return false;
-    if (c.id === casterTokenKey) return false; // Conjurador não se atinge
+    if (c.id === casterTokenKey || c.name === casterTokenKey) return false; // Conjurador não se atinge
 
     const unitsPerMeter = 2 / 1.5;
     const sizeUnits = activeSpellTargeting.size * unitsPerMeter;
-    const caster = localPositions[casterTokenKey] || { x: 0, z: 0 };
+    const caster = getCombatantPos(casterTokenKey);
     const target = spellTargetPosition;
 
     const dx = cPos.x - target.x;
@@ -231,7 +253,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     }
 
     return false;
-  }, [activeSpellTargeting, casterTokenKey, spellTargetPosition, localPositions]);
+  }, [activeSpellTargeting, casterTokenKey, spellTargetPosition, getCombatantPos]);
 
   // Sync token meshes to current combatant state
   const syncTokens = useCallback(() => {
@@ -390,12 +412,45 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         if (raycaster.ray.intersectPlane(groundPlane.current, planeIntersectPoint.current)) {
           event.preventDefault();
           event.stopPropagation();
+
+          // Raycast para verificar se um token específico foi clicado
+          let clickedCombatantId: string | null = null;
+          if (tokenGroupRef.current) {
+            const tokenIntersects = raycaster.intersectObjects(tokenGroupRef.current.children, true);
+            if (tokenIntersects.length > 0) {
+              let obj: THREE.Object3D | null = tokenIntersects[0].object;
+              while (obj && !obj.name.startsWith('token-')) {
+                obj = obj.parent;
+              }
+              if (obj) {
+                const key = obj.name.replace('token-', '');
+                const found = callbacksRef.current.combatants.find(
+                  (c) => (c.id || c.name) === key || c.id === key || c.name === key
+                );
+                if (found) clickedCombatantId = found.id;
+              }
+            }
+          }
+
+          // Para magias AoE, calcula todos os combatentes dentro da área
+          const aoeShape = activeSpellTargetingRef.current.shape;
+          let targetedCombatantIds: string[] = [];
+          if (['circle', 'cone', 'line', 'fan'].includes(aoeShape)) {
+            targetedCombatantIds = callbacksRef.current.combatants
+              .filter((c) => isCombatantInSpellArea(c, getCombatantPos(c.id || c.name)))
+              .map((c) => c.id);
+          } else if (clickedCombatantId) {
+            targetedCombatantIds = [clickedCombatantId];
+          }
+
           const customEvt = new CustomEvent('masters_codex_confirm_spell_cast', {
             detail: {
               casterTokenKey: casterTokenKeyRef.current,
               spell: activeSpellTargetingRef.current,
-              targetPosition: { x: planeIntersectPoint.current.x, z: planeIntersectPoint.current.z }
-            }
+              targetPosition: { x: planeIntersectPoint.current.x, z: planeIntersectPoint.current.z },
+              targetCombatantId: clickedCombatantId,
+              targetedCombatantIds,
+            },
           });
           window.dispatchEvent(customEvt);
         }
@@ -671,7 +726,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     if (!activeSpellTargeting || !casterTokenKey) return;
 
     const unitsPerMeter = 2 / 1.5;
-    const caster = localPositions[casterTokenKey] || { x: 0, z: 0 };
+    const caster = getCombatantPos(casterTokenKey);
     const target = spellTargetPosition || caster;
 
     // 1. Draw Range limit (Cyan outline circle centered at Caster)
@@ -708,7 +763,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       spellMesh.rotation.x = Math.PI / 2;
       spellMesh.position.set(target.x, 0.02, target.z);
       scene.add(spellMesh);
-    } else {
+    } else if (['cone', 'line', 'fan'].includes(activeSpellTargeting.shape)) {
       const dx = target.x - caster.x;
       const dz = target.z - caster.z;
       const dist = Math.sqrt(dx * dx + dz * dz) || 1;
@@ -741,7 +796,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         scene.add(spellMesh);
       }
     }
-  }, [activeSpellTargeting, casterTokenKey, spellTargetPosition, localPositions]);
+  }, [activeSpellTargeting, casterTokenKey, spellTargetPosition, localPositions, combatants, getCombatantPos]);
 
   // Camera preset switcher
   const handleSelectCameraPreset = (presetKey: 'tactical' | 'cinematic' | 'topDown') => {

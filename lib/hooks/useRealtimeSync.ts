@@ -21,7 +21,7 @@ export interface RealtimeSyncPayloads {
     hasFog?: boolean;
     hasRain?: boolean;
     floorTextureUrl?: string;
-    activeSpellTargeting?: { name: string; range: number; shape: 'circle' | 'cone' | 'line' | 'fan'; size: number } | null;
+    activeSpellTargeting?: { name: string; range: number; shape: 'circle' | 'cone' | 'line' | 'fan' | 'target' | 'multi-target'; size: number } | null;
     casterTokenKey?: string | null;
     spellTargetPosition?: { x: number; z: number } | null;
   };

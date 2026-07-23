@@ -1,30 +1,30 @@
 export interface SpellAoEDefinition {
   name: string;
   range: number;        // Alcance máximo em metros (0 para Pessoal/Toque)
-  shape: 'circle' | 'cone' | 'line' | 'fan';
-  size: number;         // Raio do círculo, comprimento do cone/linha em metros
+  shape: 'circle' | 'cone' | 'line' | 'fan' | 'target' | 'multi-target';
+  size: number;         // Raio do círculo, comprimento do cone/linha em metros (0 se não for AoE)
 }
 
 const SPELL_SHAPES_MAPPING: Record<string, Omit<SpellAoEDefinition, 'name'>> = {
   // Truques
-  'explosao mistica': { range: 36, shape: 'line', size: 36 },
-  'eldritch blast': { range: 36, shape: 'line', size: 36 },
-  'chama sagrada': { range: 18, shape: 'circle', size: 1.5 },
-  'sacred flame': { range: 18, shape: 'circle', size: 1.5 },
-  'chicote de espinhos': { range: 9, shape: 'line', size: 9 },
-  'thorn whip': { range: 9, shape: 'line', size: 9 },
+  'explosao mistica': { range: 36, shape: 'target', size: 0 },
+  'eldritch blast': { range: 36, shape: 'target', size: 0 },
+  'chama sagrada': { range: 18, shape: 'target', size: 0 },
+  'sacred flame': { range: 18, shape: 'target', size: 0 },
+  'chicote de espinhos': { range: 9, shape: 'target', size: 0 },
+  'thorn whip': { range: 9, shape: 'target', size: 0 },
 
   // Nível 1
-  'missil magico': { range: 36, shape: 'line', size: 36 },
-  'magic missile': { range: 36, shape: 'line', size: 36 },
+  'missil magico': { range: 36, shape: 'multi-target', size: 0 },
+  'magic missile': { range: 36, shape: 'multi-target', size: 0 },
   'maos flamejantes': { range: 0, shape: 'cone', size: 4.5 },
   'burning hands': { range: 0, shape: 'cone', size: 4.5 },
   'leque cromatico': { range: 0, shape: 'fan', size: 4.5 },
   'color spray': { range: 0, shape: 'fan', size: 4.5 },
 
   // Nível 2
-  'raio de ruina': { range: 36, shape: 'line', size: 36 },
-  'scorching ray': { range: 36, shape: 'line', size: 36 },
+  'raio de ruina': { range: 36, shape: 'target', size: 0 },
+  'scorching ray': { range: 36, shape: 'target', size: 0 },
 
   // Nível 3
   'bola de fogo': { range: 45, shape: 'circle', size: 6 },

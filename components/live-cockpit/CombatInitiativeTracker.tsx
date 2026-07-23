@@ -137,7 +137,7 @@ export const CombatInitiativeTracker: React.FC<CombatInitiativeTrackerProps> = (
                 className="font-bold text-sm text-amber-300 cursor-pointer hover:text-amber-400 hover:underline transition-colors"
                 onClick={() => {
                   if (activeCombatant) {
-                    openSheet(activeCombatant.id || activeCombatant.name, activeCombatant.type, activeCombatant.name, activeCombatant);
+                    openSheet(activeCombatant.id || activeCombatant.name, activeCombatant.type === 'player' ? 'pc' : activeCombatant.type, activeCombatant.name, activeCombatant);
                   }
                 }}
               >
@@ -189,7 +189,7 @@ export const CombatInitiativeTracker: React.FC<CombatInitiativeTrackerProps> = (
                       <div className="flex items-center gap-2">
                         <span 
                           className="font-semibold text-xs text-zinc-100 truncate cursor-pointer hover:text-amber-400 hover:underline transition-colors"
-                          onClick={() => openSheet(c.id || c.name, c.type, c.name, c)}
+                          onClick={() => openSheet(c.id || c.name, c.type === 'player' ? 'pc' : c.type, c.name, c)}
                         >
                           {c.name}
                         </span>

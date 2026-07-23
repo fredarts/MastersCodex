@@ -295,7 +295,7 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
                       <div className="flex items-center gap-2">
                         <h4 
                           className="font-bold text-slate-100 text-sm cursor-pointer hover:text-amber-400 hover:underline transition-colors"
-                          onClick={() => openSheet(c.id || c.name, c.type, c.name, c)}
+                          onClick={() => openSheet(c.id || c.name, c.type === 'player' ? 'pc' : c.type, c.name, c)}
                         >
                           {c.name}
                         </h4>

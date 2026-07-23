@@ -66,13 +66,15 @@ function MainApp() {
     createFeedEvent({
       campaignId: activeCampaign?.id || '',
       eventType: 'chat_message',
-      eventData: {
+      title: `Rolagem: ${title}`,
+      summary: message,
+      details: {
         sender: 'Dungeon Master',
         message,
         isPrivate,
         rollDetails: { formula: diceFormula, result: total, d20 }
       },
-      isVisibleToPlayers: !isPrivate
+      isPublic: !isPrivate
     });
   };
 

@@ -39,7 +39,7 @@ interface LiveCockpitContextType {
   spellTargetPosition: { x: number; z: number } | null;
   setSpellTargetPosition: (pos: { x: number; z: number } | null) => void;
   activeSheets: ActiveSheetState[];
-  openSheet: (id: string, type: 'pc' | 'monster' | 'npc', name: string, data?: any) => void;
+  openSheet: (id: string, type: 'pc' | 'player' | 'monster' | 'npc', name: string, data?: any) => void;
   minimizeSheet: (id: string) => void;
   maximizeSheet: (id: string) => void;
   closeSheet: (id: string) => void;

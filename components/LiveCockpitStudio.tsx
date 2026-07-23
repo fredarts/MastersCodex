@@ -40,8 +40,9 @@ import { useSession } from '@/lib/hooks/useSession';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { useAuth } from '@/context/AuthContext';
 import { useCharacterSync } from '@/lib/hooks/useCharacterSync';
+import { getAttributeModifier } from '@/lib/dnd5e-calculator';
 import { getSpellAoEDefinition } from '@/lib/dnd5e-spells-shapes';
-import { GameScene, SceneType, Combatant, ConditionType, CampaignMember, WorldEntity } from '@/lib/types';
+import { GameScene, SceneType, Combatant, ConditionType, CampaignMember, WorldEntity, CharacterSheet, CharacterSpell } from '@/lib/types';
 import { INITIAL_MONSTERS, SFX_BUTTONS, CONDITIONS, BGM_TRACKS } from '@/lib/srd-data';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 import { useAudio } from '@/context/AudioContext';
@@ -122,6 +123,13 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
   const [playingNpcVoice, setPlayingNpcVoice] = useState(false);
   const [activeBgmCategory, setActiveBgmCategory] = useState<string>('taverna');
+  const [magicMissileModalState, setMagicMissileModalState] = useState<{
+    isOpen: boolean;
+    caster: Combatant;
+    spell: CharacterSpell;
+    availableDarts: number;
+    dartAllocations: Record<string, number>;
+  } | null>(null);
 
   // Refs para save debounced de posições/rotações de tokens
   const savePositionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -426,17 +434,262 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const handleCastSpellFromCard = (c: Combatant, sheet: CharacterSheet, spell: CharacterSpell) => {
     const aoe = getSpellAoEDefinition(spell.name);
     
-    if (aoe && aoe.shape && aoe.size > 0) {
+    if (aoe) {
       // Ativa o modo de mira
       setActiveSpellTargeting(aoe);
-      setCasterTokenKey(c.id);
+      const casterKey = c.id || c.name;
+      setCasterTokenKey(casterKey);
+
       // Posição inicial no próprio conjurador
-      setSpellTargetPosition({ x: c.x ?? 1, z: c.z ?? 1 });
-      toast.info(`Modo de mira de área ativado para ${spell.name} (${aoe.shape}). Mova o mouse no grid e clique para confirmar.`);
+      const pos = tokenPositions3D[casterKey] || (c.id ? tokenPositions3D[c.id] : null) || (c.name ? tokenPositions3D[c.name] : null) || (c.x !== undefined && c.z !== undefined ? { x: c.x, z: c.z } : null);
+      const casterIdx = combatants.findIndex(x => (x.id || x.name) === casterKey || x.id === c.id || x.name === c.name);
+      const fallbackX = casterIdx !== -1 ? (casterIdx % 5) * 2 - 5 : 0;
+      const fallbackZ = casterIdx !== -1 ? Math.floor(casterIdx / 5) * 2 - 5 : 0;
+
+      const casterX = pos ? pos.x : fallbackX;
+      const casterZ = pos ? pos.z : fallbackZ;
+
+      setSpellTargetPosition({ x: casterX, z: casterZ });
+      if (aoe.shape === 'multi-target') {
+        toast.info(`Magia ${spell.name}: Clique no grid para alocar os mísseis nos alvos.`);
+      } else if (aoe.shape === 'target') {
+        toast.info(`Magia ${spell.name}: Clique no alvo dentro do raio de ${aoe.range}m no grid.`);
+      } else {
+        toast.info(`Modo de mira de área ativado para ${spell.name} (${aoe.shape}). Mova o mouse no grid e clique para confirmar.`);
+      }
     } else {
       // Magias sem AoE (alvo único, self, toque, etc.)
       executeSpellCastRoll(c, sheet, spell);
     }
+  };
+
+  const executeSingleTargetSpell = async (
+    caster: Combatant,
+    sheet: CharacterSheet | undefined,
+    spell: CharacterSpell,
+    target?: Combatant
+  ) => {
+    if (sheet && spell.level > 0 && sheet.spellSlots?.[spell.level]) {
+      const currentSlots = sheet.spellSlots[spell.level];
+      if (currentSlots.used < currentSlots.total) {
+        const updatedSheet = {
+          ...sheet,
+          spellSlots: {
+            ...sheet.spellSlots,
+            [spell.level]: { ...currentSlots, used: currentSlots.used + 1 }
+          }
+        };
+        await saveSheet(updatedSheet);
+      } else {
+        toast.error(`Sem slots disponíveis para o Nível ${spell.level}!`);
+        return;
+      }
+    }
+
+    const profBonus = sheet ? Math.floor((sheet.level - 1) / 4) + 2 : 2;
+    const ability = sheet?.spellcastingAbility || 'int';
+    const modValue = sheet ? getAttributeModifier(sheet, ability) : 3;
+    const spellAttackBonus = sheet?.spellAttackBonusOverride ?? (profBonus + modValue);
+
+    const roll = Math.floor(Math.random() * 20) + 1;
+    const total = roll + spellAttackBonus;
+    const isCrit = roll === 20;
+    const isFail = roll === 1;
+
+    let isHit = false;
+    let damage = 0;
+
+    if (target) {
+      isHit = isCrit || (!isFail && total >= target.ac);
+      if (isHit) {
+        const cleanName = spell.name.toLowerCase();
+        const diceSides = cleanName.includes('eldritch') || cleanName.includes('explosao') ? 10 : 8;
+        damage = Math.floor(Math.random() * diceSides) + 1;
+        if (isCrit) damage += Math.floor(Math.random() * diceSides) + 1;
+
+        const newHp = Math.max(0, target.hp - damage);
+        setCombatants(prev => {
+          const next = prev.map(c => c.id === target.id ? { ...c, hp: newHp } : c);
+          if (activeSceneRef.current) updateScene({ ...activeSceneRef.current, combatants: next });
+          return next;
+        });
+      }
+    }
+
+    setDiceResult({
+      title: `${spell.name} -> ${target ? target.name : 'Alvo'}`,
+      roll,
+      total,
+      isCrit,
+      isFail,
+    });
+
+    const desc = target
+      ? `${caster.name} disparou ${spell.name} em ${target.name} (d20: ${roll} + ${spellAttackBonus} = ${total} vs CA ${target.ac}). ${isHit ? `💥 ACERTOU! Caused ${damage} de dano! (HP restante: ${Math.max(0, target.hp - damage)})` : '✕ ERROU!'}`
+      : `${caster.name} conjurou ${spell.name} (d20: ${roll} + ${spellAttackBonus} = ${total})`;
+
+    toast(isHit ? `Ataque acertou ${target?.name}! Dano: ${damage}` : (target ? `Ataque errou ${target.name}` : `Conjuração executada!`));
+
+    addLogEntry({
+      actorId: caster.id,
+      actorName: caster.name,
+      targetId: target?.id,
+      targetName: target?.name,
+      eventType: 'attack',
+      description: desc,
+    });
+  };
+
+  const executeAoESpellCast = async (
+    caster: Combatant,
+    sheet: CharacterSheet | undefined,
+    spell: CharacterSpell,
+    targets: Combatant[]
+  ) => {
+    if (sheet && spell.level > 0 && sheet.spellSlots?.[spell.level]) {
+      const currentSlots = sheet.spellSlots[spell.level];
+      if (currentSlots.used < currentSlots.total) {
+        const updatedSheet = {
+          ...sheet,
+          spellSlots: {
+            ...sheet.spellSlots,
+            [spell.level]: { ...currentSlots, used: currentSlots.used + 1 }
+          }
+        };
+        await saveSheet(updatedSheet);
+      } else {
+        toast.error(`Sem slots disponíveis para o Nível ${spell.level}!`);
+        return;
+      }
+    }
+
+    const profBonus = sheet ? Math.floor((sheet.level - 1) / 4) + 2 : 2;
+    const ability = sheet?.spellcastingAbility || 'int';
+    const modValue = sheet ? getAttributeModifier(sheet, ability) : 3;
+    const spellSaveDc = sheet?.spellSaveDcOverride ?? (8 + profBonus + modValue);
+
+    const cleanName = spell.name.toLowerCase();
+    let diceCount = 3;
+    let diceSides = 6;
+    if (cleanName.includes('bola de fogo') || cleanName.includes('fireball')) {
+      diceCount = 8;
+      diceSides = 6;
+    }
+
+    let rawDamage = 0;
+    for (let i = 0; i < diceCount; i++) {
+      rawDamage += Math.floor(Math.random() * diceSides) + 1;
+    }
+
+    const damageMap: Record<string, number> = {};
+    const logDetails: string[] = [];
+
+    targets.forEach(t => {
+      const dexMod = t.dex !== undefined ? Math.floor((t.dex - 10) / 2) : 0;
+      const dexSaveRoll = Math.floor(Math.random() * 20) + 1;
+      const dexSaveTotal = dexSaveRoll + dexMod;
+      const passed = dexSaveTotal >= spellSaveDc;
+      const finalDmg = passed ? Math.floor(rawDamage / 2) : rawDamage;
+
+      damageMap[t.id] = finalDmg;
+      logDetails.push(`${t.name}: TR ${dexSaveRoll}+${dexMod}=${dexSaveTotal} vs CD ${spellSaveDc} (${passed ? 'PASSOU -> ' + finalDmg + ' dano' : 'FALHOU -> ' + finalDmg + ' dano'})`);
+    });
+
+    if (targets.length > 0) {
+      setCombatants(prev => {
+        const next = prev.map(c => {
+          if (damageMap[c.id] !== undefined) {
+            return { ...c, hp: Math.max(0, c.hp - damageMap[c.id]) };
+          }
+          return c;
+        });
+        if (activeSceneRef.current) updateScene({ ...activeSceneRef.current, combatants: next });
+        return next;
+      });
+    }
+
+    const desc = `${caster.name} conjurou ${spell.name} (Área)! Dano Base: ${rawDamage}. ` + 
+      (logDetails.length > 0 ? logDetails.join(' | ') : 'Nenhum alvo na área.');
+
+    toast.info(`Área de ${spell.name}: ${targets.length} alvo(s) atingido(s)! Dano base: ${rawDamage}`);
+
+    addLogEntry({
+      actorId: caster.id,
+      actorName: caster.name,
+      eventType: 'damage',
+      description: desc,
+    });
+  };
+
+  const handleConfirmMagicMissiles = async () => {
+    if (!magicMissileModalState) return;
+
+    const { caster, spell, dartAllocations } = magicMissileModalState;
+    const matchingSheet = characterSheets.find((s) => {
+      const cClean = caster.name.split('(')[0].trim().toLowerCase();
+      return (
+        s.characterName.toLowerCase() === cClean ||
+        s.characterName.toLowerCase().includes(cClean) ||
+        cClean.includes(s.characterName.toLowerCase())
+      );
+    });
+
+    if (matchingSheet && spell.level > 0 && matchingSheet.spellSlots?.[spell.level]) {
+      const currentSlots = matchingSheet.spellSlots[spell.level];
+      if (currentSlots.used < currentSlots.total) {
+        const updatedSheet = {
+          ...matchingSheet,
+          spellSlots: {
+            ...matchingSheet.spellSlots,
+            [spell.level]: { ...currentSlots, used: currentSlots.used + 1 },
+          },
+        };
+        await saveSheet(updatedSheet);
+      }
+    }
+
+    const damageMap: Record<string, number> = {};
+    const logDetails: string[] = [];
+
+    Object.entries(dartAllocations).forEach(([targetId, count]) => {
+      if (count <= 0) return;
+      const targetC = combatants.find((c) => c.id === targetId);
+      if (!targetC) return;
+
+      let totalDmg = 0;
+      for (let i = 0; i < count; i++) {
+        totalDmg += Math.floor(Math.random() * 4) + 1 + 1; // 1d4 + 1
+      }
+      damageMap[targetId] = totalDmg;
+      logDetails.push(`${count} dardo(s) em ${targetC.name} (${totalDmg} dano)`);
+    });
+
+    if (Object.keys(damageMap).length > 0) {
+      setCombatants((prev) => {
+        const next = prev.map((c) => {
+          if (damageMap[c.id] !== undefined) {
+            return { ...c, hp: Math.max(0, c.hp - damageMap[c.id]) };
+          }
+          return c;
+        });
+        if (activeSceneRef.current) {
+          updateScene({ ...activeSceneRef.current, combatants: next });
+        }
+        return next;
+      });
+    }
+
+    const desc = `${caster.name} disparou ${spell.name}! ` + (logDetails.join(', ') || 'Nenhum dardo alocado.');
+    toast.success(`Mísseis Mágicos disparados! ${logDetails.join(', ')}`);
+
+    addLogEntry({
+      actorId: caster.id,
+      actorName: caster.name,
+      eventType: 'damage',
+      description: desc,
+    });
+
+    setMagicMissileModalState(null);
   };
 
   const executeSpellCastRoll = async (c: Combatant, sheet: CharacterSheet, spell: CharacterSpell) => {
@@ -464,7 +717,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
 
     const profBonus = Math.floor((sheet.level - 1) / 4) + 2;
     const ability = sheet.spellcastingAbility || 'int';
-    const modValue = getMod(sheet.attributes?.[ability]);
+    const modValue = getAttributeModifier(sheet, ability);
     const spellAttackBonus = sheet.spellAttackBonusOverride ?? (profBonus + modValue);
     const spellSaveDc = sheet.spellSaveDcOverride ?? (8 + profBonus + modValue);
 
@@ -542,28 +795,59 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   useEffect(() => {
     const handleConfirmSpell = (e: Event) => {
       const customEvt = e as CustomEvent;
-      if (customEvt.detail) {
-        const { casterTokenKey, spell } = customEvt.detail;
-        const caster = combatants.find(x => x.id === casterTokenKey);
-        if (!caster) return;
+      if (!customEvt.detail) return;
 
-        const matchingSheet = characterSheets.find(s => {
-          const cClean = caster.name.split('(')[0].trim().toLowerCase();
-          return s.characterName.toLowerCase() === cClean || 
-                 s.characterName.toLowerCase().includes(cClean) || 
-                 cClean.includes(s.characterName.toLowerCase());
+      const { casterTokenKey, spell, targetCombatantId, targetedCombatantIds } = customEvt.detail;
+      const caster = combatants.find(
+        (x) => (x.id || x.name) === casterTokenKey || x.id === casterTokenKey || x.name === casterTokenKey
+      );
+      if (!caster) return;
+
+      const matchingSheet = characterSheets.find((s) => {
+        const cClean = caster.name.split('(')[0].trim().toLowerCase();
+        return (
+          s.characterName.toLowerCase() === cClean ||
+          s.characterName.toLowerCase().includes(cClean) ||
+          cClean.includes(s.characterName.toLowerCase())
+        );
+      });
+
+      const characterSpell: CharacterSpell = matchingSheet?.spells?.find((s) => s.name === spell.name) || {
+        id: spell.name,
+        name: spell.name,
+        level: spell.level || 0,
+        school: 'evocation',
+        castingTime: '1 ação',
+        range: `${spell.range || 18}m`,
+        components: 'V, S',
+        description: spell.name,
+        prepared: true,
+      };
+
+      const shape = spell.shape || 'circle';
+
+      if (shape === 'multi-target') {
+        const numDarts = 3 + Math.max(0, (characterSpell.level || 1) - 1);
+        setMagicMissileModalState({
+          isOpen: true,
+          caster,
+          spell: characterSpell,
+          availableDarts: numDarts,
+          dartAllocations: {},
         });
-
-        const characterSpell = matchingSheet?.spells?.find(s => s.name === spell.name);
-
-        if (matchingSheet && characterSpell) {
-          executeSpellCastRoll(caster, matchingSheet, characterSpell);
-        }
-
-        setActiveSpellTargeting(null);
-        setCasterTokenKey(null);
-        setSpellTargetPosition(null);
+      } else if (shape === 'target') {
+        const target = combatants.find((x) => x.id === targetCombatantId);
+        executeSingleTargetSpell(caster, matchingSheet, characterSpell, target);
+      } else {
+        const validTargets = combatants.filter(
+          (c) => targetedCombatantIds && targetedCombatantIds.includes(c.id) && c.id !== caster.id
+        );
+        executeAoESpellCast(caster, matchingSheet, characterSpell, validTargets);
       }
+
+      setActiveSpellTargeting(null);
+      setCasterTokenKey(null);
+      setSpellTargetPosition(null);
     };
 
     window.addEventListener('masters_codex_confirm_spell_cast', handleConfirmSpell);
@@ -1768,7 +2052,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                               <h4 
                                 onClick={(e) => {
                                   e.stopPropagation(); // Evita selecionar o alvo ao abrir a ficha
-                                  openSheet(c.id || c.name, c.type, c.name, c);
+                                  openSheet(c.id || c.name, c.type === 'player' ? 'pc' : c.type, c.name, c);
                                 }}
                                 className="font-bold text-slate-100 text-xs flex items-center gap-1 cursor-pointer hover:text-amber-400 hover:underline transition-colors"
                               >
@@ -2567,6 +2851,110 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         onClose={() => setShowBattleSetupModal(false)}
         onConfirmSetup={handleConfirmBattleSetup}
       />
+
+      {magicMissileModalState && magicMissileModalState.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-indigo-400" />
+                <h3 className="font-bold text-slate-100 text-base">Alocar Mísseis Mágicos</h3>
+              </div>
+              <button
+                onClick={() => setMagicMissileModalState(null)}
+                className="text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-300 space-y-1">
+              <p>Dardos Disponíveis: <span className="font-bold text-indigo-400">{magicMissileModalState.availableDarts - Object.values(magicMissileModalState.dartAllocations).reduce((a, b) => a + b, 0)}</span> de {magicMissileModalState.availableDarts}</p>
+              <p className="text-[11px] text-slate-400">Cada dardo causa <span className="text-amber-300 font-mono">1d4+1</span> de dano de energia automático.</p>
+            </div>
+
+            <div className="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+              {combatants
+                .filter((c) => c.id !== magicMissileModalState.caster.id)
+                .map((c) => {
+                  const allocated = magicMissileModalState.dartAllocations[c.id] || 0;
+                  const totalAllocated = Object.values(magicMissileModalState.dartAllocations).reduce((a, b) => a + b, 0);
+                  const remaining = magicMissileModalState.availableDarts - totalAllocated;
+                  return (
+                    <div key={c.id} className="flex items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-slate-200">
+                          {c.name.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-200">{c.name}</div>
+                          <div className="text-[10px] text-slate-400">HP: {c.hp}/{c.maxHp} | CA: {c.ac}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          disabled={allocated <= 0}
+                          onClick={() => {
+                            setMagicMissileModalState((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    dartAllocations: {
+                                      ...prev.dartAllocations,
+                                      [c.id]: Math.max(0, (prev.dartAllocations[c.id] || 0) - 1),
+                                    },
+                                  }
+                                : null
+                            );
+                          }}
+                          className="w-7 h-7 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 rounded-lg flex items-center justify-center text-slate-200 font-bold"
+                        >
+                          -
+                        </button>
+                        <span className="w-5 text-center font-bold font-mono text-indigo-400 text-sm">{allocated}</span>
+                        <button
+                          disabled={remaining <= 0}
+                          onClick={() => {
+                            setMagicMissileModalState((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    dartAllocations: {
+                                      ...prev.dartAllocations,
+                                      [c.id]: (prev.dartAllocations[c.id] || 0) + 1,
+                                    },
+                                  }
+                                : null
+                            );
+                          }}
+                          className="w-7 h-7 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 rounded-lg flex items-center justify-center text-slate-100 font-bold"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                onClick={() => setMagicMissileModalState(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmMagicMissiles}
+                disabled={Object.values(magicMissileModalState.dartAllocations).reduce((a, b) => a + b, 0) === 0}
+                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg disabled:opacity-50"
+              >
+                Disparar Mísseis
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
