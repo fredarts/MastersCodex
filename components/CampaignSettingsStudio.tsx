@@ -30,6 +30,7 @@ import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { CampaignFeedEventType, CampaignMember } from '@/lib/types';
 import { CreateCampaignModal } from '@/components/CreateCampaignModal';
+import { useLiveCockpit } from '@/context/LiveCockpitContext';
 
 export const CampaignSettingsStudio: React.FC = () => {
   const { user, loadDemoEverything } = useAuth();
@@ -48,6 +49,8 @@ export const CampaignSettingsStudio: React.FC = () => {
     deleteFeedEvent,
     updateCampaign
   } = useCampaign();
+
+  const { openSheet } = useLiveCockpit();
 
   const worldCampaigns = userCampaigns.filter((c) => {
     if (!activeWorld) return true;
@@ -620,7 +623,13 @@ export const CampaignSettingsStudio: React.FC = () => {
                           {isDM ? 'DM' : 'PL'}
                         </div>
                         <div>
-                          <div className="text-xs font-bold text-slate-100">
+                          <div 
+                            className="text-xs font-bold text-slate-100 cursor-pointer hover:text-amber-400 hover:underline transition-colors"
+                            onClick={() => {
+                              const pName = mem.characterName || mem.displayName || 'Aventureiro';
+                              openSheet(mem.id, 'pc', pName, mem);
+                            }}
+                          >
                             {mem.characterName ? `${mem.characterName} (${mem.displayName})` : mem.displayName}
                           </div>
                           <div className={`text-[10px] ${isDM ? 'text-amber-400 font-semibold' : 'text-cyan-400 font-semibold'}`}>

@@ -9,12 +9,28 @@ export interface Model3DOption {
 
 export const CHARACTER_MODELS_3D: Model3DOption[] = [
   {
+    id: 'atificie',
+    name: 'Artífice',
+    category: 'character',
+    modelUrl: '/assets/3d/characters/Atificie/Atificie.glb',
+    description: 'Mestre da alquimia, engenharia arcana e invenções mágicas',
+    icon: '⚙️',
+  },
+  {
     id: 'barbaro',
     name: 'Bárbaro',
     category: 'character',
     modelUrl: '/assets/3d/characters/Barbaro/Barbaro.glb',
     description: 'Guerreiro feroz com traje de pele e lâmina pesada',
     icon: '🪓',
+  },
+  {
+    id: 'bardo',
+    name: 'Bardo',
+    category: 'character',
+    modelUrl: '/assets/3d/characters/Bardo/Bardo.glb',
+    description: 'Artista carismático, perito em canções arcanas e encantos',
+    icon: '🪕',
   },
   {
     id: 'bruxo',
@@ -50,15 +66,23 @@ export const CHARACTER_MODELS_3D: Model3DOption[] = [
   },
   {
     id: 'guerreiro',
-    name: 'Guerreiro / Paladino',
+    name: 'Guerreiro',
     category: 'character',
     modelUrl: '/assets/3d/characters/Guerreiro/Guerreiro.glb',
     description: 'Mestre do combate marcial e armaduras reluzentes',
     icon: '⚔️',
   },
   {
+    id: 'ladino',
+    name: 'Ladino',
+    category: 'character',
+    modelUrl: '/assets/3d/characters/Ladino/Ladino.glb',
+    description: 'Especialista furtivo, mestre do golpe traiçoeiro',
+    icon: '🗡️',
+  },
+  {
     id: 'mago',
-    name: 'Mago / Conjurador',
+    name: 'Mago',
     category: 'character',
     modelUrl: '/assets/3d/characters/Mago/Mago.glb',
     description: 'Mestre das artes arcanas em pose de conjuração',
@@ -73,20 +97,20 @@ export const CHARACTER_MODELS_3D: Model3DOption[] = [
     icon: '🥋',
   },
   {
+    id: 'paladino',
+    name: 'Paladino',
+    category: 'character',
+    modelUrl: '/assets/3d/characters/Paladino/Paladino.glb',
+    description: 'Cavaleiro sagrado regido por juramentos e virtudes',
+    icon: '🛡️',
+  },
+  {
     id: 'patrulheiro',
     name: 'Patrulheiro / Ranger',
     category: 'character',
     modelUrl: '/assets/3d/characters/Patrulheiro/Patrulheiro.glb',
     description: 'Caçador ágil e mestre do rastreio na selva',
     icon: '🏹',
-  },
-  {
-    id: 'ladino',
-    name: 'Ladino / Bardo',
-    category: 'character',
-    modelUrl: '/assets/3d/characters/Ladino/Ladino.glb',
-    description: 'Especialista furtivo, mestre do golpe traiçoeiro',
-    icon: '🗡️',
   },
 ];
 
@@ -146,13 +170,22 @@ export function getModelUrlByNameOrPath(
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 
+  if (norm.includes('artifice') || norm.includes('atificie') || norm.includes('artificer')) {
+    return '/assets/3d/characters/Atificie/Atificie.glb';
+  }
   if (norm.includes('barbaro') || norm.includes('barbarian')) {
     return '/assets/3d/characters/Barbaro/Barbaro.glb';
+  }
+  if (norm.includes('bardo') || norm.includes('bard')) {
+    return '/assets/3d/characters/Bardo/Bardo.glb';
   }
   if (norm.includes('bruxo') || norm.includes('warlock')) {
     return '/assets/3d/characters/Bruxo/Bruxo.glb';
   }
-  if (norm.includes('clerigo') || norm.includes('cleric') || norm.includes('paladino') || norm.includes('paladin')) {
+  if (norm.includes('paladino') || norm.includes('paladin')) {
+    return '/assets/3d/characters/Paladino/Paladino.glb';
+  }
+  if (norm.includes('clerigo') || norm.includes('cleric')) {
     return '/assets/3d/characters/Clerigo/Clerigo.glb';
   }
   if (norm.includes('druida') || norm.includes('druid')) {
@@ -170,7 +203,7 @@ export function getModelUrlByNameOrPath(
   if (norm.includes('monge') || norm.includes('monk')) {
     return '/assets/3d/characters/Monge/Monge.glb';
   }
-  if (norm.includes('ladino') || norm.includes('rogue') || norm.includes('bardo') || norm.includes('bard')) {
+  if (norm.includes('ladino') || norm.includes('rogue')) {
     return '/assets/3d/characters/Ladino/Ladino.glb';
   }
   if (norm.includes('patrulheiro') || norm.includes('ranger')) {

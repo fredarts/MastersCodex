@@ -23,11 +23,29 @@ import { PlayerLobby } from '@/components/PlayerLobby';
 import { LiveCockpitStudio } from '@/components/LiveCockpitStudio';
 import { Combatant, Encounter, World, GameScene, UserCampaign } from '@/lib/types';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
+import { createEmptyCharacterSheet } from '@/lib/dnd5e-data';
+import { useLiveCockpit } from '@/context/LiveCockpitContext';
+import { useCharacterSync } from '@/lib/hooks/useCharacterSync';
+import { CharacterSheetModal } from '@/components/character-sheet/CharacterSheetModal';
+import { MonsterStatBlockModal } from '@/components/live-cockpit/MonsterStatBlockModal';
+import { MinimizedSheetsDock } from '@/components/live-cockpit/MinimizedSheetsDock';
 
 function MainApp() {
-  const { roleMode, loadDemoEverything } = useAuth();
-  const { setActiveCampaign } = useCampaign();
+  const { user, roleMode, loadDemoEverything } = useAuth();
+  const { activeCampaign, setActiveCampaign, createFeedEvent } = useCampaign();
   const [activeTab, setActiveTab] = useState<ActiveTab>('live_cockpit');
+
+  const { characterSheets, saveSheet } = useCharacterSync({
+    userId: user?.id || '',
+    campaignId: activeCampaign?.id,
+  });
+
+  const {
+    activeSheets,
+    minimizeSheet,
+    maximizeSheet,
+    closeSheet,
+  } = useLiveCockpit();
   
   const [combatants, setCombatants] = useState<Combatant[]>([]);
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
@@ -38,6 +56,31 @@ function MainApp() {
   const [isCreateCampaignOpen, setIsCreateCampaignOpen] = useState(false);
   const [selectedWorldForCampaign, setSelectedWorldForCampaign] = useState<World | null>(null);
   const [generatedLootResult, setGeneratedLootResult] = useState<string | null>(null);
+
+  const handleMonsterRoll = (title: string, bonus: number, isPrivate: boolean, desc?: string) => {
+    const d20 = Math.floor(Math.random() * 20) + 1;
+    const total = d20 + bonus;
+    const diceFormula = `1d20 + ${bonus}`;
+    const message = `rolou ${title}: ${diceFormula} = **${total}** ${isPrivate ? '(Secreto)' : ''}`;
+
+    createFeedEvent({
+      campaignId: activeCampaign?.id || '',
+      eventType: 'chat_message',
+      eventData: {
+        sender: 'Dungeon Master',
+        message,
+        isPrivate,
+        rollDetails: { formula: diceFormula, result: total, d20 }
+      },
+      isVisibleToPlayers: !isPrivate
+    });
+  };
+
+  const handleUpdateCombatant = (updated: Combatant) => {
+    setCombatants((prev) =>
+      prev.map((c) => (c.id === updated.id ? updated : c))
+    );
+  };
 
   useEffect(() => {
     const handleModelUpdate = (sheet: any) => {
@@ -306,6 +349,62 @@ function MainApp() {
         onClose={() => setIsCreateCampaignOpen(false)}
         selectedWorldForCampaign={selectedWorldForCampaign}
       />
+
+      {/* Dock de Minimizados */}
+      <MinimizedSheetsDock
+        activeSheets={activeSheets}
+        onMaximizeSheet={maximizeSheet}
+        onCloseSheet={closeSheet}
+      />
+
+      {/* Modais de Fichas de Jogadores (PC) */}
+      {activeSheets
+        .filter((s) => (s.type === 'pc' || (s.type as string) === 'player') && s.state === 'open')
+        .map((sheetState) => {
+          const matchingSheet = characterSheets.find((cs) => {
+            if (cs.id === sheetState.id) return true;
+            const cClean = sheetState.characterName.split('(')[0].trim().toLowerCase();
+            const sheetClean = cs.characterName.split('(')[0].trim().toLowerCase();
+            return sheetClean === cClean || sheetClean.includes(cClean) || cClean.includes(sheetClean);
+          });
+          // Se não encontrou a ficha no array sincronizado, usa um fallback inteligente com o nome do personagem para NUNCA falhar silenciosamente
+          const sheetToRender = matchingSheet || (sheetState.data && sheetState.data.attributes ? sheetState.data : (() => {
+            const fallback = createEmptyCharacterSheet('player-1', activeCampaign?.id);
+            fallback.id = sheetState.id;
+            fallback.characterName = sheetState.characterName.split('(')[0].trim() || 'Aventureiro';
+            return fallback;
+          })());
+
+          return (
+            <CharacterSheetModal
+              key={sheetState.id}
+              sheet={sheetToRender}
+              isOpen={true}
+              onClose={() => closeSheet(sheetState.id)}
+              onMinimize={() => minimizeSheet(sheetState.id)}
+              onSave={saveSheet}
+            />
+          );
+        })}
+
+      {/* Modais de Stat Blocks de Monstros/NPCs */}
+      {activeSheets
+        .filter((s) => (s.type === 'monster' || s.type === 'npc') && s.state === 'open')
+        .map((sheetState) => {
+          const combatant = combatants.find((c) => (c.id || c.name) === sheetState.id) || sheetState.data;
+          if (!combatant) return null;
+          return (
+            <MonsterStatBlockModal
+              key={sheetState.id}
+              combatant={combatant}
+              isOpen={true}
+              onClose={() => closeSheet(sheetState.id)}
+              onMinimize={() => minimizeSheet(sheetState.id)}
+              onRoll={handleMonsterRoll}
+              onUpdateCombatant={handleUpdateCombatant}
+            />
+          );
+        })}
     </div>
   );
 }

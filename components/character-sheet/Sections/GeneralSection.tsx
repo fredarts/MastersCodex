@@ -2,10 +2,11 @@ import React from 'react';
 import { CharacterSheet } from '@/lib/types';
 import { DND_ALIGNMENTS, DND_BACKGROUNDS, DND_CLASSES, DND_RACES } from '@/lib/dnd5e-data';
 import { applyClassPreset, applyLevelChange, applyRacePreset } from '@/lib/dnd5e-calculator';
-import { User, Shield, Sparkles, Award, Image as ImageIcon, Box, Check } from 'lucide-react';
-import { ALL_3D_MODELS, getModelUrlByNameOrPath } from '@/lib/3d-models';
+import { User, Shield, Sparkles, Award, Image as ImageIcon, Box, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CHARACTER_MODELS_3D, getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { storageService } from '@/lib/services/storageService';
 import { isSupabaseConfigured } from '@/lib/supabase';
+import { Model3DViewer } from '../Model3DViewer';
 
 interface GeneralSectionProps {
   sheet: CharacterSheet;
@@ -110,67 +111,89 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
       </div>
 
       {/* CARD: SELEÇÃO DE BONECO 3D (GRID DE BATALHA) */}
-      <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-4">
+      <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
             <Box className="w-4 h-4 text-sky-400" />
             Boneco 3D para o Grid de Batalha
           </h3>
-          <span className="text-[10px] text-slate-400 font-mono bg-[#0b0f19] px-2 py-0.5 rounded border border-slate-800">
-            Miniatura no Mapa
+          <span className="text-[10px] text-sky-400 font-mono bg-sky-950/60 px-2 py-0.5 rounded border border-sky-800/60 font-semibold uppercase">
+            Hero Token
           </span>
         </div>
 
-        <p className="text-xs text-slate-400">
-          Escolha o boneco 3D que representará seu personagem quando ele for colocado na arena de batalha:
-        </p>
+        {/* CONTROLES DE SELEÇÃO E PRÉ-VISUALIZAÇÃO 3D */}
+        {(() => {
+          const currentUrl = sheet.modelUrl || getModelUrlByNameOrPath(sheet.className);
+          const currentIndex = CHARACTER_MODELS_3D.findIndex((m) => m.modelUrl === currentUrl);
+          const activeIndex = currentIndex >= 0 ? currentIndex : 0;
+          const activeModel = CHARACTER_MODELS_3D[activeIndex] || CHARACTER_MODELS_3D[0];
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {ALL_3D_MODELS.map((model) => {
-            const currentSelected = sheet.modelUrl || getModelUrlByNameOrPath(sheet.className);
-            const isSelected = currentSelected === model.modelUrl;
-            return (
-              <button
-                key={model.id}
-                type="button"
-                onClick={() => onChange({ ...sheet, modelUrl: model.modelUrl })}
-                className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all relative overflow-hidden ${
-                  isSelected
-                    ? 'bg-amber-500/10 border-amber-500/80 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/40'
-                    : 'bg-[#0b0f19] border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                <div className={`w-10 h-10 rounded-lg border flex items-center justify-center text-xl shrink-0 ${
-                  isSelected ? 'bg-amber-500/20 border-amber-500/50' : 'bg-slate-800/80 border-slate-700'
-                }`}>
-                  {model.icon || '🎲'}
-                </div>
-                <div className="flex-1 min-w-0 pr-5">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-xs font-bold text-white truncate">{model.name}</span>
-                    <span
-                      className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-semibold uppercase ${
-                        model.category === 'character'
-                          ? 'bg-sky-950/80 text-sky-400 border border-sky-800/60'
-                          : 'bg-rose-950/80 text-rose-400 border border-rose-800/60'
-                      }`}
-                    >
-                      {model.category === 'character' ? 'Hero' : 'Monstro'}
-                    </span>
+          const handlePrev = () => {
+            const newIndex = (activeIndex - 1 + CHARACTER_MODELS_3D.length) % CHARACTER_MODELS_3D.length;
+            onChange({ ...sheet, modelUrl: CHARACTER_MODELS_3D[newIndex].modelUrl });
+          };
+
+          const handleNext = () => {
+            const newIndex = (activeIndex + 1) % CHARACTER_MODELS_3D.length;
+            onChange({ ...sheet, modelUrl: CHARACTER_MODELS_3D[newIndex].modelUrl });
+          };
+
+          return (
+            <div className="space-y-3">
+              {/* Dropdown com os nomes e setas de navegação */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrev}
+                  title="Modelo anterior"
+                  className="p-2 bg-[#0b0f19] hover:bg-amber-500/10 border border-slate-700 hover:border-amber-500/50 rounded-xl text-slate-300 hover:text-amber-400 transition-all shrink-0 active:scale-95 cursor-pointer"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+
+                <div className="relative flex-1">
+                  <select
+                    value={activeModel.modelUrl}
+                    onChange={(e) => onChange({ ...sheet, modelUrl: e.target.value })}
+                    className="w-full bg-[#0b0f19] border border-amber-500/30 rounded-xl px-3 py-2 text-sm font-bold text-amber-300 focus:outline-none focus:border-amber-500 transition-colors cursor-pointer appearance-none pr-8"
+                  >
+                    {CHARACTER_MODELS_3D.map((m) => (
+                      <option key={m.id} value={m.modelUrl} className="bg-[#0b0f19] text-amber-200">
+                        {m.icon ? `${m.icon} ` : ''}{m.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-amber-400 text-xs">
+                    ▼
                   </div>
-                  {model.description && (
-                    <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">{model.description}</p>
-                  )}
                 </div>
-                {isSelected && (
-                  <div className="absolute top-2.5 right-2.5 text-amber-400 bg-amber-500/20 p-0.5 rounded-full border border-amber-500/40">
-                    <Check className="w-3.5 h-3.5" />
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
+
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  title="Próximo modelo"
+                  className="p-2 bg-[#0b0f19] hover:bg-amber-500/10 border border-slate-700 hover:border-amber-500/50 rounded-xl text-slate-300 hover:text-amber-400 transition-all shrink-0 active:scale-95 cursor-pointer"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Descrição curta do modelo ativo */}
+              {activeModel.description && (
+                <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+                  <span className="truncate">{activeModel.description}</span>
+                  <span className="font-mono text-slate-500 shrink-0 ml-2">
+                    {activeIndex + 1} de {CHARACTER_MODELS_3D.length}
+                  </span>
+                </div>
+              )}
+
+              {/* Pré-visualização 3D em tempo real */}
+              <Model3DViewer modelUrl={activeModel.modelUrl} height={210} />
+            </div>
+          );
+        })()}
       </div>
 
       {/* CARD: RAÇA, CLASSE E NÍVEL (AUTO-COMPLETE) */}

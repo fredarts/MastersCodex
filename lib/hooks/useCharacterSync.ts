@@ -3,9 +3,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { CharacterSheet } from '@/lib/types';
-import { createEmptyCharacterSheet } from '@/lib/dnd5e-data';
+import { createEmptyCharacterSheet, generateUuid } from '@/lib/dnd5e-data';
 
-const STORAGE_KEY = 'masters_codex_dnd_character_sheets';
+const STORAGE_KEY = 'masters_codex_character_sheets_v1';
 
 export interface UseCharacterSyncOptions {
   userId: string;
@@ -27,7 +27,7 @@ export function useCharacterSync({ userId, campaignId, onRemoteSheetChange }: Us
       try {
         let query = supabase.from('character_sheets').select('*');
         if (campaignId) {
-          query = query.eq('campaign_id', campaignId);
+          query = query.or(`campaign_id.eq.${campaignId},campaign_id.is.null,user_id.eq.${userId}`);
         } else {
           query = query.eq('user_id', userId);
         }
@@ -64,6 +64,22 @@ export function useCharacterSync({ userId, campaignId, onRemoteSheetChange }: Us
     if (loadedSheets.length === 0) {
       const defaultSheet = createEmptyCharacterSheet(userId || 'player-1', campaignId || undefined);
       loadedSheets = [defaultSheet];
+    }
+
+    // Migra IDs antigos não-UUID para UUIDs válidos on-the-fly para conformidade com a tipagem do Postgres
+    let needsSave = false;
+    loadedSheets = loadedSheets.map((s) => {
+      if (!s.id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.id)) {
+        needsSave = true;
+        return { ...s, id: generateUuid() };
+      }
+      return s;
+    });
+
+    if (needsSave && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(loadedSheets));
+      } catch (e) {}
     }
 
     setCharacterSheets(loadedSheets);
@@ -126,8 +142,9 @@ export function useCharacterSync({ userId, campaignId, onRemoteSheetChange }: Us
   useEffect(() => {
     if (!isSupabaseConfigured() || !campaignId) return;
 
+    const uniqueId = Math.random().toString(36).substring(2, 9);
     const channel = supabase
-      .channel(`character_sheets_sync_${campaignId}`)
+      .channel(`character_sheets_sync_${campaignId}_${uniqueId}`)
       .on(
         'postgres_changes',
         {

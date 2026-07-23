@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Combatant, ConditionType } from '@/lib/types';
 import { CONDITIONS } from '@/lib/srd-data';
+import { useLiveCockpit } from '@/context/LiveCockpitContext';
 
 interface CombatInitiativeTrackerProps {
   combatants: Combatant[];
@@ -36,6 +37,7 @@ export const CombatInitiativeTracker: React.FC<CombatInitiativeTrackerProps> = (
 }) => {
   const [hpInput, setHpInput] = useState<Record<string, string>>({});
   const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
+  const { openSheet } = useLiveCockpit();
 
   const nextTurn = () => {
     if (combatants.length === 0) return;
@@ -131,7 +133,16 @@ export const CombatInitiativeTracker: React.FC<CombatInitiativeTrackerProps> = (
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
             <div>
               <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Vez do Personagem</div>
-              <div className="font-bold text-sm text-amber-300">{activeCombatant?.name}</div>
+              <div 
+                className="font-bold text-sm text-amber-300 cursor-pointer hover:text-amber-400 hover:underline transition-colors"
+                onClick={() => {
+                  if (activeCombatant) {
+                    openSheet(activeCombatant.id || activeCombatant.name, activeCombatant.type, activeCombatant.name, activeCombatant);
+                  }
+                }}
+              >
+                {activeCombatant?.name}
+              </div>
             </div>
           </div>
 
@@ -176,7 +187,12 @@ export const CombatInitiativeTracker: React.FC<CombatInitiativeTrackerProps> = (
 
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-xs text-zinc-100 truncate">{c.name}</span>
+                        <span 
+                          className="font-semibold text-xs text-zinc-100 truncate cursor-pointer hover:text-amber-400 hover:underline transition-colors"
+                          onClick={() => openSheet(c.id || c.name, c.type, c.name, c)}
+                        >
+                          {c.name}
+                        </span>
                         {c.type === 'player' && (
                           <span className="px-1.5 py-0.2 rounded text-[9px] bg-indigo-500/20 text-indigo-300 font-semibold">
                             PC

@@ -12,6 +12,7 @@ export interface TokenMeshOptions {
   positionX: number;
   positionZ: number;
   rotationAngleDeg: number;
+  isSpellTargeted?: boolean;
 }
 
 const gltfLoader = new GLTFLoader();
@@ -61,10 +62,12 @@ export function createTokenMesh(
   // Removed Base Cylinder Platform
 
   // 2. Selection Ring
-  const isSelected = options.isCurrentTurn || options.isSelectedForRotation || options.isSelectedTarget;
+  const isSelected = options.isCurrentTurn || options.isSelectedForRotation || options.isSelectedTarget || options.isSpellTargeted;
   if (isSelected) {
     const ringGeo = new THREE.RingGeometry(0.75, 0.9, 32);
-    const ringColor = options.isCurrentTurn
+    const ringColor = options.isSpellTargeted
+      ? 0xf97316
+      : options.isCurrentTurn
       ? 0x22c55e
       : options.isSelectedTarget
       ? 0xef4444
@@ -134,10 +137,12 @@ export function updateTokenMeshState(
 
   // Selection Ring
   let ringMesh = group.getObjectByName('selectionRing') as THREE.Mesh | undefined;
-  const isSelected = options.isCurrentTurn || options.isSelectedForRotation || options.isSelectedTarget;
+  const isSelected = options.isCurrentTurn || options.isSelectedForRotation || options.isSelectedTarget || options.isSpellTargeted;
 
   if (isSelected) {
-    const ringColor = options.isCurrentTurn
+    const ringColor = options.isSpellTargeted
+      ? 0xf97316
+      : options.isCurrentTurn
       ? 0x22c55e
       : options.isSelectedTarget
       ? 0xef4444

@@ -28,6 +28,7 @@ import {
   Upload,
   Printer,
   Wand2,
+  Minus,
 } from 'lucide-react';
 
 interface CharacterSheetModalProps {
@@ -36,6 +37,7 @@ interface CharacterSheetModalProps {
   onClose: () => void;
   onSave: (updatedSheet: CharacterSheet) => void;
   onRollEvent?: (event: DiceRollEvent) => void;
+  onMinimize?: () => void;
 }
 
 type TabType = 'general' | 'combat' | 'skills' | 'equipment' | 'spells' | 'rp';
@@ -55,6 +57,7 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
   onClose,
   onSave,
   onRollEvent,
+  onMinimize,
 }) => {
   const [sheet, setSheet] = useState<CharacterSheet>(initialSheet);
   const [activeTab, setActiveTab] = useState<TabType>('general');
@@ -157,6 +160,16 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
 
         {/* BOTÃO SALVAR & FECHAR */}
         <div className="flex items-center gap-2">
+          {onMinimize && (
+            <button
+              type="button"
+              onClick={onMinimize}
+              className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80"
+              title="Minimizar Ficha"
+            >
+              <Minus className="w-5 h-5" />
+            </button>
+          )}
           <button
             type="button"
             onClick={handleSave}

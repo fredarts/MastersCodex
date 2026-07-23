@@ -38,11 +38,15 @@ import { useWorld } from '@/lib/hooks/useWorld';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
+import { useAuth } from '@/context/AuthContext';
+import { useCharacterSync } from '@/lib/hooks/useCharacterSync';
+import { getSpellAoEDefinition } from '@/lib/dnd5e-spells-shapes';
 import { GameScene, SceneType, Combatant, ConditionType, CampaignMember, WorldEntity } from '@/lib/types';
 import { INITIAL_MONSTERS, SFX_BUTTONS, CONDITIONS, BGM_TRACKS } from '@/lib/srd-data';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 import { useAudio } from '@/context/AudioContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { toast } from 'sonner';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
 import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
@@ -96,12 +100,35 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     liveDisplayMode, 
     setLiveDisplayMode, 
     broadcastToPlayerView,
-    projectedScene
+    projectedScene,
+    tokenPositions3D,
+    tokenRotations3D,
+    initializeFromCombatants,
+    activeSpellTargeting,
+    setActiveSpellTargeting,
+    casterTokenKey,
+    setCasterTokenKey,
+    spellTargetPosition,
+    setSpellTargetPosition,
+    openSheet,
   } = useLiveCockpit();
+
+  const { user } = useAuth();
+  const { characterSheets, saveSheet } = useCharacterSync({
+    userId: user?.id || '',
+    campaignId: activeCampaign?.id,
+  });
 
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
   const [playingNpcVoice, setPlayingNpcVoice] = useState(false);
   const [activeBgmCategory, setActiveBgmCategory] = useState<string>('taverna');
+
+  // Refs para save debounced de posições/rotações de tokens
+  const savePositionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeSceneRef = useRef(activeScene);
+  const combatantsRef = useRef(combatants);
+  useEffect(() => { activeSceneRef.current = activeScene; }, [activeScene]);
+  useEffect(() => { combatantsRef.current = combatants; }, [combatants]);
 
   const { playBgm, pauseBgm, activeBgm, isPlayingBgm, playSfx } = useAudio();
   const [customAudios, setCustomAudios] = useState<any[]>([]);
@@ -137,6 +164,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
 
   // Combat State & Search Modal
   const [isCombatActive, setIsCombatActive] = useState<boolean>(false);
+  const [openSpellDropdownId, setOpenSpellDropdownId] = useState<string | null>(null);
   const [showAddCombatantModal, setShowAddCombatantModal] = useState<boolean>(false);
   const [activeAddTab, setActiveAddTab] = useState<'monsters' | 'players' | 'custom' | 'npcs'>('monsters');
   const [combatantSearchQuery, setCombatantSearchQuery] = useState<string>('');
@@ -151,6 +179,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const [liveTimeOfDayHour, setLiveTimeOfDayHour] = useState<number>(12);
   const [liveHasFog, setLiveHasFog] = useState<boolean>(false);
   const [liveHasRain, setLiveHasRain] = useState<boolean>(false);
+  const [liveFloorTextureUrl, setLiveFloorTextureUrl] = useState<string | undefined>(undefined);
 
   // Custom Combatant Form
   const [customName, setCustomName] = useState('');
@@ -394,6 +423,154 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     return Math.max(1, Math.floor(Math.random() * 8) + 1 + defaultMod);
   };
 
+  const handleCastSpellFromCard = (c: Combatant, sheet: CharacterSheet, spell: CharacterSpell) => {
+    const aoe = getSpellAoEDefinition(spell.name);
+    
+    if (aoe && aoe.shape && aoe.size > 0) {
+      // Ativa o modo de mira
+      setActiveSpellTargeting(aoe);
+      setCasterTokenKey(c.id);
+      // Posição inicial no próprio conjurador
+      setSpellTargetPosition({ x: c.x ?? 1, z: c.z ?? 1 });
+      toast.info(`Modo de mira de área ativado para ${spell.name} (${aoe.shape}). Mova o mouse no grid e clique para confirmar.`);
+    } else {
+      // Magias sem AoE (alvo único, self, toque, etc.)
+      executeSpellCastRoll(c, sheet, spell);
+    }
+  };
+
+  const executeSpellCastRoll = async (c: Combatant, sheet: CharacterSheet, spell: CharacterSpell) => {
+    // Gastar 1 slot se for nível 1+
+    if (spell.level > 0 && sheet.spellSlots?.[spell.level]) {
+      const currentSlots = sheet.spellSlots[spell.level];
+      if (currentSlots.used < currentSlots.total) {
+        const updatedSheet = {
+          ...sheet,
+          spellSlots: {
+            ...sheet.spellSlots,
+            [spell.level]: {
+              ...currentSlots,
+              used: currentSlots.used + 1,
+            },
+          },
+        };
+        await saveSheet(updatedSheet);
+        toast.success(`Magia ${spell.name} lançada! Slot de Nível ${spell.level} consumido.`);
+      } else {
+        toast.error(`Sem slots disponíveis para o Nível ${spell.level}!`);
+        return;
+      }
+    }
+
+    const profBonus = Math.floor((sheet.level - 1) / 4) + 2;
+    const ability = sheet.spellcastingAbility || 'int';
+    const modValue = getMod(sheet.attributes?.[ability]);
+    const spellAttackBonus = sheet.spellAttackBonusOverride ?? (profBonus + modValue);
+    const spellSaveDc = sheet.spellSaveDcOverride ?? (8 + profBonus + modValue);
+
+    const roll = Math.floor(Math.random() * 20) + 1;
+    const total = roll + spellAttackBonus;
+    const isCrit = roll === 20;
+    const isFail = roll === 1;
+
+    setDiceResult({
+      title: `Conjurar: ${spell.name}`,
+      roll,
+      total,
+      isCrit,
+      isFail,
+    });
+
+    const target = combatants.find((x) => x.id === selectedTargetId);
+    let desc = `${c.name} conjurou ${spell.name} (Nív. ${spell.level}) (CD TR: ${spellSaveDc})`;
+    if (target) {
+      desc = `${c.name} conjurou ${spell.name} contra ${target.name} (d20: ${roll} + ${spellAttackBonus} = ${total} vs CA ${target.ac}) (CD TR: ${spellSaveDc})`;
+    }
+
+    addLogEntry({
+      actorId: c.id,
+      actorName: c.name,
+      targetId: target?.id,
+      targetName: target?.name,
+      eventType: 'attack',
+      description: desc,
+    });
+  };
+
+  // Salva posições e rotações dos tokens no banco com debounce de 600ms
+  // Só persiste se houver alterações reais em relação ao que já está salvo nos combatants
+  useEffect(() => {
+    const scene = activeSceneRef.current;
+    if (!scene || Object.keys(tokenPositions3D).length === 0) return;
+
+    if (savePositionsTimerRef.current) clearTimeout(savePositionsTimerRef.current);
+
+    savePositionsTimerRef.current = setTimeout(async () => {
+      const currentScene = activeSceneRef.current;
+      const currentCombatants = combatantsRef.current;
+      if (!currentScene || !currentCombatants.length) return;
+
+      let hasChanges = false;
+      const updatedCombatants = currentCombatants.map((c) => {
+        const key = c.id || c.name;
+        const pos = tokenPositions3D[key];
+        const rot = tokenRotations3D[key];
+
+        const newX = pos !== undefined ? pos.x : c.x;
+        const newZ = pos !== undefined ? pos.z : c.z;
+        const newRot = rot !== undefined ? rot : c.rotation;
+
+        if (newX !== c.x || newZ !== c.z || newRot !== c.rotation) {
+          hasChanges = true;
+        }
+
+        return { ...c, x: newX, z: newZ, rotation: newRot };
+      });
+
+      if (hasChanges) {
+        await updateScene({ ...currentScene, combatants: updatedCombatants });
+      }
+    }, 600);
+
+    return () => {
+      if (savePositionsTimerRef.current) clearTimeout(savePositionsTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokenPositions3D, tokenRotations3D]);
+
+  // Event listener para confirmação de conjurações do Grid 3D
+  useEffect(() => {
+    const handleConfirmSpell = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      if (customEvt.detail) {
+        const { casterTokenKey, spell } = customEvt.detail;
+        const caster = combatants.find(x => x.id === casterTokenKey);
+        if (!caster) return;
+
+        const matchingSheet = characterSheets.find(s => {
+          const cClean = caster.name.split('(')[0].trim().toLowerCase();
+          return s.characterName.toLowerCase() === cClean || 
+                 s.characterName.toLowerCase().includes(cClean) || 
+                 cClean.includes(s.characterName.toLowerCase());
+        });
+
+        const characterSpell = matchingSheet?.spells?.find(s => s.name === spell.name);
+
+        if (matchingSheet && characterSpell) {
+          executeSpellCastRoll(caster, matchingSheet, characterSpell);
+        }
+
+        setActiveSpellTargeting(null);
+        setCasterTokenKey(null);
+        setSpellTargetPosition(null);
+      }
+    };
+
+    window.addEventListener('masters_codex_confirm_spell_cast', handleConfirmSpell);
+    return () => window.removeEventListener('masters_codex_confirm_spell_cast', handleConfirmSpell);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [combatants, characterSheets]);
+
   // Sync Combat Active status with current scene or combatants array
   useEffect(() => {
     if (activeScene?.sceneType === 'combat' || combatants.length > 0) {
@@ -417,6 +594,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     setLiveTimeOfDayHour(targetHour);
     setLiveHasFog(targetFog);
     setLiveHasRain(targetRain);
+    setLiveFloorTextureUrl(activeScene.floorTextureUrl || undefined);
 
     if (activeScene.timeOfDay) {
       setSelectedTimeOfDay(activeScene.timeOfDay);
@@ -436,9 +614,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         setRoundCount(1);
         setIsCombatActive(true);
         broadcastToPlayerView({ combatants: sorted });
+        // Restaura posições/rotações salvas no banco
+        initializeFromCombatants(sorted);
       }
     }
-  }, [activeScene, setCombatants]);
+  }, [activeScene, setCombatants, initializeFromCombatants]);
 
   // Escuta atualizações instantâneas de modelo 3D do personagem (local e cross-tab)
   useEffect(() => {
@@ -510,6 +690,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     setLiveTimeOfDayHour(targetHour);
     setLiveHasFog(targetFog);
     setLiveHasRain(targetRain);
+    setLiveFloorTextureUrl(scene.floorTextureUrl || undefined);
 
     if (scene.timeOfDay) {
       setSelectedTimeOfDay(scene.timeOfDay);
@@ -517,18 +698,20 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
 
     // Auto-load scene's pre-programmed combatants
     if (scene.combatants && scene.combatants.length > 0) {
-      setCombatants((prev) => {
-        const existingPlayers = prev.filter((c) => c.type === 'player');
-        const nonPlayerMonsters = scene.combatants!.filter(
-          (sc) => !existingPlayers.some((p) => p.name.toLowerCase() === sc.name.toLowerCase())
-        );
-        const merged = [...existingPlayers, ...nonPlayerMonsters].sort((a, b) => b.initiative - a.initiative);
-        broadcastToPlayerView({ combatants: merged });
-        return merged;
-      });
+      const existingPlayers = combatantsRef.current.filter((c) => c.type === 'player');
+      const nonPlayerMonsters = scene.combatants.filter(
+        (sc) => !existingPlayers.some((p) => p.name.toLowerCase() === sc.name.toLowerCase())
+      );
+      const merged = [...existingPlayers, ...nonPlayerMonsters].sort((a, b) => b.initiative - a.initiative);
+
+      setCombatants(merged);
+      broadcastToPlayerView({ combatants: merged });
       setCurrentTurnIndex(0);
       setRoundCount(1);
       setIsCombatActive(true);
+
+      // Restaura posições/rotações predefinidas salvas no banco
+      initializeFromCombatants(merged);
     }
 
     if (scene.sceneType === 'combat') {
@@ -1125,8 +1308,9 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                           hasRain: env.hasRain,
                         });
                       }}
-                      floorTextureUrl={projectedScene?.floorTextureUrl}
+                      floorTextureUrl={liveFloorTextureUrl}
                       onFloorTextureChange={(url) => {
+                        setLiveFloorTextureUrl(url);
                         broadcastToPlayerView({ floorTextureUrl: url });
                       }}
                       onConfirmPlacement={() => {
@@ -1536,6 +1720,24 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                   const isExpanded = expandedId === c.id;
                   const isStatusOpen = statusMenuOpen === c.id;
 
+                  // Busca ficha associada
+                  const matchingSheet = characterSheets.find(s => {
+                    const cClean = c.name.split('(')[0].trim().toLowerCase();
+                    return s.characterName.toLowerCase() === cClean || 
+                           s.characterName.toLowerCase().includes(cClean) || 
+                           cClean.includes(s.characterName.toLowerCase());
+                  });
+
+                  const groupedSpells = matchingSheet ? (() => {
+                    const groups: Record<number, CharacterSpell[]> = {};
+                    matchingSheet.spells?.forEach(spell => {
+                      const lvl = spell.level ?? 0;
+                      if (!groups[lvl]) groups[lvl] = [];
+                      groups[lvl].push(spell);
+                    });
+                    return groups;
+                  })() : {};
+
                   return (
                     <div
                       key={`${c.id}-${idx}`}
@@ -1563,7 +1765,13 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
 
                           <div>
                             <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-slate-100 text-xs flex items-center gap-1">
+                              <h4 
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Evita selecionar o alvo ao abrir a ficha
+                                  openSheet(c.id || c.name, c.type, c.name, c);
+                                }}
+                                className="font-bold text-slate-100 text-xs flex items-center gap-1 cursor-pointer hover:text-amber-400 hover:underline transition-colors"
+                              >
                                 {c.name}
                                 {isTarget && <span className="text-[9px] text-rose-400 font-mono font-bold">(ALVO)</span>}
                               </h4>
@@ -1680,6 +1888,75 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                             <Swords className="w-3 h-3 text-slate-950" />
                             <span>Atacar (+{getMod(c.str) >= 0 ? '+' : ''}{getMod(c.str)})</span>
                           </button>
+                        )}
+
+                        {/* Botão e Menu Dropdown de Magias (Se houver ficha e magias atreladas) */}
+                        {matchingSheet && matchingSheet.spells && matchingSheet.spells.length > 0 && (
+                          <div className="relative inline-block">
+                            <button
+                              onClick={() => setOpenSpellDropdownId(openSpellDropdownId === c.id ? null : c.id)}
+                              className="px-2.5 py-1 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-500 hover:to-indigo-600 text-slate-950 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border border-sky-400/40"
+                            >
+                              <Sparkles className="w-3 h-3 text-slate-950" />
+                              <span>Magias</span>
+                            </button>
+
+                            {openSpellDropdownId === c.id && (
+                              <div className="absolute left-0 top-full mt-2 w-64 bg-[#0f141d]/95 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl p-2.5 z-40 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-150">
+                                <div className="flex justify-between items-center pb-1.5 mb-2 border-b border-slate-800">
+                                  <span className="text-[10px] font-bold text-amber-400 font-mono">Grimório de {matchingSheet.characterName}</span>
+                                  <button onClick={() => setOpenSpellDropdownId(null)} className="text-slate-500 hover:text-slate-200">
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                                {Object.keys(groupedSpells).length === 0 ? (
+                                  <div className="text-[10px] text-slate-500 italic p-2 text-center">Nenhuma magia adicionada na ficha.</div>
+                                ) : (
+                                  Object.keys(groupedSpells)
+                                    .map(Number)
+                                    .sort((a, b) => a - b)
+                                    .map(level => {
+                                      const levelSpells = groupedSpells[level] || [];
+                                      const slots = matchingSheet.spellSlots?.[level] || { total: 0, used: 0 };
+                                      const hasSlots = level === 0 || slots.used < slots.total;
+
+                                      return (
+                                        <div key={level} className="mb-3 last:mb-0">
+                                          <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1 border-b border-slate-800/40 pb-0.5">
+                                            <span>{level === 0 ? 'Truques' : `${level}º Círculo`}</span>
+                                            {level > 0 && (
+                                              <span className={hasSlots ? 'text-emerald-400' : 'text-rose-500'}>
+                                                Slots: {slots.total - slots.used} / {slots.total}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <div className="space-y-1">
+                                            {levelSpells.map(spell => (
+                                              <button
+                                                key={spell.id}
+                                                disabled={!hasSlots}
+                                                onClick={() => {
+                                                  handleCastSpellFromCard(c, matchingSheet, spell);
+                                                  setOpenSpellDropdownId(null);
+                                                }}
+                                                className={`w-full text-left px-2 py-1.5 rounded-lg border text-[10px] transition-all flex justify-between items-center ${
+                                                  hasSlots
+                                                    ? 'bg-[#161c28] border-[#2a3449] hover:bg-[#1e293b] hover:border-slate-500 text-slate-200 cursor-pointer active:scale-95'
+                                                    : 'bg-[#121620]/40 border-[#2a3449]/40 text-slate-500 cursor-not-allowed'
+                                                }`}
+                                              >
+                                                <span className="font-semibold truncate max-w-[130px]">{spell.name}</span>
+                                                <span className="text-[8px] font-mono text-slate-400 uppercase">{spell.school || 'Magia'}</span>
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      );
+                                    })
+                                )}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
 

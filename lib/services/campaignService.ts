@@ -135,4 +135,98 @@ export const campaignService = {
 
     return newEvent;
   },
+
+  async removeCampaignMember(memberId: string): Promise<boolean> {
+    if (isSupabaseConfigured() && isValidUuid(memberId)) {
+      const { error } = await supabase.from('campaign_members').delete().eq('id', memberId);
+      if (error) {
+        toast.error(`Erro ao remover membro: ${error.message}`);
+        return false;
+      }
+      return true;
+    }
+    return true;
+  },
+
+  async joinCampaignByCode(code: string, userId: string, characterName?: string): Promise<{ campaign: UserCampaign; member?: CampaignMember } | null> {
+    if (isSupabaseConfigured() && isValidUuid(userId)) {
+      // 1. Busca a campanha pelo código de convite no banco
+      const { data: campData, error: campErr } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('invite_code', code.trim().toUpperCase())
+        .single();
+        
+      if (campErr || !campData) {
+        return null;
+      }
+      
+      const campaign = mapCampaignRowToDomain(campData as CampaignRow, 'player');
+      
+      // 2. Adiciona ou atualiza o membro na campanha se characterName for fornecido
+      let member: CampaignMember | undefined;
+      if (characterName) {
+        // Tenta buscar se o usuário já é membro desta campanha para evitar erros 409 (Conflict)
+        const { data: existingMembers } = await supabase
+          .from('campaign_members')
+          .select('*')
+          .eq('campaign_id', campaign.id)
+          .eq('user_id', userId);
+
+        const existingMember = existingMembers && existingMembers.length > 0 ? existingMembers[0] : null;
+
+        if (existingMember) {
+          // Se já existe registro, faz UPDATE sem violar restrição única
+          const { data: memData, error: memErr } = await supabase
+            .from('campaign_members')
+            .update({
+              character_name: characterName,
+              role: 'player',
+            })
+            .eq('id', existingMember.id)
+            .select()
+            .single();
+
+          if (!memErr && memData) {
+            member = mapCampaignMemberRowToDomain(memData as CampaignMemberRow);
+          } else {
+            member = mapCampaignMemberRowToDomain(existingMember as CampaignMemberRow);
+          }
+        } else {
+          // Se não existe registro prévio, faz INSERT
+          const { data: memData, error: memErr } = await supabase
+            .from('campaign_members')
+            .insert({
+              campaign_id: campaign.id,
+              user_id: userId,
+              character_name: characterName,
+              role: 'player',
+            })
+            .select()
+            .single();
+
+          if (!memErr && memData) {
+            member = mapCampaignMemberRowToDomain(memData as CampaignMemberRow);
+          } else if (memErr) {
+            // Se houver conflito de concorrência, recupera o membro cadastrado como fallback
+            const { data: fallbackMem } = await supabase
+              .from('campaign_members')
+              .select('*')
+              .eq('campaign_id', campaign.id)
+              .eq('user_id', userId)
+              .maybeSingle();
+
+            if (fallbackMem) {
+              member = mapCampaignMemberRowToDomain(fallbackMem as CampaignMemberRow);
+            } else {
+              toast.error(`Erro ao registrar membro: ${memErr.message}`);
+            }
+          }
+        }
+      }
+      
+      return { campaign, member };
+    }
+    return null;
+  },
 };

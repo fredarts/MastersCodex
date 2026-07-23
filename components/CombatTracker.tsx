@@ -24,6 +24,7 @@ import { Combatant, ConditionType } from '@/lib/types';
 import { CONDITIONS, INITIAL_MONSTERS } from '@/lib/srd-data';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
+import { useLiveCockpit } from '@/context/LiveCockpitContext';
 
 interface CombatTrackerProps {
   combatants: Combatant[];
@@ -48,6 +49,7 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
 }) => {
   const { activeCampaign, createFeedEvent } = useCampaign();
   const { activeSession } = useSession();
+  const { openSheet } = useLiveCockpit();
   const [showAddModal, setShowAddModal] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState<'player' | 'monster' | 'npc'>('monster');
@@ -291,7 +293,12 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
 
                     <div>
                       <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-slate-100 text-sm">{c.name}</h4>
+                        <h4 
+                          className="font-bold text-slate-100 text-sm cursor-pointer hover:text-amber-400 hover:underline transition-colors"
+                          onClick={() => openSheet(c.id || c.name, c.type, c.name, c)}
+                        >
+                          {c.name}
+                        </h4>
                         {isTurn && (
                           <span className="text-[9px] font-black uppercase bg-rose-500 text-slate-950 px-2 py-0.5 rounded animate-pulse">TURNO ATUAL</span>
                         )}

@@ -21,6 +21,9 @@ export interface RealtimeSyncPayloads {
     hasFog?: boolean;
     hasRain?: boolean;
     floorTextureUrl?: string;
+    activeSpellTargeting?: { name: string; range: number; shape: 'circle' | 'cone' | 'line' | 'fan'; size: number } | null;
+    casterTokenKey?: string | null;
+    spellTargetPosition?: { x: number; z: number } | null;
   };
   DICE_ROLL: { rollerName: string; rollType: string; diceFormula: string; result: number; isCrit?: boolean; isFail?: boolean };
   COMBAT_UPDATE: { combatants: any[]; currentTurnIndex: number; roundCount: number };

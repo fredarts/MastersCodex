@@ -3,6 +3,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserCampaign, CampaignMember, CampaignFeedEvent } from '@/lib/types';
 import { campaignService } from '@/lib/services/campaignService';
+import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
+import { CampaignMemberRow } from '@/lib/database.types';
+import { mapCampaignMemberRowToDomain } from '@/lib/mappers';
+import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 
 interface CampaignContextType {
   userCampaigns: UserCampaign[];
@@ -71,15 +75,57 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   };
 
   const addCampaignMember = async (campaignId: string, characterName: string, role: 'dm' | 'player' = 'player') => {
-    const newMember: CampaignMember = {
+    let newMember: CampaignMember = {
       id: `mem-${Date.now()}`,
       campaignId,
-      userId: currentUserId || 'demo-dm-user-123',
+      userId: role === 'player' ? `manual-player-${Date.now()}` : (currentUserId || 'demo-dm-user-123'),
       characterName,
       role,
     };
+
+    if (isSupabaseConfigured() && isValidUuid(campaignId)) {
+      // Verificar se já existe membro com o mesmo nome para evitar 409 Conflict
+      const { data: existing } = await supabase
+        .from('campaign_members')
+        .select('*')
+        .eq('campaign_id', campaignId)
+        .eq('character_name', characterName)
+        .maybeSingle();
+
+      if (existing) {
+        const { data: updated } = await supabase
+          .from('campaign_members')
+          .update({ role, model_url: getModelUrlByNameOrPath(characterName) })
+          .eq('id', existing.id)
+          .select()
+          .single();
+        if (updated) {
+          newMember = mapCampaignMemberRowToDomain(updated as CampaignMemberRow);
+        } else {
+          newMember = mapCampaignMemberRowToDomain(existing as CampaignMemberRow);
+        }
+      } else {
+        const { data, error } = await supabase
+          .from('campaign_members')
+          .insert({
+            campaign_id: campaignId,
+            user_id: newMember.userId,
+            character_name: characterName,
+            role: role,
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          newMember = mapCampaignMemberRowToDomain(data as CampaignMemberRow);
+        } else if (error) {
+          console.error('Erro ao adicionar membro no Supabase:', error);
+        }
+      }
+    }
+
     setCampaignMembers((prev) => {
-      const updated = [...prev, newMember];
+      const updated = [...prev.filter((m) => m.id !== newMember.id), newMember];
       try {
         localStorage.setItem('codex_members', JSON.stringify(updated));
       } catch (e) {}
@@ -88,6 +134,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   };
 
   const removeCampaignMember = async (memberId: string) => {
+    // Exclui fisicamente no banco Supabase
+    await campaignService.removeCampaignMember(memberId);
+
     setCampaignMembers((prev) => {
       const updated = prev.filter((m) => m.id !== memberId);
       try {
@@ -98,6 +147,15 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   };
 
   const updateCampaignMemberModelUrl = async (campaignId: string, characterName: string, modelUrl: string) => {
+    if (isSupabaseConfigured() && currentUserId && campaignId && isValidUuid(campaignId)) {
+      await supabase
+        .from('campaign_members')
+        .update({ model_url: modelUrl })
+        .eq('campaign_id', campaignId)
+        .eq('user_id', currentUserId)
+        .eq('character_name', characterName);
+    }
+
     setCampaignMembers((prev) => {
       const updated = prev.map((m) =>
         m.campaignId === campaignId && m.characterName?.toLowerCase() === characterName.toLowerCase()
@@ -139,6 +197,40 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   };
 
   const joinCampaignByCode = async (code: string, characterName?: string, modelUrl?: string): Promise<boolean> => {
+    if (isSupabaseConfigured() && currentUserId) {
+      const result = await campaignService.joinCampaignByCode(code, currentUserId, characterName);
+      if (result) {
+        const { campaign, member } = result;
+        
+        setUserCampaigns((prev) => {
+          if (prev.some((c) => c.id === campaign.id)) return prev;
+          const next = [...prev, campaign];
+          try {
+            localStorage.setItem('codex_campaigns', JSON.stringify(next));
+          } catch (e) {}
+          return next;
+        });
+
+        if (member) {
+          setCampaignMembers((prev) => {
+            const next = [...prev.filter((m) => m.id !== member.id), member];
+            try {
+              localStorage.setItem('codex_members', JSON.stringify(next));
+            } catch (e) {}
+            return next;
+          });
+
+          if (modelUrl) {
+            await updateCampaignMemberModelUrl(campaign.id, characterName || '', modelUrl);
+          }
+        }
+
+        setActiveCampaign(campaign);
+        return true;
+      }
+    }
+
+    // Fallback local se estiver offline ou sem Supabase
     const found = userCampaigns.find((c) => c.inviteCode?.toLowerCase() === code.trim().toLowerCase());
     if (found) {
       setActiveCampaign(found);

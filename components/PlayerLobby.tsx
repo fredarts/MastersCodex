@@ -24,8 +24,10 @@ import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { UserCampaign, CharacterSheet } from '@/lib/types';
 import { CharacterSheetModal } from './character-sheet/CharacterSheetModal';
 import { CharacterManagerModal } from './character-sheet/CharacterManagerModal';
-import { createEmptyCharacterSheet } from '@/lib/dnd5e-data';
+import { createEmptyCharacterSheet, generateUuid } from '@/lib/dnd5e-data';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
+import { useAuth } from '@/context/AuthContext';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 interface PlayerLobbyProps {
   onOpenPlayerView: () => void;
@@ -34,6 +36,7 @@ interface PlayerLobbyProps {
 export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) => {
   const { activeCampaign, setActiveCampaign, userCampaigns, joinCampaignByCode, leaveCampaign, feedEvents, updateCampaignMemberModelUrl } = useCampaign();
   const { tokenPositions3D, updateTokenPosition3D } = useLiveCockpit();
+  const { user } = useAuth();
   
   // Navigation & Modal States
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(activeCampaign?.id || null);
@@ -49,13 +52,19 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
         try {
           const parsed: CharacterSheet[] = JSON.parse(saved);
           return parsed.map((s) => {
+            // Migra ID antigo não-UUID para UUIDv4 válido se necessário
+            let currentId = s.id;
+            if (!currentId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentId)) {
+              currentId = generateUuid();
+            }
             // Se modelUrl ainda não foi definido pelo jogador, ou está com valor genérico antigo, corrige
-            if (!s.modelUrl || s.modelUrl === '/assets/3d/characters/Duida/Druida.glb') {
+            let targetModelUrl = s.modelUrl;
+            if (!targetModelUrl || targetModelUrl === '/assets/3d/characters/Duida/Druida.glb') {
               if (s.className && !s.className.toLowerCase().includes('druid')) {
-                return { ...s, modelUrl: getModelUrlByNameOrPath(s.className) };
+                targetModelUrl = getModelUrlByNameOrPath(s.className);
               }
             }
-            return s;
+            return { ...s, id: currentId, modelUrl: targetModelUrl };
           });
         } catch (err) {
           console.error('Erro ao carregar fichas salvas:', err);
@@ -76,6 +85,55 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
       localStorage.setItem(STORAGE_KEY, JSON.stringify(characterSheets));
     }
   }, [characterSheets]);
+
+  // Carrega as fichas do Supabase vinculadas ao usuário conectado e mescla com o localStorage
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    
+    const fetchSheetsFromDb = async () => {
+      const uId = user?.id;
+      if (!uId) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('character_sheets')
+          .select('*')
+          .eq('user_id', uId);
+          
+        if (!error && data && data.length > 0) {
+          const dbSheets = data.map((row) => ({
+            ...row.data,
+            id: row.id,
+            userId: row.user_id,
+            campaignId: row.campaign_id,
+            characterName: row.character_name || row.data.characterName,
+            updatedAt: row.updated_at,
+          }));
+          
+          setCharacterSheets((prev) => {
+            const merged = [...prev];
+            dbSheets.forEach((dbS) => {
+              const idx = merged.findIndex((s) => s.id === dbS.id);
+              if (idx >= 0) {
+                const localTime = new Date(merged[idx].updatedAt || 0).getTime();
+                const dbTime = new Date(dbS.updatedAt || 0).getTime();
+                if (dbTime > localTime) {
+                  merged[idx] = dbS;
+                }
+              } else {
+                merged.push(dbS);
+              }
+            });
+            return merged;
+          });
+        }
+      } catch (err) {
+        console.warn('Erro ao buscar fichas do Supabase:', err);
+      }
+    };
+    
+    fetchSheetsFromDb();
+  }, [user?.id]);
 
   const handleOpenSheetForCampaign = (camp?: UserCampaign) => {
     // Procura se já existe uma ficha vinculada à campanha ou com o nome do personagem
@@ -173,6 +231,27 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
       })
     );
 
+    // Sincroniza a ficha com o banco de dados Supabase para acesso do Mestre e de outros usuários
+    if (isSupabaseConfigured()) {
+      const uId = user?.id || updatedWithTimestamp.userId || 'player-1';
+      const cId = updatedWithTimestamp.campaignId || activeCampaign?.id || null;
+      
+      supabase.from('character_sheets').upsert({
+        id: updatedWithTimestamp.id,
+        user_id: uId,
+        campaign_id: cId,
+        character_name: updatedWithTimestamp.characterName || 'Sem Nome',
+        data: updatedWithTimestamp,
+        updated_at: updatedWithTimestamp.updatedAt,
+      }).then(({ error }) => {
+        if (error) {
+          console.error('Erro ao sincronizar ficha com Supabase:', error);
+        } else {
+          console.log('Ficha sincronizada com o Supabase.');
+        }
+      });
+    }
+
     // Sincroniza modelUrl no Supabase e no codex_members para que o DM veja o modelo correto
     try {
       const targetModelUrl = updatedWithTimestamp.modelUrl || getModelUrlByNameOrPath(updatedWithTimestamp.className || updatedWithTimestamp.characterName);
@@ -240,6 +319,19 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
     if (success) {
       const charName = characterNameInput.trim() || 'Seu Personagem';
+      
+      // Vincula o campaign_id à ficha do jogador e força o salvamento e upsert no Supabase
+      const selectedSheet = characterSheets.find(
+        (s) => s.characterName.toLowerCase() === charName.toLowerCase()
+      );
+      if (selectedSheet) {
+        const updated = { 
+          ...selectedSheet, 
+          campaignId: activeCampaign?.id || selectedCampaignId || undefined 
+        };
+        handleSaveSheet(updated);
+      }
+      
       setJoinSuccessMsg(`✓ Conectado com sucesso à mesa! Personagem: ${charName}`);
       setInviteCodeInput('');
       setCharacterNameInput('');

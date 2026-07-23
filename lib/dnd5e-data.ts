@@ -228,6 +228,19 @@ export const DND_BACKGROUNDS = [
   'Soldado',
 ];
 
+export function generateUuid(): string {
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
+    try {
+      return window.crypto.randomUUID();
+    } catch (e) {}
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 export function createEmptyCharacterSheet(userId: string, campaignId?: string): CharacterSheet {
   const initialSkills: Record<DndSkillKey, 'none'> = {
     acrobacia: 'none',
@@ -256,7 +269,7 @@ export function createEmptyCharacterSheet(userId: string, campaignId?: string): 
   }
 
   return {
-    id: `char-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    id: generateUuid(),
     userId,
     campaignId,
     characterName: 'Novo Aventureiro',
