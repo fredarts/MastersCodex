@@ -242,14 +242,14 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     return () => clearInterval(interval);
   }, [bg3DiceOverlay?.isRolling, bg3DiceOverlay?.phase]);
 
-  const rollDice = (title: string, mod: number, actorCombatant?: Combatant, actionDesc?: string, forceNoTarget: boolean = false) => {
+  const rollDice = (title: string, mod: number, actorCombatant?: Combatant, actionDesc?: string, forceNoTarget: boolean = false): boolean => {
     const currentActor = actorCombatant || combatants[currentTurnIndex];
     const target = combatants.find(c => c.id === selectedTargetId);
 
     // Validate target for Attack rolls unless forced (AoE)
     if (title.startsWith('Ataque') && !target && !forceNoTarget) {
       setPendingAttack({ title, mod, actorCombatant: currentActor, actionDesc });
-      return;
+      return false;
     }
 
     const roll = Math.floor(Math.random() * 20) + 1;
@@ -376,6 +376,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         description: `${currentActor.name} fez teste de ${title}: ${roll} + ${mod} = ${total}`
       });
     }
+    return true;
   };
 
   const getMod = (stat?: number) => stat ? Math.floor((stat - 10) / 2) : 0;
@@ -1120,50 +1121,46 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     let nextRoundCount = roundCount;
     if (nextIdx === 0) {
       nextRoundCount += 1;
-      setRoundCount(nextRoundCount);
     }
     
-    setCombatants((prev) => {
-      let rolled = prev;
-      if (nextIdx === 0 && autoInit) {
-        rolled = prev.map(c => {
-           const dexMod = c.dex ? Math.floor((c.dex - 10) / 2) : 0;
-           return { ...c, initiative: Math.floor(Math.random() * 20) + 1 + dexMod };
-        });
-      }
-      
-      const next = rolled.map((c, idx) => {
-        if (idx === nextIdx) {
-          const pos = tokenPositions3D[c.id] || { x: c.x || 0, z: c.z || 0 };
-          return {
-            ...c,
-            actionUsed: false,
-            bonusActionUsed: false,
-            reactionUsed: false,
-            movementUsed: 0,
-            hasDashed: false,
-            turnStartX: pos.x,
-            turnStartZ: pos.z,
-          };
-        }
-        return c;
+    // Compute new combatants list outside the state updater to avoid side effects inside it
+    let rolled = combatants;
+    if (nextIdx === 0 && autoInit) {
+      rolled = combatants.map(c => {
+         const dexMod = c.dex ? Math.floor((c.dex - 10) / 2) : 0;
+         return { ...c, initiative: Math.floor(Math.random() * 20) + 1 + dexMod };
       });
-      
-      const sorted = nextIdx === 0 && autoInit ? [...next].sort((a, b) => b.initiative - a.initiative) : next;
-      if (activeSceneRef.current) {
-        updateScene({ ...activeSceneRef.current, combatants: sorted });
+    }
+    
+    const next = rolled.map((c, idx) => {
+      if (idx === nextIdx) {
+        const pos = tokenPositions3D[c.id] || { x: c.x || 0, z: c.z || 0 };
+        return {
+          ...c,
+          actionUsed: false,
+          bonusActionUsed: false,
+          reactionUsed: false,
+          movementUsed: 0,
+          hasDashed: false,
+          turnStartX: pos.x,
+          turnStartZ: pos.z,
+        };
       }
-      broadcastToPlayerView({
-        combatants: sorted,
-        currentTurnIndex: nextIdx,
-        roundCount: nextRoundCount,
-        targetId: null,
-      });
-      return sorted;
+      return c;
     });
+    
+    const sorted = nextIdx === 0 && autoInit ? [...next].sort((a, b) => b.initiative - a.initiative) : next;
 
+    // Apply all state updates (React 18+ batches these atomically)
+    setCombatants(sorted);
     setCurrentTurnIndex(nextIdx);
+    setRoundCount(nextRoundCount);
     setSelectedTargetId(undefined);
+
+    // Side effects AFTER state is set (not inside updater)
+    if (activeSceneRef.current) {
+      updateScene({ ...activeSceneRef.current, combatants: sorted });
+    }
   };
 
   const handleHpChange = (id: string, delta: number) => {
@@ -2338,8 +2335,9 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                                 key={atk.id}
                                 disabled={c.actionUsed}
                                 onClick={() => {
-                                  rollDice(`Ataque: ${atk.name}`, bonus, c, atk.damage);
-                                  deductAction(c.id, 'action');
+                                  if (rollDice(`Ataque: ${atk.name}`, bonus, c, atk.damage)) {
+                                    deductAction(c.id, 'action');
+                                  }
                                 }}
                                 className={`px-2.5 py-1 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border ${
                                   c.actionUsed
@@ -2362,8 +2360,9 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                                 key={act.name}
                                 disabled={c.actionUsed}
                                 onClick={() => {
-                                  rollDice(`Ataque: ${act.name}`, bonus, c, act.desc);
-                                  deductAction(c.id, 'action');
+                                  if (rollDice(`Ataque: ${act.name}`, bonus, c, act.desc)) {
+                                    deductAction(c.id, 'action');
+                                  }
                                 }}
                                 className={`px-2.5 py-1 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border ${
                                   c.actionUsed
@@ -2381,8 +2380,9 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                           <button
                             disabled={c.actionUsed}
                             onClick={() => {
-                              rollDice(`Ataque: Corpo a Corpo`, getMod(c.str), c, '1d8');
-                              deductAction(c.id, 'action');
+                              if (rollDice(`Ataque: Corpo a Corpo`, getMod(c.str), c, '1d8')) {
+                                deductAction(c.id, 'action');
+                              }
                             }}
                             className={`px-2.5 py-1 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border ${
                               c.actionUsed
@@ -2948,7 +2948,10 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                 onClick={() => {
                   const att = pendingAttack;
                   setPendingAttack(null);
-                  rollDice(att.title, att.mod, att.actorCombatant, att.actionDesc, true);
+                  if (att && att.actorCombatant) {
+                    rollDice(att.title, att.mod, att.actorCombatant, att.actionDesc, true);
+                    deductAction(att.actorCombatant.id, 'action');
+                  }
                 }}
                 className="w-full py-2 bg-[#161c28] hover:bg-[#232d40] border border-[#2a3449] text-slate-300 font-bold text-xs rounded-xl transition-all"
               >

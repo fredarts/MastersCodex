@@ -173,6 +173,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
   const callbacksRef = useRef({
     combatants,
+    currentTurnIndex,
     setSelectedCombatantId,
     onSelectCombatant,
     onSelectTarget,
@@ -185,6 +186,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   useEffect(() => {
     callbacksRef.current = {
       combatants,
+      currentTurnIndex,
       setSelectedCombatantId,
       onSelectCombatant,
       onSelectTarget,
@@ -482,6 +484,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
           const targetKey = obj.name.replace('token-', '');
           const {
             combatants: activeCombatants,
+            currentTurnIndex: turnIdx,
             setSelectedCombatantId: setSel,
             onSelectCombatant: onSelC,
             onSelectTarget: onSelT,
@@ -497,6 +500,14 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
               isDraggingRef.current = true;
               draggedTokenKeyRef.current = targetKey;
               controls.enabled = false; // Desativa a rotação da câmera durante o arrasto do token
+              
+              // Se for o DM (ou possuir controle) e clicar num token que NÃO é a vez dele,
+              // marca-o também como alvo de ataque.
+              const currentActor = activeCombatants[turnIdx];
+              if (currentActor && clicked.id !== currentActor.id) {
+                setTargetIdState(clicked.id);
+                if (onSelT) onSelT(clicked);
+              }
             } else {
               setTargetIdState(clicked.id);
               if (onSelT) onSelT(clicked);

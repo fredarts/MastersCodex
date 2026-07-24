@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Combatant } from '@/lib/types';
 import { useRealtimeSync } from '@/lib/hooks/useRealtimeSync';
 import { useCampaign } from '@/context/CampaignContext';
@@ -60,9 +60,45 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [spellTargetPosition, setSpellTargetPositionState] = useState<{ x: number; z: number } | null>(null);
   const [activeSheets, setActiveSheets] = useState<ActiveSheetState[]>([]);
 
+  // Ref to track the last synchronized combat state to avoid feedback loops
+  const lastSyncStateRef = useRef<{
+    combatants: Combatant[];
+    currentTurnIndex: number;
+    roundCount: number;
+  } | null>(null);
+
   // Active campaign ID for Supabase WebSocket channels
   const { activeCampaign } = useCampaign();
   const campaignId = activeCampaign?.id || 'camp-demo-1';
+
+  // Helper to compare combat states
+  const isCombatStateEqual = useCallback((
+    a: typeof lastSyncStateRef.current,
+    b: { combatants: Combatant[]; currentTurnIndex: number; roundCount: number }
+  ) => {
+    if (!a) return false;
+    if (a.currentTurnIndex !== b.currentTurnIndex) return false;
+    if (a.roundCount !== b.roundCount) return false;
+    if (a.combatants.length !== b.combatants.length) return false;
+    
+    for (let i = 0; i < a.combatants.length; i++) {
+      const cA = a.combatants[i];
+      const cB = b.combatants[i];
+      if (cA.id !== cB.id) return false;
+      if (cA.name !== cB.name) return false;
+      if (cA.hp !== cB.hp) return false;
+      if (cA.maxHp !== cB.maxHp) return false;
+      if (cA.initiative !== cB.initiative) return false;
+      if (cA.actionUsed !== cB.actionUsed) return false;
+      if (cA.bonusActionUsed !== cB.bonusActionUsed) return false;
+      if (cA.reactionUsed !== cB.reactionUsed) return false;
+      if (cA.movementUsed !== cB.movementUsed) return false;
+      if (cA.hasDashed !== cB.hasDashed) return false;
+      if (cA.x !== cB.x || cA.z !== cB.z) return false;
+      if ((cA.conditions || []).join(',') !== (cB.conditions || []).join(',')) return false;
+    }
+    return true;
+  }, []);
 
   // Realtime Sync Hook
   const {
@@ -118,6 +154,15 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
     },
     onCombatUpdate: (payload) => {
+      const newState = {
+        combatants: payload.combatants,
+        currentTurnIndex: payload.currentTurnIndex,
+        roundCount: payload.roundCount,
+      };
+
+      // Set the ref immediately so that when the state update schedules a render, the sync useEffect can check it
+      lastSyncStateRef.current = newState;
+
       if (payload.combatants) setCombatants(payload.combatants);
       if (payload.currentTurnIndex !== undefined) setCurrentTurnIndex(payload.currentTurnIndex);
       if (payload.roundCount !== undefined) setRoundCount(payload.roundCount);
@@ -127,13 +172,19 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   // Sincroniza estado de combate em tempo real do Mestre para os Jogadores
   useEffect(() => {
     if (activeCampaign?.role === 'dm') {
-      broadcastCombatUpdate({
-        combatants,
-        currentTurnIndex,
-        roundCount,
-      });
+      const currentState = { combatants, currentTurnIndex, roundCount };
+      
+      // If the current state matches the last synced state, do not broadcast (prevents feedback loop)
+      if (isCombatStateEqual(lastSyncStateRef.current, currentState)) {
+        return;
+      }
+
+      // Update the ref to prevent echo
+      lastSyncStateRef.current = currentState;
+
+      broadcastCombatUpdate(currentState);
     }
-  }, [combatants, currentTurnIndex, roundCount, activeCampaign?.role, broadcastCombatUpdate]);
+  }, [combatants, currentTurnIndex, roundCount, activeCampaign?.role, broadcastCombatUpdate, isCombatStateEqual]);
 
   const setLiveDisplayMode = (mode: 'artwork' | 'map' | 'combat') => {
     setLiveDisplayModeState(mode);

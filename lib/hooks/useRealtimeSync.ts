@@ -49,6 +49,25 @@ export function useRealtimeSync({
   const channelRef = useRef<RealtimeChannel | null>(null);
   const isSubscribedRef = useRef<boolean>(false);
 
+  // Store latest callbacks in refs to prevent constant re-subscriptions when references change
+  const callbacksRef = useRef({
+    onTokenMove,
+    onTokenRotate,
+    onLiveProjectionChange,
+    onDiceRoll,
+    onCombatUpdate,
+  });
+
+  useEffect(() => {
+    callbacksRef.current = {
+      onTokenMove,
+      onTokenRotate,
+      onLiveProjectionChange,
+      onDiceRoll,
+      onCombatUpdate,
+    };
+  }, [onTokenMove, onTokenRotate, onLiveProjectionChange, onDiceRoll, onCombatUpdate]);
+
   // Cross-tab BroadcastChannel fallback
   const bcRef = useRef<BroadcastChannel | null>(null);
 
@@ -57,11 +76,12 @@ export function useRealtimeSync({
       bcRef.current = new BroadcastChannel('masters_codex_sync');
       bcRef.current.onmessage = (event) => {
         const { type, ...data } = event.data || {};
-        if (type === 'TOKEN_MOVE_3D' && onTokenMove) onTokenMove(data);
-        if (type === 'TOKEN_ROTATE_3D' && onTokenRotate) onTokenRotate(data);
-        if (type === 'LIVE_PROJECTION_UPDATE' && onLiveProjectionChange) onLiveProjectionChange(data);
-        if (type === 'DICE_ROLL' && onDiceRoll) onDiceRoll(data);
-        if (type === 'COMBAT_UPDATE' && onCombatUpdate) onCombatUpdate(data);
+        const cb = callbacksRef.current;
+        if (type === 'TOKEN_MOVE_3D' && cb.onTokenMove) cb.onTokenMove(data);
+        if (type === 'TOKEN_ROTATE_3D' && cb.onTokenRotate) cb.onTokenRotate(data);
+        if (type === 'LIVE_PROJECTION_UPDATE' && cb.onLiveProjectionChange) cb.onLiveProjectionChange(data);
+        if (type === 'DICE_ROLL' && cb.onDiceRoll) cb.onDiceRoll(data);
+        if (type === 'COMBAT_UPDATE' && cb.onCombatUpdate) cb.onCombatUpdate(data);
       };
     } catch (e) {}
 
@@ -71,7 +91,7 @@ export function useRealtimeSync({
         bcRef.current = null;
       }
     };
-  }, [onTokenMove, onTokenRotate, onLiveProjectionChange, onDiceRoll, onCombatUpdate]);
+  }, []);
 
   // Supabase Realtime Channel
   useEffect(() => {
@@ -86,19 +106,24 @@ export function useRealtimeSync({
 
     channel
       .on('broadcast', { event: 'TOKEN_MOVE_3D' }, ({ payload }) => {
-        if (onTokenMove) onTokenMove(payload);
+        const cb = callbacksRef.current;
+        if (cb.onTokenMove) cb.onTokenMove(payload);
       })
       .on('broadcast', { event: 'TOKEN_ROTATE_3D' }, ({ payload }) => {
-        if (onTokenRotate) onTokenRotate(payload);
+        const cb = callbacksRef.current;
+        if (cb.onTokenRotate) cb.onTokenRotate(payload);
       })
       .on('broadcast', { event: 'LIVE_PROJECTION_UPDATE' }, ({ payload }) => {
-        if (onLiveProjectionChange) onLiveProjectionChange(payload);
+        const cb = callbacksRef.current;
+        if (cb.onLiveProjectionChange) cb.onLiveProjectionChange(payload);
       })
       .on('broadcast', { event: 'DICE_ROLL' }, ({ payload }) => {
-        if (onDiceRoll) onDiceRoll(payload);
+        const cb = callbacksRef.current;
+        if (cb.onDiceRoll) cb.onDiceRoll(payload);
       })
       .on('broadcast', { event: 'COMBAT_UPDATE' }, ({ payload }) => {
-        if (onCombatUpdate) onCombatUpdate(payload);
+        const cb = callbacksRef.current;
+        if (cb.onCombatUpdate) cb.onCombatUpdate(payload);
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
@@ -115,7 +140,7 @@ export function useRealtimeSync({
       isSubscribedRef.current = false;
       supabase.removeChannel(channel);
     };
-  }, [campaignId, onTokenMove, onTokenRotate, onLiveProjectionChange, onDiceRoll, onCombatUpdate]);
+  }, [campaignId]);
 
   const sendBroadcast = useCallback((event: string, payload: any) => {
     // 1. Send via Supabase Realtime WebSocket if connected and subscribed

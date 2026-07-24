@@ -345,65 +345,73 @@ export const INITIAL_LORE_NODES: LoreNode[] = [
 ];
 
 export const BGM_TRACKS: BGMTrack[] = [
-  { id: 'bgm-taverna', name: 'Taverna Rústica & Cerveja', category: 'taverna', url: '/audio/bgm/Taverna.mp3', isLoop: true },
-  { id: 'bgm-combate', name: 'Combate Épico dos Dragões', category: 'combate', url: '/audio/bgm/Catacumbas.mp3', isLoop: true },
-  { id: 'bgm-masmorra', name: 'Masmorra Sombria & Ecos', category: 'masmorra', url: '/audio/bgm/Catacumbas.mp3', isLoop: true },
-  { id: 'bgm-tensao', name: 'Tensão & Perigo Iminente', category: 'tensao', url: '/audio/bgm/Cemitério.mp3', isLoop: true },
-  { id: 'bgm-floresta', name: 'Exploração Florestal', category: 'exploracao', url: '/audio/bgm/Cidade.mp3', isLoop: true },
-  { id: 'bgm-templo', name: 'Templo Celestial', category: 'exploracao', url: '/audio/bgm/Sala do Trono.mp3', isLoop: true },
-  { id: 'bgm-pantano', name: 'Pântano da Agonia', category: 'tensao', url: '/audio/bgm/Cemitério.mp3', isLoop: true },
-  { id: 'bgm-cidade', name: 'Cidade Vibrante & Feira', category: 'taverna', url: '/audio/bgm/Cidade.mp3', isLoop: true },
+  // Taverna & Social
+  { id: 'bgm-taverna', name: 'Taverna Rústica', category: 'taverna', url: '/audio/bgm/Taverna.mp3', isLoop: true },
+  { id: 'bgm-taverna-2', name: 'Taverna Festiva', category: 'taverna', url: '/audio/bgm/Taverna 2.mp3', isLoop: true },
+  { id: 'bgm-mercado', name: 'Mercado & Comércio', category: 'taverna', url: '/audio/bgm/Mercado.mp3', isLoop: true },
+
+  // Exploração & Ambientação
+  { id: 'bgm-cidade', name: 'Cidade Vibrante', category: 'exploracao', url: '/audio/bgm/Cidade.mp3', isLoop: true },
+  { id: 'bgm-cidade-deserto', name: 'Cidade do Deserto', category: 'exploracao', url: '/audio/bgm/Cidade do Deserto.mp3', isLoop: true },
   { id: 'bgm-deserto', name: 'Deserto de Areias Quentes', category: 'exploracao', url: '/audio/bgm/Deserto.mp3', isLoop: true },
-  { id: 'bgm-castelo', name: 'Castelo Real & Realeza', category: 'exploracao', url: '/audio/bgm/Castelo.mp3', isLoop: true }
+  { id: 'bgm-castelo', name: 'Castelo Real & Realeza', category: 'exploracao', url: '/audio/bgm/Castelo.mp3', isLoop: true },
+  { id: 'bgm-sala-trono', name: 'Sala do Trono', category: 'exploracao', url: '/audio/bgm/Sala do Trono.mp3', isLoop: true },
+
+  // Masmorra & Tensão
+  { id: 'bgm-catacumbas', name: 'Catacumbas Sombrias', category: 'masmorra', url: '/audio/bgm/Catacumbas.mp3', isLoop: true },
+  { id: 'bgm-cemiterio', name: 'Cemitério Assombrado', category: 'tensao', url: '/audio/bgm/Cemitério.mp3', isLoop: true },
+
+  // Combate (4 trilhas de batalha)
+  { id: 'bgm-batalha-1', name: 'Batalha Épica I', category: 'combate', url: '/audio/bgm/Batalha 1.mp3', isLoop: true },
+  { id: 'bgm-batalha-2', name: 'Batalha Épica II', category: 'combate', url: '/audio/bgm/Batalha 2.mp3', isLoop: true },
+  { id: 'bgm-batalha-3', name: 'Batalha Épica III', category: 'combate', url: '/audio/bgm/Batalha 3.mp3', isLoop: true },
+  { id: 'bgm-batalha-4', name: 'Batalha Épica IV', category: 'combate', url: '/audio/bgm/Batalha 4.mp3', isLoop: true }
 ];
 
 export const SFX_BUTTONS: SFXButton[] = [
-  // Clássicos Iniciais
-  { id: 'sfx-espada', name: 'Espada', iconName: 'Swords', category: 'combat', url: 'https://raw.githubusercontent.com/wesnoth/wesnoth/master/data/core/sounds/sword-1.ogg' },
-  { id: 'sfx-dragao', name: 'Rugido', iconName: 'Flame', category: 'combat', url: 'https://raw.githubusercontent.com/wesnoth/wesnoth/master/data/core/sounds/groan.ogg' },
-  { id: 'sfx-magia', name: 'Magia', iconName: 'Sparkles', category: 'magic', url: 'https://raw.githubusercontent.com/wesnoth/wesnoth/master/data/core/sounds/magic-missile-1.ogg' },
-  { id: 'sfx-moedas', name: 'Moedas', iconName: 'Coins', category: 'environment', url: 'https://raw.githubusercontent.com/wesnoth/wesnoth/master/data/core/sounds/gold.ogg' },
-  { id: 'sfx-porta', name: 'Porta', iconName: 'DoorOpen', category: 'environment', url: 'https://raw.githubusercontent.com/wesnoth/wesnoth/master/data/core/sounds/sigh.ogg' },
-  { id: 'sfx-risada', name: 'Risada Maligna', iconName: 'Skull', category: 'magic', url: 'https://raw.githubusercontent.com/wesnoth/wesnoth/master/data/core/sounds/wail.ogg' },
+  // ── Combate Corpo-a-Corpo ──
+  { id: 'sfx-sword-slash', name: 'Golpe de Espada', iconName: 'Sword', category: 'combat', url: '/audio/sfx/sword-slash.mp3' },
+  { id: 'sfx-attack-1', name: 'Ataque Corpo-a-Corpo I', iconName: 'Swords', category: 'combat', url: '/audio/sfx/attack-1.mp3' },
+  { id: 'sfx-attack-2', name: 'Ataque Corpo-a-Corpo II', iconName: 'Swords', category: 'combat', url: '/audio/sfx/attack-2.mp3' },
+  { id: 'sfx-attack-3', name: 'Ataque Corpo-a-Corpo III', iconName: 'Hammer', category: 'combat', url: '/audio/sfx/attack-3.mp3' },
 
-  // Magias Conhecidas (20 Magias)
+  // ── Combate à Distância ──
+  { id: 'sfx-arrow-shot', name: 'Tiro de Flecha', iconName: 'Target', category: 'combat', url: '/audio/sfx/arrow-shot.mp3' },
+  { id: 'sfx-bow-loading', name: 'Carregando Arco', iconName: 'Target', category: 'combat', url: '/audio/sfx/bow-loading.mp3' },
+
+  // ── Combate Especial ──
+  { id: 'sfx-ambush', name: 'Emboscada!', iconName: 'ShieldAlert', category: 'combat', url: '/audio/sfx/ambush.mp3' },
+  { id: 'sfx-leopard-attack', name: 'Ataque de Leopardo', iconName: 'Footprints', category: 'combat', url: '/audio/sfx/leopard-attack.mp3' },
+  { id: 'sfx-tiger-attack', name: 'Ataque de Tigre', iconName: 'Footprints', category: 'combat', url: '/audio/sfx/tiger-attack.mp3' },
+
+  // ── Magias de Fogo ──
   { id: 'sfx-fireball', name: 'Bola de Fogo (Fireball)', iconName: 'Flame', category: 'magic', url: '/audio/sfx/fireball.mp3' },
+  { id: 'sfx-fireball-explosion', name: 'Explosão de Bola de Fogo', iconName: 'Flame', category: 'magic', url: '/audio/sfx/bola-de-fogo-explosão.mp3' },
+  { id: 'sfx-lanca-fogo', name: 'Lança de Fogo', iconName: 'Flame', category: 'magic', url: '/audio/sfx/lança-de-fogo.mp3' },
+  { id: 'sfx-raio-fogo', name: 'Raio de Fogo', iconName: 'Zap', category: 'magic', url: '/audio/sfx/raio-de-fogo.mp3' },
+
+  // ── Magias Arcanas & Divinas ──
   { id: 'sfx-magic-missile', name: 'Mísseis Mágicos', iconName: 'Sparkles', category: 'magic', url: '/audio/sfx/magic-missile.mp3' },
-  { id: 'sfx-cure-wounds', name: 'Curar Ferimentos', iconName: 'Heart', category: 'magic', url: '/audio/sfx/cure-wounds.mp3' },
-  { id: 'sfx-shield', name: 'Escudo Arcano (Shield)', iconName: 'Shield', category: 'magic', url: '/audio/sfx/shield.mp3' },
-  { id: 'sfx-thunderwave', name: 'Onda de Trovão', iconName: 'Zap', category: 'magic', url: '/audio/sfx/thunderwave.mp3' },
-  { id: 'sfx-counterspell', name: 'Contramágica', iconName: 'XCircle', category: 'magic', url: '/audio/sfx/counterspell.mp3' },
-  { id: 'sfx-tasha-laugh', name: 'Gargalhada de Tasha', iconName: 'Smile', category: 'magic', url: '/audio/sfx/tasha-laugh.mp3' },
-  { id: 'sfx-light', name: 'Luz (Light)', iconName: 'Sun', category: 'magic', url: '/audio/sfx/light.mp3' },
-  { id: 'sfx-mage-hand', name: 'Mão Arcana', iconName: 'Hand', category: 'magic', url: '/audio/sfx/mage-hand.mp3' },
-  { id: 'sfx-misty-step', name: 'Passo Nebuloso (Misty Step)', iconName: 'Wind', category: 'magic', url: '/audio/sfx/misty-step.mp3' },
-  { id: 'sfx-haste', name: 'Velocidade (Haste)', iconName: 'Zap', category: 'magic', url: '/audio/sfx/haste.mp3' },
-  { id: 'sfx-sleep', name: 'Sono (Sleep)', iconName: 'Moon', category: 'magic', url: '/audio/sfx/sleep.mp3' },
   { id: 'sfx-bless', name: 'Bênção (Bless)', iconName: 'Sparkles', category: 'magic', url: '/audio/sfx/bless.mp3' },
-  { id: 'sfx-banishment', name: 'Banimento', iconName: 'XCircle', category: 'magic', url: '/audio/sfx/banishment.mp3' },
+  { id: 'sfx-cure-wounds', name: 'Curar Ferimentos', iconName: 'Heart', category: 'magic', url: '/audio/sfx/cure-wounds.mp3' },
+  { id: 'sfx-cure-wounds-2', name: 'Curar Ferimentos (Alt)', iconName: 'Heart', category: 'magic', url: '/audio/sfx/cure-wounds 2.mp3' },
+  { id: 'sfx-mage-hand', name: 'Mão Arcana', iconName: 'Hand', category: 'magic', url: '/audio/sfx/mage-hand.mp3' },
   { id: 'sfx-teleport', name: 'Teletransporte', iconName: 'Zap', category: 'magic', url: '/audio/sfx/teleport.mp3' },
   { id: 'sfx-invisibility', name: 'Invisibilidade', iconName: 'EyeOff', category: 'magic', url: '/audio/sfx/invisibility.mp3' },
-  { id: 'sfx-fly', name: 'Voo (Fly)', iconName: 'Wind', category: 'magic', url: '/audio/sfx/fly.mp3' },
-  { id: 'sfx-command', name: 'Comando (Command)', iconName: 'Volume2', category: 'magic', url: '/audio/sfx/command.mp3' },
-  { id: 'sfx-sanctuary', name: 'Santuário (Sanctuary)', iconName: 'ShieldAlert', category: 'magic', url: '/audio/sfx/sanctuary.mp3' },
-  { id: 'sfx-divine-smite', name: 'Destruição Divina', iconName: 'Swords', category: 'magic', url: '/audio/sfx/divine-smite.mp3' },
+  { id: 'sfx-aparecer-magico', name: 'Aparição Mágica', iconName: 'Sparkles', category: 'magic', url: '/audio/sfx/aparecer-magico.mp3' },
 
-  // Ataques Físicos
-  { id: 'sfx-melee-mace', name: 'Golpe de Maça', iconName: 'Hammer', category: 'combat', url: '/audio/sfx/melee-mace.mp3' },
-  { id: 'sfx-melee-dagger', name: 'Apunhalada de Adaga', iconName: 'Sword', category: 'combat', url: '/audio/sfx/melee-dagger.mp3' },
-  { id: 'sfx-ranged-bow', name: 'Tiro de Arco (Ranged)', iconName: 'Target', category: 'combat', url: '/audio/sfx/ranged-bow.mp3' },
-  { id: 'sfx-ranged-crossbow', name: 'Tiro de Besta', iconName: 'Target', category: 'combat', url: '/audio/sfx/ranged-crossbow.mp3' },
-  { id: 'sfx-ranged-firebolt', name: 'Raio de Fogo (Fire Bolt)', iconName: 'Flame', category: 'combat', url: '/audio/sfx/ranged-firebolt.mp3' },
+  // ── Monstros & Criaturas ──
+  { id: 'sfx-monster-roar', name: 'Rugido de Monstro', iconName: 'Skull', category: 'combat', url: '/audio/sfx/monster-roar.mp3' },
+  { id: 'sfx-monster-roar-2', name: 'Rugido de Monstro II', iconName: 'Skull', category: 'combat', url: '/audio/sfx/monster-roar-2.mp3' },
+  { id: 'sfx-colossal-roar', name: 'Rugido Colossal', iconName: 'Skull', category: 'combat', url: '/audio/sfx/colossal-monster-roar.mp3' },
+  { id: 'sfx-monster-dying', name: 'Monstro Morrendo', iconName: 'Skull', category: 'combat', url: '/audio/sfx/monster-dying.mp3' },
+  { id: 'sfx-urro-demonio', name: 'Urro do Demônio', iconName: 'Skull', category: 'combat', url: '/audio/sfx/urro-do-demonio.mp3' },
+  { id: 'sfx-bees', name: 'Enxame de Abelhas', iconName: 'Wind', category: 'environment', url: '/audio/sfx/bees.mp3' },
 
-  // SFX Miscelâneos & Narrativos
-  { id: 'sfx-misc-gem', name: 'Gemas & Cristais', iconName: 'Gem', category: 'environment', url: '/audio/sfx/misc-gem.mp3' },
-  { id: 'sfx-animal-wolf', name: 'Uivo de Lobo', iconName: 'Footprints', category: 'environment', url: '/audio/sfx/animal-wolf.mp3' },
-  { id: 'sfx-animal-cat', name: 'Miado de Gato', iconName: 'Footprints', category: 'environment', url: '/audio/sfx/animal-cat.mp3' },
-  { id: 'sfx-animal-dog', name: 'Latido de Cão', iconName: 'Footprints', category: 'environment', url: '/audio/sfx/animal-dog.mp3' },
-  { id: 'sfx-animal-horse', name: 'Relincho de Cavalo', iconName: 'Footprints', category: 'environment', url: '/audio/sfx/animal-horse.mp3' },
-  { id: 'sfx-animal-dragon', name: 'Rosnar de Dragão', iconName: 'Flame', category: 'environment', url: '/audio/sfx/animal-dragon.mp3' },
-  { id: 'sfx-crowd-tavern', name: 'Festa na Taverna (Crowd)', iconName: 'Users', category: 'environment', url: '/audio/sfx/crowd-tavern.mp3' },
-  { id: 'sfx-crowd-screams', name: 'Gritos de Pânico', iconName: 'Megaphone', category: 'environment', url: '/audio/sfx/crowd-screams.mp3' },
-  { id: 'sfx-crowd-whispers', name: 'Sussurros', iconName: 'MessageSquare', category: 'environment', url: '/audio/sfx/crowd-whispers.mp3' }
+  // ── Ambiente & Narrativa ──
+  { id: 'sfx-coin', name: 'Moedas', iconName: 'Coins', category: 'environment', url: '/audio/sfx/coin.mp3' },
+  { id: 'sfx-sinos', name: 'Sinos', iconName: 'Sun', category: 'environment', url: '/audio/sfx/Sinos.mp3' },
+  { id: 'sfx-acampamento', name: 'Acampamento', iconName: 'Flame', category: 'environment', url: '/audio/sfx/acampamento.mp3' },
+  { id: 'sfx-level-up', name: 'Level Up!', iconName: 'Zap', category: 'environment', url: '/audio/sfx/level-up.mp3' }
 ];
 
