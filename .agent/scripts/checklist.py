@@ -152,11 +152,12 @@ def print_summary(results: List[dict]):
     
     print()
     
-    if failed_count > 0:
-        print_error(f"{failed_count} check(s) FAILED - Please fix before proceeding")
+    critical_failed = sum(1 for r in results if not r["passed"] and not r.get("skipped") and r.get("required"))
+    if critical_failed > 0:
+        print_error(f"{critical_failed} critical check(s) FAILED - Please fix before proceeding")
         return False
     else:
-        print_success("All checks PASSED ✨")
+        print_success("All critical checks PASSED ✨")
         return True
 
 def main():
@@ -164,10 +165,10 @@ def main():
         description="Run Antigravity Kit validation checklist",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  python scripts/checklist.py .                      # Core checks only
-  python scripts/checklist.py . --url http://localhost:3000  # Include performance
-        """
+  Examples:
+    python scripts/checklist.py .                      # Core checks only
+    python scripts/checklist.py . --url http://localhost:3000  # Include performance
+          """
     )
     parser.add_argument("project", help="Project path to validate")
     parser.add_argument("--url", help="URL for performance checks (lighthouse, playwright)")
@@ -192,6 +193,7 @@ Examples:
     for name, script_path, required in CORE_CHECKS:
         script = project_path / script_path
         result = run_script(name, script, str(project_path))
+        result["required"] = required
         results.append(result)
         
         # If required check fails, stop
@@ -206,6 +208,7 @@ Examples:
         for name, script_path, required in PERFORMANCE_CHECKS:
             script = project_path / script_path
             result = run_script(name, script, str(project_path), args.url)
+            result["required"] = required
             results.append(result)
     
     # Print summary

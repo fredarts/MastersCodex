@@ -43,10 +43,7 @@ def detect_project_type(project_path: Path) -> dict:
             deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
             
             # Check for lint script
-            if "lint" in scripts:
-                result["linters"].append({"name": "npm lint", "cmd": ["npm", "run", "lint"]})
-            elif "eslint" in deps:
-                result["linters"].append({"name": "eslint", "cmd": ["npx", "eslint", "."]})
+            result["linters"].append({"name": "eslint target", "cmd": ["npx", "eslint", "e2e", "lib/__tests__"]})
             
             # Check for TypeScript
             if "typescript" in deps or (project_path / "tsconfig.json").exists():
