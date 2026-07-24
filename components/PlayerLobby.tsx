@@ -27,7 +27,7 @@ import { CharacterManagerModal } from './character-sheet/CharacterManagerModal';
 import { createEmptyCharacterSheet, generateUuid } from '@/lib/dnd5e-data';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { useAuth } from '@/context/AuthContext';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
 
 interface PlayerLobbyProps {
   onOpenPlayerView: () => void;
@@ -92,7 +92,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     
     const fetchSheetsFromDb = async () => {
       const uId = user?.id;
-      if (!uId) return;
+      if (!uId || !isValidUuid(uId)) return;
       
       try {
         const { data, error } = await supabase
@@ -236,20 +236,22 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
       const uId = user?.id || updatedWithTimestamp.userId || 'player-1';
       const cId = updatedWithTimestamp.campaignId || activeCampaign?.id || null;
       
-      supabase.from('character_sheets').upsert({
-        id: updatedWithTimestamp.id,
-        user_id: uId,
-        campaign_id: cId,
-        character_name: updatedWithTimestamp.characterName || 'Sem Nome',
-        data: updatedWithTimestamp,
-        updated_at: updatedWithTimestamp.updatedAt,
-      }).then(({ error }) => {
-        if (error) {
-          console.error('Erro ao sincronizar ficha com Supabase:', error);
-        } else {
-          console.log('Ficha sincronizada com o Supabase.');
-        }
-      });
+      if (isValidUuid(uId)) {
+        supabase.from('character_sheets').upsert({
+          id: updatedWithTimestamp.id,
+          user_id: uId,
+          campaign_id: (cId && isValidUuid(cId)) ? cId : null,
+          character_name: updatedWithTimestamp.characterName || 'Sem Nome',
+          data: updatedWithTimestamp,
+          updated_at: updatedWithTimestamp.updatedAt,
+        }).then(({ error }) => {
+          if (error) {
+            console.error('Erro ao sincronizar ficha com Supabase:', error);
+          } else {
+            console.log('Ficha sincronizada com o Supabase.');
+          }
+        });
+      }
     }
 
     // Sincroniza modelUrl no Supabase e no codex_members para que o DM veja o modelo correto

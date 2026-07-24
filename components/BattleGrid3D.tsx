@@ -15,6 +15,7 @@ import { createRainParticleSystem } from './battle-3d/WeatherEffects';
 import { BattleControlsToolbar } from './battle-3d/BattleControlsToolbar';
 import { disposeHierarchy } from '@/lib/3d-asset-manager';
 import { HelpCircle, X } from 'lucide-react';
+import { patchWebGLContext } from '@/lib/webgl-utils';
 
 export interface BattleGrid3DProps {
   combatants: Combatant[];
@@ -48,6 +49,17 @@ const getDirectionLabel = (angleDeg: number): string => {
   if (norm >= 202.5 && norm < 247.5) return 'Sudoeste ↙';
   if (norm >= 247.5 && norm < 292.5) return 'Oeste ◀';
   return 'Noroeste ↖';
+};
+
+const getSpeedInMeters = (speedStr?: string): number => {
+  if (!speedStr) return 9; // 30 ft = 9m
+  const cleaned = speedStr.toLowerCase().replace(/[^0-9\.]/g, '');
+  const val = parseFloat(cleaned);
+  if (isNaN(val)) return 9;
+  if (speedStr.toLowerCase().includes('ft') || speedStr.toLowerCase().includes('pe')) {
+    return val * 0.3; // converter pés para metros
+  }
+  return val;
 };
 
 export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
@@ -131,6 +143,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<any>(null);
   const tokenGroupRef = useRef<THREE.Group | null>(null);
+  const highlightGroupRef = useRef<THREE.Group | null>(null);
   const tokenMeshMapRef = useRef<Map<string, THREE.Group>>(new Map());
   const rainSysRef = useRef<ReturnType<typeof createRainParticleSystem> | null>(null);
   const skyDomeRef = useRef<SkyDomeInstance | null>(null);
@@ -329,6 +342,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     controlsRef.current = controls;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    patchWebGLContext(renderer);
     renderer.setSize(width, height);
     renderer.shadowMap.enabled = true;
 
@@ -535,6 +549,23 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
         // Skip if snapped position hasn't changed — prevents infinite re-render loop
         if (lastDragSnapRef.current?.x === snappedX && lastDragSnapRef.current?.z === snappedZ) return;
+
+        // Restriction Check: if dragged token is the active combatant and not in placement phase
+        const activeC = callbacksRef.current.combatants[currentTurnIndex];
+        if (activeC && activeC.id === key && !isPlacementPhase) {
+          const startX = activeC.turnStartX !== undefined ? activeC.turnStartX : (activeC.x || 0);
+          const startZ = activeC.turnStartZ !== undefined ? activeC.turnStartZ : (activeC.z || 0);
+          const speedVal = getSpeedInMeters(activeC.speed || activeC.notes) * (activeC.hasDashed ? 2 : 1);
+          const remainingMovement = Math.max(0, speedVal - (activeC.movementUsed || 0));
+
+          // Chebyshev distance in meters: 1.5m per 2 Three.js units (1 square)
+          const distInMeters = Math.max(Math.abs(snappedX - startX), Math.abs(snappedZ - startZ)) / 2 * 1.5;
+
+          if (distInMeters > remainingMovement) {
+            return; // Block drag outside allowed speed range!
+          }
+        }
+
         lastDragSnapRef.current = { x: snappedX, z: snappedZ };
 
         const group = tokenMeshMapRef.current.get(key);
@@ -554,6 +585,38 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
     const handlePointerUp = () => {
       if (isDraggingRef.current) {
+        const key = draggedTokenKeyRef.current;
+        if (key && !isPlacementPhase) {
+          const group = tokenMeshMapRef.current.get(key);
+          if (group) {
+            const snappedX = group.position.x;
+            const snappedZ = group.position.z;
+
+            const activeC = callbacksRef.current.combatants[currentTurnIndex];
+            if (activeC && activeC.id === key) {
+              const startX = activeC.turnStartX !== undefined ? activeC.turnStartX : (activeC.x || 0);
+              const startZ = activeC.turnStartZ !== undefined ? activeC.turnStartZ : (activeC.z || 0);
+              const distInMeters = Math.max(Math.abs(snappedX - startX), Math.abs(snappedZ - startZ)) / 2 * 1.5;
+
+              const nextCombatants = callbacksRef.current.combatants.map(c => {
+                if (c.id === key) {
+                  return {
+                    ...c,
+                    x: snappedX,
+                    z: snappedZ,
+                    movementUsed: distInMeters
+                  };
+                }
+                return c;
+              });
+
+              if (callbacksRef.current.onUpdateCombatants) {
+                callbacksRef.current.onUpdateCombatants(nextCombatants);
+              }
+            }
+          }
+        }
+
         isDraggingRef.current = false;
         draggedTokenKeyRef.current = null;
         lastDragSnapRef.current = null;
@@ -705,6 +768,67 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   useEffect(() => {
     syncTokens();
   }, [syncTokens]);
+
+  // Reachable movement range highlighting meshes dynamically
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    // Clear old highlights
+    if (highlightGroupRef.current) {
+      scene.remove(highlightGroupRef.current);
+      disposeHierarchy(highlightGroupRef.current);
+      highlightGroupRef.current = null;
+    }
+
+    if (isPlacementPhase) return;
+
+    const activeC = combatants[currentTurnIndex];
+    if (!activeC) return;
+
+    const startX = activeC.turnStartX !== undefined ? activeC.turnStartX : (activeC.x || 0);
+    const startZ = activeC.turnStartZ !== undefined ? activeC.turnStartZ : (activeC.z || 0);
+    const speedVal = getSpeedInMeters(activeC.speed || activeC.notes) * (activeC.hasDashed ? 2 : 1);
+    const remainingMovement = Math.max(0, speedVal - (activeC.movementUsed || 0));
+
+    if (remainingMovement <= 0) return;
+
+    const highlightGroup = new THREE.Group();
+    highlightGroup.name = 'movementHighlightGroup';
+    highlightGroupRef.current = highlightGroup;
+    scene.add(highlightGroup);
+
+    // Chebyshev distance: 1.5m per grid square (2 units)
+    const maxSquares = Math.floor(remainingMovement / 1.5);
+
+    const geo = new THREE.PlaneGeometry(1.8, 1.8);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x0ea5e9, // Tailwind sky-500
+      transparent: true,
+      opacity: 0.18,
+      side: THREE.DoubleSide
+    });
+
+    const edges = new THREE.EdgesGeometry(geo);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.4 });
+
+    for (let dx = -maxSquares; dx <= maxSquares; dx++) {
+      for (let dz = -maxSquares; dz <= maxSquares; dz++) {
+        const gridX = startX + dx * 2;
+        const gridZ = startZ + dz * 2;
+
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.set(gridX, 0.02, gridZ);
+        highlightGroup.add(mesh);
+
+        const line = new THREE.LineSegments(edges, lineMat);
+        line.rotation.x = -Math.PI / 2;
+        line.position.set(gridX, 0.02, gridZ);
+        highlightGroup.add(line);
+      }
+    }
+  }, [combatants, currentTurnIndex, isPlacementPhase]);
 
   // 4. Render Spell Range and AoE Target shape helper meshes dynamically
   useEffect(() => {

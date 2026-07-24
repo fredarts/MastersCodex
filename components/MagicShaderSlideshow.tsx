@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { patchWebGLContext } from '@/lib/webgl-utils';
 
 interface MagicShaderSlideshowProps {
   imageUrl: string;
@@ -142,6 +143,7 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
       stencil: false,
       powerPreference: 'high-performance',
     });
+    patchWebGLContext(renderer);
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     state.renderer = renderer;

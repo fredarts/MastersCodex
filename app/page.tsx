@@ -45,11 +45,14 @@ function MainApp() {
     minimizeSheet,
     maximizeSheet,
     closeSheet,
+    combatants,
+    setCombatants,
+    currentTurnIndex,
+    setCurrentTurnIndex,
+    roundCount,
+    setRoundCount,
   } = useLiveCockpit();
   
-  const [combatants, setCombatants] = useState<Combatant[]>([]);
-  const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
-  const [roundCount, setRoundCount] = useState(1);
   const [isCompendiumOpen, setIsCompendiumOpen] = useState(false);
   const [isPlayerViewOpen, setIsPlayerViewOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);

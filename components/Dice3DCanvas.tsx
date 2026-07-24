@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { patchWebGLContext } from '@/lib/webgl-utils';
 
 export type DieType = 'd20' | 'd12' | 'd10' | 'd8' | 'd6' | 'd4';
 
@@ -39,6 +40,7 @@ export const Dice3DCanvas: React.FC<Dice3DCanvasProps> = ({
     camera.position.set(0, 0, 4.2);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    patchWebGLContext(renderer);
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 

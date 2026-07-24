@@ -13,7 +13,19 @@ interface CombatTurnOrderPanelProps {
   onOpenAddCombatant: () => void;
   onRemoveCombatant: (id: string) => void;
   onUpdateHp: (id: string, delta: number) => void;
+  characterSheets?: any[];
 }
+
+const getSpeedInMeters = (speedStr?: string): number => {
+  if (!speedStr) return 9; // 30 ft = 9m
+  const cleaned = speedStr.toLowerCase().replace(/[^0-9\.]/g, '');
+  const val = parseFloat(cleaned);
+  if (isNaN(val)) return 9;
+  if (speedStr.toLowerCase().includes('ft') || speedStr.toLowerCase().includes('pe')) {
+    return val * 0.3; // converter pés para metros
+  }
+  return val;
+};
 
 export const CombatTurnOrderPanel: React.FC<CombatTurnOrderPanelProps> = ({
   combatants,
@@ -24,6 +36,7 @@ export const CombatTurnOrderPanel: React.FC<CombatTurnOrderPanelProps> = ({
   onOpenAddCombatant,
   onRemoveCombatant,
   onUpdateHp,
+  characterSheets = [],
 }) => {
   const activeCombatant = combatants[currentTurnIndex];
 
@@ -81,9 +94,30 @@ export const CombatTurnOrderPanel: React.FC<CombatTurnOrderPanelProps> = ({
                   : 'bg-slate-950/60 border-slate-800/80 text-slate-400 hover:border-slate-700'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <span className="w-5 text-center font-bold text-slate-500">{c.initiative ?? '-'}</span>
-                <span className={isPlayer ? 'text-sky-400 font-bold' : 'text-rose-400'}>{c.name}</span>
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 text-center font-bold text-slate-500">{c.initiative ?? '-'}</span>
+                  <span className={isPlayer ? 'text-sky-400 font-bold' : 'text-rose-400'}>{c.name}</span>
+                </div>
+                
+                <div className="flex items-center gap-1.5 ml-7 text-[9px] font-mono font-bold">
+                  <span className={c.actionUsed ? 'text-slate-600' : 'text-emerald-400'} title="Ação">A</span>
+                  <span className={c.bonusActionUsed ? 'text-slate-600' : 'text-cyan-400'} title="Ação Bônus">B</span>
+                  <span className={c.reactionUsed ? 'text-slate-600' : 'text-amber-400'} title="Reação">R</span>
+                  <span className="text-slate-500 ml-1">
+                    {(() => {
+                      const sheet = characterSheets.find(s => {
+                        const cClean = c.name.split('(')[0].trim().toLowerCase();
+                        return s.characterName.toLowerCase() === cClean || 
+                               s.characterName.toLowerCase().includes(cClean) || 
+                               cClean.includes(s.characterName.toLowerCase());
+                      });
+                      const maxSpeed = getSpeedInMeters(sheet?.speed || c.notes) * (c.hasDashed ? 2 : 1);
+                      const rem = Math.max(0, maxSpeed - (c.movementUsed || 0));
+                      return `${rem.toFixed(1)}m`;
+                    })()}
+                  </span>
+                </div>
               </div>
 
               <div className="flex items-center gap-3">

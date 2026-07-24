@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Combatant } from '@/lib/types';
 import { useRealtimeSync } from '@/lib/hooks/useRealtimeSync';
 import { useCampaign } from '@/context/CampaignContext';
@@ -123,6 +123,17 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       if (payload.roundCount !== undefined) setRoundCount(payload.roundCount);
     },
   });
+
+  // Sincroniza estado de combate em tempo real do Mestre para os Jogadores
+  useEffect(() => {
+    if (activeCampaign?.role === 'dm') {
+      broadcastCombatUpdate({
+        combatants,
+        currentTurnIndex,
+        roundCount,
+      });
+    }
+  }, [combatants, currentTurnIndex, roundCount, activeCampaign?.role, broadcastCombatUpdate]);
 
   const setLiveDisplayMode = (mode: 'artwork' | 'map' | 'combat') => {
     setLiveDisplayModeState(mode);

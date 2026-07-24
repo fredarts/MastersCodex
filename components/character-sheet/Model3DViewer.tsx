@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Loader2 } from 'lucide-react';
+import { patchWebGLContext } from '@/lib/webgl-utils';
 
 interface Model3DViewerProps {
   modelUrl: string;
@@ -43,6 +44,7 @@ export const Model3DViewer: React.FC<Model3DViewerProps> = ({
     camera.position.set(0, 1.2, 3.2);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    patchWebGLContext(renderer);
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 

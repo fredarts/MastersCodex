@@ -345,26 +345,26 @@ export const INITIAL_LORE_NODES: LoreNode[] = [
 ];
 
 export const BGM_TRACKS: BGMTrack[] = [
-  { id: 'bgm-taverna', name: 'Taverna Rústica & Cerveja', category: 'taverna', url: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=medieval-tavern-113540.mp3', isLoop: true },
-  { id: 'bgm-combate', name: 'Combate Épico dos Dragões', category: 'combate', url: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8724778.mp3?filename=epic-cinematic-trailer-110035.mp3', isLoop: true },
-  { id: 'bgm-masmorra', name: 'Masmorra Sombria & Ecos', category: 'masmorra', url: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=dark-ambient-10903.mp3', isLoop: true },
-  { id: 'bgm-tensao', name: 'Tensão & Perigo Iminente', category: 'tensao', url: 'https://cdn.pixabay.com/download/audio/2021/08/09/audio_8835848e02.mp3?filename=tension-suspense-movie-trailer-8610.mp3', isLoop: true },
-  { id: 'bgm-floresta', name: 'Exploração Florestal', category: 'exploracao', url: '/audio/bgm/floresta.mp3', isLoop: true },
-  { id: 'bgm-templo', name: 'Templo Celestial', category: 'exploracao', url: '/audio/bgm/templo.mp3', isLoop: true },
-  { id: 'bgm-pantano', name: 'Pântano da Agonia', category: 'tensao', url: '/audio/bgm/pantano.mp3', isLoop: true },
-  { id: 'bgm-cidade', name: 'Cidade Vibrante & Feira', category: 'taverna', url: '/audio/bgm/cidade.mp3', isLoop: true },
-  { id: 'bgm-deserto', name: 'Deserto de Areias Quentes', category: 'exploracao', url: '/audio/bgm/deserto.mp3', isLoop: true },
-  { id: 'bgm-castelo', name: 'Castelo Real & Realeza', category: 'exploracao', url: '/audio/bgm/castelo.mp3', isLoop: true }
+  { id: 'bgm-taverna', name: 'Taverna Rústica & Cerveja', category: 'taverna', url: '/audio/bgm/Taverna.mp3', isLoop: true },
+  { id: 'bgm-combate', name: 'Combate Épico dos Dragões', category: 'combate', url: '/audio/bgm/Catacumbas.mp3', isLoop: true },
+  { id: 'bgm-masmorra', name: 'Masmorra Sombria & Ecos', category: 'masmorra', url: '/audio/bgm/Catacumbas.mp3', isLoop: true },
+  { id: 'bgm-tensao', name: 'Tensão & Perigo Iminente', category: 'tensao', url: '/audio/bgm/Cemitério.mp3', isLoop: true },
+  { id: 'bgm-floresta', name: 'Exploração Florestal', category: 'exploracao', url: '/audio/bgm/Cidade.mp3', isLoop: true },
+  { id: 'bgm-templo', name: 'Templo Celestial', category: 'exploracao', url: '/audio/bgm/Sala do Trono.mp3', isLoop: true },
+  { id: 'bgm-pantano', name: 'Pântano da Agonia', category: 'tensao', url: '/audio/bgm/Cemitério.mp3', isLoop: true },
+  { id: 'bgm-cidade', name: 'Cidade Vibrante & Feira', category: 'taverna', url: '/audio/bgm/Cidade.mp3', isLoop: true },
+  { id: 'bgm-deserto', name: 'Deserto de Areias Quentes', category: 'exploracao', url: '/audio/bgm/Deserto.mp3', isLoop: true },
+  { id: 'bgm-castelo', name: 'Castelo Real & Realeza', category: 'exploracao', url: '/audio/bgm/Castelo.mp3', isLoop: true }
 ];
 
 export const SFX_BUTTONS: SFXButton[] = [
   // Clássicos Iniciais
-  { id: 'sfx-espada', name: 'Espada', iconName: 'Swords', category: 'combat', url: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_c31f47a469.mp3?filename=sword-slash-101188.mp3' },
-  { id: 'sfx-dragao', name: 'Rugido', iconName: 'Flame', category: 'combat', url: 'https://cdn.pixabay.com/download/audio/2021/08/04/audio_b4860a5e8f.mp3?filename=monster-roar-6984.mp3' },
-  { id: 'sfx-magia', name: 'Magia', iconName: 'Sparkles', category: 'magic', url: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c1c110398f.mp3?filename=magic-spell-6005.mp3' },
-  { id: 'sfx-moedas', name: 'Moedas', iconName: 'Coins', category: 'environment', url: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_a340798150.mp3?filename=coins-handling-4-88480.mp3' },
-  { id: 'sfx-porta', name: 'Porta', iconName: 'DoorOpen', category: 'environment', url: 'https://cdn.pixabay.com/download/audio/2022/03/24/audio_348425d576.mp3?filename=wooden-door-open-98835.mp3' },
-  { id: 'sfx-risada', name: 'Risada Maligna', iconName: 'Skull', category: 'magic', url: 'https://cdn.pixabay.com/download/audio/2022/10/30/audio_51744d0ec3.mp3?filename=evil-laugh-124040.mp3' },
+  { id: 'sfx-espada', name: 'Espada', iconName: 'Swords', category: 'combat', url: 'https://raw.githubusercontent.com/wesnoth/wesnoth/master/data/core/sounds/sword-1.ogg' },
+  { id: 'sfx-dragao', name: 'Rugido', iconName: 'Flame', category: 'combat', url: 'https://raw.githubusercontent.com/wesnoth/wesnoth/master/data/core/sounds/groan.ogg' },
+  { id: 'sfx-magia', name: 'Magia', iconName: 'Sparkles', category: 'magic', url: 'https://raw.githubusercontent.com/wesnoth/wesnoth/master/data/core/sounds/magic-missile-1.ogg' },
+  { id: 'sfx-moedas', name: 'Moedas', iconName: 'Coins', category: 'environment', url: 'https://raw.githubusercontent.com/wesnoth/wesnoth/master/data/core/sounds/gold.ogg' },
+  { id: 'sfx-porta', name: 'Porta', iconName: 'DoorOpen', category: 'environment', url: 'https://raw.githubusercontent.com/wesnoth/wesnoth/master/data/core/sounds/sigh.ogg' },
+  { id: 'sfx-risada', name: 'Risada Maligna', iconName: 'Skull', category: 'magic', url: 'https://raw.githubusercontent.com/wesnoth/wesnoth/master/data/core/sounds/wail.ogg' },
 
   // Magias Conhecidas (20 Magias)
   { id: 'sfx-fireball', name: 'Bola de Fogo (Fireball)', iconName: 'Flame', category: 'magic', url: '/audio/sfx/fireball.mp3' },

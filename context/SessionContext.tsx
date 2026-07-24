@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { GameSession, GameScene } from '@/lib/types';
 import { sessionService } from '@/lib/services/sessionService';
+import { useCampaign } from '@/context/CampaignContext';
 
 interface SessionContextType {
   sessions: GameSession[];
@@ -28,11 +29,14 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [scenes, setScenes] = useState<GameScene[]>([]);
   const [activeScene, setActiveSceneState] = useState<GameScene | null>(null);
 
+  const { activeCampaign } = useCampaign();
+  const campaignId = activeCampaign?.id || 'camp-demo-1';
+
   useEffect(() => {
-    sessionService.fetchSessions('camp-demo-1').then((fetchedSessions) => {
+    sessionService.fetchSessions(campaignId).then((fetchedSessions) => {
       if (fetchedSessions.length > 0) {
         setSessions(fetchedSessions);
-        const savedSessionId = typeof window !== 'undefined' ? localStorage.getItem('codex_activeSessionId') : null;
+        const savedSessionId = typeof window !== 'undefined' ? localStorage.getItem(`codex_activeSessionId_${campaignId}`) : null;
         const found = savedSessionId ? fetchedSessions.find((s) => s.id === savedSessionId) : null;
         const target = found || fetchedSessions[0];
         setActiveSessionState(target);
@@ -40,26 +44,34 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         sessionService.fetchScenes(target.id).then((fetchedScenes) => {
           if (fetchedScenes.length > 0) {
             setScenes(fetchedScenes);
-            const savedSceneId = typeof window !== 'undefined' ? localStorage.getItem('codex_activeSceneId') : null;
+            const savedSceneId = typeof window !== 'undefined' ? localStorage.getItem(`codex_activeSceneId_${target.id}`) : null;
             const foundScene = savedSceneId ? fetchedScenes.find((sc) => sc.id === savedSceneId) : null;
             setActiveSceneState(foundScene || fetchedScenes[0]);
+          } else {
+            setScenes([]);
+            setActiveSceneState(null);
           }
         });
+      } else {
+        setSessions([]);
+        setActiveSessionState(null);
+        setScenes([]);
+        setActiveSceneState(null);
       }
     });
-  }, []);
+  }, [campaignId]);
 
   const setActiveSession = (session: GameSession | null) => {
     setActiveSessionState(session);
     try {
       if (session) {
-        localStorage.setItem('codex_activeSessionId', session.id);
+        localStorage.setItem(`codex_activeSessionId_${campaignId}`, session.id);
         sessionService.fetchScenes(session.id).then((fetchedScenes) => {
           setScenes(fetchedScenes);
           if (fetchedScenes.length > 0) setActiveSceneState(fetchedScenes[0]);
         });
       } else {
-        localStorage.removeItem('codex_activeSessionId');
+        localStorage.removeItem(`codex_activeSessionId_${campaignId}`);
       }
     } catch (e) {}
   };
@@ -68,9 +80,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setActiveSceneState(scene);
     try {
       if (scene) {
-        localStorage.setItem('codex_activeSceneId', scene.id);
+        localStorage.setItem(`codex_activeSceneId_${scene.sessionId}`, scene.id);
       } else {
-        localStorage.removeItem('codex_activeSceneId');
+        // Se deletado ou nulo, limpa do localStorage
+        if (activeSession) {
+          localStorage.removeItem(`codex_activeSceneId_${activeSession.id}`);
+        }
       }
     } catch (e) {}
   };

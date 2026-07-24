@@ -149,6 +149,7 @@ export interface Combatant {
   cha?: number;
   actions?: { name: string; desc: string }[];
   cr?: string;
+  speed?: string;
   avatarUrl?: string;
   modelUrl?: string;
   notes?: string;
@@ -156,6 +157,13 @@ export interface Combatant {
   x?: number;
   z?: number;
   rotation?: number; // em graus (0-360)
+  actionUsed?: boolean;
+  bonusActionUsed?: boolean;
+  reactionUsed?: boolean;
+  movementUsed?: number;
+  turnStartX?: number;
+  turnStartZ?: number;
+  hasDashed?: boolean;
 }
 
 export interface CombatLogEntry {

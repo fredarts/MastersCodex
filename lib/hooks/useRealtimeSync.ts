@@ -47,6 +47,7 @@ export function useRealtimeSync({
   onCombatUpdate,
 }: UseRealtimeSyncOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const isSubscribedRef = useRef<boolean>(false);
 
   // Cross-tab BroadcastChannel fallback
   const bcRef = useRef<BroadcastChannel | null>(null);
@@ -101,25 +102,40 @@ export function useRealtimeSync({
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
+          isSubscribedRef.current = true;
           console.log(`📡 Supabase Realtime conectado ao canal: ${channelName}`);
+        } else {
+          isSubscribedRef.current = false;
         }
       });
 
     channelRef.current = channel;
 
     return () => {
+      isSubscribedRef.current = false;
       supabase.removeChannel(channel);
     };
   }, [campaignId, onTokenMove, onTokenRotate, onLiveProjectionChange, onDiceRoll, onCombatUpdate]);
 
   const sendBroadcast = useCallback((event: string, payload: any) => {
-    // 1. Send via Supabase Realtime WebSocket if connected
+    // 1. Send via Supabase Realtime WebSocket if connected and subscribed
     if (channelRef.current) {
-      channelRef.current.send({
-        type: 'broadcast',
-        event,
-        payload,
-      });
+      if (isSubscribedRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event,
+          payload,
+        });
+      } else {
+        // Fallback explicitly to httpSend to avoid the automatic REST fallback warning
+        channelRef.current.httpSend(
+          'broadcast',
+          event,
+          payload
+        ).catch((err: any) => {
+          console.warn('httpSend failed:', err);
+        });
+      }
     }
 
     // 2. Send via Local BroadcastChannel (Same-machine / cross-tab)

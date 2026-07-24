@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
 import { CharacterSheet } from '@/lib/types';
 import { createEmptyCharacterSheet, generateUuid } from '@/lib/dnd5e-data';
 
@@ -23,10 +23,10 @@ export function useCharacterSync({ userId, campaignId, onRemoteSheetChange }: Us
     setIsLoading(true);
     let loadedSheets: CharacterSheet[] = [];
 
-    if (isSupabaseConfigured() && userId) {
+    if (isSupabaseConfigured() && userId && isValidUuid(userId)) {
       try {
         let query = supabase.from('character_sheets').select('*');
-        if (campaignId) {
+        if (campaignId && isValidUuid(campaignId)) {
           query = query.or(`campaign_id.eq.${campaignId},campaign_id.is.null,user_id.eq.${userId}`);
         } else {
           query = query.eq('user_id', userId);
@@ -87,7 +87,10 @@ export function useCharacterSync({ userId, campaignId, onRemoteSheetChange }: Us
   }, [userId, campaignId]);
 
   useEffect(() => {
-    fetchSheets();
+    const timer = setTimeout(() => {
+      fetchSheets();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [fetchSheets]);
 
   // 2. Salva ficha no Supabase + localStorage com Debounce
@@ -121,11 +124,19 @@ export function useCharacterSync({ userId, campaignId, onRemoteSheetChange }: Us
 
       debounceTimerRef.current = setTimeout(async () => {
         if (!isSupabaseConfigured()) return;
+        const targetUserId = sheetWithTimestamp.userId || userId;
+        const targetCampaignId = sheetWithTimestamp.campaignId || campaignId;
+
+        if (!isValidUuid(targetUserId)) {
+          console.log('Sincronização com Supabase ignorada: ID do usuário inválido para o Postgres (mock/offline).');
+          return;
+        }
+
         try {
           await supabase.from('character_sheets').upsert({
             id: sheetWithTimestamp.id,
-            user_id: sheetWithTimestamp.userId || userId || 'player-1',
-            campaign_id: sheetWithTimestamp.campaignId || campaignId || null,
+            user_id: targetUserId,
+            campaign_id: (targetCampaignId && isValidUuid(targetCampaignId)) ? targetCampaignId : null,
             character_name: sheetWithTimestamp.characterName || 'Sem Nome',
             data: sheetWithTimestamp,
             updated_at: sheetWithTimestamp.updatedAt,
@@ -154,8 +165,8 @@ export function useCharacterSync({ userId, campaignId, onRemoteSheetChange }: Us
           filter: `campaign_id=eq.${campaignId}`,
         },
         (payload) => {
-          if (payload.new && (payload.new as any).data) {
-            const remoteData = (payload.new as any).data as CharacterSheet;
+          if (payload.new && (payload.new as Record<string, unknown>).data) {
+            const remoteData = (payload.new as Record<string, unknown>).data as CharacterSheet;
             if (remoteData) {
               setCharacterSheets((prev) => {
                 const idx = prev.findIndex((s) => s.id === remoteData.id);

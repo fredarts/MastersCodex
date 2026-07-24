@@ -463,6 +463,35 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     }
   };
 
+  const getSpeedInMeters = (speedStr?: string): number => {
+    if (!speedStr) return 9; // 30 ft = 9m
+    const cleaned = speedStr.toLowerCase().replace(/[^0-9\.]/g, '');
+    const val = parseFloat(cleaned);
+    if (isNaN(val)) return 9;
+    if (speedStr.toLowerCase().includes('ft') || speedStr.toLowerCase().includes('pe')) {
+      return val * 0.3; // converter pés para metros
+    }
+    return val;
+  };
+
+  const deductAction = (combatantId: string, actionType: 'action' | 'bonus' | 'reaction') => {
+    setCombatants((prev) => {
+      const next = prev.map((c) => {
+        if (c.id === combatantId) {
+          if (actionType === 'action') return { ...c, actionUsed: true };
+          if (actionType === 'bonus') return { ...c, bonusActionUsed: true };
+          if (actionType === 'reaction') return { ...c, reactionUsed: true };
+        }
+        return c;
+      });
+      if (activeSceneRef.current) {
+        updateScene({ ...activeSceneRef.current, combatants: next });
+      }
+      broadcastToPlayerView({ combatants: next });
+      return next;
+    });
+  };
+
   const executeSingleTargetSpell = async (
     caster: Combatant,
     sheet: CharacterSheet | undefined,
@@ -485,6 +514,12 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         return;
       }
     }
+
+    const cleanTime = (spell.castingTime || '').toLowerCase();
+    const isBonusAction = cleanTime.includes('bônus') || cleanTime.includes('bonus');
+    const isReaction = cleanTime.includes('reação') || cleanTime.includes('reaction');
+    const actionType = isBonusAction ? 'bonus' : (isReaction ? 'reaction' : 'action');
+    deductAction(caster.id, actionType);
 
     const profBonus = sheet ? Math.floor((sheet.level - 1) / 4) + 2 : 2;
     const ability = sheet?.spellcastingAbility || 'int';
@@ -562,6 +597,12 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         return;
       }
     }
+
+    const cleanTime = (spell.castingTime || '').toLowerCase();
+    const isBonusAction = cleanTime.includes('bônus') || cleanTime.includes('bonus');
+    const isReaction = cleanTime.includes('reação') || cleanTime.includes('reaction');
+    const actionType = isBonusAction ? 'bonus' : (isReaction ? 'reaction' : 'action');
+    deductAction(caster.id, actionType);
 
     const profBonus = sheet ? Math.floor((sheet.level - 1) / 4) + 2 : 2;
     const ability = sheet?.spellcastingAbility || 'int';
@@ -648,6 +689,12 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       }
     }
 
+    const cleanTime = (spell.castingTime || '').toLowerCase();
+    const isBonusAction = cleanTime.includes('bônus') || cleanTime.includes('bonus');
+    const isReaction = cleanTime.includes('reação') || cleanTime.includes('reaction');
+    const actionType = isBonusAction ? 'bonus' : (isReaction ? 'reaction' : 'action');
+    deductAction(caster.id, actionType);
+
     const damageMap: Record<string, number> = {};
     const logDetails: string[] = [];
 
@@ -714,6 +761,12 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         return;
       }
     }
+
+    const cleanTime = (spell.castingTime || '').toLowerCase();
+    const isBonusAction = cleanTime.includes('bônus') || cleanTime.includes('bonus');
+    const isReaction = cleanTime.includes('reação') || cleanTime.includes('reaction');
+    const actionType = isBonusAction ? 'bonus' : (isReaction ? 'reaction' : 'action');
+    deductAction(c.id, actionType);
 
     const profBonus = Math.floor((sheet.level - 1) / 4) + 2;
     const ability = sheet.spellcastingAbility || 'int';
@@ -1068,26 +1121,49 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     if (nextIdx === 0) {
       nextRoundCount += 1;
       setRoundCount(nextRoundCount);
-      
-      if (autoInit) {
-        setCombatants(prev => {
-          const rolled = prev.map(c => {
-             const dexMod = c.dex ? Math.floor((c.dex - 10) / 2) : 0;
-             return { ...c, initiative: Math.floor(Math.random() * 20) + 1 + dexMod };
-          });
-          const sorted = rolled.sort((a,b) => b.initiative - a.initiative);
-          broadcastToPlayerView({ combatants: sorted });
-          return sorted;
+    }
+    
+    setCombatants((prev) => {
+      let rolled = prev;
+      if (nextIdx === 0 && autoInit) {
+        rolled = prev.map(c => {
+           const dexMod = c.dex ? Math.floor((c.dex - 10) / 2) : 0;
+           return { ...c, initiative: Math.floor(Math.random() * 20) + 1 + dexMod };
         });
       }
-    }
+      
+      const next = rolled.map((c, idx) => {
+        if (idx === nextIdx) {
+          const pos = tokenPositions3D[c.id] || { x: c.x || 0, z: c.z || 0 };
+          return {
+            ...c,
+            actionUsed: false,
+            bonusActionUsed: false,
+            reactionUsed: false,
+            movementUsed: 0,
+            hasDashed: false,
+            turnStartX: pos.x,
+            turnStartZ: pos.z,
+          };
+        }
+        return c;
+      });
+      
+      const sorted = nextIdx === 0 && autoInit ? [...next].sort((a, b) => b.initiative - a.initiative) : next;
+      if (activeSceneRef.current) {
+        updateScene({ ...activeSceneRef.current, combatants: sorted });
+      }
+      broadcastToPlayerView({
+        combatants: sorted,
+        currentTurnIndex: nextIdx,
+        roundCount: nextRoundCount,
+        targetId: null,
+      });
+      return sorted;
+    });
+
     setCurrentTurnIndex(nextIdx);
     setSelectedTargetId(undefined);
-    broadcastToPlayerView({
-      currentTurnIndex: nextIdx,
-      roundCount: nextRoundCount,
-      targetId: null,
-    });
   };
 
   const handleHpChange = (id: string, delta: number) => {
@@ -1150,6 +1226,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
           initiative: Math.floor(Math.random() * 20) + 1,
           conditions: [],
           cr: m.cr,
+          speed: m.speed || '9m',
         });
       }
 
@@ -1175,6 +1252,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         initiative: Math.floor(Math.random() * 20) + 1,
         conditions: [],
         modelUrl: getModelUrlByNameOrPath(npc.name),
+        speed: npc.attributes?.speed || npc.attributes?.deslocamento || '9m',
       };
 
       const next = [...prev, newC];
@@ -1192,9 +1270,10 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
 
     // 1. Usa o modelUrl vindo do cadastro do membro no Supabase (fonte de verdade cross-account)
     let resolvedModelUrl: string | undefined = member.modelUrl;
+    let resolvedSpeed = '9m';
 
     // 2. Se não estiver no cadastro do membro, busca na ficha salva no localStorage (fallback local)
-    if (!resolvedModelUrl) {
+    if (!resolvedModelUrl || resolvedSpeed === '9m') {
       try {
         const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
         if (saved) {
@@ -1209,6 +1288,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
           if (found) {
             if (found.modelUrl) resolvedModelUrl = found.modelUrl;
             else if (found.className) resolvedModelUrl = getModelUrlByNameOrPath(found.className);
+            if (found.speed) resolvedSpeed = found.speed;
           }
         }
       } catch (e) {}
@@ -1229,6 +1309,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       initiative: Math.floor(Math.random() * 20) + 1,
       conditions: [],
       modelUrl: resolvedModelUrl,
+      speed: resolvedSpeed,
     };
 
     setCombatants((prev) => {
@@ -2012,6 +2093,9 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                            cClean.includes(s.characterName.toLowerCase());
                   });
 
+                  const maxSpeed = getSpeedInMeters(matchingSheet?.speed || c.notes) * (c.hasDashed ? 2 : 1);
+                  const remainingMovement = Math.max(0, maxSpeed - (c.movementUsed || 0));
+
                   const groupedSpells = matchingSheet ? (() => {
                     const groups: Record<number, CharacterSpell[]> = {};
                     matchingSheet.spells?.forEach(spell => {
@@ -2096,6 +2180,104 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                                 </div>
                               )}
                             </div>
+
+                            {/* Action Economy Tracker */}
+                            <div className="flex flex-wrap items-center gap-1 mt-2.5" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={() => {
+                                  setCombatants(prev => {
+                                    const next = prev.map(x => x.id === c.id ? { ...x, actionUsed: !x.actionUsed } : x);
+                                    if (activeSceneRef.current) updateScene({ ...activeSceneRef.current, combatants: next });
+                                    broadcastToPlayerView({ combatants: next });
+                                    return next;
+                                  });
+                                }}
+                                className={`px-2 py-0.5 text-[9px] font-extrabold rounded border transition-colors ${
+                                  c.actionUsed
+                                    ? 'bg-slate-800 text-slate-500 border-slate-700/60'
+                                    : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30'
+                                }`}
+                                title="Ação do Turno (Atacar, Conjurar Magia, etc.)"
+                              >
+                                Ação
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setCombatants(prev => {
+                                    const next = prev.map(x => x.id === c.id ? { ...x, bonusActionUsed: !x.bonusActionUsed } : x);
+                                    if (activeSceneRef.current) updateScene({ ...activeSceneRef.current, combatants: next });
+                                    broadcastToPlayerView({ combatants: next });
+                                    return next;
+                                  });
+                                }}
+                                className={`px-2 py-0.5 text-[9px] font-extrabold rounded border transition-colors ${
+                                  c.bonusActionUsed
+                                    ? 'bg-slate-800 text-slate-500 border-slate-700/60'
+                                    : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/30'
+                                }`}
+                                title="Ação Bônus"
+                              >
+                                Bônus
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setCombatants(prev => {
+                                    const next = prev.map(x => x.id === c.id ? { ...x, reactionUsed: !x.reactionUsed } : x);
+                                    if (activeSceneRef.current) updateScene({ ...activeSceneRef.current, combatants: next });
+                                    broadcastToPlayerView({ combatants: next });
+                                    return next;
+                                  });
+                                }}
+                                className={`px-2 py-0.5 text-[9px] font-extrabold rounded border transition-colors ${
+                                  c.reactionUsed
+                                    ? 'bg-slate-800 text-slate-500 border-slate-700/60'
+                                    : 'bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500/30'
+                                }`}
+                                title="Reação (Ataques de Oportunidade)"
+                              >
+                                Reação
+                              </button>
+
+                              {isTurn && (
+                                <button
+                                  disabled={c.actionUsed}
+                                  onClick={() => {
+                                    setCombatants(prev => {
+                                      const next = prev.map(x => {
+                                        if (x.id === c.id) {
+                                          return {
+                                            ...x,
+                                            actionUsed: true,
+                                            hasDashed: true
+                                          };
+                                        }
+                                        return x;
+                                      });
+                                      if (activeSceneRef.current) updateScene({ ...activeSceneRef.current, combatants: next });
+                                      broadcastToPlayerView({ combatants: next });
+                                      return next;
+                                    });
+                                    toast.success(`${c.name} usou Disparada (Dash)! Deslocamento duplicado.`);
+                                  }}
+                                  className={`px-2 py-0.5 text-[9px] font-extrabold rounded border transition-colors ${
+                                    c.hasDashed
+                                      ? 'bg-orange-600/30 text-orange-400 border-orange-500/40 font-black'
+                                      : c.actionUsed
+                                      ? 'bg-slate-900/50 text-slate-600 border-slate-800 cursor-not-allowed'
+                                      : 'bg-orange-500/20 text-orange-400 border-orange-500/40 hover:bg-orange-500/30'
+                                  }`}
+                                  title="Usar Ação para Disparada (Dash)"
+                                >
+                                  Disparada
+                                </button>
+                              )}
+
+                              <span className="text-[9px] text-slate-400 font-mono ml-1.5 font-bold">
+                                Mov: {remainingMovement.toFixed(1)}m / {maxSpeed.toFixed(1)}m
+                              </span>
+                            </div>
                           </div>
                         </div>
                         
@@ -2148,15 +2330,46 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                       {/* Prominent Quick Attack Actions */}
                       <div className="mt-2 pt-2 border-t border-[#2a3449]/60 flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                         <span className="text-[9px] font-bold text-rose-400/80 uppercase font-mono tracking-wider mr-1">Ataques:</span>
-                        {c.actions && c.actions.length > 0 ? (
+                        {c.type === 'player' && matchingSheet && matchingSheet.attacks && matchingSheet.attacks.length > 0 ? (
+                          matchingSheet.attacks.map(atk => {
+                            const bonus = parseInt(atk.atkBonus.replace('+', '').trim()) || 0;
+                            return (
+                              <button
+                                key={atk.id}
+                                disabled={c.actionUsed}
+                                onClick={() => {
+                                  rollDice(`Ataque: ${atk.name}`, bonus, c, atk.damage);
+                                  deductAction(c.id, 'action');
+                                }}
+                                className={`px-2.5 py-1 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border ${
+                                  c.actionUsed
+                                    ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+                                    : 'bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-slate-950 border-rose-400/40 cursor-pointer animate-fade-in'
+                                }`}
+                                title={`Rolar ${atk.name} (${atk.damage} de dano)`}
+                              >
+                                <Swords className="w-3 h-3 text-slate-950" />
+                                <span>{atk.name} (+{bonus})</span>
+                              </button>
+                            );
+                          })
+                        ) : c.actions && c.actions.length > 0 ? (
                           c.actions.map(act => {
                             const match = act.desc.match(/\+([0-9]+)/);
                             const bonus = match ? parseInt(match[1]) : getMod(c.str);
                             return (
                               <button
                                 key={act.name}
-                                onClick={() => rollDice(`Ataque: ${act.name}`, bonus, c, act.desc)}
-                                className="px-2.5 py-1 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-slate-950 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border border-rose-400/40"
+                                disabled={c.actionUsed}
+                                onClick={() => {
+                                  rollDice(`Ataque: ${act.name}`, bonus, c, act.desc);
+                                  deductAction(c.id, 'action');
+                                }}
+                                className={`px-2.5 py-1 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border ${
+                                  c.actionUsed
+                                    ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+                                    : 'bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-slate-950 border-rose-400/40 cursor-pointer'
+                                }`}
                                 title={act.desc}
                               >
                                 <Swords className="w-3 h-3 text-slate-950" />
@@ -2166,8 +2379,16 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                           })
                         ) : (
                           <button
-                            onClick={() => rollDice(`Ataque: Corpo a Corpo`, getMod(c.str), c, '1d8')}
-                            className="px-2.5 py-1 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-slate-950 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border border-rose-400/40"
+                            disabled={c.actionUsed}
+                            onClick={() => {
+                              rollDice(`Ataque: Corpo a Corpo`, getMod(c.str), c, '1d8');
+                              deductAction(c.id, 'action');
+                            }}
+                            className={`px-2.5 py-1 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border ${
+                              c.actionUsed
+                                ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+                                : 'bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-slate-950 border-rose-400/40 cursor-pointer'
+                            }`}
                           >
                             <Swords className="w-3 h-3 text-slate-950" />
                             <span>Atacar (+{getMod(c.str) >= 0 ? '+' : ''}{getMod(c.str)})</span>
@@ -2215,24 +2436,33 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                                             )}
                                           </div>
                                           <div className="space-y-1">
-                                            {levelSpells.map(spell => (
-                                              <button
-                                                key={spell.id}
-                                                disabled={!hasSlots}
-                                                onClick={() => {
-                                                  handleCastSpellFromCard(c, matchingSheet, spell);
-                                                  setOpenSpellDropdownId(null);
-                                                }}
-                                                className={`w-full text-left px-2 py-1.5 rounded-lg border text-[10px] transition-all flex justify-between items-center ${
-                                                  hasSlots
-                                                    ? 'bg-[#161c28] border-[#2a3449] hover:bg-[#1e293b] hover:border-slate-500 text-slate-200 cursor-pointer active:scale-95'
-                                                    : 'bg-[#121620]/40 border-[#2a3449]/40 text-slate-500 cursor-not-allowed'
-                                                }`}
-                                              >
-                                                <span className="font-semibold truncate max-w-[130px]">{spell.name}</span>
-                                                <span className="text-[8px] font-mono text-slate-400 uppercase">{spell.school || 'Magia'}</span>
-                                              </button>
-                                            ))}
+                                            {levelSpells.map(spell => {
+                                              const cleanTime = (spell.castingTime || '').toLowerCase();
+                                              const isBonus = cleanTime.includes('bônus') || cleanTime.includes('bonus');
+                                              const isReact = cleanTime.includes('reação') || cleanTime.includes('reaction');
+                                              const isAct = !isBonus && !isReact;
+                                              const actionBlocked = (isAct && c.actionUsed) || (isBonus && c.bonusActionUsed) || (isReact && c.reactionUsed);
+                                              const canCast = hasSlots && !actionBlocked;
+
+                                              return (
+                                                <button
+                                                  key={spell.id}
+                                                  disabled={!canCast}
+                                                  onClick={() => {
+                                                    handleCastSpellFromCard(c, matchingSheet, spell);
+                                                    setOpenSpellDropdownId(null);
+                                                  }}
+                                                  className={`w-full text-left px-2 py-1.5 rounded-lg border text-[10px] transition-all flex justify-between items-center ${
+                                                    canCast
+                                                      ? 'bg-[#161c28] border-[#2a3449] hover:bg-[#1e293b] hover:border-slate-500 text-slate-200 cursor-pointer active:scale-95'
+                                                      : 'bg-[#121620]/40 border-[#2a3449]/40 text-slate-500 cursor-not-allowed'
+                                                  }`}
+                                                >
+                                                  <span className="font-semibold truncate max-w-[130px]">{spell.name}</span>
+                                                  <span className="text-[8px] font-mono text-slate-400 uppercase">{spell.school || 'Magia'}</span>
+                                                </button>
+                                              );
+                                            })}
                                           </div>
                                         </div>
                                       );
