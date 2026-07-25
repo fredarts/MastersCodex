@@ -92,4 +92,93 @@ export const campaignService = {
       };
     }
   },
+
+  async updateCampaign(campaign: UserCampaign, userId?: string): Promise<Result<UserCampaign>> {
+    try {
+      const repo = RepositoryFactory.getCampaignRepository(userId || campaign.id);
+      const data = await repo.updateCampaign(campaign);
+      return { ok: true, value: data };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao atualizar campanha.'),
+      };
+    }
+  },
+
+  async addCampaignMember(
+    campaignId: string,
+    characterName: string,
+    role: 'dm' | 'player' = 'player',
+    userId?: string
+  ): Promise<Result<CampaignMember>> {
+    try {
+      const repo = RepositoryFactory.getCampaignRepository(campaignId);
+      const data = await repo.addCampaignMember(campaignId, characterName, role, userId);
+      return { ok: true, value: data };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao adicionar membro à campanha.'),
+      };
+    }
+  },
+
+  async updateCampaignMemberModelUrl(
+    campaignId: string,
+    characterName: string,
+    modelUrl: string,
+    userId?: string
+  ): Promise<Result<boolean>> {
+    try {
+      const repo = RepositoryFactory.getCampaignRepository(campaignId);
+      const success = await repo.updateCampaignMemberModelUrl(campaignId, characterName, modelUrl, userId);
+      return { ok: true, value: success };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao atualizar modelo 3D do membro.'),
+      };
+    }
+  },
+
+  async leaveCampaign(campaignId: string, userId: string): Promise<Result<boolean>> {
+    try {
+      const repo = RepositoryFactory.getCampaignRepository(campaignId);
+      const success = await repo.leaveCampaign(campaignId, userId);
+      return { ok: true, value: success };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao sair da campanha.'),
+      };
+    }
+  },
+
+  async toggleFeedEventVisibility(id: string, campaignId?: string): Promise<Result<boolean>> {
+    try {
+      const repo = RepositoryFactory.getCampaignRepository(campaignId || id);
+      const success = await repo.toggleFeedEventVisibility(id);
+      return { ok: true, value: success };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao alterar visibilidade do feed.'),
+      };
+    }
+  },
+
+  async deleteFeedEvent(id: string, campaignId?: string): Promise<Result<boolean>> {
+    try {
+      const repo = RepositoryFactory.getCampaignRepository(campaignId || id);
+      const success = await repo.deleteFeedEvent(id);
+      return { ok: true, value: success };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao excluir evento do feed.'),
+      };
+    }
+  },
 };
+

@@ -2,6 +2,7 @@ import { supabase, isValidUuid } from '@/lib/supabase';
 import { UserCampaign, CampaignMember, CampaignFeedEvent } from '@/lib/types';
 import { CampaignRow, CampaignMemberRow, CampaignFeedEventRow } from '@/lib/database.types';
 import { mapCampaignRowToDomain, mapCampaignMemberRowToDomain, mapFeedEventRowToDomain } from '@/lib/mappers';
+import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { ICampaignRepository } from '../contracts/ICampaignRepository';
 
 export class SupabaseCampaignRepository implements ICampaignRepository {
@@ -181,4 +182,140 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
 
     return { campaign, member };
   }
+
+  async updateCampaign(campaign: UserCampaign): Promise<UserCampaign> {
+    if (!isValidUuid(campaign.id)) {
+      throw new Error('ID de campanha inválido.');
+    }
+
+    const { data, error } = await supabase
+      .from('campaigns')
+      .update({
+        title: campaign.title,
+        description: campaign.description,
+        world_id: isValidUuid(campaign.worldId) ? campaign.worldId : null,
+      })
+      .eq('id', campaign.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return mapCampaignRowToDomain(data as CampaignRow, campaign.role || 'dm');
+  }
+
+  async addCampaignMember(
+    campaignId: string,
+    characterName: string,
+    role: 'dm' | 'player' = 'player',
+    userId?: string
+  ): Promise<CampaignMember> {
+    if (!isValidUuid(campaignId)) {
+      throw new Error('ID de campanha inválido.');
+    }
+
+    const targetUserId = userId || (role === 'player' ? `manual-player-${Date.now()}` : 'demo-dm-user-123');
+
+    const { data: existing } = await supabase
+      .from('campaign_members')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .eq('character_name', characterName)
+      .maybeSingle();
+
+    if (existing) {
+      const { data: updated, error: updateErr } = await supabase
+        .from('campaign_members')
+        .update({ role, model_url: getModelUrlByNameOrPath(characterName) })
+        .eq('id', existing.id)
+        .select()
+        .single();
+      if (!updateErr && updated) {
+        return mapCampaignMemberRowToDomain(updated as CampaignMemberRow);
+      }
+      return mapCampaignMemberRowToDomain(existing as CampaignMemberRow);
+    }
+
+    const { data, error } = await supabase
+      .from('campaign_members')
+      .insert({
+        campaign_id: campaignId,
+        user_id: targetUserId,
+        character_name: characterName,
+        role,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return mapCampaignMemberRowToDomain(data as CampaignMemberRow);
+  }
+
+  async updateCampaignMemberModelUrl(
+    campaignId: string,
+    characterName: string,
+    modelUrl: string,
+    userId?: string
+  ): Promise<boolean> {
+    if (!isValidUuid(campaignId)) return false;
+
+    let query = supabase
+      .from('campaign_members')
+      .update({ model_url: modelUrl })
+      .eq('campaign_id', campaignId)
+      .ilike('character_name', characterName);
+
+    if (userId && isValidUuid(userId)) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { error } = await query;
+    if (error) throw error;
+    return true;
+  }
+
+  async leaveCampaign(campaignId: string, userId: string): Promise<boolean> {
+    if (!isValidUuid(campaignId) || !isValidUuid(userId)) return false;
+
+    const { error } = await supabase
+      .from('campaign_members')
+      .delete()
+      .eq('campaign_id', campaignId)
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    return true;
+  }
+
+  async toggleFeedEventVisibility(id: string): Promise<boolean> {
+    if (!isValidUuid(id)) return false;
+
+    const { data: current, error: fetchErr } = await supabase
+      .from('campaign_feed_events')
+      .select('is_public')
+      .eq('id', id)
+      .single();
+
+    if (fetchErr || !current) throw fetchErr || new Error('Evento não encontrado');
+
+    const { error } = await supabase
+      .from('campaign_feed_events')
+      .update({ is_public: !current.is_public })
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
+  }
+
+  async deleteFeedEvent(id: string): Promise<boolean> {
+    if (!isValidUuid(id)) return false;
+
+    const { error } = await supabase
+      .from('campaign_feed_events')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
+  }
 }
+

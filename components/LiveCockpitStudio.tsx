@@ -66,8 +66,8 @@ import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
 import { SpellTargetingOverlay } from '@/components/live-cockpit/SpellTargetingOverlay';
 import { CombatantHpManager } from '@/components/live-cockpit/CombatantHpManager';
 import { LiveCockpitAudioController } from '@/components/live-cockpit/LiveCockpitAudioController';
-
-
+import { useCombatEngine } from '@/lib/hooks/useCombatEngine';
+import { useSceneProjection } from '@/lib/hooks/useSceneProjection';
 
 interface LiveCockpitStudioProps {
   onGenerateLoot: () => void;
@@ -89,6 +89,10 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     setActiveScene, 
     updateScene 
   } = useSession();
+  
+  const combatEngine = useCombatEngine();
+  const sceneProjection = useSceneProjection();
+
   const { 
     combatants,
     setCombatants,
@@ -111,6 +115,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     setSpellTargetPosition,
     openSheet,
   } = useLiveCockpit();
+
 
   const { user } = useAuth();
   const { characterSheets, saveSheet } = useCharacterSync({
@@ -1789,6 +1794,10 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
               {/* Media & Soundboard Panel (Modular Component) */}
               <LiveCockpitAudioController
                 campaignId={activeCampaign?.id}
+                activeBgmCategory={activeBgmCategory}
+                setActiveBgmCategory={setActiveBgmCategory}
+                playingNpcVoice={playingNpcVoice}
+                setPlayingNpcVoice={setPlayingNpcVoice}
               />
             </div>
           </div>

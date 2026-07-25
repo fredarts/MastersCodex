@@ -17,6 +17,78 @@ export interface VectorSearchResult {
 }
 
 /**
+  * Gera um vetor de embedding de 768 dimensões para o texto fornecido (usando API ou fallback determinístico)
+  */
+export async function generateTextEmbedding(text: string): Promise<number[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (apiKey) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'models/text-embedding-004',
+            content: { parts: [{ text }] },
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const json = await response.json();
+        if (json.embedding?.values) {
+          return json.embedding.values;
+        }
+      }
+    } catch (_e) {}
+  }
+
+  // Fallback determinístico (768 dimensões)
+  const embedding = new Array(768).fill(0);
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = (hash << 5) - hash + text.charCodeAt(i);
+    hash |= 0;
+  }
+  for (let i = 0; i < 768; i++) {
+    embedding[i] = Math.sin(hash + i) * 0.5 + 0.5;
+  }
+  return embedding;
+}
+
+/**
+ * Salva um documento de lore com vetor de embedding na tabela `lore_embeddings` do Supabase
+ */
+export async function indexLoreDocument(
+  worldId: string,
+  content: string,
+  entityId?: string,
+  metadata: Record<string, any> = {}
+): Promise<boolean> {
+  if (!isSupabaseConfigured() || !isValidUuid(worldId)) return false;
+
+  try {
+    const embedding = await generateTextEmbedding(content);
+    const { error } = await supabase.from('lore_embeddings').insert({
+      world_id: worldId,
+      entity_id: isValidUuid(entityId) ? entityId : null,
+      content,
+      embedding,
+      metadata,
+    });
+
+    if (error) {
+      console.warn('Erro ao indexar embedding de lore no Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+/**
  * Consulta a busca por similaridade de cosseno vetorial no Supabase Postgres via pgvector (RPC match_lore_documents)
  */
 export async function fetchVectorLoreSimilarity(

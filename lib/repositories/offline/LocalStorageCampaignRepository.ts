@@ -109,4 +109,97 @@ export class LocalStorageCampaignRepository implements ICampaignRepository {
       return null;
     }
   }
+
+  async updateCampaign(campaign: UserCampaign): Promise<UserCampaign> {
+    try {
+      const saved = localStorage.getItem('codex_campaigns');
+      const all: UserCampaign[] = saved ? JSON.parse(saved) : [];
+      const updated = all.map((c) => (c.id === campaign.id ? campaign : c));
+      localStorage.setItem('codex_campaigns', JSON.stringify(updated));
+    } catch (_e) {}
+    return campaign;
+  }
+
+  async addCampaignMember(
+    campaignId: string,
+    characterName: string,
+    role: 'dm' | 'player' = 'player',
+    userId?: string
+  ): Promise<CampaignMember> {
+    const newMember: CampaignMember = {
+      id: `mem-${Date.now()}`,
+      campaignId,
+      userId: userId || (role === 'player' ? `manual-player-${Date.now()}` : 'demo-dm-user-123'),
+      characterName,
+      role,
+    };
+
+    try {
+      const saved = localStorage.getItem('codex_members');
+      const all: CampaignMember[] = saved ? JSON.parse(saved) : [];
+      const filtered = all.filter((m) => !(m.campaignId === campaignId && m.characterName === characterName));
+      filtered.push(newMember);
+      localStorage.setItem('codex_members', JSON.stringify(filtered));
+    } catch (_e) {}
+
+    return newMember;
+  }
+
+  async updateCampaignMemberModelUrl(
+    campaignId: string,
+    characterName: string,
+    modelUrl: string,
+    _userId?: string
+  ): Promise<boolean> {
+    try {
+      const saved = localStorage.getItem('codex_members');
+      const all: CampaignMember[] = saved ? JSON.parse(saved) : [];
+      const updated = all.map((m) =>
+        m.campaignId === campaignId && m.characterName?.toLowerCase() === characterName.toLowerCase()
+          ? { ...m, modelUrl }
+          : m
+      );
+      localStorage.setItem('codex_members', JSON.stringify(updated));
+      return true;
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  async leaveCampaign(campaignId: string, _userId: string): Promise<boolean> {
+    try {
+      const savedCamps = localStorage.getItem('codex_campaigns');
+      const camps: UserCampaign[] = savedCamps ? JSON.parse(savedCamps) : [];
+      const updatedCamps = camps.filter((c) => c.id !== campaignId);
+      localStorage.setItem('codex_campaigns', JSON.stringify(updatedCamps));
+      return true;
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  async toggleFeedEventVisibility(id: string): Promise<boolean> {
+    try {
+      const saved = localStorage.getItem('codex_feed');
+      const all: CampaignFeedEvent[] = saved ? JSON.parse(saved) : [];
+      const updated = all.map((e) => (e.id === id ? { ...e, isPublic: !e.isPublic } : e));
+      localStorage.setItem('codex_feed', JSON.stringify(updated));
+      return true;
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  async deleteFeedEvent(id: string): Promise<boolean> {
+    try {
+      const saved = localStorage.getItem('codex_feed');
+      const all: CampaignFeedEvent[] = saved ? JSON.parse(saved) : [];
+      const filtered = all.filter((e) => e.id !== id);
+      localStorage.setItem('codex_feed', JSON.stringify(filtered));
+      return true;
+    } catch (_e) {
+      return false;
+    }
+  }
 }
+

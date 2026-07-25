@@ -7,12 +7,14 @@ import { useAuth } from '@/context/AuthContext';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useBattleGridState } from '@/lib/hooks/useBattleGridState';
+import { useRealtimeBattleSync } from '@/lib/hooks/useRealtimeBattleSync';
 import { applySceneEnvironment } from './battle-3d/BattleEnvironment';
 import { setupCameraAndOrbit, DEFAULT_CAMERA_PRESETS } from './battle-3d/BattleCameraControls';
 import { createTokenMesh, updateTokenMeshState, TokenMeshOptions } from './battle-3d/Token3DMesh';
 import { createBattleSkyDome, SkyDomeInstance } from './battle-3d/BattleSkyDome';
 import { createRainParticleSystem } from './battle-3d/WeatherEffects';
 import { BattleControlsToolbar } from './battle-3d/BattleControlsToolbar';
+import { InstancedTokenManager } from './battle-3d/InstancedTokenManager';
 import { disposeHierarchy } from '@/lib/3d-asset-manager';
 import { HelpCircle, X } from 'lucide-react';
 import { patchWebGLContext } from '@/lib/webgl-utils';
@@ -85,7 +87,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { roleMode, user } = useAuth();
-  const { campaignMembers } = useCampaign();
+  const { activeCampaign, campaignMembers } = useCampaign();
   const {
     tokenPositions3D,
     updateTokenPosition3D,
@@ -98,6 +100,18 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     spellTargetPosition,
     setSpellTargetPosition,
   } = useLiveCockpit();
+
+  const handleRemoteTokenMove = useCallback((tokenKey: string, position: { x: number; y: number; z: number }, rotation?: number) => {
+    updateTokenPosition3D(tokenKey, position.x, position.z);
+    if (rotation !== undefined) {
+      updateTokenRotation3D(tokenKey, rotation);
+    }
+  }, [updateTokenPosition3D, updateTokenRotation3D]);
+
+  const { broadcastTokenMove } = useRealtimeBattleSync({
+    campaignId: activeCampaign?.id,
+    onTokenMove: handleRemoteTokenMove,
+  });
 
   const activeSpellTargetingRef = useRef(activeSpellTargeting);
   const casterTokenKeyRef = useRef(casterTokenKey);
@@ -279,9 +293,6 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     if (!tokenGroup || !sceneRef.current) return;
 
     if (!instancedTokenManagerRef.current) {
-      // Import dynamic ou lazy instancing (se quisermos não quebrar SSR)
-      // Como estamos no lado do cliente, podemos inicializar
-      const { InstancedTokenManager } = require('./battle-3d/InstancedTokenManager');
       instancedTokenManagerRef.current = new InstancedTokenManager(sceneRef.current, 1000);
     }
 
@@ -319,9 +330,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         isSpellTargeted: !!targeted,
       };
 
-      // Separar Genéricos de Únicos
-      // Consideramos "Único" se for player, npc, ou tiver modelUrl customizado.
-      const isGeneric = c.type === 'monster' && !c.modelUrl;
+      // Separar Genéricos de Únicos (Usamos instanciamento em massa apenas se houver >= 15 combatentes em tela)
+      const isGeneric = combatants.length >= 15 && c.type === 'monster' && !c.modelUrl;
 
       if (isGeneric) {
         // Remover possível representação única antiga se existir

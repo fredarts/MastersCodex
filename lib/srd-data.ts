@@ -206,10 +206,120 @@ export const INITIAL_MONSTERS: SRDMonster[] = [
     actions: [
       { name: 'Grande Clava', desc: '+6 para acertar, dano 13 (2d8+4) de concussão.' }
     ]
+  },
+  {
+    id: 'lich',
+    name: 'Lich',
+    type: 'Morto-Vivo',
+    size: 'Médio',
+    alignment: 'Qualquer Mau',
+    ac: 17,
+    hp: 135,
+    speed: '9m (30ft)',
+    cr: '21',
+    xp: 33000,
+    str: 11, dex: 16, con: 16, int: 20, wis: 14, cha: 16,
+    abilities: [
+      { name: 'Resistência Lendária (3/Dia)', desc: 'Se o lich falhar em um teste de resistência, ele pode optar por passar.' },
+      { name: 'Rejuvenescimento', desc: 'Se tiver um filactério, o lich ganha um novo corpo em 1d10 dias após ser destruído.' }
+    ],
+    actions: [
+      { name: 'Toque Paralisante', desc: '+12 para acertar, dano 10 (3d6) necrótico. Teste de CON CD 18 ou paralisado por 1 minuto.' }
+    ]
+  },
+  {
+    id: 'mimic',
+    name: 'Mímico (Mimic)',
+    type: 'Monstruosidade (Metamorfo)',
+    size: 'Médio',
+    alignment: 'Neutro',
+    ac: 12,
+    hp: 58,
+    speed: '4.5m (15ft)',
+    cr: '2',
+    xp: 450,
+    str: 17, dex: 12, con: 15, int: 5, wis: 13, cha: 8,
+    abilities: [
+      { name: 'Adesivo', desc: 'Aderência a criaturas e objetos. Qualquer criatura que o tocar fica Agarrada (CD 13 para escapar).' },
+      { name: 'Aparência Falsa', desc: 'Enquanto o mímico permanecer imóvel, é indistinguível de um objeto comum (baú, porta).' }
+    ],
+    actions: [
+      { name: 'Pseudópode', desc: '+5 para acertar, dano 7 (1d8+3) de concussão + grudado.' }
+    ]
+  },
+  {
+    id: 'minotaur',
+    name: 'Minotauro',
+    type: 'Monstruosidade',
+    size: 'Grande',
+    alignment: 'Caótico e Mau',
+    ac: 14,
+    hp: 76,
+    speed: '12m (40ft)',
+    cr: '3',
+    xp: 700,
+    str: 18, dex: 11, con: 16, int: 6, wis: 16, cha: 9,
+    abilities: [
+      { name: 'Investida com Chifres', desc: 'Se se mover 3m em linha reta e acertar com os chifres, causa +9 (2d8) de dano perfurante extra.' }
+    ],
+    actions: [
+      { name: 'Machado Grande', desc: '+6 para acertar, dano 17 (2d12+4) cortante.' },
+      { name: 'Chifres', desc: '+6 para acertar, dano 13 (2d8+4) perfurante.' }
+    ]
+  },
+  {
+    id: 'fire-elemental',
+    name: 'Elemental do Fogo',
+    type: 'Elemental',
+    size: 'Grande',
+    alignment: 'Neutro',
+    ac: 13,
+    hp: 102,
+    speed: '15m (50ft)',
+    cr: '5',
+    xp: 1800,
+    str: 10, dex: 17, con: 16, int: 6, wis: 10, cha: 7,
+    abilities: [
+      { name: 'Forma de Fogo', desc: 'Entra no espaço de criaturas e incendeia alvos. Sofre dano ao entrar na água.' }
+    ],
+    actions: [
+      { name: 'Toque Flamejante', desc: '+6 para acertar, dano 10 (2d6+3) de fogo.' }
+    ]
+  },
+  {
+    id: 'kobold',
+    name: 'Kobold',
+    type: 'Humanóide (Dragonado)',
+    size: 'Pequeno',
+    alignment: 'Leal e Mau',
+    ac: 12,
+    hp: 5,
+    speed: '9m (30ft)',
+    cr: '1/8',
+    xp: 25,
+    str: 7, dex: 15, con: 9, int: 8, wis: 7, cha: 8,
+    abilities: [
+      { name: 'Táticas de Matilha', desc: 'Vantagem se um aliado estiver a 1.5m do alvo.' }
+    ],
+    actions: [
+      { name: 'Adaga', desc: '+4 para acertar, dano 4 (1d4+2) perfurante.' }
+    ]
   }
 ];
 
 export const INITIAL_SPELLS: SRDSpell[] = [
+  {
+    id: 'magic-missile',
+    name: 'Mísseis Mágicos (Magic Missile)',
+    level: 1,
+    school: 'Evocação',
+    castingTime: '1 Ação',
+    range: '36 metros',
+    components: 'V, S',
+    duration: 'Instantânea',
+    description: 'Você cria três dardos brilhantes de força mágica. Cada dardo atinge uma criatura à sua escolha e causa 1d4 + 1 de dano de força automaticamente (sem teste de ataque).',
+    classes: ['Mago', 'Feiticeiro']
+  },
   {
     id: 'fireball',
     name: 'Bola de Fogo (Fireball)',
@@ -247,6 +357,42 @@ export const INITIAL_SPELLS: SRDSpell[] = [
     classes: ['Mago', 'Feiticeiro']
   },
   {
+    id: 'misty-step',
+    name: 'Passo Nebuloso (Misty Step)',
+    level: 2,
+    school: 'Conjuração',
+    castingTime: '1 Ação Bônus',
+    range: 'Pessoal',
+    components: 'V',
+    duration: 'Instantânea',
+    description: 'Brevemente cercado por uma névoa prateada, você se teleporta até 9 metros para um espaço desocupado que possa ver.',
+    classes: ['Mago', 'Feiticeiro', 'Bruxo']
+  },
+  {
+    id: 'hold-person',
+    name: 'Imobilizar Pessoa (Hold Person)',
+    level: 2,
+    school: 'Encantamento',
+    castingTime: '1 Ação',
+    range: '18 metros',
+    components: 'V, S, M (uma pequena peça de ferro reto)',
+    duration: 'Concentração, até 1 minuto',
+    description: 'Escolha um humanoide. Ele deve passar num teste de resistência de Sabedoria ou ficará Paralisado pela duração da magia.',
+    classes: ['Bardo', 'Clérigo', 'Druida', 'Mago', 'Feiticeiro', 'Bruxo']
+  },
+  {
+    id: 'invisibility',
+    name: 'Invisibilidade (Invisibility)',
+    level: 2,
+    school: 'Ilusão',
+    castingTime: '1 Ação',
+    range: 'Toque',
+    components: 'V, S, M (uma pestana envolta em goma)',
+    duration: 'Concentração, até 1 hora',
+    description: 'Uma criatura que você tocar fica invisível até que a magia termine. A magia termina se o alvo atacar ou conjurar uma magia.',
+    classes: ['Bardo', 'Mago', 'Feiticeiro', 'Bruxo']
+  },
+  {
     id: 'eldritch-blast',
     name: 'Disparo Místico (Eldritch Blast)',
     level: 0,
@@ -282,6 +428,27 @@ export const INITIAL_ITEMS: SRDItem[] = [
     rarity: 'Comum',
     description: 'Você recupera 2d4 + 2 pontos de vida ao beber esta poção vermelha borbulhante.',
     value: '50 PO'
+  },
+  {
+    id: 'ring-of-protection',
+    name: 'Anel de Proteção',
+    type: 'Anel Mágico',
+    rarity: 'Raro',
+    description: 'Você ganha +1 de bônus na Classe de Armadura e nos testes de resistência enquanto usar este anel.'
+  },
+  {
+    id: 'wand-of-magic-missiles',
+    name: 'Varinha de Mísseis Mágicos',
+    type: 'Varinha Mágica',
+    rarity: 'Incomum',
+    description: 'Esta varinha tem 7 cargas. Enquanto a segurar, você pode usar uma ação para gastar 1 ou mais cargas para conjurar Mísseis Mágicos.'
+  },
+  {
+    id: 'cloak-of-displacement',
+    name: 'Capa do Deslocamento',
+    type: 'Item Mágico (Vestuário)',
+    rarity: 'Rara',
+    description: 'Enquanto usar esta capa, ela projeta uma ilusão de você ao seu lado, fazendo com que ataques contra você tenham Desvantagem.'
   }
 ];
 
