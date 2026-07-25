@@ -101,7 +101,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithEmail = async (email: string) => {
     if (isSupabaseConfigured()) {
-      const { error } = await supabase.auth.signInWithOtp({ email });
+      const { error } = await supabase.auth.signInWithOtp({ 
+        email,
+        options: { emailRedirectTo: window.location.origin }
+      });
       if (error) throw error;
     } else {
       setUser({

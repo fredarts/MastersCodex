@@ -6,7 +6,6 @@ import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useWorld } from '@/lib/hooks/useWorld';
-import logoImg from '@/app/logo.png';
 
 interface HeaderProps {
   onOpenSearch: () => void;
@@ -37,7 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2.5">
           <div className="w-12 h-12 flex items-center justify-center">
-            <img src={logoImg.src || '/logo.png'} alt="Master's Codex Logo" className="w-full h-full object-contain drop-shadow-md" />
+            <img src="/logo.png" alt="Master's Codex Logo" className="w-full h-full object-contain drop-shadow-md" />
           </div>
           <div>
             <div className="flex items-center gap-2">
