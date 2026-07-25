@@ -5,6 +5,8 @@ import { Combatant } from '@/lib/types';
 import { useRealtimeSync } from '@/lib/hooks/useRealtimeSync';
 import { useCampaign } from '@/context/CampaignContext';
 
+import { useBattleGridStore } from '@/lib/stores/useBattleGridStore';
+
 export interface ActiveSheetState {
   id: string;
   type: 'pc' | 'monster' | 'npc';
@@ -49,8 +51,14 @@ const LiveCockpitContext = createContext<LiveCockpitContextType | undefined>(und
 
 export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [liveDisplayMode, setLiveDisplayModeState] = useState<'artwork' | 'map' | 'combat'>('artwork');
-  const [tokenPositions3D, setTokenPositions3D] = useState<Record<string, { x: number; z: number }>>({});
-  const [tokenRotations3D, setTokenRotations3D] = useState<Record<string, number>>({});
+  
+  const tokenPositions3D = useBattleGridStore((state) => state.tokenPositions3D);
+  const tokenRotations3D = useBattleGridStore((state) => state.tokenRotations3D);
+  const storeUpdateTokenPosition3D = useBattleGridStore((state) => state.updateTokenPosition3D);
+  const storeUpdateTokenRotation3D = useBattleGridStore((state) => state.updateTokenRotation3D);
+  const storeSetTokenPositions3D = useBattleGridStore((state) => state.setTokenPositions3D);
+  const storeSetTokenRotations3D = useBattleGridStore((state) => state.setTokenRotations3D);
+  const storeInitializeFromCombatants = useBattleGridStore((state) => state.initializeFromCombatants);
   const [combatants, setCombatants] = useState<Combatant[]>([]);
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
   const [roundCount, setRoundCount] = useState(1);
@@ -112,7 +120,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     onTokenMove: (payload) => {
       const targetKey = payload.combatantId || payload.characterName;
       if (targetKey) {
-        setTokenPositions3D((prev) => ({
+        storeSetTokenPositions3D((prev) => ({
           ...prev,
           [targetKey]: { x: payload.newX, z: payload.newZ },
         }));
@@ -121,7 +129,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     onTokenRotate: (payload) => {
       const targetKey = payload.combatantId || payload.characterName;
       if (targetKey && payload.angle !== undefined) {
-        setTokenRotations3D((prev) => ({
+        storeSetTokenRotations3D((prev) => ({
           ...prev,
           [targetKey]: payload.angle,
         }));
@@ -248,28 +256,8 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   /** Popula os maps de posição/rotação a partir dos dados já salvos nos combatants (campos x, z, rotation) */
   const initializeFromCombatants = useCallback((combatants: Combatant[]) => {
-    if (!combatants || combatants.length === 0) return;
-
-    const posMap: Record<string, { x: number; z: number }> = {};
-    const rotMap: Record<string, number> = {};
-
-    combatants.forEach((c) => {
-      const key = c.id || c.name;
-      if (c.x !== undefined && c.z !== undefined) {
-        posMap[key] = { x: c.x, z: c.z };
-      }
-      if (c.rotation !== undefined) {
-        rotMap[key] = c.rotation;
-      }
-    });
-
-    if (Object.keys(posMap).length > 0) {
-      setTokenPositions3D((prev) => ({ ...prev, ...posMap }));
-    }
-    if (Object.keys(rotMap).length > 0) {
-      setTokenRotations3D((prev) => ({ ...prev, ...rotMap }));
-    }
-  }, []);
+    storeInitializeFromCombatants(combatants);
+  }, [storeInitializeFromCombatants]);
 
   const updateTokenPosition3D = (
     idOrName: string,
@@ -278,35 +266,23 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     newX?: number,
     newZ?: number
   ) => {
-    setTokenPositions3D((prev) => {
-      const current = prev[idOrName] || { x: 0, z: 0 };
-      const nextX = newX !== undefined ? newX : Math.max(-5, Math.min(5, current.x + (deltaX || 0)));
-      const nextZ = newZ !== undefined ? newZ : Math.max(-5, Math.min(5, current.z + (deltaZ || 0)));
-      const updated = { ...prev, [idOrName]: { x: nextX, z: nextZ } };
-
+    storeUpdateTokenPosition3D(idOrName, deltaX, deltaZ, newX, newZ, (id, x, z) => {
       broadcastTokenMove({
-        combatantId: idOrName,
-        characterName: idOrName,
-        newX: nextX,
-        newZ: nextZ,
+        combatantId: id,
+        characterName: id,
+        newX: x,
+        newZ: z,
       });
-
-      return updated;
     });
   };
 
   const updateTokenRotation3D = (idOrName: string, angleInDegrees: number) => {
-    const normalizedAngle = ((angleInDegrees % 360) + 360) % 360;
-    setTokenRotations3D((prev) => {
-      const updated = { ...prev, [idOrName]: normalizedAngle };
-
+    storeUpdateTokenRotation3D(idOrName, angleInDegrees, (id, angle) => {
       broadcastTokenRotate({
-        combatantId: idOrName,
-        characterName: idOrName,
-        angle: normalizedAngle,
+        combatantId: id,
+        characterName: id,
+        angle,
       });
-
-      return updated;
     });
   };
 
