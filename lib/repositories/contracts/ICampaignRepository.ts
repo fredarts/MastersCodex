@@ -6,4 +6,6 @@ export interface ICampaignRepository {
   fetchCampaignMembers(campaignId: string): Promise<CampaignMember[]>;
   fetchFeedEvents(campaignId: string): Promise<CampaignFeedEvent[]>;
   createFeedEvent(event: Omit<CampaignFeedEvent, 'id'>): Promise<CampaignFeedEvent>;
+  removeCampaignMember(memberId: string): Promise<boolean>;
+  joinCampaignByCode(code: string, userId: string, characterName?: string): Promise<{ campaign: UserCampaign; member?: CampaignMember } | null>;
 }

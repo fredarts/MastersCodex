@@ -134,6 +134,25 @@ describe('Mappers Unit Tests', () => {
       expect(domain.avatarUrl).toBe('https://avatar');
       expect(domain.modelUrl).toBe('https://model');
     });
+    it('deve tolerar valores nulos e fallbacks adequados', () => {
+      const row: any = {
+        id: 'cm-2',
+        campaign_id: 'c-1',
+        user_id: 'u-2',
+        role: 'player',
+        character_name: null,
+        displayName: 'John',
+        avatar_url: null,
+        model_url: null,
+        joined_at: null,
+      };
+
+      const domain = mapCampaignMemberRowToDomain(row as CampaignMemberRow);
+      expect(domain.characterName).toBeUndefined();
+      expect(domain.avatarUrl).toBeUndefined();
+      expect(domain.modelUrl).toBeUndefined();
+      expect(domain.joinedAt).toBeNull();
+    });
   });
 
   describe('mapSessionRowToDomain', () => {

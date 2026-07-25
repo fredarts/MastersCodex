@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Eye, 
   EyeOff, 
@@ -13,6 +13,8 @@ import {
   Sparkles
 } from 'lucide-react';
 import { Combatant } from '@/lib/types';
+import { useSession } from '@/context/SessionContext';
+import { toast } from 'sonner';
 
 interface MapMakerProps {
   combatants: Combatant[];
@@ -32,6 +34,8 @@ interface Cell {
 const GRID_SIZE = 12;
 
 export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
+  const { activeScene, fetchSceneMap, saveSceneMap } = useSession();
+
   const createInitialGrid = (): Cell[][] => {
     const grid: Cell[][] = [];
     for (let r = 0; r < GRID_SIZE; r++) {
@@ -63,6 +67,40 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
   // Measure Ruler State
   const [measureStart, setMeasureStart] = useState<{ r: number; c: number } | null>(null);
   const [measuredDistance, setMeasuredDistance] = useState<{ feet: number; meters: number } | null>(null);
+
+  // Loading map data when activeScene changes
+  useEffect(() => {
+    if (activeScene) {
+      fetchSceneMap(activeScene.id).then((mapData) => {
+        if (mapData) {
+          if (mapData.grid) setGrid(mapData.grid);
+          if (mapData.bgImageUrl !== undefined) setBgImageUrl(mapData.bgImageUrl);
+        } else {
+          setGrid(createInitialGrid());
+          setBgImageUrl(null);
+        }
+      });
+    } else {
+      setGrid(createInitialGrid());
+      setBgImageUrl(null);
+    }
+  }, [activeScene]);
+
+  // Debounced auto-save of the map grid
+  useEffect(() => {
+    if (!activeScene) return;
+
+    const delayDebounce = setTimeout(() => {
+      saveSceneMap(activeScene.id, {
+        grid,
+        bgImageUrl,
+      }).catch((e) => {
+        console.error('Auto-save MapMaker failed:', e);
+      });
+    }, 1000); // 1s delay
+
+    return () => clearTimeout(delayDebounce);
+  }, [grid, bgImageUrl, activeScene]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -125,9 +163,17 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     setBgImageUrl(null);
   };
 
-  const exportMapAsImage = () => {
-    // Basic screenshot export notification
-    alert('🎨 Mapa pronto para exportação! Utilize a tecla PrintScreen ou a captura nativa do navegador para salvar o grid em alta resolução.');
+  const handleManualSave = async () => {
+    if (!activeScene) {
+      toast.error('Nenhuma cena ativa para salvar o mapa.');
+      return;
+    }
+    try {
+      await saveSceneMap(activeScene.id, { grid, bgImageUrl });
+      toast.success('Mapa tático salvo com sucesso!');
+    } catch (e: any) {
+      toast.error(`Falha ao salvar o mapa: ${e.message}`);
+    }
   };
 
   const getTileBg = (type: TileType) => {
@@ -244,14 +290,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
             </button>
           )}
           <button
-            onClick={() => {
-              try {
-                localStorage.setItem('codex_custom_map', JSON.stringify(grid));
-                alert('Mapa tático salvo com sucesso!');
-              } catch (e) {
-                console.error(e);
-              }
-            }}
+            onClick={handleManualSave}
             className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1 transition-all"
           >
             <Download className="w-3.5 h-3.5" /> Salvar Mapa

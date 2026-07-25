@@ -37,7 +37,7 @@ export const srdService = {
         let query = supabase.from('srd_monsters').select('*');
 
         if (searchQuery) {
-          query = query.ilike('name', `%${searchQuery}%`);
+          query = query.textSearch('fts', searchQuery.trim().replace(/\s+/g, ' | '));
         }
         if (cr && cr !== 'all') {
           query = query.eq('cr', cr);
@@ -98,7 +98,7 @@ export const srdService = {
         let query = supabase.from('srd_spells').select('*');
 
         if (searchQuery) {
-          query = query.ilike('name', `%${searchQuery}%`);
+          query = query.textSearch('fts', searchQuery.trim().replace(/\s+/g, ' | '));
         }
         if (level !== undefined && level !== 'all') {
           query = query.eq('level', level);
@@ -154,7 +154,7 @@ export const srdService = {
         let query = supabase.from('srd_items').select('*');
 
         if (searchQuery) {
-          query = query.ilike('name', `%${searchQuery}%`);
+          query = query.textSearch('fts', searchQuery.trim().replace(/\s+/g, ' | '));
         }
         if (rarity && rarity !== 'all') {
           query = query.eq('rarity', rarity);

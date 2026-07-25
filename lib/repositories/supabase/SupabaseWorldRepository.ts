@@ -3,15 +3,13 @@ import { World, WorldEntity } from '@/lib/types';
 import { WorldRow, WorldEntityRow } from '@/lib/database.types';
 import { mapWorldRowToDomain, mapWorldEntityRowToDomain } from '@/lib/mappers';
 import { IWorldRepository } from '../contracts/IWorldRepository';
-import { toast } from 'sonner';
 
 export class SupabaseWorldRepository implements IWorldRepository {
   async fetchWorlds(userId?: string): Promise<World[]> {
     if (!userId) return [];
     const { data, error } = await supabase.from('worlds').select('*').eq('dm_id', userId);
     if (error) {
-      toast.error(`Erro ao carregar mundos do Supabase: ${error.message}`);
-      return [];
+      throw error;
     }
     return (data as WorldRow[]).map(mapWorldRowToDomain);
   }
@@ -24,7 +22,6 @@ export class SupabaseWorldRepository implements IWorldRepository {
       .single();
 
     if (error) {
-      toast.error(`Erro ao criar mundo no Supabase: ${error.message}`);
       throw error;
     }
     return mapWorldRowToDomain(data as WorldRow);
@@ -36,14 +33,13 @@ export class SupabaseWorldRepository implements IWorldRepository {
       .update({ title: world.title, genre: world.genre, description: world.description })
       .eq('id', world.id);
 
-    if (error) toast.error(`Erro ao atualizar mundo: ${error.message}`);
+    if (error) throw error;
   }
 
   async fetchWorldEntities(worldId: string): Promise<WorldEntity[]> {
     const { data, error } = await supabase.from('world_entities').select('*').eq('world_id', worldId);
     if (error) {
-      toast.error(`Erro ao carregar entidades: ${error.message}`);
-      return [];
+      throw error;
     }
     return (data as WorldEntityRow[]).map(mapWorldEntityRowToDomain);
   }
@@ -65,7 +61,6 @@ export class SupabaseWorldRepository implements IWorldRepository {
       .single();
 
     if (error) {
-      toast.error(`Erro ao criar entidade: ${error.message}`);
       throw error;
     }
     return mapWorldEntityRowToDomain(data as WorldEntityRow);
@@ -73,6 +68,7 @@ export class SupabaseWorldRepository implements IWorldRepository {
 
   async deleteWorldEntity(id: string): Promise<void> {
     const { error } = await supabase.from('world_entities').delete().eq('id', id);
-    if (error) toast.error(`Erro ao remover entidade: ${error.message}`);
+    if (error) throw error;
   }
 }
+

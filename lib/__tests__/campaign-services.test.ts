@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { campaignService } from '../services/campaignService';
 import * as supabaseModule from '../supabase';
 
@@ -27,8 +26,8 @@ vi.mock('../supabase', () => {
 
   return {
     supabase: mockSupabase,
-    isSupabaseConfigured: vi.fn(() => false),
-    isValidUuid: vi.fn((id) => typeof id === 'string' && id.includes('-')),
+    isSupabaseConfigured: vi.fn(),
+    isValidUuid: vi.fn(),
   };
 });
 
@@ -37,17 +36,18 @@ describe('Campaign Service & Repository Persistence Tests', () => {
   const mockCampaignId = '22222222-2222-2222-2222-222222222222';
 
   // Setup Mock LocalStorage
-  let store: Record<string, string> = {};
+  const store: Record<string, string> = {};
   const mockLocalStorage = {
     getItem: (key: string) => store[key] || null,
     setItem: (key: string, value: string) => { store[key] = value; },
-    clear: () => { store = {}; },
+    removeItem: (key: string) => { delete store[key]; },
+    clear: () => { Object.keys(store).forEach(k => delete store[k]); }
   };
 
   beforeEach(() => {
-    store = {};
     vi.stubGlobal('localStorage', mockLocalStorage);
     vi.clearAllMocks();
+    mockLocalStorage.clear();
   });
 
   describe('Offline (localStorage) Mode', () => {
@@ -57,7 +57,10 @@ describe('Campaign Service & Repository Persistence Tests', () => {
 
     it('deve retornar lista vazia de campanhas se localstorage estiver limpo', async () => {
       const camps = await campaignService.fetchUserCampaigns(mockUserId);
-      expect(camps).toEqual([]);
+      expect(camps.ok).toBe(true);
+      if (camps.ok) {
+        expect(camps.value).toEqual([]);
+      }
     });
 
     it('deve buscar campanhas salvas localmente', async () => {
@@ -67,23 +70,32 @@ describe('Campaign Service & Repository Persistence Tests', () => {
       mockLocalStorage.setItem('codex_campaigns', JSON.stringify(localData));
 
       const camps = await campaignService.fetchUserCampaigns(mockUserId);
-      expect(camps).toEqual(localData);
+      expect(camps.ok).toBe(true);
+      if (camps.ok) {
+        expect(camps.value).toEqual(localData);
+      }
     });
 
     it('deve criar uma campanha local offline', async () => {
       const camp = await campaignService.createCampaign('Nova Campanha Offline', undefined, 'Uma campanha local', mockUserId);
-      expect(camp.title).toBe('Nova Campanha Offline');
-      expect(camp.id).toContain('camp-');
-      expect(camp.role).toBe('dm');
-      expect(camp.inviteCode).toBeDefined();
+      expect(camp.ok).toBe(true);
+      if (camp.ok) {
+        expect(camp.value.title).toBe('Nova Campanha Offline');
+        expect(camp.value.id).toContain('camp-');
+        expect(camp.value.role).toBe('dm');
+        expect(camp.value.inviteCode).toBeDefined();
+      }
     });
 
     it('deve buscar membros salvos localmente', async () => {
-      const mockMembers = [{ id: 'mem-1', userId: 'u-1', role: 'player', characterName: 'Conan' }];
+      const mockMembers = [{ id: 'mem-1', campaignId: mockCampaignId, userId: 'u-1', role: 'player', characterName: 'Conan' }];
       mockLocalStorage.setItem('codex_members', JSON.stringify(mockMembers));
 
       const members = await campaignService.fetchCampaignMembers(mockCampaignId);
-      expect(members).toEqual(mockMembers);
+      expect(members.ok).toBe(true);
+      if (members.ok) {
+        expect(members.value).toEqual(mockMembers);
+      }
     });
   });
 
@@ -119,11 +131,14 @@ describe('Campaign Service & Repository Persistence Tests', () => {
       });
 
       const result = await campaignService.fetchUserCampaigns(mockUserId);
-      expect(result).toHaveLength(2);
-      expect(result[0].id).toBe('c-dm-1');
-      expect(result[0].role).toBe('dm');
-      expect(result[1].id).toBe('c-mem-2');
-      expect(result[1].role).toBe('player');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toHaveLength(2);
+        expect(result.value[0].id).toBe('c-dm-1');
+        expect(result.value[0].role).toBe('dm');
+        expect(result.value[1].id).toBe('c-mem-2');
+        expect(result.value[1].role).toBe('player');
+      }
     });
 
     it('deve cadastrar uma nova campanha no Supabase', async () => {
@@ -145,9 +160,12 @@ describe('Campaign Service & Repository Persistence Tests', () => {
       fromSpy.mockReturnValue(mockChain as any);
 
       const result = await campaignService.createCampaign('Campanha Supabase', undefined, 'Nova aventura', mockUserId);
-      expect(result.id).toBe('new-camp-uuid');
-      expect(result.title).toBe('Campanha Supabase');
-      expect(result.role).toBe('dm');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.id).toBe('new-camp-uuid');
+        expect(result.value.title).toBe('Campanha Supabase');
+        expect(result.value.role).toBe('dm');
+      }
     });
 
     it('deve aderir a uma campanha pelo código de convite', async () => {
@@ -188,9 +206,12 @@ describe('Campaign Service & Repository Persistence Tests', () => {
       });
 
       const result = await campaignService.joinCampaignByCode('INV-789', mockUserId, 'Drizzt');
-      expect(result).not.toBeNull();
-      expect(result?.campaign.id).toBe('camp-invite-123');
-      expect(result?.member?.characterName).toBe('Drizzt');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).not.toBeNull();
+        expect(result.value?.campaign.id).toBe('camp-invite-123');
+        expect(result.value?.member?.characterName).toBe('Drizzt');
+      }
     });
   });
 });

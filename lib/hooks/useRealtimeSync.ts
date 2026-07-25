@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
+import { offlineQueue } from '@/lib/sync/OfflineQueueManager';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
@@ -125,10 +126,24 @@ export function useRealtimeSync({
         const cb = callbacksRef.current;
         if (cb.onCombatUpdate) cb.onCombatUpdate(payload);
       })
-      .subscribe((status) => {
+      .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           isSubscribedRef.current = true;
           console.log(`📡 Supabase Realtime conectado ao canal: ${channelName}`);
+
+          // Reconciliação Offline (CRDT LWW)
+          const queue = await offlineQueue.getQueue();
+          if (queue.length > 0) {
+            console.log(`📡 Sincronizando ${queue.length} eventos offline...`);
+            for (const ev of queue) {
+              channel.send({
+                type: 'broadcast',
+                event: ev.eventType,
+                payload: ev.payload,
+              });
+              await offlineQueue.dequeueEvent(ev.id);
+            }
+          }
         } else {
           isSubscribedRef.current = false;
         }
@@ -152,13 +167,10 @@ export function useRealtimeSync({
           payload,
         });
       } else {
-        // Fallback explicitly to httpSend to avoid the automatic REST fallback warning
-        channelRef.current.httpSend(
-          'broadcast',
-          event,
-          payload
-        ).catch((err: any) => {
-          console.warn('httpSend failed:', err);
+        // Fallback: Queue offline event for CRDT
+        const entityId = payload.combatantId || payload.sceneId || 'global';
+        offlineQueue.enqueueEvent(entityId, event, payload).catch(err => {
+          console.error('Failed to enqueue offline event:', err);
         });
       }
     }

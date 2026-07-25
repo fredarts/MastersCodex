@@ -7,6 +7,7 @@ import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
 import { CampaignMemberRow } from '@/lib/database.types';
 import { mapCampaignMemberRowToDomain } from '@/lib/mappers';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
+import { toast } from 'sonner';
 
 interface CampaignContextType {
   userCampaigns: UserCampaign[];
@@ -19,13 +20,13 @@ interface CampaignContextType {
   addCampaignMember: (campaignId: string, characterName: string, role?: 'dm' | 'player') => Promise<void>;
   removeCampaignMember: (memberId: string) => Promise<void>;
   updateCampaignMemberModelUrl: (campaignId: string, characterName: string, modelUrl: string) => Promise<void>;
-  createCampaign: (title: string, worldId?: string, description?: string) => Promise<UserCampaign>;
+  createCampaign: (title: string, worldId?: string, description?: string) => Promise<UserCampaign | null>;
   updateCampaign: (updatedCampaign: UserCampaign) => Promise<void>;
   joinCampaignByCode: (code: string, characterName?: string, modelUrl?: string) => Promise<boolean>;
   leaveCampaign: (campaignId: string) => Promise<void>;
   feedEvents: CampaignFeedEvent[];
   setFeedEvents: React.Dispatch<React.SetStateAction<CampaignFeedEvent[]>>;
-  createFeedEvent: (eventData: Omit<CampaignFeedEvent, 'id'>) => Promise<CampaignFeedEvent>;
+  createFeedEvent: (eventData: Omit<CampaignFeedEvent, 'id'>) => Promise<CampaignFeedEvent | null>;
   toggleFeedEventVisibility: (id: string) => Promise<void>;
   deleteFeedEvent: (id: string) => Promise<void>;
 }
@@ -42,16 +43,27 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   const [feedEvents, setFeedEvents] = useState<CampaignFeedEvent[]>([]);
 
   useEffect(() => {
-    campaignService.fetchUserCampaigns(currentUserId).then((camps) => {
-      if (camps.length > 0) {
-        setUserCampaigns(camps);
-        const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem('codex_activeCampaignId') : null;
-        const found = savedActiveId ? camps.find((c) => c.id === savedActiveId) : null;
-        const target = found || camps[0];
-        setActiveCampaignState(target);
+    campaignService.fetchUserCampaigns(currentUserId).then((res) => {
+      if (res.ok) {
+        const camps = res.value;
+        if (camps.length > 0) {
+          setUserCampaigns(camps);
+          const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem('codex_activeCampaignId') : null;
+          const found = savedActiveId ? camps.find((c) => c.id === savedActiveId) : null;
+          const target = found || camps[0];
+          setActiveCampaignState(target);
 
-        campaignService.fetchCampaignMembers(target.id).then(setCampaignMembers);
-        campaignService.fetchFeedEvents(target.id).then(setFeedEvents);
+          campaignService.fetchCampaignMembers(target.id, currentUserId).then((mRes) => {
+            if (mRes.ok) setCampaignMembers(mRes.value);
+            else toast.error(mRes.error.message);
+          });
+          campaignService.fetchFeedEvents(target.id, currentUserId).then((fRes) => {
+            if (fRes.ok) setFeedEvents(fRes.value);
+            else toast.error(fRes.error.message);
+          });
+        }
+      } else {
+        toast.error(res.error.message);
       }
     });
   }, [currentUserId]);
@@ -61,8 +73,14 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
     try {
       if (camp) {
         localStorage.setItem('codex_activeCampaignId', camp.id);
-        campaignService.fetchCampaignMembers(camp.id).then(setCampaignMembers);
-        campaignService.fetchFeedEvents(camp.id).then(setFeedEvents);
+        campaignService.fetchCampaignMembers(camp.id, currentUserId).then((mRes) => {
+          if (mRes.ok) setCampaignMembers(mRes.value);
+          else toast.error(mRes.error.message);
+        });
+        campaignService.fetchFeedEvents(camp.id, currentUserId).then((fRes) => {
+          if (fRes.ok) setFeedEvents(fRes.value);
+          else toast.error(fRes.error.message);
+        });
       } else {
         localStorage.removeItem('codex_activeCampaignId');
       }
@@ -70,8 +88,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   };
 
   const fetchCampaignMembers = async (campaignId: string) => {
-    const members = await campaignService.fetchCampaignMembers(campaignId);
-    setCampaignMembers(members);
+    const res = await campaignService.fetchCampaignMembers(campaignId, currentUserId);
+    if (res.ok) {
+      setCampaignMembers(res.value);
+    } else {
+      toast.error(res.error.message);
+    }
   };
 
   const addCampaignMember = async (campaignId: string, characterName: string, role: 'dm' | 'player' = 'player') => {
@@ -84,7 +106,6 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
     };
 
     if (isSupabaseConfigured() && isValidUuid(campaignId)) {
-      // Verificar se já existe membro com o mesmo nome para evitar 409 Conflict
       const { data: existing } = await supabase
         .from('campaign_members')
         .select('*')
@@ -119,7 +140,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
         if (!error && data) {
           newMember = mapCampaignMemberRowToDomain(data as CampaignMemberRow);
         } else if (error) {
-          console.error('Erro ao adicionar membro no Supabase:', error);
+          toast.error(`Erro ao adicionar membro: ${error.message}`);
         }
       }
     }
@@ -134,8 +155,11 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   };
 
   const removeCampaignMember = async (memberId: string) => {
-    // Exclui fisicamente no banco Supabase
-    await campaignService.removeCampaignMember(memberId);
+    const res = await campaignService.removeCampaignMember(memberId, currentUserId);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return;
+    }
 
     setCampaignMembers((prev) => {
       const updated = prev.filter((m) => m.id !== memberId);
@@ -148,12 +172,15 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
 
   const updateCampaignMemberModelUrl = async (campaignId: string, characterName: string, modelUrl: string) => {
     if (isSupabaseConfigured() && currentUserId && campaignId && isValidUuid(campaignId)) {
-      await supabase
+      const { error } = await supabase
         .from('campaign_members')
         .update({ model_url: modelUrl })
         .eq('campaign_id', campaignId)
         .eq('user_id', currentUserId)
         .eq('character_name', characterName);
+      if (error) {
+        toast.error(`Erro ao atualizar miniatura 3D: ${error.message}`);
+      }
     }
 
     setCampaignMembers((prev) => {
@@ -169,8 +196,13 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
     });
   };
 
-  const createCampaign = async (title: string, worldId?: string, description = ''): Promise<UserCampaign> => {
-    const newCamp = await campaignService.createCampaign(title, worldId, description, currentUserId);
+  const createCampaign = async (title: string, worldId?: string, description = ''): Promise<UserCampaign | null> => {
+    const res = await campaignService.createCampaign(title, worldId, description, currentUserId);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return null;
+    }
+    const newCamp = res.value;
     setUserCampaigns((prev) => {
       const updated = [...prev, newCamp];
       try {
@@ -184,6 +216,22 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   };
 
   const updateCampaign = async (updatedCampaign: UserCampaign) => {
+    if (isSupabaseConfigured() && isValidUuid(updatedCampaign.id)) {
+      const { error } = await supabase
+        .from('campaigns')
+        .update({
+          title: updatedCampaign.title,
+          description: updatedCampaign.description,
+          world_id: isValidUuid(updatedCampaign.worldId) ? updatedCampaign.worldId : null,
+        })
+        .eq('id', updatedCampaign.id);
+
+      if (error) {
+        toast.error(`Erro ao atualizar campanha: ${error.message}`);
+        return;
+      }
+    }
+
     setUserCampaigns((prev) => {
       const updated = prev.map((c) => (c.id === updatedCampaign.id ? updatedCampaign : c));
       try {
@@ -198,9 +246,13 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
 
   const joinCampaignByCode = async (code: string, characterName?: string, modelUrl?: string): Promise<boolean> => {
     if (isSupabaseConfigured() && currentUserId) {
-      const result = await campaignService.joinCampaignByCode(code, currentUserId, characterName);
-      if (result) {
-        const { campaign, member } = result;
+      const res = await campaignService.joinCampaignByCode(code, currentUserId, characterName);
+      if (!res.ok) {
+        toast.error(res.error.message);
+        return false;
+      }
+      if (res.value) {
+        const { campaign, member } = res.value;
         
         setUserCampaigns((prev) => {
           if (prev.some((c) => c.id === campaign.id)) return prev;
@@ -230,7 +282,6 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
       }
     }
 
-    // Fallback local se estiver offline ou sem Supabase
     const found = userCampaigns.find((c) => c.inviteCode?.toLowerCase() === code.trim().toLowerCase());
     if (found) {
       setActiveCampaign(found);
@@ -246,18 +297,35 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   };
 
   const leaveCampaign = async (campaignId: string) => {
+    if (isSupabaseConfigured() && currentUserId && isValidUuid(campaignId)) {
+      const { error } = await supabase
+        .from('campaign_members')
+        .delete()
+        .eq('campaign_id', campaignId)
+        .eq('user_id', currentUserId);
+      if (error) {
+        toast.error(`Erro ao deixar campanha: ${error.message}`);
+        return;
+      }
+    }
+
     setUserCampaigns((prev) => prev.filter((c) => c.id !== campaignId));
     if (activeCampaign?.id === campaignId) {
       setActiveCampaign(null);
     }
   };
 
-  const createFeedEvent = async (eventData: Omit<CampaignFeedEvent, 'id'>): Promise<CampaignFeedEvent> => {
+  const createFeedEvent = async (eventData: Omit<CampaignFeedEvent, 'id'>): Promise<CampaignFeedEvent | null> => {
     const payload = {
       ...eventData,
       campaignId: eventData.campaignId || activeCampaign?.id || 'camp-demo-1',
     };
-    const newEvent = await campaignService.createFeedEvent(payload);
+    const res = await campaignService.createFeedEvent(payload, currentUserId);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return null;
+    }
+    const newEvent = res.value;
     setFeedEvents((prev) => {
       const updated = [newEvent, ...prev];
       try {
@@ -269,6 +337,20 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   };
 
   const toggleFeedEventVisibility = async (id: string) => {
+    if (isSupabaseConfigured() && isValidUuid(id)) {
+      const targetEvent = feedEvents.find((e) => e.id === id);
+      if (targetEvent) {
+        const { error } = await supabase
+          .from('campaign_feed_events')
+          .update({ is_public: !targetEvent.isPublic })
+          .eq('id', id);
+        if (error) {
+          toast.error(`Erro ao alterar visibilidade do feed: ${error.message}`);
+          return;
+        }
+      }
+    }
+
     setFeedEvents((prev) => {
       const updated = prev.map((e) => (e.id === id ? { ...e, isPublic: !e.isPublic } : e));
       try {
@@ -279,6 +361,17 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   };
 
   const deleteFeedEvent = async (id: string) => {
+    if (isSupabaseConfigured() && isValidUuid(id)) {
+      const { error } = await supabase
+        .from('campaign_feed_events')
+        .delete()
+        .eq('id', id);
+      if (error) {
+        toast.error(`Erro ao remover evento do feed: ${error.message}`);
+        return;
+      }
+    }
+
     setFeedEvents((prev) => {
       const updated = prev.filter((e) => e.id !== id);
       try {

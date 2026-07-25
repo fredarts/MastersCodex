@@ -421,8 +421,8 @@ export function applyShortRest(
   const conMod = getAttributeModifier(sheet, 'con');
 
   // Dados de vida já usados e totais
-  const hitDiceUsedMatch = sheet.hitDiceUsed.match(/^(\d+)/);
-  let usedCount = hitDiceUsedMatch ? parseInt(hitDiceUsedMatch[1], 10) : 0;
+  const usedCountStr = sheet.hitDiceUsed.replace(hitDie, '');
+  let usedCount = parseInt(usedCountStr, 10) || 0;
   const totalDice = sheet.level;
   const availableDice = Math.max(0, totalDice - usedCount);
 
@@ -463,8 +463,8 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
   const totalDice = sheet.level;
 
   // Recupera metade dos dados de vida (mínimo 1)
-  const hitDiceUsedMatch = sheet.hitDiceUsed.match(/^(\d+)/);
-  let usedCount = hitDiceUsedMatch ? parseInt(hitDiceUsedMatch[1], 10) : 0;
+  const usedCountStr = sheet.hitDiceUsed.replace(hitDie, '');
+  let usedCount = parseInt(usedCountStr, 10) || 0;
   const recovered = Math.max(1, Math.floor(totalDice / 2));
   usedCount = Math.max(0, usedCount - recovered);
 

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
 import { buildCampaignPromptContext, CampaignRAGInput } from '@/lib/ai/campaign-rag';
+import { GeminiProvider } from '@/lib/ai/providers/GeminiProvider';
+import { OpenRouterProvider } from '@/lib/ai/providers/OpenRouterProvider';
+import { DemoFallbackProvider } from '@/lib/ai/providers/DemoFallbackProvider';
+import { IAIProvider } from '@/lib/ai/providers/IAIProvider';
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,60 +19,34 @@ export async function POST(req: NextRequest) {
     const geminiApiKey = process.env.GEMINI_API_KEY;
     const openRouterApiKey = process.env.OPENROUTER_API_KEY;
 
-    // 2. Opção A: Tentar Google Gemini API oficial
+    // 2. Montar cadeia de responsabilidade para os provedores (Chain of Responsibility + Strategy)
+    const providers: IAIProvider[] = [];
+
     if (geminiApiKey && geminiApiKey !== 'your-gemini-api-key-here') {
-      try {
-        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: fullPrompt,
-        });
-
-        const text = response.text || 'Não foi possível gerar a resposta.';
-        return NextResponse.json({ text, provider: 'gemini' });
-      } catch (geminiError: any) {
-        console.warn('Erro na chamada da API Gemini, tentando fallback:', geminiError?.message || geminiError);
-      }
+      providers.push(new GeminiProvider(geminiApiKey));
     }
 
-    // 3. Opção B: Tentar OpenRouter API (modelos gratuitos como Llama 3)
     if (openRouterApiKey && openRouterApiKey !== 'your-openrouter-api-key-here') {
-      try {
-        const model = process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
-        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openRouterApiKey}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://masterscodex.app',
-            'X-Title': 'Masters Codex RPG',
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: 'user', content: fullPrompt }
-            ],
-          }),
-        });
+      const model = process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+      providers.push(new OpenRouterProvider(openRouterApiKey, model));
+    }
 
-        if (res.ok) {
-          const data = await res.json();
-          const text = data.choices?.[0]?.message?.content || 'Sem resposta do OpenRouter.';
-          return NextResponse.json({ text, provider: `openrouter (${model})` });
-        } else {
-          const errText = await res.text();
-          console.warn('Erro OpenRouter HTTP:', res.status, errText);
-        }
-      } catch (openRouterError: any) {
-        console.warn('Erro na chamada OpenRouter API:', openRouterError?.message || openRouterError);
+    // Fallback garantido no final da fila
+    providers.push(new DemoFallbackProvider());
+
+    // 3. Tentar os provedores em ordem de prioridade
+    for (const provider of providers) {
+      try {
+        const result = await provider.generateNarrative(fullPrompt);
+        return NextResponse.json(result);
+      } catch (error: any) {
+        console.warn('Falha em um provedor de IA, tentando o próximo na fila...', error?.message || error);
       }
     }
 
-    // 4. Fallback Simulado (caso nenhuma API Key válida esteja configurada)
-    return NextResponse.json({
-      text: `[MODO DEMO - NENHUMA CHAVE DE IA CONFIGURADA]\n\nPara ativar a inteligência artificial real do Gemini ou OpenRouter, adicione a chave no arquivo .env.local:\n\nGEMINI_API_KEY=sua_chave_aqui\nOU\nOPENROUTER_API_KEY=sua_chave_aqui\n\n--- Narração Gerada Simulada ---\n${body.userPrompt}`,
-      provider: 'demo-fallback',
-    });
+    // Se chegar aqui (teoricamente o fallback nunca falha, mas só por garantia)
+    return NextResponse.json({ error: 'Todos os provedores de IA falharam.' }, { status: 500 });
+
   } catch (error: any) {
     console.error('Erro na API /api/ai/narrate:', error);
     return NextResponse.json(

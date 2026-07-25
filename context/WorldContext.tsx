@@ -3,17 +3,18 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { World, WorldEntity } from '@/lib/types';
 import { worldService } from '@/lib/services/worldService';
+import { toast } from 'sonner';
 
 interface WorldContextType {
   userWorlds: World[];
   setUserWorlds: React.Dispatch<React.SetStateAction<World[]>>;
   activeWorld: World | null;
   setActiveWorld: (world: World | null) => void;
-  createWorld: (title: string, genre?: string, description?: string) => Promise<World>;
+  createWorld: (title: string, genre?: string, description?: string) => Promise<World | null>;
   updateWorld: (updatedWorld: World) => Promise<void>;
   worldEntities: WorldEntity[];
   setWorldEntities: React.Dispatch<React.SetStateAction<WorldEntity[]>>;
-  createWorldEntity: (entity: Omit<WorldEntity, 'id'>) => Promise<WorldEntity>;
+  createWorldEntity: (entity: Omit<WorldEntity, 'id'>) => Promise<WorldEntity | null>;
   deleteWorldEntity: (id: string) => Promise<void>;
 }
 
@@ -28,14 +29,26 @@ export const WorldProvider: React.FC<{ children: React.ReactNode; currentUserId?
   const [worldEntities, setWorldEntities] = useState<WorldEntity[]>([]);
 
   useEffect(() => {
-    worldService.fetchWorlds(currentUserId).then((worlds) => {
-      if (worlds.length > 0) {
-        setUserWorlds(worlds);
-        const savedActiveWorldId = typeof window !== 'undefined' ? localStorage.getItem('codex_activeWorldId') : null;
-        const found = savedActiveWorldId ? worlds.find((w) => w.id === savedActiveWorldId) : null;
-        setActiveWorldState(found || worlds[0]);
+    worldService.fetchWorlds(currentUserId).then((res) => {
+      if (res.ok) {
+        const worlds = res.value;
+        if (worlds.length > 0) {
+          setUserWorlds(worlds);
+          const savedActiveWorldId = typeof window !== 'undefined' ? localStorage.getItem('codex_activeWorldId') : null;
+          const found = savedActiveWorldId ? worlds.find((w) => w.id === savedActiveWorldId) : null;
+          const currentActive = found || worlds[0];
+          setActiveWorldState(currentActive);
 
-        worldService.fetchWorldEntities((found || worlds[0]).id).then(setWorldEntities);
+          worldService.fetchWorldEntities(currentActive.id, currentUserId).then((entitiesRes) => {
+            if (entitiesRes.ok) {
+              setWorldEntities(entitiesRes.value);
+            } else {
+              toast.error(entitiesRes.error.message);
+            }
+          });
+        }
+      } else {
+        toast.error(res.error.message);
       }
     });
   }, [currentUserId]);
@@ -45,15 +58,26 @@ export const WorldProvider: React.FC<{ children: React.ReactNode; currentUserId?
     try {
       if (world) {
         localStorage.setItem('codex_activeWorldId', world.id);
-        worldService.fetchWorldEntities(world.id).then(setWorldEntities);
+        worldService.fetchWorldEntities(world.id, currentUserId).then((entitiesRes) => {
+          if (entitiesRes.ok) {
+            setWorldEntities(entitiesRes.value);
+          } else {
+            toast.error(entitiesRes.error.message);
+          }
+        });
       } else {
         localStorage.removeItem('codex_activeWorldId');
       }
     } catch (e) {}
   };
 
-  const createWorld = async (title: string, genre = 'Fantasia Medieval', description = ''): Promise<World> => {
-    const newWorld = await worldService.createWorld(title, genre, description, currentUserId);
+  const createWorld = async (title: string, genre = 'Fantasia Medieval', description = ''): Promise<World | null> => {
+    const res = await worldService.createWorld(title, genre, description, currentUserId);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return null;
+    }
+    const newWorld = res.value;
     setUserWorlds((prev) => {
       const updated = [...prev, newWorld];
       try {
@@ -66,7 +90,11 @@ export const WorldProvider: React.FC<{ children: React.ReactNode; currentUserId?
   };
 
   const updateWorld = async (updatedWorld: World) => {
-    await worldService.updateWorld(updatedWorld);
+    const res = await worldService.updateWorld(updatedWorld);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return;
+    }
     setUserWorlds((prev) => {
       const updated = prev.map((w) => (w.id === updatedWorld.id ? updatedWorld : w));
       try {
@@ -79,12 +107,17 @@ export const WorldProvider: React.FC<{ children: React.ReactNode; currentUserId?
     }
   };
 
-  const createWorldEntity = async (entityData: Omit<WorldEntity, 'id'>): Promise<WorldEntity> => {
+  const createWorldEntity = async (entityData: Omit<WorldEntity, 'id'>): Promise<WorldEntity | null> => {
     const payload = {
       ...entityData,
       worldId: entityData.worldId || activeWorld?.id || 'world-demo-1',
     };
-    const newEntity = await worldService.createWorldEntity(payload);
+    const res = await worldService.createWorldEntity(payload, currentUserId);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return null;
+    }
+    const newEntity = res.value;
     setWorldEntities((prev) => {
       const updated = [...prev, newEntity];
       try {
@@ -96,7 +129,11 @@ export const WorldProvider: React.FC<{ children: React.ReactNode; currentUserId?
   };
 
   const deleteWorldEntity = async (id: string) => {
-    await worldService.deleteWorldEntity(id);
+    const res = await worldService.deleteWorldEntity(id, currentUserId);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return;
+    }
     setWorldEntities((prev) => {
       const updated = prev.filter((e) => e.id !== id);
       try {

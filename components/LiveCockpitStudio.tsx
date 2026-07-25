@@ -63,26 +63,18 @@ import { CombatInitiativeTracker } from '@/components/live-cockpit/CombatInitiat
 import { AddCombatantModal } from '@/components/live-cockpit/AddCombatantModal';
 import { BattleSetupModal, BattleSetupMode } from '@/components/live-cockpit/BattleSetupModal';
 import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
+import { SpellTargetingOverlay } from '@/components/live-cockpit/SpellTargetingOverlay';
+import { CombatantHpManager } from '@/components/live-cockpit/CombatantHpManager';
+import { LiveCockpitAudioController } from '@/components/live-cockpit/LiveCockpitAudioController';
+
 
 
 interface LiveCockpitStudioProps {
-  combatants: Combatant[];
-  setCombatants: React.Dispatch<React.SetStateAction<Combatant[]>>;
-  currentTurnIndex: number;
-  setCurrentTurnIndex: React.Dispatch<React.SetStateAction<number>>;
-  roundCount: number;
-  setRoundCount: React.Dispatch<React.SetStateAction<number>>;
   onGenerateLoot: () => void;
   onOpenPlayerView: () => void;
 }
 
 export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
-  combatants,
-  setCombatants,
-  currentTurnIndex,
-  setCurrentTurnIndex,
-  roundCount,
-  setRoundCount,
   onGenerateLoot,
   onOpenPlayerView,
 }) => {
@@ -98,6 +90,12 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     updateScene 
   } = useSession();
   const { 
+    combatants,
+    setCombatants,
+    currentTurnIndex,
+    setCurrentTurnIndex,
+    roundCount,
+    setRoundCount,
     liveDisplayMode, 
     setLiveDisplayMode, 
     broadcastToPlayerView,
@@ -198,7 +196,6 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
 
   
   const [autoInit, setAutoInit] = useState(false);
-  const [hpInput, setHpInput] = useState<Record<string, string>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
   const [diceResult, setDiceResult] = useState<{title: string; roll: number; total: number; isCrit: boolean; isFail: boolean} | null>(null);
@@ -1183,12 +1180,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     });
   };
 
-  const handlePreciseHp = (id: string, isDamage: boolean) => {
-    const val = parseInt(hpInput[id] || '0', 10);
-    if (isNaN(val) || val <= 0) return;
-    handleHpChange(id, isDamage ? -val : val);
-    setHpInput(prev => ({...prev, [id]: ''}));
-  };
+
 
   const handleToggleCondition = (id: string, cond: ConditionType) => {
     setCombatants((prev) => {
@@ -1427,6 +1419,9 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   return (
     <div className="flex-1 bg-[#0a0d14] flex flex-col h-full overflow-hidden select-none relative">
       {statusMenuOpen && <div className="fixed inset-0 z-10" onClick={() => setStatusMenuOpen(null)} />}
+      
+      {/* Spell Targeting HUD Indicator Overlay */}
+      <SpellTargetingOverlay />
       
       {/* Top Cockpit Header Bar */}
       <div className="bg-[#121824] border-b border-[#2a3449] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-md relative z-20">
@@ -1791,72 +1786,12 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                 </button>
               </div>
 
-              {/* BGM Active Scene Playlist */}
-              <div className="p-3 bg-[#121824] border border-[#2a3449] rounded-xl space-y-2">
-                <div className="text-[10px] font-bold text-pink-400 uppercase font-mono flex items-center gap-1">
-                  <Music className="w-3.5 h-3.5" /> BGM da Cena Ativa
-                </div>
-                
-                {(!activeScene?.bgmTracks || activeScene.bgmTracks.length === 0) ? (
-                  <div className="text-[10px] text-slate-500 italic">Nenhuma música configurada.</div>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    {activeScene.bgmTracks.map(trackId => {
-                      const track = allBgmTracks.find(t => t.id === trackId);
-                      if (!track) return null;
-                      const isActive = activeBgm?.id === track.id;
-                      return (
-                        <button
-                          key={trackId}
-                          onClick={() => {
-                            if (isActive && isPlayingBgm) {
-                              pauseBgm();
-                            } else {
-                              playBgm(track);
-                            }
-                          }}
-                          className={`w-full py-1 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
-                            isActive && isPlayingBgm
-                              ? 'bg-pink-600 text-slate-950 font-bold shadow-md animate-pulse'
-                              : 'bg-[#0a0d14] hover:bg-[#1a2233] text-slate-300 border border-[#2a3449]'
-                          }`}
-                        >
-                          <span className="truncate mr-2">{track.name}</span>
-                          <span className="shrink-0 text-[10px] font-bold">{isActive && isPlayingBgm ? 'PAUSAR' : 'TOCAR'}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Soundboard SFX da Cena */}
-              <div className="p-3 bg-[#121824] border border-[#2a3449] rounded-xl space-y-2">
-                <div className="text-[10px] font-bold text-amber-400 uppercase font-mono flex items-center gap-1">
-                  <Volume2 className="w-3.5 h-3.5" /> SFX Rápidos da Cena
-                </div>
-                
-                {(!activeScene?.sfxShortcuts || activeScene.sfxShortcuts.length === 0) ? (
-                  <div className="text-[10px] text-slate-500 italic">Nenhum efeito configurado.</div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {activeScene.sfxShortcuts.map(sfxId => {
-                      const sfx = allSfxTracks.find(s => s.id === sfxId);
-                      if (!sfx) return null;
-                      return (
-                        <button
-                          key={sfxId}
-                          onClick={() => playSfx(sfx.url)}
-                          className="py-1 px-2 rounded-lg text-[10px] font-bold bg-[#0a0d14] hover:bg-amber-500/20 hover:text-amber-300 text-slate-300 border border-[#2a3449] transition-all truncate text-center cursor-pointer"
-                          title={`Disparar Efeito: ${sfx.name}`}
-                        >
-                          {sfx.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              {/* Media & Soundboard Panel (Modular Component) */}
+              <LiveCockpitAudioController
+                activeScene={activeScene}
+                allBgmTracks={allBgmTracks}
+                allSfxTracks={allSfxTracks}
+              />
             </div>
           </div>
         </div>
@@ -2288,41 +2223,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                         </div>
                       </div>
 
-                      {/* Precise HP System */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 mt-1 bg-[#0a0d14]/50 p-2 rounded-xl border border-[#2a3449]/50" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-2">
-                           <div className="bg-[#0a0d14] px-2 py-1 rounded-lg border border-cyan-900/50 shadow-inner">
-                             <div className="text-[8px] font-bold text-cyan-500/70 uppercase leading-none">CA</div>
-                             <div className="text-xs font-mono font-black text-cyan-300 leading-none">{c.ac}</div>
-                           </div>
-                           
-                           <div className="w-24">
-                              <div className="flex justify-between text-[10px] font-mono font-bold mb-1">
-                                <span className="text-rose-400 flex items-center gap-1">HP</span>
-                                <span className="text-slate-200">{c.hp}/{c.maxHp}</span>
-                              </div>
-                              <div className="w-full h-1.5 bg-[#0a0d14] rounded-full overflow-hidden border border-[#2a3449]">
-                                <div className={`h-full transition-all duration-300 ${hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 20 ? 'bg-amber-500' : 'bg-rose-600'}`} style={{ width: `${hpPercent}%` }}></div>
-                              </div>
-                           </div>
-                        </div>
-
-                        <div className="flex items-center bg-[#0a0d14] rounded-lg border border-[#2a3449] overflow-hidden focus-within:border-amber-500/50">
-                          <input 
-                            type="number" 
-                            value={hpInput[c.id] || ''} 
-                            onChange={(e) => setHpInput(prev => ({...prev, [c.id]: e.target.value}))}
-                            placeholder="Val" 
-                            className="w-10 bg-transparent text-xs font-mono font-bold text-center text-slate-200 outline-none p-1 appearance-none"
-                          />
-                          <button onClick={() => handlePreciseHp(c.id, true)} className="px-2 py-1 bg-rose-950/40 hover:bg-rose-900 text-rose-400 border-l border-[#2a3449] transition-colors" title="Causar Dano">
-                            <Swords className="w-3 h-3" />
-                          </button>
-                          <button onClick={() => handlePreciseHp(c.id, false)} className="px-2 py-1 bg-emerald-950/40 hover:bg-emerald-900 text-emerald-400 border-l border-[#2a3449] transition-colors" title="Curar Vida">
-                            <Heart className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
+                      {/* Precise HP System (Modular Component) */}
+                      <CombatantHpManager
+                        combatant={c}
+                        onHpChange={handleHpChange}
+                      />
 
                       {/* Prominent Quick Attack Actions */}
                       <div className="mt-2 pt-2 border-t border-[#2a3449]/60 flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>

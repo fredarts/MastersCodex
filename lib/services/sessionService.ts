@@ -1,171 +1,121 @@
-import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
-import { GameSession, GameScene } from '@/lib/types';
-import { SessionRow, SceneRow } from '@/lib/database.types';
-import { mapSessionRowToDomain, mapSceneRowToDomain } from '@/lib/mappers';
-import { toast } from 'sonner';
+import { RepositoryFactory } from '@/lib/repositories/RepositoryFactory';
+import { GameSession, GameScene, Result } from '@/lib/types';
 
 export const sessionService = {
-  async fetchSessions(campaignId: string): Promise<GameSession[]> {
-    if (isSupabaseConfigured() && isValidUuid(campaignId)) {
-      const { data, error } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('campaign_id', campaignId)
-        .order('session_number', { ascending: true });
-
-      if (error) {
-        toast.error(`Erro ao carregar sessões: ${error.message}`);
-      } else if (data) {
-        return (data as SessionRow[]).map(mapSessionRowToDomain);
-      }
-    }
+  async fetchSessions(campaignId: string): Promise<Result<GameSession[]>> {
     try {
-      const saved = localStorage.getItem('codex_sessions');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      toast.error('Erro ao carregar sessões salvas localmente.');
-      return [];
+      const repo = RepositoryFactory.getSessionRepository(campaignId);
+      const data = await repo.fetchSessions(campaignId);
+      return { ok: true, value: data };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao carregar sessões.'),
+      };
     }
   },
 
-  async createSession(title: string, campaignId = 'camp-demo-1', sessionNumber = 1, notes = ''): Promise<GameSession> {
-    const newSession: GameSession = {
-      id: `sess-${Date.now()}`,
-      campaignId,
-      sessionNumber,
-      title,
-      notes,
-    };
-
-    if (isSupabaseConfigured() && isValidUuid(campaignId)) {
-      const { data, error } = await supabase.from('sessions').insert({
-        campaign_id: campaignId,
-        session_number: sessionNumber,
-        title,
-        notes,
-      }).select().single();
-
-      if (error) {
-        toast.error(`Erro ao criar sessão no banco: ${error.message}`);
-      } else if (data) {
-        return mapSessionRowToDomain(data as SessionRow);
-      }
-    }
-
-    return newSession;
-  },
-
-  async updateSession(session: GameSession): Promise<void> {
-    if (isSupabaseConfigured() && isValidUuid(session.id)) {
-      const { error } = await supabase.from('sessions').update({
-        title: session.title,
-        notes: session.notes,
-      }).eq('id', session.id);
-
-      if (error) {
-        toast.error(`Erro ao atualizar sessão: ${error.message}`);
-      }
-    }
-  },
-
-  async fetchScenes(sessionId: string): Promise<GameScene[]> {
-    if (isSupabaseConfigured() && isValidUuid(sessionId)) {
-      const { data, error } = await supabase
-        .from('scenes')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('order_index', { ascending: true });
-
-      if (error) {
-        toast.error(`Erro ao carregar cenas: ${error.message}`);
-      } else if (data) {
-        return (data as SceneRow[]).map(mapSceneRowToDomain);
-      }
-    }
+  async createSession(title: string, campaignId = 'camp-demo-1', sessionNumber = 1, notes = ''): Promise<Result<GameSession>> {
     try {
-      const saved = localStorage.getItem('codex_scenes');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      toast.error('Erro ao carregar cenas salvas localmente.');
-      return [];
+      const repo = RepositoryFactory.getSessionRepository(campaignId);
+      const data = await repo.createSession(title, campaignId, sessionNumber, notes);
+      return { ok: true, value: data };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao criar sessão.'),
+      };
     }
   },
 
-  async createScene(sceneData: Omit<GameScene, 'id'>): Promise<GameScene> {
-    const newScene: GameScene = {
-      ...sceneData,
-      id: `sc-${Date.now()}`,
-    };
-
-    if (isSupabaseConfigured() && isValidUuid(sceneData.sessionId)) {
-      const { data, error } = await supabase.from('scenes').insert({
-        session_id: sceneData.sessionId,
-        order_index: sceneData.orderIndex,
-        title: sceneData.title,
-        scene_type: sceneData.sceneType,
-        npc_name: sceneData.npcName,
-        sensory_text: sceneData.sensoryText,
-        secret_notes: sceneData.secretNotes,
-        bgm_category: sceneData.bgmCategory,
-        bgm_tracks: sceneData.bgmTracks || [],
-        image_url: sceneData.imageUrl,
-        npc_audio_url: sceneData.npcAudioUrl,
-        sfx_shortcuts: sceneData.sfxShortcuts,
-        combatants: sceneData.combatants,
-        time_of_day: sceneData.timeOfDay,
-        time_of_day_hour: sceneData.timeOfDayHour,
-        has_fog: sceneData.hasFog,
-        has_rain: sceneData.hasRain,
-        floor_texture_url: sceneData.floorTextureUrl,
-        scene_images: sceneData.sceneImages || [],
-        active_image_index: sceneData.activeImageIndex || 0,
-      }).select().single();
-
-      if (error) {
-        toast.error(`Erro ao criar cena: ${error.message}`);
-      } else if (data) {
-        return mapSceneRowToDomain(data as SceneRow);
-      }
-    }
-
-    return newScene;
-  },
-
-  async updateScene(scene: GameScene): Promise<void> {
-    if (isSupabaseConfigured() && isValidUuid(scene.id)) {
-      const { error } = await supabase.from('scenes').update({
-        title: scene.title,
-        scene_type: scene.sceneType,
-        npc_name: scene.npcName,
-        sensory_text: scene.sensoryText,
-        secret_notes: scene.secretNotes,
-        bgm_category: scene.bgmCategory,
-        bgm_tracks: scene.bgmTracks || [],
-        image_url: scene.imageUrl,
-        npc_audio_url: scene.npcAudioUrl,
-        sfx_shortcuts: scene.sfxShortcuts,
-        combatants: scene.combatants,
-        time_of_day: scene.timeOfDay,
-        time_of_day_hour: scene.timeOfDayHour,
-        has_fog: scene.hasFog,
-        has_rain: scene.hasRain,
-        floor_texture_url: scene.floorTextureUrl,
-        scene_images: scene.sceneImages || [],
-        active_image_index: scene.activeImageIndex || 0,
-      }).eq('id', scene.id);
-
-      if (error) {
-        toast.error(`Erro ao atualizar cena: ${error.message}`);
-      }
+  async updateSession(session: GameSession, campaignId?: string): Promise<Result<void>> {
+    try {
+      const repo = RepositoryFactory.getSessionRepository(campaignId || session.campaignId);
+      await repo.updateSession(session);
+      return { ok: true, value: undefined };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao atualizar sessão.'),
+      };
     }
   },
 
-  async deleteScene(id: string): Promise<void> {
-    if (isSupabaseConfigured() && isValidUuid(id)) {
-      const { error } = await supabase.from('scenes').delete().eq('id', id);
-      if (error) {
-        toast.error(`Erro ao remover cena: ${error.message}`);
-      }
+  async fetchScenes(sessionId: string, campaignIdOrUserId?: string): Promise<Result<GameScene[]>> {
+    try {
+      const repo = RepositoryFactory.getSessionRepository(campaignIdOrUserId);
+      const data = await repo.fetchScenes(sessionId);
+      return { ok: true, value: data };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao carregar cenas.'),
+      };
+    }
+  },
+
+  async createScene(sceneData: Omit<GameScene, 'id'>, campaignIdOrUserId?: string): Promise<Result<GameScene>> {
+    try {
+      const repo = RepositoryFactory.getSessionRepository(campaignIdOrUserId);
+      const data = await repo.createScene(sceneData);
+      return { ok: true, value: data };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao criar cena.'),
+      };
+    }
+  },
+
+  async updateScene(scene: GameScene, campaignIdOrUserId?: string): Promise<Result<void>> {
+    try {
+      const repo = RepositoryFactory.getSessionRepository(campaignIdOrUserId);
+      await repo.updateScene(scene);
+      return { ok: true, value: undefined };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao atualizar cena.'),
+      };
+    }
+  },
+
+  async deleteScene(id: string, campaignIdOrUserId?: string): Promise<Result<void>> {
+    try {
+      const repo = RepositoryFactory.getSessionRepository(campaignIdOrUserId);
+      await repo.deleteScene(id);
+      return { ok: true, value: undefined };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao remover cena.'),
+      };
+    }
+  },
+
+  async fetchSceneMap(sceneId: string, campaignIdOrUserId?: string): Promise<Result<any | null>> {
+    try {
+      const repo = RepositoryFactory.getSessionRepository(campaignIdOrUserId);
+      const data = await repo.fetchSceneMap(sceneId);
+      return { ok: true, value: data };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao carregar mapa da cena.'),
+      };
+    }
+  },
+
+  async saveSceneMap(sceneId: string, gridData: any, campaignIdOrUserId?: string): Promise<Result<void>> {
+    try {
+      const repo = RepositoryFactory.getSessionRepository(campaignIdOrUserId);
+      await repo.saveSceneMap(sceneId, gridData);
+      return { ok: true, value: undefined };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao salvar mapa da cena.'),
+      };
     }
   },
 };

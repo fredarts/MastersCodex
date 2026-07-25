@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   calculateModifier,
   formatModifier,
   calculateProficiencyBonus,
   calculateSpellDC,
   applyLongRest,
+  calculatePassivePerception,
+  applyShortRest,
 } from '../dnd5e-calculator';
 import { CharacterSheet } from '../types';
 
@@ -101,6 +103,62 @@ describe('D&D 5e Rules Calculator Unit Tests', () => {
       expect(restored.deathSaves.failures).toBe(0);
       expect(restored.spellSlots[1].used).toBe(0);
       expect(restored.spellSlots[2].used).toBe(0);
+    });
+  });
+  describe('calculatePassivePerception', () => {
+    it('deve calcular percepção passiva (10 + percepção total)', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        level: 5, // Prof = +3
+        attributes: {
+          wis: { score: 16 }, // Mod = +3
+        } as any,
+        skills: {
+          percepcao: 'proficient', // Total = 3 + 3 = 6
+        } as any,
+      };
+
+      expect(calculatePassivePerception(mockSheet as CharacterSheet)).toBe(16); // 10 + 6 = 16
+    });
+
+    it('deve calcular percepção passiva com expertise', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        level: 5, // Prof = +3
+        attributes: {
+          wis: { score: 16 }, // Mod = +3
+        } as any,
+        skills: {
+          percepcao: 'expertise', // Total = 3 + (3 * 2) = 9
+        } as any,
+      };
+
+      expect(calculatePassivePerception(mockSheet as CharacterSheet)).toBe(19); // 10 + 9 = 19
+    });
+  });
+
+  describe('applyShortRest', () => {
+    it('deve recuperar PV rolando dados de vida e atualizar os usados', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Guerreiro', // hitDie = 1d10
+        level: 5,
+        currentHp: 10,
+        maxHp: 50,
+        attributes: {
+          con: { score: 14 } // mod = +2
+        } as any,
+        hitDiceUsed: '21d10', // Usados: 2. Totais: 5. Disponíveis: 3.
+      };
+
+      // Spy no Math.random para controlar o rolo do dado
+      const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5); // (0.5 * 10) + 1 = 6
+
+      const { updatedSheet, hpRecovered } = applyShortRest(mockSheet as CharacterSheet, 2);
+
+      // Roll: 6 + 2 = 8 por dado. 2 dados = 16.
+      expect(hpRecovered).toBe(16);
+      expect(updatedSheet.currentHp).toBe(26);
+      expect(updatedSheet.hitDiceUsed).toBe('41d10'); // 2 já usados + 2 = 4
+
+      randomSpy.mockRestore();
     });
   });
 });

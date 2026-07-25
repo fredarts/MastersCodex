@@ -270,14 +270,24 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     return false;
   }, [activeSpellTargeting, casterTokenKey, spellTargetPosition, getCombatantPos]);
 
+  // Instanced Token Manager Ref
+  const instancedTokenManagerRef = useRef<any>(null);
+  
   // Sync token meshes to current combatant state
   const syncTokens = useCallback(() => {
     const tokenGroup = tokenGroupRef.current;
-    if (!tokenGroup) return;
+    if (!tokenGroup || !sceneRef.current) return;
+
+    if (!instancedTokenManagerRef.current) {
+      // Import dynamic ou lazy instancing (se quisermos não quebrar SSR)
+      // Como estamos no lado do cliente, podemos inicializar
+      const { InstancedTokenManager } = require('./battle-3d/InstancedTokenManager');
+      instancedTokenManagerRef.current = new InstancedTokenManager(sceneRef.current, 1000);
+    }
 
     const activeKeys = new Set(combatants.map((c) => c.id || c.name));
 
-    // Remove deleted tokens
+    // Remove deleted tokens (Unique ones)
     for (const [key, group] of tokenMeshMapRef.current.entries()) {
       if (!activeKeys.has(key)) {
         tokenGroup.remove(group);
@@ -285,6 +295,9 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         tokenMeshMapRef.current.delete(key);
       }
     }
+
+    const genericCombatants: Combatant[] = [];
+    const genericOptionsMap = new Map<string, any>();
 
     // Sync active combatants
     combatants.forEach((c, idx) => {
@@ -306,15 +319,36 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         isSpellTargeted: !!targeted,
       };
 
-      const existingGroup = tokenMeshMapRef.current.get(key);
-      if (existingGroup) {
-        updateTokenMeshState(existingGroup, options);
+      // Separar Genéricos de Únicos
+      // Consideramos "Único" se for player, npc, ou tiver modelUrl customizado.
+      const isGeneric = c.type === 'monster' && !c.modelUrl;
+
+      if (isGeneric) {
+        // Remover possível representação única antiga se existir
+        const existingGroup = tokenMeshMapRef.current.get(key);
+        if (existingGroup) {
+          tokenGroup.remove(existingGroup);
+          disposeHierarchy(existingGroup);
+          tokenMeshMapRef.current.delete(key);
+        }
+
+        genericCombatants.push(c);
+        genericOptionsMap.set(key, options);
       } else {
-        const tokenMesh = createTokenMesh(options);
-        tokenGroup.add(tokenMesh);
-        tokenMeshMapRef.current.set(key, tokenMesh);
+        const existingGroup = tokenMeshMapRef.current.get(key);
+        if (existingGroup) {
+          updateTokenMeshState(existingGroup, options);
+        } else {
+          const tokenMesh = createTokenMesh(options);
+          tokenGroup.add(tokenMesh);
+          tokenMeshMapRef.current.set(key, tokenMesh);
+        }
       }
     });
+
+    // Update InstancedMesh manager
+    instancedTokenManagerRef.current.update(genericCombatants, genericOptionsMap);
+
   }, [
     combatants,
     currentTurnIndex,

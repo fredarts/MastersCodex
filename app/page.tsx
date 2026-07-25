@@ -256,12 +256,6 @@ function MainApp() {
 
               {activeTab === 'live_cockpit' && (
                 <LiveCockpitStudio
-                  combatants={combatants}
-                  setCombatants={setCombatants}
-                  currentTurnIndex={currentTurnIndex}
-                  setCurrentTurnIndex={setCurrentTurnIndex}
-                  roundCount={roundCount}
-                  setRoundCount={setRoundCount}
                   onGenerateLoot={handleGenerateLootForCombat}
                   onOpenPlayerView={() => setIsPlayerViewOpen(true)}
                 />

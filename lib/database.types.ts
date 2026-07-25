@@ -106,3 +106,11 @@ export interface AudioFavoriteRow {
   audio_id: string;
   created_at?: string;
 }
+
+export interface SceneMapRow {
+  scene_id: string;
+  grid_data: any;
+  created_at?: string;
+  updated_at?: string;
+}
+

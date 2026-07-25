@@ -8,6 +8,7 @@ vi.mock('../supabase', () => {
   const mockQuery = {
     select: vi.fn().mockReturnThis(),
     ilike: vi.fn().mockReturnThis(),
+    textSearch: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     range: vi.fn().mockReturnThis(),
     then: vi.fn(),
@@ -81,6 +82,7 @@ describe('SRD Compendium Service Tests', () => {
       const mockQuery = {
         select: vi.fn().mockReturnThis(),
         ilike: vi.fn().mockReturnThis(),
+        textSearch: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         range: vi.fn().mockReturnThis(),
         then: vi.fn((onfulfilled) => Promise.resolve({ data: mockMonsters, error: null }).then(onfulfilled)),
@@ -91,7 +93,7 @@ describe('SRD Compendium Service Tests', () => {
       const results = await srdService.fetchMonsters({ searchQuery: 'Beholder', cr: '13', page: 2, limit: 10 });
       
       expect(supabaseModule.supabase.from).toHaveBeenCalledWith('srd_monsters');
-      expect(mockQuery.ilike).toHaveBeenCalledWith('name', '%Beholder%');
+      expect(mockQuery.textSearch).toHaveBeenCalledWith('fts', 'Beholder');
       expect(mockQuery.eq).toHaveBeenCalledWith('cr', '13');
       // page 2 com limit 10 -> range(10, 19)
       expect(mockQuery.range).toHaveBeenCalledWith(10, 19);
@@ -107,6 +109,7 @@ describe('SRD Compendium Service Tests', () => {
       const mockQuery = {
         select: vi.fn().mockReturnThis(),
         ilike: vi.fn().mockReturnThis(),
+        textSearch: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         range: vi.fn().mockReturnThis(),
         then: vi.fn((onfulfilled) => Promise.resolve({ data: mockSpells, error: null }).then(onfulfilled)),
@@ -117,7 +120,7 @@ describe('SRD Compendium Service Tests', () => {
       const results = await srdService.fetchSpells({ searchQuery: 'Fireball', level: 3, school: 'Evocation', page: 1, limit: 5 });
       
       expect(supabaseModule.supabase.from).toHaveBeenCalledWith('srd_spells');
-      expect(mockQuery.ilike).toHaveBeenCalledWith('name', '%Fireball%');
+      expect(mockQuery.textSearch).toHaveBeenCalledWith('fts', 'Fireball');
       expect(mockQuery.eq).toHaveBeenCalledWith('level', 3);
       expect(mockQuery.eq).toHaveBeenCalledWith('school', 'Evocation');
       expect(mockQuery.range).toHaveBeenCalledWith(0, 4);

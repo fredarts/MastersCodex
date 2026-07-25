@@ -8,4 +8,6 @@ export interface ISessionRepository {
   createScene(scene: Omit<GameScene, 'id'>): Promise<GameScene>;
   updateScene(scene: GameScene): Promise<void>;
   deleteScene(id: string): Promise<void>;
+  fetchSceneMap(sceneId: string): Promise<any | null>;
+  saveSceneMap(sceneId: string, gridData: any): Promise<void>;
 }
