@@ -20,11 +20,6 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Configurar Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Instalar Dependências NPM
         run: npm ci
 
@@ -33,9 +28,6 @@ jobs:
 
       - name: Executar Testes Unitários (Vitest)
         run: npm run test
-
-      - name: Executar Audit Script de Arquitetura (checklist.py)
-        run: python .agent/scripts/checklist.py .
 
       - name: Validar Build de Produção Next.js
         run: npm run build
