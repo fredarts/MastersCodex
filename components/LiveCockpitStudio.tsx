@@ -2623,6 +2623,20 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         onClose={() => setShowCreateSceneModal(false)}
       />
 
+      <AddCombatantModal
+        isOpen={showAddCombatantModal}
+        onClose={() => setShowAddCombatantModal(false)}
+        campaignMembers={campaignMembers || []}
+        onAddCombatant={(newCombatant) => {
+          setCombatants((prev) => {
+            const next = [...prev, newCombatant];
+            return next.sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
+          });
+          toast.success(`${newCombatant.name} adicionado ao combate!`);
+          setShowAddCombatantModal(false);
+        }}
+      />
+
       <BattleSetupModal
         isOpen={showBattleSetupModal}
         onClose={() => setShowBattleSetupModal(false)}

@@ -158,6 +158,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const controlsRef = useRef<any>(null);
   const tokenGroupRef = useRef<THREE.Group | null>(null);
   const highlightGroupRef = useRef<THREE.Group | null>(null);
+  const trailGroupRef = useRef<THREE.Group | null>(null);
+  const dragTrailRef = useRef<{ x: number; z: number }[]>([]);
   const tokenMeshMapRef = useRef<Map<string, THREE.Group>>(new Map());
   const rainSysRef = useRef<ReturnType<typeof createRainParticleSystem> | null>(null);
   const skyDomeRef = useRef<SkyDomeInstance | null>(null);
@@ -185,32 +187,6 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const groundPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
   const planeIntersectPoint = useRef(new THREE.Vector3());
 
-  const callbacksRef = useRef({
-    combatants,
-    currentTurnIndex,
-    setSelectedCombatantId,
-    onSelectCombatant,
-    onSelectTarget,
-    canUserControlCombatant,
-    updateTokenPosition3D,
-    onUpdateCombatants,
-    setLocalPositions,
-  });
-
-  useEffect(() => {
-    callbacksRef.current = {
-      combatants,
-      currentTurnIndex,
-      setSelectedCombatantId,
-      onSelectCombatant,
-      onSelectTarget,
-      canUserControlCombatant,
-      updateTokenPosition3D,
-      onUpdateCombatants,
-      setLocalPositions,
-    };
-  });
-
   const getCombatantPos = useCallback((idOrName: string | null | undefined): { x: number; z: number } => {
     if (!idOrName) return { x: 0, z: 0 };
 
@@ -232,6 +208,190 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
     return { x: 0, z: 0 };
   }, [combatants, localPositions]);
+
+  // Helper to render reachable movement highlights around a given center position
+  const renderMovementHighlights = useCallback((centerX: number, centerZ: number, remainingMeters: number) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    if (highlightGroupRef.current) {
+      scene.remove(highlightGroupRef.current);
+      disposeHierarchy(highlightGroupRef.current);
+      highlightGroupRef.current = null;
+    }
+
+    if (isPlacementPhase || remainingMeters <= 0) return;
+
+    const maxSquares = Math.floor(remainingMeters / 1.5);
+    if (maxSquares < 0) return;
+
+    const highlightGroup = new THREE.Group();
+    highlightGroup.name = 'movementHighlightGroup';
+    highlightGroupRef.current = highlightGroup;
+    scene.add(highlightGroup);
+
+    const geo = new THREE.PlaneGeometry(1.8, 1.8);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x0ea5e9, // Tailwind sky-500
+      transparent: true,
+      opacity: 0.18,
+      side: THREE.DoubleSide
+    });
+
+    const edges = new THREE.EdgesGeometry(geo);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.4 });
+
+    for (let dx = -maxSquares; dx <= maxSquares; dx++) {
+      for (let dz = -maxSquares; dz <= maxSquares; dz++) {
+        const gridX = centerX + dx * 2;
+        const gridZ = centerZ + dz * 2;
+
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.set(gridX, 0.02, gridZ);
+        highlightGroup.add(mesh);
+
+        const line = new THREE.LineSegments(edges, lineMat);
+        line.rotation.x = -Math.PI / 2;
+        line.position.set(gridX, 0.02, gridZ);
+        highlightGroup.add(line);
+      }
+    }
+  }, [isPlacementPhase]);
+
+  // Helper to render active movement drag trail
+  const renderDragTrail = useCallback((trail: { x: number; z: number }[]) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    if (trailGroupRef.current) {
+      scene.remove(trailGroupRef.current);
+      disposeHierarchy(trailGroupRef.current);
+      trailGroupRef.current = null;
+    }
+
+    if (trail.length <= 1) return;
+
+    const trailGroup = new THREE.Group();
+    trailGroup.name = 'dragTrailGroup';
+    trailGroupRef.current = trailGroup;
+    scene.add(trailGroup);
+
+    // 1. Highlight tiles in trail (amber translucent)
+    const tileGeo = new THREE.PlaneGeometry(1.8, 1.8);
+    const tileMat = new THREE.MeshBasicMaterial({
+      color: 0xf59e0b, // Amber-500
+      transparent: true,
+      opacity: 0.28,
+      side: THREE.DoubleSide
+    });
+    const edges = new THREE.EdgesGeometry(tileGeo);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.8 });
+
+    for (let i = 1; i < trail.length; i++) {
+      const pt = trail[i];
+      const mesh = new THREE.Mesh(tileGeo, tileMat);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.set(pt.x, 0.025, pt.z);
+      trailGroup.add(mesh);
+
+      const border = new THREE.LineSegments(edges, lineMat);
+      border.rotation.x = -Math.PI / 2;
+      border.position.set(pt.x, 0.025, pt.z);
+      trailGroup.add(border);
+    }
+
+    // 2. Bright connecting line along trail center points
+    const points: THREE.Vector3[] = trail.map((pt) => new THREE.Vector3(pt.x, 0.04, pt.z));
+    const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+    const pathLineMat = new THREE.LineBasicMaterial({
+      color: 0x38bdf8, // Sky-400 glowing path
+      linewidth: 3
+    });
+    const pathLine = new THREE.Line(lineGeo, pathLineMat);
+    trailGroup.add(pathLine);
+
+    // 3. Floating distance badge (in meters) above token's head
+    const distanceMeters = (trail.length - 1) * 1.5;
+    const currentHead = trail[trail.length - 1];
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      // Rounded pill background
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)'; // Dark slate transparent
+      ctx.strokeStyle = '#38bdf8'; // Glowing sky-400 border
+      ctx.lineWidth = 6;
+
+      const x = 12, y = 12, w = 232, h = 104, r = 28;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Footsteps icon + distance text
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = 'bold 36px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`👣 ${distanceMeters.toFixed(1)}m`, 128, 64);
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    const spriteMat = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false
+    });
+    const distanceSprite = new THREE.Sprite(spriteMat);
+    distanceSprite.scale.set(2.4, 1.2, 1);
+    distanceSprite.position.set(currentHead.x, 2.5, currentHead.z);
+    trailGroup.add(distanceSprite);
+  }, []);
+
+  const callbacksRef = useRef({
+    combatants,
+    currentTurnIndex,
+    setSelectedCombatantId,
+    onSelectCombatant,
+    onSelectTarget,
+    canUserControlCombatant,
+    updateTokenPosition3D,
+    onUpdateCombatants,
+    setLocalPositions,
+    renderMovementHighlights,
+    renderDragTrail,
+    getCombatantPos
+  });
+
+  useEffect(() => {
+    callbacksRef.current = {
+      combatants,
+      currentTurnIndex,
+      setSelectedCombatantId,
+      onSelectCombatant,
+      onSelectTarget,
+      canUserControlCombatant,
+      updateTokenPosition3D,
+      onUpdateCombatants,
+      setLocalPositions,
+      renderMovementHighlights,
+      renderDragTrail,
+      getCombatantPos
+    };
+  });
 
   const isCombatantInSpellArea = useCallback((c: Combatant, cPos: { x: number; z: number }): boolean => {
     if (!activeSpellTargeting || !casterTokenKey || !spellTargetPosition) return false;
@@ -532,7 +692,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
             setSelectedCombatantId: setSel,
             onSelectCombatant: onSelC,
             onSelectTarget: onSelT,
-            canUserControlCombatant: canControl
+            canUserControlCombatant: canControl,
+            getCombatantPos: getPos
           } = callbacksRef.current;
 
           const clicked = activeCombatants.find((c) => (c.id || c.name) === targetKey);
@@ -545,8 +706,13 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
               draggedTokenKeyRef.current = targetKey;
               controls.enabled = false; // Desativa a rotação da câmera durante o arrasto do token
               
-              // Se for o DM (ou possuir controle) e clicar num token que NÃO é a vez dele,
-              // marca-o também como alvo de ataque.
+              // Inicializa o rastro (trail) na casa snapped inicial do token
+              const cPos = getPos(targetKey);
+              const startSnapX = Math.floor(cPos.x / 2) * 2 + 1;
+              const startSnapZ = Math.floor(cPos.z / 2) * 2 + 1;
+              dragTrailRef.current = [{ x: startSnapX, z: startSnapZ }];
+              lastDragSnapRef.current = { x: startSnapX, z: startSnapZ };
+
               const currentActor = activeCombatants[turnIdx];
               if (currentActor && clicked.id !== currentActor.id) {
                 setTargetIdState(clicked.id);
@@ -605,22 +771,84 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         // Skip if snapped position hasn't changed — prevents infinite re-render loop
         if (lastDragSnapRef.current?.x === snappedX && lastDragSnapRef.current?.z === snappedZ) return;
 
-        // Restriction Check: if dragged token is the active combatant and not in placement phase
         const activeC = callbacksRef.current.combatants[currentTurnIndex];
         if (activeC && activeC.id === key && !isPlacementPhase) {
-          const startX = activeC.turnStartX !== undefined ? activeC.turnStartX : (activeC.x || 0);
-          const startZ = activeC.turnStartZ !== undefined ? activeC.turnStartZ : (activeC.z || 0);
           const speedVal = getSpeedInMeters(activeC.speed || activeC.notes) * (activeC.hasDashed ? 2 : 1);
-          const remainingMovement = Math.max(0, speedVal - (activeC.movementUsed || 0));
+          const remainingMovementTotal = Math.max(0, speedVal - (activeC.movementUsed || 0));
 
-          // Chebyshev distance in meters: 1.5m per 2 Three.js units (1 square)
-          const distInMeters = Math.max(Math.abs(snappedX - startX), Math.abs(snappedZ - startZ)) / 2 * 1.5;
-
-          if (distInMeters > remainingMovement) {
-            return; // Block drag outside allowed speed range!
+          let trail = [...dragTrailRef.current];
+          if (trail.length === 0) {
+            const cPos = callbacksRef.current.getCombatantPos(key);
+            trail = [{ x: Math.floor(cPos.x / 2) * 2 + 1, z: Math.floor(cPos.z / 2) * 2 + 1 }];
           }
+
+          // Check if snapped tile is already in trail (Backtracking)
+          const existingIdx = trail.findIndex((pt) => pt.x === snappedX && pt.z === snappedZ);
+          if (existingIdx !== -1) {
+            // Rewind trail up to existingIdx
+            trail = trail.slice(0, existingIdx + 1);
+          } else {
+            // Forward move: interpolate step-by-step from last point in trail to snapped tile
+            const lastPt = trail[trail.length - 1];
+            const steps: { x: number; z: number }[] = [];
+            let curX = lastPt.x;
+            let curZ = lastPt.z;
+
+            while (curX !== snappedX || curZ !== snappedZ) {
+              if (curX < snappedX) curX += 2;
+              else if (curX > snappedX) curX -= 2;
+
+              if (curZ < snappedZ) curZ += 2;
+              else if (curZ > snappedZ) curZ -= 2;
+
+              steps.push({ x: curX, z: curZ });
+            }
+
+            // Check movement budget
+            const totalTrailSquares = (trail.length - 1) + steps.length;
+            const totalTrailCost = totalTrailSquares * 1.5;
+
+            if (totalTrailCost <= remainingMovementTotal) {
+              trail = [...trail, ...steps];
+            } else {
+              // Exceeds total remaining movement budget!
+              // Cap steps to allowable distance
+              const maxSquares = Math.floor(remainingMovementTotal / 1.5);
+              const allowedStepsCount = maxSquares - (trail.length - 1);
+              if (allowedStepsCount > 0) {
+                trail = [...trail, ...steps.slice(0, allowedStepsCount)];
+              }
+            }
+          }
+
+          dragTrailRef.current = trail;
+          const currentHead = trail[trail.length - 1];
+          lastDragSnapRef.current = { x: currentHead.x, z: currentHead.z };
+
+          const group = tokenMeshMapRef.current.get(key);
+          if (group) {
+            group.position.x = currentHead.x;
+            group.position.z = currentHead.z;
+          }
+
+          callbacksRef.current.setLocalPositions((prev) => ({
+            ...prev,
+            [key]: { x: currentHead.x, z: currentHead.z },
+          }));
+
+          callbacksRef.current.updateTokenPosition3D(key, undefined, undefined, currentHead.x, currentHead.z);
+
+          // Update trail visual rendering
+          callbacksRef.current.renderDragTrail(trail);
+
+          // Dynamic Highlight Reduction: calculate remaining movement after current trail cost
+          const trailCostMeters = (trail.length - 1) * 1.5;
+          const remainingMeters = Math.max(0, remainingMovementTotal - trailCostMeters);
+          callbacksRef.current.renderMovementHighlights(currentHead.x, currentHead.z, remainingMeters);
+          return;
         }
 
+        // Non-active combatant drag or placement phase
         lastDragSnapRef.current = { x: snappedX, z: snappedZ };
 
         const group = tokenMeshMapRef.current.get(key);
@@ -649,17 +877,16 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
             const activeC = callbacksRef.current.combatants[currentTurnIndex];
             if (activeC && activeC.id === key) {
-              const startX = activeC.turnStartX !== undefined ? activeC.turnStartX : (activeC.x || 0);
-              const startZ = activeC.turnStartZ !== undefined ? activeC.turnStartZ : (activeC.z || 0);
-              const distInMeters = Math.max(Math.abs(snappedX - startX), Math.abs(snappedZ - startZ)) / 2 * 1.5;
+              const trailSquares = Math.max(0, dragTrailRef.current.length - 1);
+              const trailCostMeters = trailSquares * 1.5;
 
-              const nextCombatants = callbacksRef.current.combatants.map(c => {
+              const nextCombatants = callbacksRef.current.combatants.map((c) => {
                 if (c.id === key) {
                   return {
                     ...c,
                     x: snappedX,
                     z: snappedZ,
-                    movementUsed: distInMeters
+                    movementUsed: (c.movementUsed || 0) + trailCostMeters,
                   };
                 }
                 return c;
@@ -672,6 +899,14 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
           }
         }
 
+        // Clear visual trail mesh
+        if (trailGroupRef.current && sceneRef.current) {
+          sceneRef.current.remove(trailGroupRef.current);
+          disposeHierarchy(trailGroupRef.current);
+          trailGroupRef.current = null;
+        }
+
+        dragTrailRef.current = [];
         isDraggingRef.current = false;
         draggedTokenKeyRef.current = null;
         lastDragSnapRef.current = null;
@@ -826,64 +1061,19 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
   // Reachable movement range highlighting meshes dynamically
   useEffect(() => {
-    const scene = sceneRef.current;
-    if (!scene) return;
-
-    // Clear old highlights
-    if (highlightGroupRef.current) {
-      scene.remove(highlightGroupRef.current);
-      disposeHierarchy(highlightGroupRef.current);
-      highlightGroupRef.current = null;
-    }
-
     if (isPlacementPhase) return;
 
     const activeC = combatants[currentTurnIndex];
     if (!activeC) return;
 
-    const startX = activeC.turnStartX !== undefined ? activeC.turnStartX : (activeC.x || 0);
-    const startZ = activeC.turnStartZ !== undefined ? activeC.turnStartZ : (activeC.z || 0);
+    const cPos = getCombatantPos(activeC.id || activeC.name);
+    const currentX = cPos.x;
+    const currentZ = cPos.z;
     const speedVal = getSpeedInMeters(activeC.speed || activeC.notes) * (activeC.hasDashed ? 2 : 1);
     const remainingMovement = Math.max(0, speedVal - (activeC.movementUsed || 0));
 
-    if (remainingMovement <= 0) return;
-
-    const highlightGroup = new THREE.Group();
-    highlightGroup.name = 'movementHighlightGroup';
-    highlightGroupRef.current = highlightGroup;
-    scene.add(highlightGroup);
-
-    // Chebyshev distance: 1.5m per grid square (2 units)
-    const maxSquares = Math.floor(remainingMovement / 1.5);
-
-    const geo = new THREE.PlaneGeometry(1.8, 1.8);
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0x0ea5e9, // Tailwind sky-500
-      transparent: true,
-      opacity: 0.18,
-      side: THREE.DoubleSide
-    });
-
-    const edges = new THREE.EdgesGeometry(geo);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.4 });
-
-    for (let dx = -maxSquares; dx <= maxSquares; dx++) {
-      for (let dz = -maxSquares; dz <= maxSquares; dz++) {
-        const gridX = startX + dx * 2;
-        const gridZ = startZ + dz * 2;
-
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set(gridX, 0.02, gridZ);
-        highlightGroup.add(mesh);
-
-        const line = new THREE.LineSegments(edges, lineMat);
-        line.rotation.x = -Math.PI / 2;
-        line.position.set(gridX, 0.02, gridZ);
-        highlightGroup.add(line);
-      }
-    }
-  }, [combatants, currentTurnIndex, isPlacementPhase]);
+    renderMovementHighlights(currentX, currentZ, remainingMovement);
+  }, [combatants, currentTurnIndex, isPlacementPhase, getCombatantPos, renderMovementHighlights]);
 
   // 4. Render Spell Range and AoE Target shape helper meshes dynamically
   useEffect(() => {
