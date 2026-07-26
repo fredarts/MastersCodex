@@ -39,6 +39,7 @@ export interface BattleGrid3DProps {
   userRole?: 'dm' | 'player';
   floorTextureUrl?: string;
   onFloorTextureChange?: (url: string) => void;
+  onAttackTarget?: (target: Combatant) => void;
 }
 
 const getDirectionLabel = (angleDeg: number): string => {
@@ -84,6 +85,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   userRole,
   floorTextureUrl,
   onFloorTextureChange,
+  onAttackTarget: propOnAttackTarget,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { roleMode, user } = useAuth();
@@ -226,7 +228,14 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
   }, [combatants, localPositions]);
 
   // Helper to render reachable movement highlights around a given center position
-  const renderMovementHighlights = useCallback((centerX: number, centerZ: number, remainingMeters: number) => {
+  const renderMovementHighlights = useCallback((
+    centerX: number,
+    centerZ: number,
+    remainingMeters: number,
+    startX?: number,
+    startZ?: number,
+    totalBudgetMeters?: number
+  ) => {
     const scene = sceneRef.current;
     if (!scene) return;
 
@@ -257,20 +266,32 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     const edges = new THREE.EdgesGeometry(geo);
     const lineMat = new THREE.LineBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.4 });
 
+    const originX = startX !== undefined ? startX : centerX;
+    const originZ = startZ !== undefined ? startZ : centerZ;
+    const maxBudget = totalBudgetMeters ?? remainingMeters;
+
     for (let dx = -maxSquares; dx <= maxSquares; dx++) {
       for (let dz = -maxSquares; dz <= maxSquares; dz++) {
         const gridX = centerX + dx * 2;
         const gridZ = centerZ + dz * 2;
 
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set(gridX, 0.02, gridZ);
-        highlightGroup.add(mesh);
+        const stepsFromHead = Math.abs(dx) + Math.abs(dz);
+        const distFromHeadMeters = stepsFromHead * 1.5;
 
-        const line = new THREE.LineSegments(edges, lineMat);
-        line.rotation.x = -Math.PI / 2;
-        line.position.set(gridX, 0.02, gridZ);
-        highlightGroup.add(line);
+        const stepsFromStart = (Math.abs(gridX - originX) + Math.abs(gridZ - originZ)) / 2;
+        const distFromStartMeters = stepsFromStart * 1.5;
+
+        if (distFromHeadMeters <= remainingMeters && distFromStartMeters <= maxBudget) {
+          const mesh = new THREE.Mesh(geo, mat);
+          mesh.rotation.x = -Math.PI / 2;
+          mesh.position.set(gridX, 0.02, gridZ);
+          highlightGroup.add(mesh);
+
+          const line = new THREE.LineSegments(edges, lineMat);
+          line.rotation.x = -Math.PI / 2;
+          line.position.set(gridX, 0.02, gridZ);
+          highlightGroup.add(line);
+        }
       }
     }
   }, [isPlacementPhase]);
@@ -787,10 +808,13 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         // Skip if snapped position hasn't changed — prevents infinite re-render loop
         if (lastDragSnapRef.current?.x === snappedX && lastDragSnapRef.current?.z === snappedZ) return;
 
-        const activeC = callbacksRef.current.combatants[currentTurnIndex];
-        if (activeC && activeC.id === key && !isPlacementPhase) {
-          const speedVal = getSpeedInMeters(activeC.speed || activeC.notes) * (activeC.hasDashed ? 2 : 1);
-          const remainingMovementTotal = Math.max(0, speedVal - (activeC.movementUsed || 0));
+        const { combatants: activeCombatants, currentTurnIndex: turnIdx } = callbacksRef.current;
+        const activeC = activeCombatants[turnIdx];
+        const targetC = activeCombatants.find((c) => c.id === key || c.name === key || (c.id || c.name) === key) || activeC;
+
+        if (targetC && !isPlacementPhase) {
+          const speedVal = getSpeedInMeters(targetC.speed || targetC.notes) * (targetC.hasDashed ? 2 : 1);
+          const remainingMovementTotal = Math.max(0, speedVal - (targetC.movementUsed || 0));
 
           let trail = [...dragTrailRef.current];
           if (trail.length === 0) {
@@ -860,7 +884,15 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
           // Dynamic Highlight Reduction: calculate remaining movement after current trail cost
           const trailCostMeters = (trail.length - 1) * 1.5;
           const remainingMeters = Math.max(0, remainingMovementTotal - trailCostMeters);
-          callbacksRef.current.renderMovementHighlights(currentHead.x, currentHead.z, remainingMeters);
+          const startPt = trail[0] || { x: currentHead.x, z: currentHead.z };
+          callbacksRef.current.renderMovementHighlights(
+            currentHead.x,
+            currentHead.z,
+            remainingMeters,
+            startPt.x,
+            startPt.z,
+            remainingMovementTotal
+          );
           return;
         }
 
@@ -891,13 +923,14 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
             const snappedX = group.position.x;
             const snappedZ = group.position.z;
 
-            const activeC = callbacksRef.current.combatants[currentTurnIndex];
-            if (activeC && activeC.id === key) {
+            const { combatants: activeCombatants } = callbacksRef.current;
+            const targetC = activeCombatants.find((c) => c.id === key || c.name === key || (c.id || c.name) === key);
+            if (targetC) {
               const trailSquares = Math.max(0, dragTrailRef.current.length - 1);
               const trailCostMeters = trailSquares * 1.5;
 
-              const nextCombatants = callbacksRef.current.combatants.map((c) => {
-                if (c.id === key) {
+              const nextCombatants = activeCombatants.map((c) => {
+                if (c.id === targetC.id || c.name === targetC.name) {
                   return {
                     ...c,
                     x: snappedX,
@@ -1077,7 +1110,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
   // Reachable movement range highlighting meshes dynamically
   useEffect(() => {
-    if (isPlacementPhase) return;
+    if (isPlacementPhase || isDraggingRef.current) return;
 
     const activeC = combatants[currentTurnIndex];
     if (!activeC) return;
@@ -1090,6 +1123,69 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
     renderMovementHighlights(currentX, currentZ, remainingMovement);
   }, [combatants, currentTurnIndex, isPlacementPhase, getCombatantPos, renderMovementHighlights]);
+
+  // 3.5 Smoothly auto-center 3D camera on active turn combatant on turn change
+  const prevTurnIndexRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isPlacementPhase) return;
+    if (currentTurnIndex === undefined || !combatants || combatants.length === 0) return;
+
+    if (prevTurnIndexRef.current === currentTurnIndex) return;
+    prevTurnIndexRef.current = currentTurnIndex;
+
+    const activeC = combatants[currentTurnIndex];
+    if (!activeC) return;
+
+    const cPos = getCombatantPos(activeC.id || activeC.name);
+    const targetX = cPos.x;
+    const targetZ = cPos.z;
+
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+
+    if (camera && controls) {
+      const currentTarget = controls.target;
+      const offsetX = camera.position.x - currentTarget.x;
+      const offsetY = camera.position.y - currentTarget.y;
+      const offsetZ = camera.position.z - currentTarget.z;
+
+      const startTargetX = currentTarget.x;
+      const startTargetZ = currentTarget.z;
+      const deltaX = targetX - startTargetX;
+      const deltaZ = targetZ - startTargetZ;
+
+      const distance = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
+      if (distance > 0.1) {
+        let startTime: number | null = null;
+        const duration = 350; // 350ms smooth ease-out gliding transition
+
+        const animateCameraPan = (now: number) => {
+          if (!startTime) startTime = now;
+          const elapsed = now - startTime;
+          const progress = Math.min(1, elapsed / duration);
+          const easeProgress = 1 - Math.pow(1 - progress, 3);
+
+          const curTargetX = startTargetX + deltaX * easeProgress;
+          const curTargetZ = startTargetZ + deltaZ * easeProgress;
+
+          controls.target.set(curTargetX, 0, curTargetZ);
+          camera.position.set(curTargetX + offsetX, currentTarget.y + offsetY, curTargetZ + offsetZ);
+          controls.update();
+
+          if (progress < 1) {
+            requestAnimationFrame(animateCameraPan);
+          }
+        };
+
+        requestAnimationFrame(animateCameraPan);
+      } else {
+        controls.target.set(targetX, 0, targetZ);
+        camera.position.set(targetX + offsetX, camera.position.y, targetZ + offsetZ);
+        controls.update();
+      }
+    }
+  }, [currentTurnIndex, combatants, isPlacementPhase, getCombatantPos]);
 
   // 4. Render Spell Range and AoE Target shape helper meshes dynamically
   useEffect(() => {
@@ -1229,7 +1325,11 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         onFloorTextureChange={onFloorTextureChange}
         onConfirmPlacement={onConfirmPlacement}
         onAttackTarget={(target) => {
-          if (onSelectTarget) onSelectTarget(target);
+          if (propOnAttackTarget) {
+            propOnAttackTarget(target);
+          } else if (onSelectTarget) {
+            onSelectTarget(target);
+          }
         }}
         onToggleHelp={() => setShowHelpModal(true)}
       />

@@ -502,6 +502,48 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     });
   };
 
+  const handleAttackFromWidget = (target: Combatant) => {
+    setSelectedTargetId(target.id);
+    broadcastToPlayerView({ targetId: target.id });
+
+    const currentActor = combatants[currentTurnIndex];
+    if (!currentActor) {
+      toast.error('Nenhum combatente ativo no turno!');
+      return;
+    }
+
+    const matchingSheet = characterSheets.find((s) => {
+      const cClean = currentActor.name.split('(')[0].trim().toLowerCase();
+      return (
+        s.characterName.toLowerCase() === cClean ||
+        s.characterName.toLowerCase().includes(cClean) ||
+        cClean.includes(s.characterName.toLowerCase())
+      );
+    });
+
+    let atkName = 'Ataque';
+    let bonus = getMod(currentActor.str);
+    let dmgDesc = '1d8';
+
+    if (matchingSheet?.attacks && matchingSheet.attacks.length > 0) {
+      const atk = matchingSheet.attacks[0];
+      atkName = atk.name;
+      bonus = parseInt(atk.atkBonus.replace('+', '').trim()) || 0;
+      dmgDesc = atk.damage || '1d8';
+    } else if (currentActor.actions && currentActor.actions.length > 0) {
+      const act = currentActor.actions[0];
+      atkName = act.name;
+      const match = act.desc.match(/\+([0-9]+)/);
+      bonus = match ? parseInt(match[1]) : getMod(currentActor.str);
+      dmgDesc = act.desc;
+    }
+
+    const rolled = rollDice(`Ataque: ${atkName}`, bonus, currentActor, dmgDesc);
+    if (rolled) {
+      deductAction(currentActor.id, 'action');
+    }
+  };
+
   const executeSingleTargetSpell = async (
     caster: Combatant,
     sheet: CharacterSheet | undefined,
@@ -1734,6 +1776,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                         setSelectedTargetId(target.id);
                         broadcastToPlayerView({ targetId: target.id });
                       }}
+                      onAttackTarget={handleAttackFromWidget}
                       interactive={true}
                       isPlacementPhase={isPlacementPhase}
                       setupMode={battleSetupMode}
