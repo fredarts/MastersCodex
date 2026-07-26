@@ -58,6 +58,18 @@ export class LocalStorageWorldRepository implements IWorldRepository {
     return newEntity;
   }
 
+  async updateWorldEntity(entity: WorldEntity): Promise<void> {
+    try {
+      const saved = localStorage.getItem('codex_entities');
+      const all: WorldEntity[] = saved ? JSON.parse(saved) : [];
+      const idx = all.findIndex((e) => e.id === entity.id);
+      if (idx !== -1) {
+        all[idx] = entity;
+        localStorage.setItem('codex_entities', JSON.stringify(all));
+      }
+    } catch (_e) {}
+  }
+
   async deleteWorldEntity(id: string): Promise<void> {
     try {
       const saved = localStorage.getItem('codex_entities');

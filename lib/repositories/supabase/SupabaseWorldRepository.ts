@@ -54,8 +54,9 @@ export class SupabaseWorldRepository implements IWorldRepository {
         sub_type: entityData.subType,
         status: entityData.status,
         short_desc: entityData.shortDesc,
-        full_desc: entityData.fullContent,
+        full_content: entityData.fullContent,
         attributes: entityData.attributes,
+        images: entityData.images || [],
       })
       .select()
       .single();
@@ -64,6 +65,24 @@ export class SupabaseWorldRepository implements IWorldRepository {
       throw error;
     }
     return mapWorldEntityRowToDomain(data as WorldEntityRow);
+  }
+
+  async updateWorldEntity(entity: WorldEntity): Promise<void> {
+    const { error } = await supabase
+      .from('world_entities')
+      .update({
+        category: entity.category,
+        name: entity.name,
+        sub_type: entity.subType,
+        status: entity.status,
+        short_desc: entity.shortDesc,
+        full_content: entity.fullContent,
+        attributes: entity.attributes,
+        images: entity.images || [],
+      })
+      .eq('id', entity.id);
+
+    if (error) throw error;
   }
 
   async deleteWorldEntity(id: string): Promise<void> {

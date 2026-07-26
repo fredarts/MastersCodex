@@ -485,6 +485,14 @@ export const CampaignSettingsStudio: React.FC = () => {
                 >
                   📖 Recaps
                 </button>
+                <button
+                  onClick={() => setFeedFilter('world_lore')}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                    feedFilter === 'world_lore' ? 'bg-purple-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  📜 Lore do Mundo
+                </button>
               </div>
 
               <button

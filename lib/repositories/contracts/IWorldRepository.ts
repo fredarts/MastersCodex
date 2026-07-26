@@ -6,5 +6,6 @@ export interface IWorldRepository {
   updateWorld(world: World): Promise<void>;
   fetchWorldEntities(worldId: string): Promise<WorldEntity[]>;
   createWorldEntity(entity: Omit<WorldEntity, 'id'>): Promise<WorldEntity>;
+  updateWorldEntity(entity: WorldEntity): Promise<void>;
   deleteWorldEntity(id: string): Promise<void>;
 }

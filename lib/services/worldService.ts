@@ -67,6 +67,19 @@ export const worldService = {
     }
   },
 
+  async updateWorldEntity(entity: WorldEntity, userId?: string): Promise<Result<void>> {
+    try {
+      const repo = RepositoryFactory.getWorldRepository(userId);
+      await repo.updateWorldEntity(entity);
+      return { ok: true, value: undefined };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao atualizar entidade.'),
+      };
+    }
+  },
+
   async deleteWorldEntity(id: string, userId?: string): Promise<Result<void>> {
     try {
       const repo = RepositoryFactory.getWorldRepository(userId);

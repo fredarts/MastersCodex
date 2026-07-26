@@ -35,11 +35,12 @@ export function mapWorldEntityRowToDomain(row: WorldEntityRow): WorldEntity {
     category: row.category,
     name: row.name,
     subType: row.sub_type || undefined,
-    status: row.status || 'active',
+    status: (row.status as any) || 'active',
     shortDesc: row.short_desc || '',
-    fullContent: row.full_desc || row.full_content || undefined,
+    fullContent: row.full_content || undefined,
     attributes: row.attributes || {},
     connections: row.connections || [],
+    images: row.images || [],
     createdAt: row.created_at,
   };
 }

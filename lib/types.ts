@@ -16,11 +16,60 @@ export type ConditionType =
 
 export type UserRoleMode = 'dm' | 'player';
 
-export type WorldEntityCategory = 'npc' | 'location' | 'faction' | 'religion' | 'lore_event';
+export type WorldEntityCategory = 
+  | 'npc' 
+  | 'location' 
+  | 'faction' 
+  | 'religion' 
+  | 'lore_event'
+  | 'species'
+  | 'ethnicity'
+  | 'tradition'
+  | 'profession'
+  | 'natural_law'
+  | 'spell'
+  | 'disease'
+  | 'item'
+  | 'material'
+  | 'technology'
+  | 'document'
+  | 'language'
+  | 'military_conflict'
+  | 'military_unit'
+  | 'currency'
+  | 'trade_route'
+  | 'beast'
+  | 'flora'
+  | 'magic_system'
+  | 'plane'
+  | 'cosmology';
+
+export interface WorldMapPin {
+  id: string;
+  worldId: string;
+  entityId?: string;
+  title: string;
+  category: WorldEntityCategory | 'custom';
+  x: number; // percentage 0-100
+  y: number; // percentage 0-100
+  description?: string;
+  iconName?: string;
+}
+
+export interface TimelineEvent {
+  id: string;
+  worldId: string;
+  entityId?: string;
+  title: string;
+  era: string; // Ex: "Segunda Era", "Ano 420"
+  yearOrder: number; // For sorting
+  description: string;
+  category: WorldEntityCategory;
+}
 
 export type SceneType = 'combat' | 'dialogue' | 'social' | 'exploration';
 
-export type CampaignFeedEventType = 'battle_summary' | 'npc_encounter' | 'session_recap' | 'milestone' | 'house_rule' | 'chat_message';
+export type CampaignFeedEventType = 'battle_summary' | 'npc_encounter' | 'session_recap' | 'milestone' | 'house_rule' | 'chat_message' | 'world_lore';
 
 export interface UserProfile {
   id: string;
@@ -47,6 +96,7 @@ export interface WorldEntity {
   status: 'active' | 'destroyed' | 'dead' | 'allied' | 'hostile';
   shortDesc: string;
   fullContent?: string;
+  images?: string[]; // Galeria de imagens (upload ou IA Nano Banana)
   attributes?: Record<string, any>;
   connections?: string[]; // IDs de outras entidades conectadas
   createdAt?: string;

@@ -15,6 +15,7 @@ interface WorldContextType {
   worldEntities: WorldEntity[];
   setWorldEntities: React.Dispatch<React.SetStateAction<WorldEntity[]>>;
   createWorldEntity: (entity: Omit<WorldEntity, 'id'>) => Promise<WorldEntity | null>;
+  updateWorldEntity: (entity: WorldEntity) => Promise<void>;
   deleteWorldEntity: (id: string) => Promise<void>;
 }
 
@@ -128,6 +129,22 @@ export const WorldProvider: React.FC<{ children: React.ReactNode; currentUserId?
     return newEntity;
   };
 
+  const updateWorldEntity = async (entity: WorldEntity) => {
+    const res = await worldService.updateWorldEntity(entity, currentUserId);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return;
+    }
+    setWorldEntities((prev) => {
+      const updated = prev.map((e) => (e.id === entity.id ? entity : e));
+      try {
+        localStorage.setItem('codex_entities', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+    toast.success('Entidade atualizada com sucesso!');
+  };
+
   const deleteWorldEntity = async (id: string) => {
     const res = await worldService.deleteWorldEntity(id, currentUserId);
     if (!res.ok) {
@@ -155,6 +172,7 @@ export const WorldProvider: React.FC<{ children: React.ReactNode; currentUserId?
         worldEntities,
         setWorldEntities,
         createWorldEntity,
+        updateWorldEntity,
         deleteWorldEntity,
       }}
     >

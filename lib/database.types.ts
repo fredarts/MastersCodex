@@ -10,15 +10,15 @@ export interface WorldRow {
 export interface WorldEntityRow {
   id: string;
   world_id: string;
-  category: 'npc' | 'location' | 'faction' | 'religion' | 'lore_event';
+  category: any;
   name: string;
   sub_type?: string | null;
-  status: 'active' | 'destroyed' | 'dead' | 'allied' | 'hostile';
+  status: string;
   short_desc?: string | null;
-  full_desc?: string | null;
   full_content?: string | null;
   attributes?: Record<string, any> | null;
-  connections?: string[] | null;
+  connections?: any[] | null;
+  images?: string[] | null;
   created_at?: string;
 }
 

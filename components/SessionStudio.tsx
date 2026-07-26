@@ -26,6 +26,7 @@ import {
   Users,
   User
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
 import { useWorld } from '@/lib/hooks/useWorld';
@@ -44,7 +45,7 @@ interface SessionStudioProps {
 }
 
 export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) => {
-  const { activeCampaign, campaignMembers } = useCampaign();
+  const { activeCampaign, campaignMembers, createFeedEvent } = useCampaign();
   const { 
     sessions, 
     activeSession, 
@@ -59,7 +60,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
   const { worldEntities } = useWorld();
 
   const [selectedScene, setSelectedScene] = useState<GameScene | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<'image' | 'audio' | 'combat' | 'voice' | 'notes'>('image');
+  const [activeSubTab, setActiveSubTab] = useState<'image' | 'audio' | 'combat' | 'voice' | 'notes' | 'worldbuilding'>('image');
+  const [worldSearch, setWorldSearch] = useState('');
+  const [worldFilterCat, setWorldFilterCat] = useState('all');
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
   const [showNewSessionInput, setShowNewSessionInput] = useState(false);
   const [newSessionTitle, setNewSessionTitle] = useState('');
@@ -579,6 +582,16 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                 >
                   <BookOpen className="w-3.5 h-3.5 text-amber-400" />
                   <span>📜 Texto Sensorial & Segredos</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveSubTab('worldbuilding')}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 ${
+                    activeSubTab === 'worldbuilding' ? 'border-amber-400 text-amber-300 bg-[#161c28]' : 'border-transparent text-slate-400'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>🌐 Transmitir Worldbuilding ({worldEntities.length})</span>
                 </button>
               </div>
 
@@ -1269,6 +1282,153 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                         placeholder="Ex: O mordomo carrega uma chave secreta no bolso direito..."
                         className="w-full bg-[#0a0d14] border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200 focus:outline-none focus:border-amber-500 font-serif resize-none"
                       ></textarea>
+                    </div>
+                  </div>
+                )}
+
+                {activeSubTab === 'worldbuilding' && (
+                  <div className="max-w-4xl mx-auto space-y-4">
+                    <div className="bg-[#121824] p-4 rounded-xl border border-[#2a3449] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-amber-400" /> Transmitir Lore & Conhecimento para a Cena
+                          </h4>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Selecione entradas do Worldbuilding para revelar detalhes na cena atual e publicar no Feed da Campanha dos jogadores.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Filter & Search */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                        <div className="relative flex-1 min-w-[200px]">
+                          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                          <input
+                            type="text"
+                            value={worldSearch}
+                            onChange={(e) => setWorldSearch(e.target.value)}
+                            placeholder="Buscar NPCs, locais, religiões, feitiços, itens..."
+                            className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-1 overflow-x-auto">
+                          <button
+                            type="button"
+                            onClick={() => setWorldFilterCat('all')}
+                            className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                              worldFilterCat === 'all' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            Todos ({worldEntities.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setWorldFilterCat('npc')}
+                            className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                              worldFilterCat === 'npc' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            NPCs
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setWorldFilterCat('location')}
+                            className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                              worldFilterCat === 'location' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            Locais
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setWorldFilterCat('faction')}
+                            className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                              worldFilterCat === 'faction' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            Facções
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setWorldFilterCat('spell')}
+                            className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                              worldFilterCat === 'spell' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            Feitiços
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Entities Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {worldEntities
+                        .filter((ent) => {
+                          const matchesCat = worldFilterCat === 'all' || ent.category === worldFilterCat;
+                          const matchesQuery =
+                            !worldSearch ||
+                            ent.name.toLowerCase().includes(worldSearch.toLowerCase()) ||
+                            ent.shortDesc.toLowerCase().includes(worldSearch.toLowerCase());
+                          return matchesCat && matchesQuery;
+                        })
+                        .map((ent) => (
+                          <div
+                            key={ent.id}
+                            className="p-4 rounded-2xl bg-[#161c28] border border-[#2a3449] hover:border-amber-500/50 transition-all flex flex-col justify-between overflow-hidden"
+                          >
+                            <div>
+                              {ent.images && ent.images.length > 0 && (
+                                <div className="relative h-28 -mx-4 -mt-4 mb-3 overflow-hidden bg-[#0a0d14]">
+                                  <img src={ent.images[0]} alt={ent.name} className="w-full h-full object-cover" />
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[10px] font-bold uppercase bg-[#0a0d14] text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded">
+                                  {ent.subType || ent.category}
+                                </span>
+                              </div>
+                              <h5 className="font-bold text-sm text-slate-100">{ent.name}</h5>
+                              <p className="text-xs text-slate-300 mt-1 font-serif line-clamp-3">{ent.shortDesc}</p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!selectedScene) {
+                                  toast.error('Selecione uma cena ativa para transmitir a lore.');
+                                  return;
+                                }
+                                const loreSegment = `\n\n📜 [WORLDBUILDING REVELADO: ${ent.name}]\n${ent.shortDesc}\n${ent.fullContent ? `Detalhes: ${ent.fullContent}` : ''}`;
+                                const updatedSensory = sensoryText ? `${sensoryText}${loreSegment}` : loreSegment.trim();
+                                setSensoryText(updatedSensory);
+
+                                if (activeCampaign) {
+                                  await createFeedEvent({
+                                    campaignId: activeCampaign.id,
+                                    eventType: 'world_lore',
+                                    title: `Lore Revelada: ${ent.name}`,
+                                    summary: ent.shortDesc,
+                                    isPublic: true,
+                                  });
+                                }
+
+                                await updateScene({
+                                  ...selectedScene,
+                                  sensoryText: updatedSensory,
+                                });
+
+                                toast.success(`✨ Lore "${ent.name}" transmitida para a cena e Feed da Campanha!`);
+                              }}
+                              className="mt-3 w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-xl shadow flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>⚡ Transmitir para a Cena & Feed</span>
+                            </button>
+                          </div>
+                        ))}
                     </div>
                   </div>
                 )}
