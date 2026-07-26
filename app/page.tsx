@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Sparkles } from 'lucide-react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { Header } from '@/components/Header';
@@ -60,6 +61,43 @@ function MainApp() {
   const [selectedWorldForCampaign, setSelectedWorldForCampaign] = useState<World | null>(null);
   const [generatedLootResult, setGeneratedLootResult] = useState<string | null>(null);
 
+  // Retractable Panels State (Sidebar & AI Drawer)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [isAIPanelCollapsed, setIsAIPanelCollapsed] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedSidebar = localStorage.getItem('masters_codex_sidebar_collapsed');
+      if (savedSidebar !== null) {
+        setIsSidebarCollapsed(savedSidebar === 'true');
+      }
+      const savedAI = localStorage.getItem('masters_codex_ai_panel_collapsed');
+      if (savedAI !== null) {
+        setIsAIPanelCollapsed(savedAI === 'true');
+      }
+    }
+  }, []);
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('masters_codex_sidebar_collapsed', String(next));
+      }
+      return next;
+    });
+  };
+
+  const toggleAIPanel = () => {
+    setIsAIPanelCollapsed((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('masters_codex_ai_panel_collapsed', String(next));
+      }
+      return next;
+    });
+  };
+
   const handleMonsterRoll = (title: string, bonus: number, isPrivate: boolean, desc?: string) => {
     const d20 = Math.floor(Math.random() * 20) + 1;
     const total = d20 + bonus;
@@ -98,14 +136,11 @@ function MainApp() {
           const isMatch =
             cClean === sheetClean ||
             c.name.toLowerCase().includes(sheetClean) ||
-            sheet.characterName?.toLowerCase().includes(cClean) ||
-            (sheet.id && c.id.includes(sheet.id));
+            sheetClean.includes(cClean);
 
-          if (isMatch) {
-            if (c.modelUrl !== updatedModelUrl) {
-              hasChanges = true;
-              return { ...c, modelUrl: updatedModelUrl };
-            }
+          if (isMatch && c.modelUrl !== updatedModelUrl) {
+            hasChanges = true;
+            return { ...c, modelUrl: updatedModelUrl };
           }
           return c;
         });
@@ -113,30 +148,12 @@ function MainApp() {
       });
     };
 
-    let bc: BroadcastChannel | null = null;
-    try {
-      bc = new BroadcastChannel('masters_codex_sync');
-      bc.onmessage = (event) => {
-        if (event.data?.type === 'CHARACTER_MODEL_UPDATED' && event.data?.sheet) {
-          handleModelUpdate(event.data.sheet);
-        }
-      };
-    } catch (e) {}
-
-    const handleLocalEvent = (e: Event) => {
-      const customEvt = e as CustomEvent;
-      if (customEvt.detail) {
-        handleModelUpdate(customEvt.detail);
-      }
-    };
-
-    window.addEventListener('masters_codex_character_model_updated', handleLocalEvent);
-
-    return () => {
-      if (bc) bc.close();
-      window.removeEventListener('masters_codex_character_model_updated', handleLocalEvent);
-    };
-  }, []);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('character_sheet_updated', (e: any) => {
+        if (e.detail) handleModelUpdate(e.detail);
+      });
+    }
+  }, [setCombatants]);
 
   const handleLoadEncounter = (encounter: Encounter) => {
     const loadedCombatants: Combatant[] = encounter.combatants.map((c, idx) => ({
@@ -144,12 +161,7 @@ function MainApp() {
       id: `enc-${Date.now()}-${idx}`,
       initiative: Math.floor(Math.random() * 20) + 1,
     }));
-
-    setCombatants((prev) => [
-      ...prev.filter((c) => c.type === 'player'),
-      ...loadedCombatants,
-    ].sort((a, b) => b.initiative - a.initiative));
-
+    setCombatants(loadedCombatants);
     setCurrentTurnIndex(0);
     setRoundCount(1);
     setActiveTab('combat');
@@ -157,37 +169,13 @@ function MainApp() {
 
   const handleLoadDemoEverything = () => {
     loadDemoEverything();
-    setCombatants([
-      { id: 'p1', name: 'Kaelen (Guerreiro Nível 5)', type: 'player', hp: 45, maxHp: 45, ac: 18, initiative: 18, conditions: [], modelUrl: getModelUrlByNameOrPath('Guerreiro') },
-      { id: 'p2', name: 'Lyra (Maga Nível 5)', type: 'player', hp: 32, maxHp: 32, ac: 15, initiative: 14, conditions: ['Concentração'], modelUrl: getModelUrlByNameOrPath('Mago') },
-      { id: 'm1', name: 'Líder Hobgoblin Kraag', type: 'monster', hp: 11, maxHp: 11, ac: 18, initiative: 12, conditions: [], cr: '1/2', modelUrl: '/assets/3d/monsters/Líder Hobgoblin/Líder Hobgoblin.glb' },
-      { id: 'm2', name: 'Goblin Arqueiro #1', type: 'monster', hp: 7, maxHp: 7, ac: 15, initiative: 9, conditions: [], cr: '1/4', modelUrl: '/assets/3d/monsters/Goblin Arqueiro/Goblin Arqueiro.glb' }
-    ]);
-    setCurrentTurnIndex(0);
-    setRoundCount(1);
-    setActiveTab('combat');
   };
 
   const handleEquipScene = (scene: GameScene) => {
-    // 1-Click Auto Equip Scene Logic
     if (scene.combatants && scene.combatants.length > 0) {
-      setCombatants((prev) => {
-        const existingPlayers = prev.filter((c) => c.type === 'player');
-        const nonPlayerMonsters = scene.combatants!.filter(
-          (sc) => !existingPlayers.some((p) => p.name.toLowerCase() === sc.name.toLowerCase())
-        );
-        return [...existingPlayers, ...nonPlayerMonsters].sort((a, b) => b.initiative - a.initiative);
-      });
+      setCombatants(scene.combatants);
       setCurrentTurnIndex(0);
       setRoundCount(1);
-    }
-
-    if (scene.sceneType === 'combat') {
-      setActiveTab('live_cockpit');
-    } else if (scene.sceneType === 'exploration') {
-      setActiveTab('map');
-    } else {
-      setActiveTab('live_cockpit');
     }
   };
 
@@ -198,17 +186,20 @@ function MainApp() {
 
   const handleSelectCampaignFromWorld = (campaign: UserCampaign) => {
     setActiveCampaign(campaign);
-    setActiveTab('campaign_settings');
+    setActiveTab('live_cockpit');
   };
 
-  const handleGenerateLootForCombat = () => {
-    const result = `💰 TESOURO DO COMBATE ATIVO:
+  const handleGenerateLootForCombat = (result?: string) => {
+    if (result) {
+      setGeneratedLootResult(result);
+    } else {
+      const defaultLoot = `💰 TESOURO DO COMBATE ATIVO:
 • 24 Moedas de Prata e 12 Moedas de Ouro.
 • 1x Adaga Ensanguentada do Líder Hobgoblin (+1 Acerto).
 • 1x Anel com Brasão da Guilda das Sombras (Chave secreta).
 • 1x Poção de Cura (2d4 + 2 HP).`;
-
-    setGeneratedLootResult(result);
+      setGeneratedLootResult(defaultLoot);
+    }
     setActiveTab('ai');
   };
 
@@ -219,13 +210,17 @@ function MainApp() {
         onOpenSearch={() => setIsCompendiumOpen(true)}
         onOpenPlayerView={() => setIsPlayerViewOpen(true)}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        isSidebarCollapsed={isSidebarCollapsed}
+        onToggleSidebar={toggleSidebar}
+        isAIPanelCollapsed={isAIPanelCollapsed}
+        onToggleAIPanel={toggleAIPanel}
       />
 
       {/* Main Workspace Body: Switch based on Role Mode */}
       {roleMode === 'player' ? (
         <PlayerLobby onOpenPlayerView={() => setIsPlayerViewOpen(true)} />
       ) : (
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden relative">
           {/* Left Sidebar Navigation */}
           <Sidebar
             activeTab={activeTab}
@@ -236,10 +231,12 @@ function MainApp() {
               setIsCreateCampaignOpen(true);
             }}
             onLoadDemoEverything={handleLoadDemoEverything}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={toggleSidebar}
           />
 
           {/* Main Workspace Column */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden relative">
             {/* DM Session & Scene Timeline Navigation Bar (Visible only in Live Cockpit & Session Studio) */}
             {(activeTab === 'live_cockpit' || activeTab === 'session_studio') && (
               <SessionNavigator onEquipScene={handleEquipScene} />
@@ -284,7 +281,12 @@ function MainApp() {
 
               {activeTab === 'map' && <MapMaker combatants={combatants} />}
 
-              {activeTab === 'ai' && <AICoPilot generatedLootResult={generatedLootResult} />}
+              {activeTab === 'ai' && (
+                <AICoPilot
+                  generatedLootResult={generatedLootResult}
+                  isCollapsed={false}
+                />
+              )}
 
               {activeTab === 'lore' && <LoreGraph />}
 
@@ -309,9 +311,28 @@ function MainApp() {
 
               {/* Right Panel AI Assistant always accessible on desktop when not on AI, Worldbuilder, SessionStudio or Campaign Settings tab */}
               {activeTab !== 'ai' && activeTab !== 'worldbuilder' && activeTab !== 'session_studio' && activeTab !== 'campaign_settings' && (
-                <div className="hidden xl:block">
-                  <AICoPilot generatedLootResult={generatedLootResult} />
-                </div>
+                !isAIPanelCollapsed ? (
+                  <div className="hidden xl:block h-full transition-all duration-300">
+                    <AICoPilot
+                      generatedLootResult={generatedLootResult}
+                      isCollapsed={isAIPanelCollapsed}
+                      onToggleCollapse={toggleAIPanel}
+                    />
+                  </div>
+                ) : (
+                  <div className="hidden xl:flex items-center absolute right-0 top-1/2 -translate-y-1/2 z-30">
+                    <button
+                      onClick={toggleAIPanel}
+                      className="bg-[#161c28] hover:bg-[#1f2738] text-purple-400 hover:text-purple-300 border border-r-0 border-purple-500/40 py-4 px-1.5 rounded-l-xl shadow-xl backdrop-blur-sm flex flex-col items-center gap-2 transition-all group cursor-pointer"
+                      title="Expandir Widget IA Co-Mestre"
+                    >
+                      <Sparkles className="w-4 h-4 animate-pulse group-hover:scale-110 transition-transform" />
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300 [writing-mode:vertical-lr] rotate-180">
+                        IA CO-MESTRE
+                      </span>
+                    </button>
+                  </div>
+                )
               )}
             </main>
           </div>

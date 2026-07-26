@@ -23,7 +23,7 @@ function normalizeAndPrepareModel(modelScene: THREE.Group): THREE.Group {
   const size = new THREE.Vector3();
   box.getSize(size);
 
-  const targetHeight = 1.35; // Altura padrão proporcional em unidades do mundo 3D
+  const targetHeight = 2.295; // Altura proporcional em unidades 3D (aumentada em 70%)
   const naturalHeight = size.y || Math.max(size.x, size.z);
 
   if (naturalHeight > 0) {
@@ -32,7 +32,7 @@ function normalizeAndPrepareModel(modelScene: THREE.Group): THREE.Group {
     const boxMinY = box.min.y;
     modelScene.position.y = -boxMinY * scale;
   } else {
-    modelScene.scale.set(0.85, 0.85, 0.85);
+    modelScene.scale.set(1.445, 1.445, 1.445);
     modelScene.position.y = 0;
   }
 
@@ -64,7 +64,7 @@ export function createTokenMesh(
   // 2. Selection Ring
   const isSelected = options.isCurrentTurn || options.isSelectedForRotation || options.isSelectedTarget || options.isSpellTargeted;
   if (isSelected) {
-    const ringGeo = new THREE.RingGeometry(0.75, 0.9, 32);
+    const ringGeo = new THREE.RingGeometry(1.275, 1.53, 32);
     const ringColor = options.isSpellTargeted
       ? 0xf97316
       : options.isCurrentTurn
@@ -85,12 +85,12 @@ export function createTokenMesh(
   }
 
   // 3. Direction Arrow Cone
-  const arrowGeo = new THREE.ConeGeometry(0.18, 0.35, 3);
+  const arrowGeo = new THREE.ConeGeometry(0.25, 0.5, 3);
   const arrowMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
   const arrowMesh = new THREE.Mesh(arrowGeo, arrowMat);
   arrowMesh.name = 'arrowMesh';
   arrowMesh.rotation.x = Math.PI / 2;
-  arrowMesh.position.set(0, 0.05, -0.6);
+  arrowMesh.position.set(0, 0.05, -1.0);
   group.add(arrowMesh);
 
   // 4. Determine Model GLB URL
@@ -149,7 +149,7 @@ export function updateTokenMeshState(
       : 0x3b82f6;
 
     if (!ringMesh) {
-      const ringGeo = new THREE.RingGeometry(0.75, 0.9, 32);
+      const ringGeo = new THREE.RingGeometry(1.275, 1.53, 32);
       const ringMat = new THREE.MeshBasicMaterial({
         color: ringColor,
         side: THREE.DoubleSide,

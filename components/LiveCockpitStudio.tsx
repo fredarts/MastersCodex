@@ -127,6 +127,26 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   });
 
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
+  const [isTimelineCollapsed, setIsTimelineCollapsed] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('masters_codex_timeline_collapsed');
+      if (saved !== null) {
+        setIsTimelineCollapsed(saved === 'true');
+      }
+    }
+  }, []);
+
+  const toggleTimeline = () => {
+    setIsTimelineCollapsed((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('masters_codex_timeline_collapsed', String(next));
+      }
+      return next;
+    });
+  };
   const [playingNpcVoice, setPlayingNpcVoice] = useState(false);
   const [activeBgmCategory, setActiveBgmCategory] = useState<string>('taverna');
   const [magicMissileModalState, setMagicMissileModalState] = useState<{
@@ -1574,11 +1594,15 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
               </span>
             </div>
             <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5 mt-0.5">
-              <span>{activeWorld?.title || 'Mundo'}</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-amber-400">{activeCampaign?.title || 'Campanha Sem Título'}</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-cyan-400">{activeSession?.title || 'Sessão Ativa'}</span>
+              <span className="text-slate-400 font-mono text-[11px]">Transmissão ao Vivo:</span>
+              {activeScene ? (
+                <span className="text-amber-300 font-semibold flex items-center gap-1 truncate max-w-[300px]">
+                  {getSceneIcon(activeScene.sceneType)}
+                  <span className="truncate">{activeScene.title}</span>
+                </span>
+              ) : (
+                <span className="text-slate-500 italic text-xs">Nenhuma cena ativa</span>
+              )}
             </div>
           </div>
         </div>
@@ -1629,31 +1653,70 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
 
       {/* Main 3-Column Cockpit Studio Body */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Column 1: Timeline de Cenas da Sessão (Left - 300px) */}
-        <div className="w-72 bg-[#0c0f17] border-r border-[#2a3449] flex flex-col justify-between overflow-hidden">
-          <div className="p-3 border-b border-[#2a3449] flex items-center justify-between bg-[#121824]/50">
-            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
-              <Film className="w-3.5 h-3.5 text-purple-400" />
-              Timeline da Sessão ({scenes.length})
-            </span>
-            <button
-              onClick={() => setShowCreateSceneModal(true)}
-              className="p-1 text-amber-400 hover:bg-[#1f2738] rounded-lg transition-colors"
-              title="Nova Cena"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+        {/* Column 1: Timeline de Cenas da Sessão (Left - Retractable: 288px / 64px) */}
+        <div className={`${isTimelineCollapsed ? 'w-16' : 'w-72'} bg-[#0c0f17] border-r border-[#2a3449] flex flex-col justify-between overflow-hidden transition-all duration-300 flex-shrink-0 relative z-10`}>
+          <div className={`p-3 border-b border-[#2a3449] flex items-center ${isTimelineCollapsed ? 'justify-center flex-col gap-2' : 'justify-between'} bg-[#121824]/50`}>
+            {!isTimelineCollapsed && (
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1.5 truncate">
+                <Film className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                <span className="truncate">Timeline ({scenes.length})</span>
+              </span>
+            )}
+            <div className={`flex items-center gap-1 ${isTimelineCollapsed ? 'flex-col' : ''}`}>
+              <button
+                onClick={() => setShowCreateSceneModal(true)}
+                className="p-1 text-amber-400 hover:bg-[#1f2738] rounded-lg transition-colors cursor-pointer"
+                title="Nova Cena"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+              <button
+                onClick={toggleTimeline}
+                className="p-1 text-slate-400 hover:text-amber-400 hover:bg-[#1f2738] rounded-lg transition-colors cursor-pointer"
+                title={isTimelineCollapsed ? "Expandir Timeline de Cenas" : "Retrair Timeline de Cenas"}
+              >
+                {isTimelineCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
-          <div className="flex-1 p-3 space-y-2 overflow-y-auto">
+          <div className={`flex-1 overflow-y-auto ${isTimelineCollapsed ? 'p-2 space-y-3' : 'p-3 space-y-2'}`}>
             {scenes.length === 0 ? (
-              <div className="p-6 text-center text-slate-500 text-xs border border-dashed border-[#2a3449] rounded-xl">
-                Nenhuma cena criada nesta sessão. Crie uma cena para disparar recursos visuais.
+              <div className={`p-4 text-center text-slate-500 text-xs border border-dashed border-[#2a3449] rounded-xl ${isTimelineCollapsed ? 'text-[10px] p-2' : ''}`}>
+                {isTimelineCollapsed ? 'Vazio' : 'Nenhuma cena criada nesta sessão. Crie uma cena para disparar recursos visuais.'}
               </div>
             ) : (
               scenes.map((sc, idx) => {
                 const isActive = activeScene?.id === sc.id;
                 const isEditingThis = editingSceneId === sc.id;
+
+                if (isTimelineCollapsed) {
+                  return (
+                    <div
+                      key={`collapsed-${sc.id}-${idx}`}
+                      onClick={() => handleFireSceneLive(sc)}
+                      title={`Cena #${idx + 1}: ${sc.title} (${sc.sceneType})${isActive ? ' [AO VIVO]' : ''}`}
+                      className={`w-11 h-13 mx-auto p-1.5 rounded-xl border transition-all flex flex-col items-center justify-between cursor-pointer group relative ${
+                        isActive
+                          ? 'bg-gradient-to-b from-purple-950 via-[#161c28] to-[#121824] border-emerald-400 shadow-md ring-2 ring-emerald-500/50'
+                          : 'bg-[#161c28] border-[#2a3449] hover:bg-[#1f2738] hover:border-purple-500/40'
+                      }`}
+                    >
+                      <span className={`text-[10px] font-mono font-bold ${isActive ? 'text-emerald-400' : 'text-slate-400'}`}>
+                        #{idx + 1}
+                      </span>
+                      <div className="my-0.5">
+                        {getSceneIcon(sc.sceneType)}
+                      </div>
+                      {isActive ? (
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      ) : (
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-600 group-hover:bg-amber-400 transition-colors"></span>
+                      )}
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     key={`${sc.id}-${idx}`}

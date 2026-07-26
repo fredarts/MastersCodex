@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key } from 'lucide-react';
+import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -11,12 +11,20 @@ interface HeaderProps {
   onOpenSearch: () => void;
   onOpenPlayerView: () => void;
   onOpenAuthModal: () => void;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
+  isAIPanelCollapsed?: boolean;
+  onToggleAIPanel?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenSearch,
   onOpenPlayerView,
   onOpenAuthModal,
+  isSidebarCollapsed,
+  onToggleSidebar,
+  isAIPanelCollapsed,
+  onToggleAIPanel,
 }) => {
   const { user, roleMode, setRoleMode } = useAuth();
   const { activeCampaign } = useCampaign();
@@ -33,14 +41,25 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="h-16 bg-[#0f141d] border-b border-[#2a3449] px-4 flex items-center justify-between shadow-lg relative z-20 select-none">
       {/* Brand & Mode Switcher */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 md:gap-4">
+        {/* Left Sidebar Toggle Button */}
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            className="p-2 bg-[#161c28] hover:bg-[#1f2738] text-slate-300 hover:text-amber-400 border border-[#2a3449] hover:border-amber-500/50 rounded-xl transition-all cursor-pointer"
+            title={isSidebarCollapsed ? "Expandir Menu Lateral (Sidebar)" : "Retrair Menu Lateral (Sidebar)"}
+          >
+            <PanelLeft className={`w-5 h-5 transition-transform duration-200 ${isSidebarCollapsed ? '' : 'text-amber-400'}`} />
+          </button>
+        )}
+
         <div className="flex items-center gap-2.5">
-          <div className="w-12 h-12 flex items-center justify-center">
+          <div className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center">
             <img src="/logo.png" alt="Master's Codex Logo" className="w-full h-full object-contain drop-shadow-md" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-bold text-base tracking-wider text-slate-100 uppercase flex items-center gap-1.5">
+              <h1 className="font-bold text-sm md:text-base tracking-wider text-slate-100 uppercase flex items-center gap-1.5">
                 Master's <span className="text-amber-500">Codex</span>
               </h1>
               <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded font-mono">
@@ -157,6 +176,22 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <LogIn className="w-4 h-4" />
             <span>Entrar / Cadastrar</span>
+          </button>
+        )}
+
+        {/* Right AI Panel Toggle Button */}
+        {onToggleAIPanel && (
+          <button
+            onClick={onToggleAIPanel}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+              !isAIPanelCollapsed
+                ? 'bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-md shadow-purple-950/40'
+                : 'bg-[#161c28] border-[#2a3449] text-slate-400 hover:text-purple-300 hover:border-purple-500/40'
+            }`}
+            title={isAIPanelCollapsed ? "Expandir Widget IA Co-Mestre" : "Retrair Widget IA Co-Mestre"}
+          >
+            <Sparkles className="w-4 h-4 text-purple-400 animate-pulse" />
+            <span className="hidden lg:inline">IA Co-Mestre</span>
           </button>
         )}
       </div>

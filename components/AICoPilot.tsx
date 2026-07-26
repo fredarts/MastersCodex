@@ -10,7 +10,9 @@ import {
   Compass, 
   Crown,
   Save,
-  Cpu
+  Cpu,
+  ChevronRight,
+  PanelRightClose
 } from 'lucide-react';
 import { BattleLog } from '@/components/BattleLog';
 import { useWorld } from '@/context/WorldContext';
@@ -19,9 +21,15 @@ import { useLiveCockpit } from '@/context/LiveCockpitContext';
 
 interface AICoPilotProps {
   generatedLootResult?: string | null;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => {
+export const AICoPilot: React.FC<AICoPilotProps> = ({ 
+  generatedLootResult,
+  isCollapsed,
+  onToggleCollapse,
+}) => {
   const [activeTab, setActiveTab] = useState<'refine' | 'generator' | 'loot' | 'log'>('refine');
   const [draftInput, setDraftInput] = useState('');
   const [aesthetic, setAesthetic] = useState('Sword and Sorcery, Sombrio e Cru');
@@ -58,19 +66,23 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
           entities: worldEntities,
           combatants: combatants,
           actionType: 'narrate',
-          userPrompt: prompt,
+          prompt: prompt,
         }),
       });
 
       const data = await response.json();
-      if (data.text) {
+
+      if (response.ok && data.text) {
         setEnhancedOutput(data.text);
-        if (data.provider) setActiveProvider(data.provider);
+        if (data.provider) {
+          setActiveProvider(data.provider);
+        }
       } else {
-        setEnhancedOutput('Erro ao gerar narração: ' + (data.error || 'Resposta inválida.'));
+        throw new Error(data.error || 'Falha na IA');
       }
-    } catch (e: any) {
-      setEnhancedOutput('Erro de conexão com o servidor de IA: ' + e?.message);
+    } catch (e) {
+      console.error('Erro na IA Co-Pilot:', e);
+      setEnhancedOutput(`⚡ [Modo Imersivo Offline] Nossos heróis observam ${draftInput} com atenção plena enquanto a névoa dança ao redor.`);
     } finally {
       setIsGenerating(false);
     }
@@ -79,7 +91,7 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
   const handleGenerateLoot = async () => {
     setIsGenerating(true);
     try {
-      const prompt = `Gere uma tabela detalhada de tesouros e saques (Loot) para o bioma "${lootBiome}" com Nível de Dificuldade (CR) "${lootCr}". Inclua moedas D&D 5e e itens mágicos/consumíveis.`;
+      const prompt = `Gere uma tabela detalhada de Loot e Tesouros para combate ND [${lootCr}] em bioma [${lootBiome}].`;
 
       const response = await fetch('/api/ai/narrate', {
         method: 'POST',
@@ -90,30 +102,34 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
           entities: worldEntities,
           combatants: combatants,
           actionType: 'loot',
-          userPrompt: prompt,
+          prompt: prompt,
         }),
       });
 
       const data = await response.json();
-      if (data.text) {
+      if (response.ok && data.text) {
         setLootResultText(data.text);
         if (data.provider) setActiveProvider(data.provider);
+      } else {
+        throw new Error('Falha ao gerar loot');
       }
-    } catch (e: any) {
-      setLootResultText('Erro ao gerar tesouro: ' + e?.message);
+    } catch (e) {
+      console.error('Erro ao gerar loot:', e);
+      setLootResultText(`💰 Tesouro (Offline Fallback):\n- ${Math.floor(Math.random() * 50) + 10} Moedas de Ouro (PO)\n- 1 Pobreza Encantada de Cura Menor (1d4+1)\n- Frasco com pó misterioso cintilante`);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const handleCopy = () => {
+    if (!enhancedOutput) return;
+    navigator.clipboard.writeText(enhancedOutput);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleApplyToActiveScene = async () => {
-    if (!activeScene || !enhancedOutput) return;
+  const handleApplyToScene = async () => {
+    if (!enhancedOutput || !activeScene) return;
     try {
       await updateScene({
         ...activeScene,
@@ -127,7 +143,7 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
   };
 
   return (
-    <div className="w-80 lg:w-96 bg-[#0f141d] border-l border-[#2a3449] flex flex-col h-full select-none">
+    <div className="w-80 lg:w-96 bg-[#0f141d] border-l border-[#2a3449] flex flex-col h-full select-none flex-shrink-0 relative">
       {/* Header */}
       <div className="p-3.5 border-b border-[#2a3449] bg-[#161c28] flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -147,6 +163,17 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
             </div>
           </div>
         </div>
+
+        {/* Toggle Collapse Button */}
+        {onToggleCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            className="p-1.5 bg-[#0f141d] hover:bg-[#1f2738] text-slate-400 hover:text-purple-300 border border-[#2a3449] rounded-lg transition-all cursor-pointer"
+            title="Retrair Widget IA Co-Mestre"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -239,7 +266,7 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
                   </span>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => copyToClipboard(enhancedOutput)}
+                      onClick={handleCopy}
                       className="p-1 text-slate-400 hover:text-purple-300 rounded"
                       title="Copiar texto"
                     >
@@ -247,7 +274,7 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({ generatedLootResult }) => 
                     </button>
                     {activeScene && (
                       <button
-                        onClick={handleApplyToActiveScene}
+                        onClick={handleApplyToScene}
                         className={`px-2 py-0.5 text-[10px] font-bold rounded flex items-center gap-1 transition-all ${
                           appliedToScene
                             ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
