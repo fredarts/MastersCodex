@@ -457,7 +457,7 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
         </header>
 
         {/* Main Content Render */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className={`flex-1 ${activeTab === 'graph' || activeTab === 'timeline' || activeTab === 'map' ? 'flex flex-col h-full w-full overflow-hidden min-h-0' : 'overflow-y-auto p-6'}`}>
           {activeTab === 'graph' ? (
             <LoreGraph />
           ) : activeTab === 'timeline' ? (
