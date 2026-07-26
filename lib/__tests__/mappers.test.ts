@@ -62,7 +62,7 @@ describe('Mappers Unit Tests', () => {
         sub_type: 'Mago',
         status: 'active',
         short_desc: 'Mago lendário',
-        full_desc: 'Detalhamento longo de Elminster.',
+        full_content: 'Detalhamento longo de Elminster.',
         attributes: { level: 20 },
         connections: ['we-2'],
         created_at: '2026-07-24',
