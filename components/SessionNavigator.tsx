@@ -242,13 +242,13 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
       </div>
 
       {/* Scenes Timeline Carousel */}
-      <div className="flex-1 flex items-center gap-2 overflow-x-auto py-0.5 px-2">
-        <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider flex items-center gap-1 font-mono">
+      <div className="flex-1 flex items-center gap-2 overflow-x-auto tablet-scroll-x tablet-hide-scrollbar py-0.5 px-2">
+        <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider flex items-center gap-1 font-mono flex-shrink-0">
           <Film className="w-3 h-3 text-slate-400" /> CENAS DA SESSÃO:
         </span>
 
         {scenes.length === 0 ? (
-          <span className="text-xs text-slate-500 italic">Nenhuma cena criada para esta sessão.</span>
+          <span className="text-xs text-slate-500 italic flex-shrink-0">Nenhuma cena criada para esta sessão.</span>
         ) : (
           scenes.map((sc: any) => {
             const isActive = activeScene?.id === sc.id;
@@ -256,7 +256,7 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
 
             if (isEditingThisScene) {
               return (
-                <div key={sc.id} className="flex items-center gap-1 bg-[#161c28] border border-amber-500 rounded-xl px-2 py-1 text-xs">
+                <div key={sc.id} className="flex items-center gap-1 bg-[#161c28] border border-amber-500 rounded-xl px-2 py-1 text-xs flex-shrink-0">
                   <input
                     type="text"
                     autoFocus
@@ -278,7 +278,7 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
             return (
               <div
                 key={sc.id}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs transition-all flex-shrink-0 group ${
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs transition-all flex-shrink-0 group tablet-touch-button ${
                   isActive
                     ? 'bg-gradient-to-r from-amber-500/20 to-amber-700/20 border-amber-500 text-amber-300 font-bold shadow-md shadow-amber-500/10'
                     : 'bg-[#161c28] border-[#2a3449] text-slate-300 hover:bg-[#1f2738]'
@@ -320,7 +320,7 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
       {activeSession && (
         <button
           onClick={() => setShowCreateSceneModal(true)}
-          className="flex items-center gap-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold px-3 py-1 rounded-lg text-xs shadow transition-all active:scale-95 flex-shrink-0"
+          className="flex items-center gap-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold px-3 py-1 rounded-lg text-xs shadow transition-all active:scale-95 flex-shrink-0 tablet-touch-button"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>+ Adicionar Cena</span>

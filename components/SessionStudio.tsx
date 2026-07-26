@@ -430,9 +430,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       </div>
 
       {/* Main Studio Body: Left Timeline Panel + Right Scene Editor */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* Left Scenes Timeline Sidebar */}
-        <div className="w-64 bg-[#0f141d] border-r border-[#2a3449] flex flex-col justify-between p-3 select-none">
+        <div className="w-full md:w-64 bg-[#0f141d] border-b md:border-b-0 md:border-r border-[#2a3449] flex flex-col justify-between p-3 select-none">
           <div>
             <div className="flex items-center justify-between px-2 mb-2">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-mono">

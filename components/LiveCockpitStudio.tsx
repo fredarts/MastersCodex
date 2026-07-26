@@ -1652,9 +1652,9 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       </div>
 
       {/* Main 3-Column Cockpit Studio Body */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden tablet-landscape-cockpit">
         {/* Column 1: Timeline de Cenas da Sessão (Left - Retractable: 288px / 64px) */}
-        <div className={`${isTimelineCollapsed ? 'w-16' : 'w-72'} bg-[#0c0f17] border-r border-[#2a3449] flex flex-col justify-between overflow-hidden transition-all duration-300 flex-shrink-0 relative z-10`}>
+        <div className={`${isTimelineCollapsed ? 'w-16' : 'w-72'} bg-[#0c0f17] border-r border-[#2a3449] flex flex-col justify-between overflow-hidden transition-all duration-300 flex-shrink-0 relative z-10 tablet-landscape-sidebar`}>
           <div className={`p-3 border-b border-[#2a3449] flex items-center ${isTimelineCollapsed ? 'justify-center flex-col gap-2' : 'justify-between'} bg-[#121824]/50`}>
             {!isTimelineCollapsed && (
               <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1.5 truncate">

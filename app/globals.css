@@ -93,3 +93,95 @@ body {
   color: #06b6d4;
   text-shadow: 0 0 8px rgba(6, 182, 212, 0.4);
 }
+
+/* ==========================================================================
+   TABLET DEDICATED RESPONSIVE STYLES & MEDIA QUERIES (Landscape & Portrait)
+   ========================================================================== */
+
+/* Touch Scroll & Touch Target Utilities */
+.tablet-touch-button {
+  min-height: 42px;
+  touch-action: manipulation;
+  display: inline-flex;
+  items: center;
+  justify-content: center;
+}
+
+.tablet-scroll-x {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tablet-scroll-x > * {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+.tablet-hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.tablet-hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* General Tablet Breakpoint Range (768px - 1279px) */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .tablet-compact-text {
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+
+  .tablet-compact-padding {
+    padding: 0.5rem;
+  }
+
+  .tablet-compact-gap {
+    gap: 0.5rem;
+  }
+}
+
+/* Tablet Landscape (Horizontal Mode) Specific Styles */
+@media (min-width: 768px) and (max-width: 1279px) and (orientation: landscape) {
+  .tablet-landscape-grid {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 0.75rem;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .tablet-landscape-cockpit {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 0.75rem;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .tablet-landscape-sidebar {
+    width: 64px !important;
+  }
+}
+
+/* Tablet Portrait (Vertical Mode) Specific Styles */
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+  .tablet-portrait-stack {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow-y: auto;
+    gap: 0.75rem;
+  }
+
+  .tablet-portrait-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .tablet-portrait-full-width {
+    width: 100% !important;
+  }
+}
+
