@@ -187,26 +187,42 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const groundPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
   const planeIntersectPoint = useRef(new THREE.Vector3());
 
+const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
+  let hash = 0;
+  for (let i = 0; i < idOrName.length; i++) {
+    hash = (hash << 5) - hash + idOrName.charCodeAt(i);
+    hash |= 0;
+  }
+  const absHash = Math.abs(hash);
+  const col = absHash % 5;
+  const row = Math.floor(absHash / 5) % 5;
+  return { x: col * 2 - 4, z: row * 2 - 4 };
+};
+
   const getCombatantPos = useCallback((idOrName: string | null | undefined): { x: number; z: number } => {
     if (!idOrName) return { x: 0, z: 0 };
 
     if (localPositions[idOrName]) return localPositions[idOrName];
 
-    const idx = combatants.findIndex(
-      (c) => (c.id || c.name) === idOrName || c.id === idOrName || c.name === idOrName
-    );
-
-    if (idx !== -1) {
-      const c = combatants[idx];
-      const key = c.id || c.name;
-      if (localPositions[key]) return localPositions[key];
-      if (c.id && localPositions[c.id]) return localPositions[c.id];
-      if (c.name && localPositions[c.name]) return localPositions[c.name];
-      if (c.x !== undefined && c.z !== undefined) return { x: c.x, z: c.z };
-      return { x: (idx % 5) * 2 - 5, z: Math.floor(idx / 5) * 2 - 5 };
+    // 1. Strict ID match
+    const byId = combatants.find((c) => c.id === idOrName);
+    if (byId) {
+      if (localPositions[byId.id]) return localPositions[byId.id];
+      if (byId.name && localPositions[byId.name]) return localPositions[byId.name];
+      if (byId.x !== undefined && byId.z !== undefined) return { x: byId.x, z: byId.z };
+      return getStableDefaultPos(byId.id);
     }
 
-    return { x: 0, z: 0 };
+    // 2. Name match fallback
+    const byName = combatants.find((c) => c.name === idOrName);
+    if (byName) {
+      const key = byName.id || byName.name;
+      if (localPositions[key]) return localPositions[key];
+      if (byName.x !== undefined && byName.z !== undefined) return { x: byName.x, z: byName.z };
+      return getStableDefaultPos(key);
+    }
+
+    return getStableDefaultPos(idOrName);
   }, [combatants, localPositions]);
 
   // Helper to render reachable movement highlights around a given center position
@@ -473,7 +489,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     // Sync active combatants
     combatants.forEach((c, idx) => {
       const key = c.id || c.name;
-      const pos = localPositions[key] || { x: (idx % 5) * 2 - 5, z: Math.floor(idx / 5) * 2 - 5 };
+      const pos = localPositions[key] || (c.x !== undefined && c.z !== undefined ? { x: c.x, z: c.z } : getStableDefaultPos(key));
       const rot = localRotations[key] || 0;
 
       const targeted = activeSpellTargeting && casterTokenKey && isCombatantInSpellArea(c, pos);
@@ -1179,9 +1195,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
 
 
-  const selectedCombatant = combatants.find(
-    (c) => (c.id || c.name) === selectedCombatantId
-  );
+  const selectedCombatant = combatants.find((c) => c.id === selectedCombatantId) ||
+    combatants.find((c) => c.name === selectedCombatantId);
   const selectedTarget = combatants.find(
     (c) => c.id === targetIdState
   );

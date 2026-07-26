@@ -14,6 +14,7 @@ import {
   Plus, 
   RotateCcw, 
   ChevronRight, 
+  ChevronLeft,
   Skull, 
   Volume2, 
   Map as MapIcon, 
@@ -29,10 +30,12 @@ import {
   User,
   UserPlus,
   X,
+  Trash2,
   Dices,
   Edit3,
   Check,
-  ScrollText
+  ScrollText,
+  GripVertical
 } from 'lucide-react';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -172,11 +175,15 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
   const [editedSceneTitle, setEditedSceneTitle] = useState('');
   const lastSyncedSceneVersionRef = useRef<string | null>(null);
+  const lastSyncedSceneIdRef = useRef<string | null>(null);
 
   // Combat State & Search Modal
   const [isCombatActive, setIsCombatActive] = useState<boolean>(false);
   const [openSpellDropdownId, setOpenSpellDropdownId] = useState<string | null>(null);
   const [showAddCombatantModal, setShowAddCombatantModal] = useState<boolean>(false);
+  const [confirmDeleteCombatant, setConfirmDeleteCombatant] = useState<Combatant | null>(null);
+  const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null);
+  const [dragOverCardIndex, setDragOverCardIndex] = useState<number | null>(null);
   const [activeAddTab, setActiveAddTab] = useState<'monsters' | 'players' | 'custom' | 'npcs'>('monsters');
   const [combatantSearchQuery, setCombatantSearchQuery] = useState<string>('');
 
@@ -940,15 +947,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       setSelectedTimeOfDay(activeScene.timeOfDay);
     }
 
-    const sceneVersionKey = `${activeScene.id}_${activeScene.updatedAt || ''}_${JSON.stringify(
-      activeScene.combatants || []
-    )}`;
-
-    if (lastSyncedSceneVersionRef.current !== sceneVersionKey) {
-      lastSyncedSceneVersionRef.current = sceneVersionKey;
+    if (lastSyncedSceneIdRef.current !== activeScene.id) {
+      lastSyncedSceneIdRef.current = activeScene.id;
 
       if (activeScene.combatants && activeScene.combatants.length > 0) {
-        const sorted = [...activeScene.combatants].sort((a, b) => b.initiative - a.initiative);
+        const sorted = [...activeScene.combatants].sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
         setCombatants(sorted);
         setCurrentTurnIndex(0);
         setRoundCount(1);
@@ -1125,7 +1128,6 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       nextRoundCount += 1;
     }
     
-    // Compute new combatants list outside the state updater to avoid side effects inside it
     let rolled = combatants;
     if (nextIdx === 0 && autoInit) {
       rolled = combatants.map(c => {
@@ -1153,16 +1155,101 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     
     const sorted = nextIdx === 0 && autoInit ? [...next].sort((a, b) => b.initiative - a.initiative) : next;
 
-    // Apply all state updates (React 18+ batches these atomically)
     setCombatants(sorted);
     setCurrentTurnIndex(nextIdx);
     setRoundCount(nextRoundCount);
     setSelectedTargetId(undefined);
 
-    // Side effects AFTER state is set (not inside updater)
     if (activeSceneRef.current) {
       updateScene({ ...activeSceneRef.current, combatants: sorted });
     }
+  };
+
+  const handlePrevTurn = () => {
+    if (combatants.length === 0) return;
+    let prevIdx = currentTurnIndex - 1;
+    let prevRoundCount = roundCount;
+    if (prevIdx < 0) {
+      prevIdx = Math.max(0, combatants.length - 1);
+      if (prevRoundCount > 1) {
+        prevRoundCount -= 1;
+      }
+    }
+
+    const next = combatants.map((c, idx) => {
+      if (idx === prevIdx) {
+        const pos = tokenPositions3D[c.id] || { x: c.x || 0, z: c.z || 0 };
+        return {
+          ...c,
+          actionUsed: false,
+          bonusActionUsed: false,
+          reactionUsed: false,
+          movementUsed: 0,
+          hasDashed: false,
+          turnStartX: pos.x,
+          turnStartZ: pos.z,
+        };
+      }
+      return c;
+    });
+
+    setCombatants(next);
+    setCurrentTurnIndex(prevIdx);
+    setRoundCount(prevRoundCount);
+    setSelectedTargetId(undefined);
+
+    if (activeSceneRef.current) {
+      updateScene({ ...activeSceneRef.current, combatants: next });
+    }
+  };
+
+  const handleCardDrop = (targetIndex: number) => {
+    if (draggedCardIndex === null || draggedCardIndex === targetIndex) {
+      setDraggedCardIndex(null);
+      setDragOverCardIndex(null);
+      return;
+    }
+
+    const updatedList = [...combatants];
+    const [draggedItem] = updatedList.splice(draggedCardIndex, 1);
+    updatedList.splice(targetIndex, 0, draggedItem);
+
+    const activeId = combatants[currentTurnIndex]?.id;
+
+    // Recalcula as iniciativas seguindo a regra do usuário:
+    // Quando um personagem é movido para baixo na lista, a iniciativa passa a ser (iniciativa da criatura acima - 1)
+    const reorderedWithNewInit = updatedList.map((c, i) => {
+      if (c.id === draggedItem.id) {
+        if (i > 0) {
+          const initAbove = updatedList[i - 1].initiative;
+          return { ...c, initiative: initAbove - 1 };
+        } else {
+          const initBelow = updatedList[1]?.initiative ?? 10;
+          return { ...c, initiative: initBelow + 1 };
+        }
+      }
+      return c;
+    });
+
+    setCombatants(reorderedWithNewInit);
+
+    if (activeId) {
+      const newTurnIdx = reorderedWithNewInit.findIndex((x) => x.id === activeId);
+      if (newTurnIdx !== -1) {
+        setCurrentTurnIndex(newTurnIdx);
+      }
+    }
+
+    if (activeSceneRef.current) {
+      updateScene({ ...activeSceneRef.current, combatants: reorderedWithNewInit });
+    }
+    broadcastToPlayerView({ combatants: reorderedWithNewInit });
+
+    const newInitVal = reorderedWithNewInit[targetIndex].initiative;
+    toast.success(`Iniciativa de ${draggedItem.name} ajustada para ${newInitVal}`);
+
+    setDraggedCardIndex(null);
+    setDragOverCardIndex(null);
   };
 
   const handleHpChange = (id: string, delta: number) => {
@@ -1985,11 +2072,21 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
               <div className="p-2 border-b border-[#2a3449] bg-[#161c28]/40 flex flex-col gap-2">
                 <div className="flex gap-2">
                   <button
+                    onClick={handlePrevTurn}
+                    disabled={combatants.length === 0 || (currentTurnIndex === 0 && roundCount === 1)}
+                    className="py-1.5 px-3 bg-[#121824] hover:bg-[#1e293b] disabled:opacity-40 disabled:cursor-not-allowed border border-[#2a3449] text-slate-300 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1"
+                    title="Voltar Turno Anterior"
+                  >
+                    <ChevronLeft className="w-4 h-4 text-slate-400" />
+                    <span>Voltar</span>
+                  </button>
+
+                  <button
                     onClick={handleNextTurn}
                     disabled={combatants.length === 0}
                     className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:bg-[#1f2738] disabled:text-slate-600 text-slate-950 font-black text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5"
                   >
-                    <span>AVANÇAR TURNO</span>
+                    <span>AVANÇAR TURNO ({combatants.length > 0 ? currentTurnIndex + 1 : 0}/{combatants.length})</span>
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -2032,6 +2129,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                            cClean.includes(s.characterName.toLowerCase());
                   });
 
+                  const initMod = matchingSheet
+                    ? (matchingSheet.initiativeBonus ?? getAttributeModifier(matchingSheet, 'dex'))
+                    : (c.dex !== undefined ? Math.floor((c.dex - 10) / 2) : 0);
+                  const initModStr = initMod >= 0 ? `+${initMod}` : `${initMod}`;
+
                   const maxSpeed = getSpeedInMeters(matchingSheet?.speed || c.notes) * (c.hasDashed ? 2 : 1);
                   const remainingMovement = Math.max(0, maxSpeed - (c.movementUsed || 0));
 
@@ -2048,42 +2150,87 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                   return (
                     <div
                       key={`${c.id}-${idx}`}
+                      draggable={true}
+                      onDragStart={(e) => {
+                        setDraggedCardIndex(idx);
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (dragOverCardIndex !== idx) setDragOverCardIndex(idx);
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverCardIndex === idx) setDragOverCardIndex(null);
+                      }}
+                      onDrop={() => handleCardDrop(idx)}
+                      onDragEnd={() => {
+                        setDraggedCardIndex(null);
+                        setDragOverCardIndex(null);
+                      }}
                       onClick={() => {
                         setSelectedTargetId(c.id);
                         broadcastToPlayerView({ targetId: c.id });
                       }}
-                      className={`p-3 rounded-xl border transition-all flex flex-col gap-2 cursor-pointer ${
-                        isTarget
+                      className={`p-3 rounded-xl border transition-all flex flex-col gap-2 cursor-pointer relative ${
+                        draggedCardIndex === idx
+                          ? 'opacity-30 scale-[0.98] border-dashed border-amber-500/80 bg-amber-500/10'
+                          : dragOverCardIndex === idx
+                          ? 'border-amber-400 ring-2 ring-amber-400/50 bg-amber-500/10'
+                          : isTarget
                           ? 'ring-2 ring-rose-500 border-rose-500 shadow-rose-900/30'
-                          : ''
-                      } ${
-                        isTurn
+                          : isTurn
                           ? 'bg-gradient-to-r from-rose-950/40 via-[#161c28] to-[#121824] border-rose-500/80 shadow-xl'
                           : 'bg-[#121824] border-[#2a3449] opacity-90 hover:opacity-100'
                       }`}
                     >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="flex items-start justify-between gap-2">
                         {/* Left Info */}
-                        <div className="flex items-start gap-3 min-w-[200px]">
-                          <div className="w-9 h-9 rounded-xl bg-[#0a0d14] border border-[#2a3449] flex flex-col items-center justify-center font-mono font-bold text-amber-400 shadow-inner">
-                            <span className="text-[8px] text-slate-500 font-sans">INIT</span>
-                            <span className="text-xs leading-none">{c.initiative}</span>
+                        <div className="flex items-start gap-2 flex-1 min-w-0">
+                          {/* Drag Handle Icon */}
+                          <div 
+                            className="py-2.5 px-0.5 text-slate-600 hover:text-amber-400 cursor-grab active:cursor-grabbing flex-shrink-0 transition-colors" 
+                            title="Clique e arraste para reordenar a iniciativa"
+                          >
+                            <GripVertical className="w-4 h-4" />
+                          </div>
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const d20 = Math.floor(Math.random() * 20) + 1;
+                              const total = d20 + initMod;
+                              setCombatants((prev) => {
+                                const next = prev.map((x) => (x.id === c.id ? { ...x, initiative: total } : x))
+                                  .sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
+                                if (activeSceneRef.current) updateScene({ ...activeSceneRef.current, combatants: next });
+                                broadcastToPlayerView({ combatants: next });
+                                return next;
+                              });
+                              toast.success(`Nova iniciativa de ${c.name}: d20(${d20}) ${initModStr} = ${total}`);
+                            }}
+                            className="px-2 py-1 min-w-[54px] h-10 rounded-xl bg-[#0a0d14] border border-[#2a3449] hover:border-amber-500/50 flex flex-col items-center justify-center font-mono shadow-inner flex-shrink-0 cursor-pointer transition-colors group"
+                            title={`Clique para rolar nova iniciativa! Bônus Base: ${initModStr} | Total Rolado: ${c.initiative}`}
+                          >
+                            <span className="text-[7px] font-bold text-slate-500 font-sans tracking-wider uppercase group-hover:text-amber-400/80 transition-colors">INIC</span>
+                            <div className="flex items-baseline gap-1 mt-0.5">
+                              <span className="text-xs font-extrabold text-amber-400 leading-none">{c.initiative}</span>
+                              <span className="text-[9px] font-bold text-slate-400 leading-none">({initModStr})</span>
+                            </div>
                           </div>
 
-                          <div>
+                          <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <h4 
                                 onClick={(e) => {
                                   e.stopPropagation(); // Evita selecionar o alvo ao abrir a ficha
                                   openSheet(c.id || c.name, c.type === 'player' ? 'pc' : c.type, c.name, c);
                                 }}
-                                className="font-bold text-slate-100 text-xs flex items-center gap-1 cursor-pointer hover:text-amber-400 hover:underline transition-colors"
+                                className="font-bold text-slate-100 text-xs flex items-center gap-1 cursor-pointer hover:text-amber-400 hover:underline transition-colors truncate"
                               >
                                 {c.name}
-                                {isTarget && <span className="text-[9px] text-rose-400 font-mono font-bold">(ALVO)</span>}
+                                {isTarget && <span className="text-[9px] text-rose-400 font-mono font-bold flex-shrink-0">(ALVO)</span>}
                               </h4>
                               {isTurn && (
-                                <span className="text-[8px] font-black uppercase bg-rose-500 text-slate-950 px-1.5 py-0.5 rounded animate-pulse">ATUAL</span>
+                                <span className="text-[8px] font-black uppercase bg-rose-500 text-slate-950 px-1.5 py-0.5 rounded animate-pulse flex-shrink-0">ATUAL</span>
                               )}
                             </div>
 
@@ -2224,7 +2371,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                           <button onClick={() => setExpandedId(isExpanded ? null : c.id)} className={`p-1.5 rounded-lg border transition-colors ${isExpanded ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-[#0f141d] border-[#2a3449] text-slate-400 hover:text-slate-200'}`} title="Ações e Rolagens">
                             <Dices className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => handleDeleteCombatant(c.id)} className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition-colors">
+                          <button
+                            onClick={() => setConfirmDeleteCombatant(c)}
+                            className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                            title="Remover combatente da batalha"
+                          >
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -2629,8 +2780,19 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         campaignMembers={campaignMembers || []}
         onAddCombatant={(newCombatant) => {
           setCombatants((prev) => {
-            const next = [...prev, newCombatant];
-            return next.sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
+            const currentActiveId = prev[currentTurnIndex]?.id;
+            const next = [...prev, newCombatant].sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
+            if (currentActiveId) {
+              const newActiveIdx = next.findIndex(x => x.id === currentActiveId);
+              if (newActiveIdx !== -1) {
+                setCurrentTurnIndex(newActiveIdx);
+              }
+            }
+            if (activeSceneRef.current) {
+              updateScene({ ...activeSceneRef.current, combatants: next });
+            }
+            broadcastToPlayerView({ combatants: next });
+            return next;
           });
           toast.success(`${newCombatant.name} adicionado ao combate!`);
           setShowAddCombatantModal(false);
@@ -2642,6 +2804,49 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         onClose={() => setShowBattleSetupModal(false)}
         onConfirmSetup={handleConfirmBattleSetup}
       />
+
+      {confirmDeleteCombatant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl text-center">
+            <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-100 text-base">Remover Combatente?</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Tem certeza de que deseja remover <strong className="text-slate-200">{confirmDeleteCombatant.name}</strong> da batalha?
+              </p>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setConfirmDeleteCombatant(null)}
+                className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const targetId = confirmDeleteCombatant.id;
+                  const updatedList = combatants.filter((x) => x.id !== targetId);
+                  setCombatants(updatedList);
+                  if (activeSceneRef.current) {
+                    updateScene({ ...activeSceneRef.current, combatants: updatedList });
+                  }
+                  broadcastToPlayerView({ combatants: updatedList });
+                  if (selectedTargetId === targetId) {
+                    setSelectedTargetId(undefined);
+                  }
+                  toast.success(`${confirmDeleteCombatant.name} removido da batalha.`);
+                  setConfirmDeleteCombatant(null);
+                }}
+                className="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-slate-100 text-xs font-bold rounded-xl transition-colors shadow-lg shadow-rose-600/20"
+              >
+                Sim, Remover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {magicMissileModalState && magicMissileModalState.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
