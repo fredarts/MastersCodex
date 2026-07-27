@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AdvantageMode, CharacterSheet, DiceRollEvent } from '@/lib/types';
+import { AdvantageMode, CharacterSheet, DiceRollEvent, PlayerRollEvent } from '@/lib/types';
 import { GeneralSection } from './Sections/GeneralSection';
 import { CombatSection } from './Sections/CombatSection';
 import { SkillsSection } from './Sections/SkillsSection';
@@ -29,6 +29,7 @@ import {
   Printer,
   Wand2,
   Minus,
+  Eye,
 } from 'lucide-react';
 
 interface CharacterSheetModalProps {
@@ -38,6 +39,9 @@ interface CharacterSheetModalProps {
   onSave: (updatedSheet: CharacterSheet) => void;
   onRollEvent?: (event: DiceRollEvent) => void;
   onMinimize?: () => void;
+  broadcastRoll?: (roll: PlayerRollEvent) => void;
+  lockBaseAttributes?: boolean;
+  readOnly?: boolean;
 }
 
 type TabType = 'general' | 'combat' | 'skills' | 'equipment' | 'spells' | 'rp';
@@ -58,6 +62,9 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
   onSave,
   onRollEvent,
   onMinimize,
+  broadcastRoll,
+  lockBaseAttributes = false,
+  readOnly = false,
 }) => {
   const [sheet, setSheet] = useState<CharacterSheet>(initialSheet);
   const [activeTab, setActiveTab] = useState<TabType>('general');
@@ -78,6 +85,7 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
   if (!isOpen) return null;
 
   const handleSave = () => {
+    if (readOnly) return;
     onSave(sheet);
     setIsSavedFeedback(true);
     setTimeout(() => {
@@ -87,13 +95,28 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
   };
 
   const handleClose = () => {
-    onSave(sheet);
+    if (!readOnly) onSave(sheet);
     onClose();
   };
 
   const handleRollExecuted = (event: DiceRollEvent) => {
     setLastRoll(event);
     if (onRollEvent) onRollEvent(event);
+    if (broadcastRoll) {
+      broadcastRoll({
+        id: event.id,
+        characterName: event.characterName || sheet.characterName,
+        rollType: event.rollType === 'attack' ? 'attack' : event.rollType === 'skill' ? 'skill' : event.rollType === 'saving_throw' ? 'save' : 'custom',
+        label: event.label,
+        d20Roll: event.selectedD20 || event.d20Roll1 || 10,
+        modifier: event.modifier,
+        total: event.total,
+        isCrit: event.isCrit,
+        isFail: event.isFail,
+        advantageMode: event.advantageMode,
+        timestamp: event.timestamp || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      });
+    }
     setTimeout(() => {
       setLastRoll((prev) => (prev?.id === event.id ? null : prev));
     }, 4500);
@@ -160,7 +183,7 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
 
         {/* BOTÃO SALVAR & FECHAR */}
         <div className="flex items-center gap-2">
-          {onMinimize && (
+          {onMinimize && !readOnly && (
             <button
               type="button"
               onClick={onMinimize}
@@ -170,23 +193,30 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
               <Minus className="w-5 h-5" />
             </button>
           )}
-          <button
-            type="button"
-            onClick={handleSave}
-            className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-3 py-2 rounded-xl shadow-md active:scale-95 transition-transform"
-          >
-            {isSavedFeedback ? (
-              <>
-                <CheckCircle2 className="w-4 h-4 text-slate-950 animate-bounce" />
-                <span>Salvo!</span>
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                <span>Salvar</span>
-              </>
-            )}
-          </button>
+          {readOnly ? (
+            <span className="flex items-center gap-1.5 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-bold text-xs px-3 py-1.5 rounded-xl">
+              <Eye className="w-3.5 h-3.5" />
+              SOMENTE LEITURA
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSave}
+              className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-3 py-2 rounded-xl shadow-md active:scale-95 transition-transform"
+            >
+              {isSavedFeedback ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-slate-950 animate-bounce" />
+                  <span>Salvo!</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>Salvar</span>
+                </>
+              )}
+            </button>
+          )}
           <button
             type="button"
             onClick={handleClose}
@@ -290,30 +320,32 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
           </div>
         )}
 
-        {activeTab === 'general' && <GeneralSection sheet={sheet} onChange={setSheet} />}
-        {activeTab === 'combat' && (
-          <CombatSection
-            sheet={sheet}
-            onChange={setSheet}
-            advantageMode={advantageMode}
-            onRoll={handleRollExecuted}
-          />
-        )}
-        {activeTab === 'skills' && (
-          <SkillsSection
-            sheet={sheet}
-            onChange={setSheet}
-            advantageMode={advantageMode}
-            onRoll={handleRollExecuted}
-          />
-        )}
-        {activeTab === 'equipment' && <EquipmentSection sheet={sheet} onChange={setSheet} />}
-        {activeTab === 'spells' && <SpellsSection sheet={sheet} onChange={setSheet} />}
-        {activeTab === 'rp' && <RPSection sheet={sheet} onChange={setSheet} />}
+        <fieldset disabled={readOnly} className={`border-none p-0 m-0 min-w-0 ${readOnly ? 'pointer-events-none select-none' : ''}`}>
+          {activeTab === 'general' && <GeneralSection sheet={sheet} onChange={readOnly ? () => {} : setSheet} />}
+          {activeTab === 'combat' && (
+            <CombatSection
+              sheet={sheet}
+              onChange={readOnly ? () => {} : setSheet}
+              advantageMode={advantageMode}
+              onRoll={readOnly ? () => {} : handleRollExecuted}
+            />
+          )}
+          {activeTab === 'skills' && (
+            <SkillsSection
+              sheet={sheet}
+              onChange={readOnly ? () => {} : setSheet}
+              advantageMode={advantageMode}
+              onRoll={readOnly ? () => {} : handleRollExecuted}
+            />
+          )}
+          {activeTab === 'equipment' && <EquipmentSection sheet={sheet} onChange={readOnly ? () => {} : setSheet} />}
+          {activeTab === 'spells' && <SpellsSection sheet={sheet} onChange={readOnly ? () => {} : setSheet} />}
+          {activeTab === 'rp' && <RPSection sheet={sheet} onChange={readOnly ? () => {} : setSheet} />}
+        </fieldset>
       </main>
 
       {/* BARRA DE COMBATE DE ACESSO RÁPIDO NO RODAPÉ */}
-      <QuickCombatBar sheet={sheet} onChange={setSheet} />
+      {!readOnly && <QuickCombatBar sheet={sheet} onChange={setSheet} />}
 
       {/* DRAWER LATERAL DO MENU SANDUÍCHE (RETRÁTIL MOBILE) */}
       {isDrawerOpen && (
@@ -366,54 +398,58 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
               </div>
 
               {/* FERRAMENTAS E EXPORTAÇÃO */}
-              <div className="pt-4 border-t border-slate-800 space-y-2">
-                <span className="text-[10px] font-black uppercase text-slate-500 block tracking-wider">
-                  Ferramentas & Exportação
-                </span>
+              {!readOnly && (
+                <div className="pt-4 border-t border-slate-800 space-y-2">
+                  <span className="text-[10px] font-black uppercase text-slate-500 block tracking-wider">
+                    Ferramentas &amp; Exportação
+                  </span>
 
-                <button
-                  type="button"
-                  onClick={() => { setIsWizardOpen(true); setIsDrawerOpen(false); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-all"
-                >
-                  <Wand2 className="w-4 h-4" />
-                  Criador Guiado (Wizard)
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsWizardOpen(true); setIsDrawerOpen(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-all"
+                  >
+                    <Wand2 className="w-4 h-4" />
+                    Criador Guiado (Wizard)
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => exportCharacterToJson(sheet)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 hover:text-white transition-all"
-                >
-                  <Download className="w-4 h-4 text-slate-400" />
-                  Exportar JSON
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => exportCharacterToJson(sheet)}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 hover:text-white transition-all"
+                  >
+                    <Download className="w-4 h-4 text-slate-400" />
+                    Exportar JSON
+                  </button>
 
-                <label className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 hover:text-white transition-all cursor-pointer">
-                  <Upload className="w-4 h-4 text-slate-400" />
-                  <span>Importar JSON</span>
-                  <input type="file" accept=".json" onChange={handleImportJsonFile} className="hidden" />
-                </label>
+                  <label className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 hover:text-white transition-all cursor-pointer">
+                    <Upload className="w-4 h-4 text-slate-400" />
+                    <span>Importar JSON</span>
+                    <input type="file" accept=".json" onChange={handleImportJsonFile} className="hidden" />
+                  </label>
 
-                <button
-                  type="button"
-                  onClick={() => exportCharacterToPrintablePdf(sheet)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 hover:text-white transition-all"
-                >
-                  <Printer className="w-4 h-4 text-slate-400" />
-                  Imprimir / PDF
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => exportCharacterToPrintablePdf(sheet)}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 hover:text-white transition-all"
+                  >
+                    <Printer className="w-4 h-4 text-slate-400" />
+                    Imprimir / PDF
+                  </button>
+                </div>
+              )}
             </div>
 
-            <button
-              type="button"
-              onClick={handleSave}
-              className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 text-xs"
-            >
-              <Save className="w-4 h-4" />
-              Salvar Ficha de Personagem
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={handleSave}
+                className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 text-xs"
+              >
+                <Save className="w-4 h-4" />
+                Salvar Ficha de Personagem
+              </button>
+            )}
           </div>
         </div>
       )}

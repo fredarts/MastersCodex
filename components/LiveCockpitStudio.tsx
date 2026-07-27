@@ -1,76 +1,31 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Tv, 
-  Film, 
-  Play, 
-  Swords, 
-  Shield, 
-  Heart, 
-  Music, 
-  Mic, 
-  BookOpen, 
-  Plus, 
-  RotateCcw, 
-  ChevronRight, 
-  ChevronLeft,
-  Skull, 
-  Volume2, 
-  Map as MapIcon, 
-  Sparkles, 
-  Radio, 
-  Eye, 
-  CheckCircle2, 
-  MessageSquare,
-  Compass,
-  Beer,
-  Search,
-  Users,
-  User,
-  UserPlus,
-  X,
-  Trash2,
-  Dices,
-  Edit3,
-  Check,
-  ScrollText,
-  GripVertical
-} from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { useAuth } from '@/context/AuthContext';
 import { useCharacterSync } from '@/lib/hooks/useCharacterSync';
-import { getAttributeModifier } from '@/lib/dnd5e-calculator';
-import { getSpellAoEDefinition } from '@/lib/dnd5e-spells-shapes';
-import { GameScene, SceneType, Combatant, ConditionType, CampaignMember, WorldEntity, CharacterSheet, CharacterSpell } from '@/lib/types';
-import { INITIAL_MONSTERS, SFX_BUTTONS, CONDITIONS, BGM_TRACKS } from '@/lib/srd-data';
-import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from '@/lib/imageUtils';
 import { useAudio } from '@/context/AudioContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { BattleGrid3D } from '@/components/BattleGrid3D';
-import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
-import { getModelUrlByNameOrPath } from '@/lib/3d-models';
-import { BattleLog } from '@/components/BattleLog';
-import { Dice3DCanvas, DieType } from '@/components/Dice3DCanvas';
-import { CombatLogEntry } from '@/lib/types';
-import { CreateSceneModal } from '@/components/CreateSceneModal';
+
 import { LiveCockpitHeader } from '@/components/live-cockpit/LiveCockpitHeader';
-import { SceneProjectionSelector } from '@/components/live-cockpit/SceneProjectionSelector';
-import { CombatTurnOrderPanel } from '@/components/live-cockpit/CombatTurnOrderPanel';
-import { QuickAudioPanel } from '@/components/live-cockpit/QuickAudioPanel';
-import { CombatInitiativeTracker } from '@/components/live-cockpit/CombatInitiativeTracker';
-import { AddCombatantModal } from '@/components/live-cockpit/AddCombatantModal';
-import { BattleSetupModal, BattleSetupMode } from '@/components/live-cockpit/BattleSetupModal';
-import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
-import { SpellTargetingOverlay } from '@/components/live-cockpit/SpellTargetingOverlay';
-import { CombatantHpManager } from '@/components/live-cockpit/CombatantHpManager';
-import { LiveCockpitAudioController } from '@/components/live-cockpit/LiveCockpitAudioController';
+import { SceneTimelinePanel } from '@/components/live-cockpit/SceneTimelinePanel';
+import { LiveVisualMirror } from '@/components/live-cockpit/LiveVisualMirror';
+import { CombatInitiativePanel } from '@/components/live-cockpit/CombatInitiativePanel';
+import { FloatingDiceRollerHUD } from '@/components/live-cockpit/FloatingDiceRollerHUD';
+import { LiveCockpitModalManager } from '@/components/live-cockpit/LiveCockpitModalManager';
+
+import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { useCombatEngine } from '@/lib/hooks/useCombatEngine';
 import { useSceneProjection } from '@/lib/hooks/useSceneProjection';
+import { getAttributeModifier } from '@/lib/dnd5e-calculator';
+import { getSpellAoEDefinition } from '@/lib/dnd5e-spells-shapes';
+import { getModelUrlByNameOrPath } from '@/lib/3d-models';
+import { Combatant, CharacterSheet, CharacterSpell, CombatLogEntry, ConditionType } from '@/lib/types';
+import { BattleSetupMode } from '@/components/live-cockpit/BattleSetupModal';
 
 interface LiveCockpitStudioProps {
   onGenerateLoot: () => void;
@@ -81,92 +36,109 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   onGenerateLoot,
   onOpenPlayerView,
 }) => {
-  const { activeWorld, worldEntities } = useWorld();
+  const { worldEntities } = useWorld();
   const { activeCampaign, campaignMembers, createFeedEvent } = useCampaign();
-  const { 
-    activeSession, 
-    sessions, 
-    setActiveSession, 
-    scenes, 
-    activeScene, 
-    setActiveScene, 
-    updateScene 
+  const {
+    activeSession,
+    scenes,
+    activeScene,
+    setActiveSession,
+    setActiveScene,
+    updateScene,
   } = useSession();
-  
+
   const combatEngine = useCombatEngine();
   const sceneProjection = useSceneProjection();
 
-  const { 
+  const {
     combatants,
     setCombatants,
     currentTurnIndex,
     setCurrentTurnIndex,
     roundCount,
     setRoundCount,
-    liveDisplayMode, 
-    setLiveDisplayMode, 
+    liveDisplayMode,
+    setLiveDisplayMode,
     broadcastToPlayerView,
-    projectedScene,
     tokenPositions3D,
     tokenRotations3D,
     initializeFromCombatants,
-    activeSpellTargeting,
     setActiveSpellTargeting,
-    casterTokenKey,
     setCasterTokenKey,
-    spellTargetPosition,
     setSpellTargetPosition,
-    openSheet,
+    broadcastCombatLogEntry,
+    setCombatLogs,
   } = useLiveCockpit();
 
-
   const { user } = useAuth();
-  const { characterSheets, saveSheet } = useCharacterSync({
+  const { characterSheets } = useCharacterSync({
     userId: user?.id || '',
     campaignId: activeCampaign?.id,
   });
 
-  const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
-  const [isTimelineCollapsed, setIsTimelineCollapsed] = useState<boolean>(false);
+  const { playSfx } = useAudio();
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('masters_codex_timeline_collapsed');
-      if (saved !== null) {
-        setIsTimelineCollapsed(saved === 'true');
-      }
-    }
-  }, []);
+  // Zustand Store states & actions
+  const {
+    isTimelineCollapsed,
+    setIsTimelineCollapsed,
+    rightPanelTab,
+    setRightPanelTab,
+    isCombatActive,
+    setIsCombatActive,
+    autoInit,
+    setAutoInit,
+    customAudios,
+    setCustomAudios,
+    diceResult,
+    setDiceResult,
+    bg3DiceOverlay,
+    setBg3DiceOverlay,
+    animatedRollNumber,
+    setAnimatedRollNumber,
+    selectedTargetId,
+    setSelectedTargetId,
+    setConfirmDeleteCombatant,
+    pendingAttack,
+    setPendingAttack,
+    magicMissileModalState,
+    setMagicMissileModalState,
+    isPlacementPhase,
+    setIsPlacementPhase,
+    battleSetupMode,
+    setBattleSetupMode,
+    selectedTimeOfDay,
+    setSelectedTimeOfDay,
+    liveTimeOfDayHour,
+    setLiveTimeOfDayHour,
+    liveHasFog,
+    setLiveHasFog,
+    liveHasRain,
+    setLiveHasRain,
+    liveFloorTextureUrl,
+    setLiveFloorTextureUrl,
+    playingNpcVoice,
+    activeBgmCategory,
+    setActiveBgmCategory,
+    setPlayingNpcVoice,
+    setShowCreateSceneModal,
+    setShowAddCombatantModal,
+    setShowBattleSetupModal,
+  } = useLiveCockpitStudioStore();
 
-  const toggleTimeline = () => {
-    setIsTimelineCollapsed((prev) => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('masters_codex_timeline_collapsed', String(next));
-      }
-      return next;
-    });
-  };
-  const [playingNpcVoice, setPlayingNpcVoice] = useState(false);
-  const [activeBgmCategory, setActiveBgmCategory] = useState<string>('taverna');
-  const [magicMissileModalState, setMagicMissileModalState] = useState<{
-    isOpen: boolean;
-    caster: Combatant;
-    spell: CharacterSpell;
-    availableDarts: number;
-    dartAllocations: Record<string, number>;
-  } | null>(null);
-
-  // Refs para save debounced de posições/rotações de tokens
   const savePositionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSceneRef = useRef(activeScene);
   const combatantsRef = useRef(combatants);
-  useEffect(() => { activeSceneRef.current = activeScene; }, [activeScene]);
-  useEffect(() => { combatantsRef.current = combatants; }, [combatants]);
 
-  const { playBgm, pauseBgm, activeBgm, isPlayingBgm, playSfx } = useAudio();
-  const [customAudios, setCustomAudios] = useState<any[]>([]);
+  useEffect(() => {
+    activeSceneRef.current = activeScene;
+  }, [activeScene]);
 
+  useEffect(() => {
+    combatantsRef.current = combatants;
+  }, [combatants]);
+
+  // Load custom audio assets
   useEffect(() => {
     if (activeCampaign?.id && isSupabaseConfigured()) {
       supabase
@@ -177,706 +149,46 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
           if (data) setCustomAudios(data);
         });
     }
-  }, [activeCampaign?.id]);
+  }, [activeCampaign?.id, setCustomAudios]);
 
-  const srdBgms = BGM_TRACKS.map(t => ({ ...t, isCustom: false }));
-  const customBgms = customAudios
-    .filter(a => a.type === 'bgm')
-    .map(a => ({ id: a.id, name: a.name, url: a.url, category: a.category, isLoop: a.is_loop, isCustom: true }));
-  const allBgmTracks = [...srdBgms, ...customBgms];
+  // Load initial timeline collapse state
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('masters_codex_timeline_collapsed');
+      if (saved !== null) {
+        setIsTimelineCollapsed(saved === 'true');
+      }
+    }
+  }, [setIsTimelineCollapsed]);
 
-  const srdSfxs = SFX_BUTTONS.map(s => ({ ...s, isLoop: false, isCustom: false }));
-  const customSfxs = customAudios
-    .filter(a => a.type === 'sfx')
-    .map(a => ({ id: a.id, name: a.name, iconName: a.icon_name || 'Music', url: a.url, category: a.category, isCustom: true }));
-  const allSfxTracks = [...srdSfxs, ...customSfxs];
+  // Sync Combat Active status with current scene or combatants array
+  useEffect(() => {
+    if (activeScene?.sceneType === 'combat' || combatants.length > 0) {
+      setIsCombatActive(true);
+    } else {
+      setIsCombatActive(false);
+    }
+  }, [activeScene?.id, activeScene?.sceneType, combatants.length, setIsCombatActive]);
 
-  // Scene inline editing state
-  const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
-  const [editedSceneTitle, setEditedSceneTitle] = useState('');
-  const lastSyncedSceneVersionRef = useRef<string | null>(null);
-  const lastSyncedSceneIdRef = useRef<string | null>(null);
-
-  // Combat State & Search Modal
-  const [isCombatActive, setIsCombatActive] = useState<boolean>(false);
-  const [openSpellDropdownId, setOpenSpellDropdownId] = useState<string | null>(null);
-  const [showAddCombatantModal, setShowAddCombatantModal] = useState<boolean>(false);
-  const [confirmDeleteCombatant, setConfirmDeleteCombatant] = useState<Combatant | null>(null);
-  const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null);
-  const [dragOverCardIndex, setDragOverCardIndex] = useState<number | null>(null);
-  const [activeAddTab, setActiveAddTab] = useState<'monsters' | 'players' | 'custom' | 'npcs'>('monsters');
-  const [combatantSearchQuery, setCombatantSearchQuery] = useState<string>('');
-
-  // Battle Setup & 3D Placement Phase State
-  const [showBattleSetupModal, setShowBattleSetupModal] = useState<boolean>(false);
-  const [isPlacementPhase, setIsPlacementPhase] = useState<boolean>(false);
-  const [battleSetupMode, setBattleSetupMode] = useState<BattleSetupMode>('normal');
-  const [selectedTimeOfDay, setSelectedTimeOfDay] = useState<'day' | 'sunset' | 'night' | 'fog' | 'storm'>('day');
-
-  // Live Environment Override State (syncs from scene, can be modified live by DM)
-  const [liveTimeOfDayHour, setLiveTimeOfDayHour] = useState<number>(12);
-  const [liveHasFog, setLiveHasFog] = useState<boolean>(false);
-  const [liveHasRain, setLiveHasRain] = useState<boolean>(false);
-  const [liveFloorTextureUrl, setLiveFloorTextureUrl] = useState<string | undefined>(undefined);
-
-  // Custom Combatant Form
-  const [customName, setCustomName] = useState('');
-  const [customHp, setCustomHp] = useState(15);
-  const [customAc, setCustomAc] = useState(13);
-  const [customInit, setCustomInit] = useState(10);
-  const [customType, setCustomType] = useState<'player' | 'monster' | 'npc'>('monster');
-
-  
-  const [autoInit, setAutoInit] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
-  const [diceResult, setDiceResult] = useState<{title: string; roll: number; total: number; isCrit: boolean; isFail: boolean} | null>(null);
-
+  // Handle dice overlay timer dismiss
   useEffect(() => {
     if (diceResult) {
       const t = setTimeout(() => setDiceResult(null), 5000);
       return () => clearTimeout(t);
     }
-  }, [diceResult]);
+  }, [diceResult, setDiceResult]);
 
-  const [pendingAttack, setPendingAttack] = useState<{ title: string; mod: number; actorCombatant?: Combatant; actionDesc?: string } | null>(null);
-  
-  const [bg3DiceOverlay, setBg3DiceOverlay] = useState<{
-    title: string;
-    actorName?: string;
-    targetName?: string;
-    d20Roll: number;
-    modifier: number;
-    totalRoll: number;
-    targetAc?: number;
-    isHit?: boolean;
-    isCrit?: boolean;
-    isFail?: boolean;
-    damageDiceFormula?: string;
-    damageAmount?: number;
-    isRolling: boolean;
-    phase: 'd20' | 'damage';
-  } | null>(null);
-
-  const [animatedRollNumber, setAnimatedRollNumber] = useState<number>(1);
-
+  // Animate BG3 rolling dice numbers
   useEffect(() => {
     if (!bg3DiceOverlay || !bg3DiceOverlay.isRolling) return;
-
     const maxVal = bg3DiceOverlay.phase === 'd20' ? 20 : 8;
     const interval = setInterval(() => {
       setAnimatedRollNumber(Math.floor(Math.random() * maxVal) + 1);
     }, 45);
-
     return () => clearInterval(interval);
-  }, [bg3DiceOverlay?.isRolling, bg3DiceOverlay?.phase]);
+  }, [bg3DiceOverlay?.isRolling, bg3DiceOverlay?.phase, setAnimatedRollNumber]);
 
-  const rollDice = (title: string, mod: number, actorCombatant?: Combatant, actionDesc?: string, forceNoTarget: boolean = false): boolean => {
-    const currentActor = actorCombatant || combatants[currentTurnIndex];
-    const target = combatants.find(c => c.id === selectedTargetId);
-
-    // Validate target for Attack rolls unless forced (AoE)
-    if (title.startsWith('Ataque') && !target && !forceNoTarget) {
-      setPendingAttack({ title, mod, actorCombatant: currentActor, actionDesc });
-      return false;
-    }
-
-    const roll = Math.floor(Math.random() * 20) + 1;
-    const total = roll + mod;
-    const isCrit = roll === 20;
-    const isFail = roll === 1;
-
-    setDiceResult({
-      title,
-      roll,
-      total,
-      isCrit,
-      isFail
-    });
-
-    const isAttack = title.startsWith('Ataque');
-    const isHit = isAttack && target ? (isCrit || total >= target.ac) : undefined;
-    let dmgAmount: number | undefined = undefined;
-
-    if (isAttack && target && isHit) {
-      dmgAmount = parseAndRollDamage(actionDesc, mod);
-    }
-
-    // Trigger BG3 Dice Overlay
-    setBg3DiceOverlay({
-      title,
-      actorName: currentActor?.name,
-      targetName: target?.name,
-      d20Roll: roll,
-      modifier: mod,
-      totalRoll: total,
-      targetAc: target?.ac,
-      isHit,
-      isCrit,
-      isFail,
-      damageDiceFormula: actionDesc || '1d8',
-      damageAmount: dmgAmount,
-      isRolling: true,
-      phase: 'd20'
-    });
-
-    // Animate rolling numbers then reveal final result
-    setTimeout(() => {
-      setBg3DiceOverlay(prev => prev ? { ...prev, isRolling: false } : null);
-
-      if (isHit && dmgAmount !== undefined) {
-        setTimeout(() => {
-          setBg3DiceOverlay(prev => prev ? { ...prev, phase: 'damage', isRolling: true } : null);
-          setTimeout(() => {
-            setBg3DiceOverlay(prev => prev ? { ...prev, isRolling: false } : null);
-          }, 600);
-        }, 1500);
-      }
-    }, 700);
-
-    if (title.startsWith('Ataque') && currentActor) {
-      if (target) {
-        const isHit = isCrit || total >= target.ac;
-        const resultText = isCrit ? '💥 ACERTO CRÍTICO!' : isHit ? '✓ ACERTOU!' : '✕ ERROU!';
-        const desc = `${currentActor.name} executou ${title} contra ${target.name} (d20: ${roll} + ${mod} = ${total} vs CA ${target.ac}) → ${resultText}`;
-        
-        addLogEntry({
-          actorId: currentActor.id,
-          actorName: currentActor.name,
-          targetId: target.id,
-          targetName: target.name,
-          eventType: 'attack',
-          actionName: title,
-          d20Roll: roll,
-          totalRoll: total,
-          targetAc: target.ac,
-          isHit,
-          isCrit,
-          isFail,
-          description: desc
-        });
-
-        // Automatic damage roll on Hit!
-        if (isHit) {
-          const dmg = parseAndRollDamage(actionDesc, mod);
-          const prevHp = target.hp;
-          handleHpChange(target.id, -dmg);
-          const newHp = Math.max(0, target.hp - dmg);
-          
-          addLogEntry({
-            actorId: currentActor.id,
-            actorName: currentActor.name,
-            targetId: target.id,
-            targetName: target.name,
-            eventType: 'damage',
-            amount: dmg,
-            description: `💥 ${currentActor.name} causou ${dmg} de dano em ${target.name} (HP: ${prevHp} → ${newHp})`
-          });
-
-          if (newHp === 0) {
-            addLogEntry({
-              actorId: target.id,
-              actorName: target.name,
-              eventType: 'death',
-              description: `💀 ${target.name} foi derrotado em combate!`
-            });
-          }
-        }
-      } else {
-        addLogEntry({
-          actorId: currentActor.id,
-          actorName: currentActor.name,
-          eventType: 'attack',
-          actionName: title,
-          d20Roll: roll,
-          totalRoll: total,
-          isCrit,
-          isFail,
-          description: `${currentActor.name} rolou ${title}: ${roll} + ${mod} = ${total}`
-        });
-      }
-    } else if (currentActor) {
-      addLogEntry({
-        actorId: currentActor.id,
-        actorName: currentActor.name,
-        eventType: 'save',
-        d20Roll: roll,
-        totalRoll: total,
-        description: `${currentActor.name} fez teste de ${title}: ${roll} + ${mod} = ${total}`
-      });
-    }
-    return true;
-  };
-
-  const getMod = (stat?: number) => stat ? Math.floor((stat - 10) / 2) : 0;
-
-  
-  const [selectedTargetId, setSelectedTargetId] = useState<string | undefined>(undefined);
-  const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>([]);
-  const [rightPanelTab, setRightPanelTab] = useState<'init' | 'log' | 'teleprompter'>('init');
-  const [teleprompterFontSize, setTeleprompterFontSize] = useState<number>(18);
-
-  const addLogEntry = async (entry: Omit<CombatLogEntry, 'id' | 'timestamp' | 'round'>) => {
-    const newLog: CombatLogEntry = {
-      ...entry,
-      id: `log-${Date.now()}-${Math.random()}`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      round: roundCount
-    };
-
-    setCombatLogs(prev => {
-      const next = [...prev, newLog];
-      broadcastToPlayerView({ combatLogs: next });
-      return next;
-    });
-
-    if (activeCampaign) {
-      await createFeedEvent({
-        campaignId: activeCampaign.id,
-        sessionId: activeSession?.id,
-        eventType: 'battle_summary',
-        title: entry.description,
-        summary: entry.description,
-        isPublic: true,
-      });
-    }
-  };
-
-  const parseAndRollDamage = (desc?: string, defaultMod: number = 0): number => {
-    if (!desc) return Math.floor(Math.random() * 8) + 1 + defaultMod;
-    
-    // Match patterns like 2d6+3, 1d8+2, 1d6
-    const match = desc.match(/([0-9]+)d([0-9]+)(?:\s*[\+\-]\s*([0-9]+))?/i);
-    if (match) {
-      const count = parseInt(match[1], 10);
-      const sides = parseInt(match[2], 10);
-      const bonus = match[3] ? parseInt(match[3], 10) : 0;
-      
-      let total = 0;
-      for (let i = 0; i < count; i++) {
-        total += Math.floor(Math.random() * sides) + 1;
-      }
-      return Math.max(1, total + bonus);
-    }
-    return Math.max(1, Math.floor(Math.random() * 8) + 1 + defaultMod);
-  };
-
-  const handleCastSpellFromCard = (c: Combatant, sheet: CharacterSheet, spell: CharacterSpell) => {
-    const aoe = getSpellAoEDefinition(spell.name);
-    
-    if (aoe) {
-      // Ativa o modo de mira
-      setActiveSpellTargeting(aoe);
-      const casterKey = c.id || c.name;
-      setCasterTokenKey(casterKey);
-
-      // Posição inicial no próprio conjurador
-      const pos = tokenPositions3D[casterKey] || (c.id ? tokenPositions3D[c.id] : null) || (c.name ? tokenPositions3D[c.name] : null) || (c.x !== undefined && c.z !== undefined ? { x: c.x, z: c.z } : null);
-      const casterIdx = combatants.findIndex(x => (x.id || x.name) === casterKey || x.id === c.id || x.name === c.name);
-      const fallbackX = casterIdx !== -1 ? (casterIdx % 5) * 2 - 5 : 0;
-      const fallbackZ = casterIdx !== -1 ? Math.floor(casterIdx / 5) * 2 - 5 : 0;
-
-      const casterX = pos ? pos.x : fallbackX;
-      const casterZ = pos ? pos.z : fallbackZ;
-
-      setSpellTargetPosition({ x: casterX, z: casterZ });
-      if (aoe.shape === 'multi-target') {
-        toast.info(`Magia ${spell.name}: Clique no grid para alocar os mísseis nos alvos.`);
-      } else if (aoe.shape === 'target') {
-        toast.info(`Magia ${spell.name}: Clique no alvo dentro do raio de ${aoe.range}m no grid.`);
-      } else {
-        toast.info(`Modo de mira de área ativado para ${spell.name} (${aoe.shape}). Mova o mouse no grid e clique para confirmar.`);
-      }
-    } else {
-      // Magias sem AoE (alvo único, self, toque, etc.)
-      executeSpellCastRoll(c, sheet, spell);
-    }
-  };
-
-  const getSpeedInMeters = (speedStr?: string): number => {
-    if (!speedStr) return 9; // 30 ft = 9m
-    const cleaned = speedStr.toLowerCase().replace(/[^0-9\.]/g, '');
-    const val = parseFloat(cleaned);
-    if (isNaN(val)) return 9;
-    if (speedStr.toLowerCase().includes('ft') || speedStr.toLowerCase().includes('pe')) {
-      return val * 0.3; // converter pés para metros
-    }
-    return val;
-  };
-
-  const deductAction = (combatantId: string, actionType: 'action' | 'bonus' | 'reaction') => {
-    setCombatants((prev) => {
-      const next = prev.map((c) => {
-        if (c.id === combatantId) {
-          if (actionType === 'action') return { ...c, actionUsed: true };
-          if (actionType === 'bonus') return { ...c, bonusActionUsed: true };
-          if (actionType === 'reaction') return { ...c, reactionUsed: true };
-        }
-        return c;
-      });
-      if (activeSceneRef.current) {
-        updateScene({ ...activeSceneRef.current, combatants: next });
-      }
-      broadcastToPlayerView({ combatants: next });
-      return next;
-    });
-  };
-
-  const handleAttackFromWidget = (target: Combatant) => {
-    setSelectedTargetId(target.id);
-    broadcastToPlayerView({ targetId: target.id });
-
-    const currentActor = combatants[currentTurnIndex];
-    if (!currentActor) {
-      toast.error('Nenhum combatente ativo no turno!');
-      return;
-    }
-
-    const matchingSheet = characterSheets.find((s) => {
-      const cClean = currentActor.name.split('(')[0].trim().toLowerCase();
-      return (
-        s.characterName.toLowerCase() === cClean ||
-        s.characterName.toLowerCase().includes(cClean) ||
-        cClean.includes(s.characterName.toLowerCase())
-      );
-    });
-
-    let atkName = 'Ataque';
-    let bonus = getMod(currentActor.str);
-    let dmgDesc = '1d8';
-
-    if (matchingSheet?.attacks && matchingSheet.attacks.length > 0) {
-      const atk = matchingSheet.attacks[0];
-      atkName = atk.name;
-      bonus = parseInt(atk.atkBonus.replace('+', '').trim()) || 0;
-      dmgDesc = atk.damage || '1d8';
-    } else if (currentActor.actions && currentActor.actions.length > 0) {
-      const act = currentActor.actions[0];
-      atkName = act.name;
-      const match = act.desc.match(/\+([0-9]+)/);
-      bonus = match ? parseInt(match[1]) : getMod(currentActor.str);
-      dmgDesc = act.desc;
-    }
-
-    const rolled = rollDice(`Ataque: ${atkName}`, bonus, currentActor, dmgDesc);
-    if (rolled) {
-      deductAction(currentActor.id, 'action');
-    }
-  };
-
-  const executeSingleTargetSpell = async (
-    caster: Combatant,
-    sheet: CharacterSheet | undefined,
-    spell: CharacterSpell,
-    target?: Combatant
-  ) => {
-    if (sheet && spell.level > 0 && sheet.spellSlots?.[spell.level]) {
-      const currentSlots = sheet.spellSlots[spell.level];
-      if (currentSlots.used < currentSlots.total) {
-        const updatedSheet = {
-          ...sheet,
-          spellSlots: {
-            ...sheet.spellSlots,
-            [spell.level]: { ...currentSlots, used: currentSlots.used + 1 }
-          }
-        };
-        await saveSheet(updatedSheet);
-      } else {
-        toast.error(`Sem slots disponíveis para o Nível ${spell.level}!`);
-        return;
-      }
-    }
-
-    const cleanTime = (spell.castingTime || '').toLowerCase();
-    const isBonusAction = cleanTime.includes('bônus') || cleanTime.includes('bonus');
-    const isReaction = cleanTime.includes('reação') || cleanTime.includes('reaction');
-    const actionType = isBonusAction ? 'bonus' : (isReaction ? 'reaction' : 'action');
-    deductAction(caster.id, actionType);
-
-    const profBonus = sheet ? Math.floor((sheet.level - 1) / 4) + 2 : 2;
-    const ability = sheet?.spellcastingAbility || 'int';
-    const modValue = sheet ? getAttributeModifier(sheet, ability) : 3;
-    const spellAttackBonus = sheet?.spellAttackBonusOverride ?? (profBonus + modValue);
-
-    const roll = Math.floor(Math.random() * 20) + 1;
-    const total = roll + spellAttackBonus;
-    const isCrit = roll === 20;
-    const isFail = roll === 1;
-
-    let isHit = false;
-    let damage = 0;
-
-    if (target) {
-      isHit = isCrit || (!isFail && total >= target.ac);
-      if (isHit) {
-        const cleanName = spell.name.toLowerCase();
-        const diceSides = cleanName.includes('eldritch') || cleanName.includes('explosao') ? 10 : 8;
-        damage = Math.floor(Math.random() * diceSides) + 1;
-        if (isCrit) damage += Math.floor(Math.random() * diceSides) + 1;
-
-        const newHp = Math.max(0, target.hp - damage);
-        setCombatants(prev => {
-          const next = prev.map(c => c.id === target.id ? { ...c, hp: newHp } : c);
-          if (activeSceneRef.current) updateScene({ ...activeSceneRef.current, combatants: next });
-          return next;
-        });
-      }
-    }
-
-    setDiceResult({
-      title: `${spell.name} -> ${target ? target.name : 'Alvo'}`,
-      roll,
-      total,
-      isCrit,
-      isFail,
-    });
-
-    const desc = target
-      ? `${caster.name} disparou ${spell.name} em ${target.name} (d20: ${roll} + ${spellAttackBonus} = ${total} vs CA ${target.ac}). ${isHit ? `💥 ACERTOU! Caused ${damage} de dano! (HP restante: ${Math.max(0, target.hp - damage)})` : '✕ ERROU!'}`
-      : `${caster.name} conjurou ${spell.name} (d20: ${roll} + ${spellAttackBonus} = ${total})`;
-
-    toast(isHit ? `Ataque acertou ${target?.name}! Dano: ${damage}` : (target ? `Ataque errou ${target.name}` : `Conjuração executada!`));
-
-    addLogEntry({
-      actorId: caster.id,
-      actorName: caster.name,
-      targetId: target?.id,
-      targetName: target?.name,
-      eventType: 'attack',
-      description: desc,
-    });
-  };
-
-  const executeAoESpellCast = async (
-    caster: Combatant,
-    sheet: CharacterSheet | undefined,
-    spell: CharacterSpell,
-    targets: Combatant[]
-  ) => {
-    if (sheet && spell.level > 0 && sheet.spellSlots?.[spell.level]) {
-      const currentSlots = sheet.spellSlots[spell.level];
-      if (currentSlots.used < currentSlots.total) {
-        const updatedSheet = {
-          ...sheet,
-          spellSlots: {
-            ...sheet.spellSlots,
-            [spell.level]: { ...currentSlots, used: currentSlots.used + 1 }
-          }
-        };
-        await saveSheet(updatedSheet);
-      } else {
-        toast.error(`Sem slots disponíveis para o Nível ${spell.level}!`);
-        return;
-      }
-    }
-
-    const cleanTime = (spell.castingTime || '').toLowerCase();
-    const isBonusAction = cleanTime.includes('bônus') || cleanTime.includes('bonus');
-    const isReaction = cleanTime.includes('reação') || cleanTime.includes('reaction');
-    const actionType = isBonusAction ? 'bonus' : (isReaction ? 'reaction' : 'action');
-    deductAction(caster.id, actionType);
-
-    const profBonus = sheet ? Math.floor((sheet.level - 1) / 4) + 2 : 2;
-    const ability = sheet?.spellcastingAbility || 'int';
-    const modValue = sheet ? getAttributeModifier(sheet, ability) : 3;
-    const spellSaveDc = sheet?.spellSaveDcOverride ?? (8 + profBonus + modValue);
-
-    const cleanName = spell.name.toLowerCase();
-    let diceCount = 3;
-    let diceSides = 6;
-    if (cleanName.includes('bola de fogo') || cleanName.includes('fireball')) {
-      diceCount = 8;
-      diceSides = 6;
-    }
-
-    let rawDamage = 0;
-    for (let i = 0; i < diceCount; i++) {
-      rawDamage += Math.floor(Math.random() * diceSides) + 1;
-    }
-
-    const damageMap: Record<string, number> = {};
-    const logDetails: string[] = [];
-
-    targets.forEach(t => {
-      const dexMod = t.dex !== undefined ? Math.floor((t.dex - 10) / 2) : 0;
-      const dexSaveRoll = Math.floor(Math.random() * 20) + 1;
-      const dexSaveTotal = dexSaveRoll + dexMod;
-      const passed = dexSaveTotal >= spellSaveDc;
-      const finalDmg = passed ? Math.floor(rawDamage / 2) : rawDamage;
-
-      damageMap[t.id] = finalDmg;
-      logDetails.push(`${t.name}: TR ${dexSaveRoll}+${dexMod}=${dexSaveTotal} vs CD ${spellSaveDc} (${passed ? 'PASSOU -> ' + finalDmg + ' dano' : 'FALHOU -> ' + finalDmg + ' dano'})`);
-    });
-
-    if (targets.length > 0) {
-      setCombatants(prev => {
-        const next = prev.map(c => {
-          if (damageMap[c.id] !== undefined) {
-            return { ...c, hp: Math.max(0, c.hp - damageMap[c.id]) };
-          }
-          return c;
-        });
-        if (activeSceneRef.current) updateScene({ ...activeSceneRef.current, combatants: next });
-        return next;
-      });
-    }
-
-    const desc = `${caster.name} conjurou ${spell.name} (Área)! Dano Base: ${rawDamage}. ` + 
-      (logDetails.length > 0 ? logDetails.join(' | ') : 'Nenhum alvo na área.');
-
-    toast.info(`Área de ${spell.name}: ${targets.length} alvo(s) atingido(s)! Dano base: ${rawDamage}`);
-
-    addLogEntry({
-      actorId: caster.id,
-      actorName: caster.name,
-      eventType: 'damage',
-      description: desc,
-    });
-  };
-
-  const handleConfirmMagicMissiles = async () => {
-    if (!magicMissileModalState) return;
-
-    const { caster, spell, dartAllocations } = magicMissileModalState;
-    const matchingSheet = characterSheets.find((s) => {
-      const cClean = caster.name.split('(')[0].trim().toLowerCase();
-      return (
-        s.characterName.toLowerCase() === cClean ||
-        s.characterName.toLowerCase().includes(cClean) ||
-        cClean.includes(s.characterName.toLowerCase())
-      );
-    });
-
-    if (matchingSheet && spell.level > 0 && matchingSheet.spellSlots?.[spell.level]) {
-      const currentSlots = matchingSheet.spellSlots[spell.level];
-      if (currentSlots.used < currentSlots.total) {
-        const updatedSheet = {
-          ...matchingSheet,
-          spellSlots: {
-            ...matchingSheet.spellSlots,
-            [spell.level]: { ...currentSlots, used: currentSlots.used + 1 },
-          },
-        };
-        await saveSheet(updatedSheet);
-      }
-    }
-
-    const cleanTime = (spell.castingTime || '').toLowerCase();
-    const isBonusAction = cleanTime.includes('bônus') || cleanTime.includes('bonus');
-    const isReaction = cleanTime.includes('reação') || cleanTime.includes('reaction');
-    const actionType = isBonusAction ? 'bonus' : (isReaction ? 'reaction' : 'action');
-    deductAction(caster.id, actionType);
-
-    const damageMap: Record<string, number> = {};
-    const logDetails: string[] = [];
-
-    Object.entries(dartAllocations).forEach(([targetId, count]) => {
-      if (count <= 0) return;
-      const targetC = combatants.find((c) => c.id === targetId);
-      if (!targetC) return;
-
-      let totalDmg = 0;
-      for (let i = 0; i < count; i++) {
-        totalDmg += Math.floor(Math.random() * 4) + 1 + 1; // 1d4 + 1
-      }
-      damageMap[targetId] = totalDmg;
-      logDetails.push(`${count} dardo(s) em ${targetC.name} (${totalDmg} dano)`);
-    });
-
-    if (Object.keys(damageMap).length > 0) {
-      setCombatants((prev) => {
-        const next = prev.map((c) => {
-          if (damageMap[c.id] !== undefined) {
-            return { ...c, hp: Math.max(0, c.hp - damageMap[c.id]) };
-          }
-          return c;
-        });
-        if (activeSceneRef.current) {
-          updateScene({ ...activeSceneRef.current, combatants: next });
-        }
-        return next;
-      });
-    }
-
-    const desc = `${caster.name} disparou ${spell.name}! ` + (logDetails.join(', ') || 'Nenhum dardo alocado.');
-    toast.success(`Mísseis Mágicos disparados! ${logDetails.join(', ')}`);
-
-    addLogEntry({
-      actorId: caster.id,
-      actorName: caster.name,
-      eventType: 'damage',
-      description: desc,
-    });
-
-    setMagicMissileModalState(null);
-  };
-
-  const executeSpellCastRoll = async (c: Combatant, sheet: CharacterSheet, spell: CharacterSpell) => {
-    // Gastar 1 slot se for nível 1+
-    if (spell.level > 0 && sheet.spellSlots?.[spell.level]) {
-      const currentSlots = sheet.spellSlots[spell.level];
-      if (currentSlots.used < currentSlots.total) {
-        const updatedSheet = {
-          ...sheet,
-          spellSlots: {
-            ...sheet.spellSlots,
-            [spell.level]: {
-              ...currentSlots,
-              used: currentSlots.used + 1,
-            },
-          },
-        };
-        await saveSheet(updatedSheet);
-        toast.success(`Magia ${spell.name} lançada! Slot de Nível ${spell.level} consumido.`);
-      } else {
-        toast.error(`Sem slots disponíveis para o Nível ${spell.level}!`);
-        return;
-      }
-    }
-
-    const cleanTime = (spell.castingTime || '').toLowerCase();
-    const isBonusAction = cleanTime.includes('bônus') || cleanTime.includes('bonus');
-    const isReaction = cleanTime.includes('reação') || cleanTime.includes('reaction');
-    const actionType = isBonusAction ? 'bonus' : (isReaction ? 'reaction' : 'action');
-    deductAction(c.id, actionType);
-
-    const profBonus = Math.floor((sheet.level - 1) / 4) + 2;
-    const ability = sheet.spellcastingAbility || 'int';
-    const modValue = getAttributeModifier(sheet, ability);
-    const spellAttackBonus = sheet.spellAttackBonusOverride ?? (profBonus + modValue);
-    const spellSaveDc = sheet.spellSaveDcOverride ?? (8 + profBonus + modValue);
-
-    const roll = Math.floor(Math.random() * 20) + 1;
-    const total = roll + spellAttackBonus;
-    const isCrit = roll === 20;
-    const isFail = roll === 1;
-
-    setDiceResult({
-      title: `Conjurar: ${spell.name}`,
-      roll,
-      total,
-      isCrit,
-      isFail,
-    });
-
-    const target = combatants.find((x) => x.id === selectedTargetId);
-    let desc = `${c.name} conjurou ${spell.name} (Nív. ${spell.level}) (CD TR: ${spellSaveDc})`;
-    if (target) {
-      desc = `${c.name} conjurou ${spell.name} contra ${target.name} (d20: ${roll} + ${spellAttackBonus} = ${total} vs CA ${target.ac}) (CD TR: ${spellSaveDc})`;
-    }
-
-    addLogEntry({
-      actorId: c.id,
-      actorName: c.name,
-      targetId: target?.id,
-      targetName: target?.name,
-      eventType: 'attack',
-      description: desc,
-    });
-  };
-
-  // Salva posições e rotações dos tokens no banco com debounce de 600ms
-  // Só persiste se houver alterações reais em relação ao que já está salvo nos combatants
+  // Debounced token positions & rotations save
   useEffect(() => {
     const scene = activeSceneRef.current;
     if (!scene || Object.keys(tokenPositions3D).length === 0) return;
@@ -913,124 +225,66 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     return () => {
       if (savePositionsTimerRef.current) clearTimeout(savePositionsTimerRef.current);
     };
+  }, [tokenPositions3D, tokenRotations3D, updateScene]);
+
+  // Sync active scene properties to live environment states
+  // IMPORTANT: Depends on activeScene?.id (not full object) to prevent infinite loop.
+  // The cycle was: updateScene → new activeScene ref → effect re-fires →
+  // setCombatants → initializeFromCombatants → tokenPositions3D change →
+  // save effect → updateScene → loop. Using the ref for reads breaks this cycle.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokenPositions3D, tokenRotations3D]);
-
-  // Event listener para confirmação de conjurações do Grid 3D
   useEffect(() => {
-    const handleConfirmSpell = (e: Event) => {
-      const customEvt = e as CustomEvent;
-      if (!customEvt.detail) return;
+    const scene = activeSceneRef.current;
+    if (!scene) return;
 
-      const { casterTokenKey, spell, targetCombatantId, targetedCombatantIds } = customEvt.detail;
-      const caster = combatants.find(
-        (x) => (x.id || x.name) === casterTokenKey || x.id === casterTokenKey || x.name === casterTokenKey
-      );
-      if (!caster) return;
-
-      const matchingSheet = characterSheets.find((s) => {
-        const cClean = caster.name.split('(')[0].trim().toLowerCase();
-        return (
-          s.characterName.toLowerCase() === cClean ||
-          s.characterName.toLowerCase().includes(cClean) ||
-          cClean.includes(s.characterName.toLowerCase())
-        );
-      });
-
-      const characterSpell: CharacterSpell = matchingSheet?.spells?.find((s) => s.name === spell.name) || {
-        id: spell.name,
-        name: spell.name,
-        level: spell.level || 0,
-        school: 'evocation',
-        castingTime: '1 ação',
-        range: `${spell.range || 18}m`,
-        components: 'V, S',
-        description: spell.name,
-        prepared: true,
-      };
-
-      const shape = spell.shape || 'circle';
-
-      if (shape === 'multi-target') {
-        const numDarts = 3 + Math.max(0, (characterSpell.level || 1) - 1);
-        setMagicMissileModalState({
-          isOpen: true,
-          caster,
-          spell: characterSpell,
-          availableDarts: numDarts,
-          dartAllocations: {},
-        });
-      } else if (shape === 'target') {
-        const target = combatants.find((x) => x.id === targetCombatantId);
-        executeSingleTargetSpell(caster, matchingSheet, characterSpell, target);
-      } else {
-        const validTargets = combatants.filter(
-          (c) => targetedCombatantIds && targetedCombatantIds.includes(c.id) && c.id !== caster.id
-        );
-        executeAoESpellCast(caster, matchingSheet, characterSpell, validTargets);
-      }
-
-      setActiveSpellTargeting(null);
-      setCasterTokenKey(null);
-      setSpellTargetPosition(null);
-    };
-
-    window.addEventListener('masters_codex_confirm_spell_cast', handleConfirmSpell);
-    return () => window.removeEventListener('masters_codex_confirm_spell_cast', handleConfirmSpell);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [combatants, characterSheets]);
-
-  // Sync Combat Active status with current scene or combatants array
-  useEffect(() => {
-    if (activeScene?.sceneType === 'combat' || combatants.length > 0) {
-      setIsCombatActive(true);
-    } else {
-      setIsCombatActive(false);
-    }
-  }, [activeScene?.id, activeScene?.sceneType, combatants.length]);
-
-  useEffect(() => {
-    if (!activeScene) return;
-
-    if (activeScene.bgmCategory) {
-      setActiveBgmCategory(activeScene.bgmCategory);
+    if (scene.bgmCategory) {
+      setActiveBgmCategory(scene.bgmCategory);
     }
 
-    const targetHour = activeScene.timeOfDayHour ?? (activeScene.timeOfDay === 'night' ? 24 : activeScene.timeOfDay === 'sunset' ? 18 : 12);
-    const targetFog = activeScene.hasFog ?? (activeScene.timeOfDay === 'fog');
-    const targetRain = activeScene.hasRain ?? (activeScene.timeOfDay === 'storm');
+    const targetHour =
+      scene.timeOfDayHour ??
+      (scene.timeOfDay === 'night'
+        ? 24
+        : scene.timeOfDay === 'sunset'
+        ? 18
+        : 12);
+    const targetFog = scene.hasFog ?? scene.timeOfDay === 'fog';
+    const targetRain = scene.hasRain ?? scene.timeOfDay === 'storm';
 
     setLiveTimeOfDayHour(targetHour);
     setLiveHasFog(targetFog);
     setLiveHasRain(targetRain);
-    setLiveFloorTextureUrl(activeScene.floorTextureUrl || undefined);
+    setLiveFloorTextureUrl(scene.floorTextureUrl || undefined);
 
-    if (activeScene.timeOfDay) {
-      setSelectedTimeOfDay(activeScene.timeOfDay);
+    if (scene.timeOfDay) {
+      setSelectedTimeOfDay(scene.timeOfDay);
     }
 
-    if (lastSyncedSceneIdRef.current !== activeScene.id) {
-      lastSyncedSceneIdRef.current = activeScene.id;
-
-      if (activeScene.combatants && activeScene.combatants.length > 0) {
-        const sorted = [...activeScene.combatants].sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
+    if (scene.id) {
+      if (scene.combatants && scene.combatants.length > 0) {
+        const sorted = [...scene.combatants].sort(
+          (a, b) => (b.initiative || 0) - (a.initiative || 0)
+        );
         setCombatants(sorted);
         setCurrentTurnIndex(0);
         setRoundCount(1);
         setIsCombatActive(true);
         broadcastToPlayerView({ combatants: sorted });
-        // Restaura posições/rotações salvas no banco
         initializeFromCombatants(sorted);
       }
     }
-  }, [activeScene, setCombatants, initializeFromCombatants]);
+  }, [activeScene?.id, setCombatants, initializeFromCombatants, setCurrentTurnIndex, setRoundCount, setIsCombatActive, setActiveBgmCategory, setLiveTimeOfDayHour, setLiveHasFog, setLiveHasRain, setLiveFloorTextureUrl, setSelectedTimeOfDay, broadcastToPlayerView]);
 
-  // Escuta atualizações instantâneas de modelo 3D do personagem (local e cross-tab)
+
+
+
+  // Listen to Character Model cross-tab broadcasts
   useEffect(() => {
     const handleModelUpdate = (sheet: any) => {
       if (!sheet || !sheet.characterName) return;
 
-      const updatedModelUrl = sheet.modelUrl || getModelUrlByNameOrPath(sheet.className || sheet.characterName);
+      const updatedModelUrl =
+        sheet.modelUrl || getModelUrlByNameOrPath(sheet.className || sheet.characterName);
 
       setCombatants((prev) => {
         let hasChanges = false;
@@ -1083,2017 +337,827 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       if (bc) bc.close();
       window.removeEventListener('masters_codex_character_model_updated', handleLocalEvent);
     };
-  }, [setCombatants]);
+  }, [setCombatants, broadcastToPlayerView]);
 
-  const handleFireSceneLive = (scene: GameScene) => {
-    setActiveScene(scene);
+  // Listen to 3D Grid spell confirms
+  useEffect(() => {
+    const handleConfirmSpell = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      if (!customEvt.detail) return;
 
-    const targetHour = scene.timeOfDayHour ?? (scene.timeOfDay === 'night' ? 24 : scene.timeOfDay === 'sunset' ? 18 : 12);
-    const targetFog = scene.hasFog ?? (scene.timeOfDay === 'fog');
-    const targetRain = scene.hasRain ?? (scene.timeOfDay === 'storm');
-
-    setLiveTimeOfDayHour(targetHour);
-    setLiveHasFog(targetFog);
-    setLiveHasRain(targetRain);
-    setLiveFloorTextureUrl(scene.floorTextureUrl || undefined);
-
-    if (scene.timeOfDay) {
-      setSelectedTimeOfDay(scene.timeOfDay);
-    }
-
-    // Auto-load scene's pre-programmed combatants
-    if (scene.combatants && scene.combatants.length > 0) {
-      const existingPlayers = combatantsRef.current.filter((c) => c.type === 'player');
-      const nonPlayerMonsters = scene.combatants.filter(
-        (sc) => !existingPlayers.some((p) => p.name.toLowerCase() === sc.name.toLowerCase())
+      const { casterTokenKey, spell, targetCombatantId, targetedCombatantIds } = customEvt.detail;
+      const caster = combatants.find(
+        (x) =>
+          (x.id || x.name) === casterTokenKey ||
+          x.id === casterTokenKey ||
+          x.name === casterTokenKey
       );
-      const merged = [...existingPlayers, ...nonPlayerMonsters].sort((a, b) => b.initiative - a.initiative);
+      if (!caster) return;
 
-      setCombatants(merged);
-      broadcastToPlayerView({ combatants: merged });
-      setCurrentTurnIndex(0);
-      setRoundCount(1);
-      setIsCombatActive(true);
-
-      // Restaura posições/rotações predefinidas salvas no banco
-      initializeFromCombatants(merged);
-    }
-
-    if (scene.sceneType === 'combat') {
-      setLiveDisplayMode('combat');
-      setIsCombatActive(true);
-    } else {
-      setLiveDisplayMode('artwork');
-    }
-
-    const activeIdx = scene.activeImageIndex ?? 0;
-    const activeSlide = scene.sceneImages?.[activeIdx];
-    const targetImageUrl = activeSlide ? activeSlide.imageUrl : scene.imageUrl;
-    const targetSensoryText = activeSlide ? (activeSlide.overlayText || scene.sensoryText) : scene.sensoryText;
-
-    broadcastToPlayerView({
-      sceneId: scene.id,
-      title: scene.title,
-      imageUrl: targetImageUrl ? normalizeImageUrl(targetImageUrl) : undefined,
-      sensoryText: targetSensoryText,
-      sceneImages: scene.sceneImages || [],
-      activeImageIndex: activeIdx,
-      mode: scene.sceneType === 'combat' ? 'combat' : 'artwork',
-      timeOfDay: scene.timeOfDay || 'day',
-      timeOfDayHour: targetHour,
-      hasFog: targetFog,
-      hasRain: targetRain,
-      floorTextureUrl: scene.floorTextureUrl,
-    });
-
-    // Iniciar a primeira música associada à cena em loop
-    if (scene.bgmTracks && scene.bgmTracks.length > 0) {
-      const firstTrackId = scene.bgmTracks[0];
-      const track = allBgmTracks.find(t => t.id === firstTrackId);
-      if (track) {
-        playBgm(track);
-      }
-    } else if (scene.bgmCategory) {
-      const track = allBgmTracks.find(t => t.id === `bgm-${scene.bgmCategory}`);
-      if (track) {
-        playBgm(track);
-      }
-    }
-  };
-
-  const handleSlideChange = async (index: number) => {
-    if (!activeScene || !activeScene.sceneImages) return;
-    const updatedScene = {
-      ...activeScene,
-      activeImageIndex: index,
-    };
-    await updateScene(updatedScene);
-    
-    // Broadcast updated slide to player view
-    const slide = activeScene.sceneImages[index];
-    broadcastToPlayerView({
-      sceneId: activeScene.id,
-      title: activeScene.title,
-      imageUrl: slide ? normalizeImageUrl(slide.imageUrl) : undefined,
-      sensoryText: slide ? (slide.overlayText || activeScene.sensoryText) : activeScene.sensoryText,
-      sceneImages: activeScene.sceneImages,
-      activeImageIndex: index,
-      mode: liveDisplayMode,
-    });
-  };
-
-  const handleNextTurn = () => {
-    if (combatants.length === 0) return;
-    const nextIdx = (currentTurnIndex + 1) % combatants.length;
-    let nextRoundCount = roundCount;
-    if (nextIdx === 0) {
-      nextRoundCount += 1;
-    }
-    
-    let rolled = combatants;
-    if (nextIdx === 0 && autoInit) {
-      rolled = combatants.map(c => {
-         const dexMod = c.dex ? Math.floor((c.dex - 10) / 2) : 0;
-         return { ...c, initiative: Math.floor(Math.random() * 20) + 1 + dexMod };
+      const matchingSheet = characterSheets.find((s) => {
+        const cClean = caster.name.split('(')[0].trim().toLowerCase();
+        return (
+          s.characterName.toLowerCase() === cClean ||
+          s.characterName.toLowerCase().includes(cClean) ||
+          cClean.includes(s.characterName.toLowerCase())
+        );
       });
-    }
-    
-    const next = rolled.map((c, idx) => {
-      if (idx === nextIdx) {
-        const pos = tokenPositions3D[c.id] || { x: c.x || 0, z: c.z || 0 };
-        return {
-          ...c,
-          actionUsed: false,
-          bonusActionUsed: false,
-          reactionUsed: false,
-          movementUsed: 0,
-          hasDashed: false,
-          turnStartX: pos.x,
-          turnStartZ: pos.z,
-        };
+
+      const characterSpell: CharacterSpell = matchingSheet?.spells?.find(
+        (s) => s.name === spell.name
+      ) || {
+        id: spell.name,
+        name: spell.name,
+        level: spell.level || 0,
+        school: 'evocation',
+        castingTime: '1 ação',
+        range: `${spell.range || 18}m`,
+        components: 'V, S',
+        description: spell.name,
+        prepared: true,
+      };
+
+      const shape = spell.shape || 'circle';
+
+      if (shape === 'multi-target') {
+        const numDarts = 3 + Math.max(0, (characterSpell.level || 1) - 1);
+        setMagicMissileModalState({
+          isOpen: true,
+          caster,
+          spell: characterSpell,
+          availableDarts: numDarts,
+          dartAllocations: {},
+        });
+      } else if (shape === 'target') {
+        const target = combatants.find((x) => x.id === targetCombatantId);
+        executeSingleTargetSpell(caster, matchingSheet, characterSpell, target);
+      } else {
+        const validTargets = combatants.filter(
+          (c) => targetedCombatantIds && targetedCombatantIds.includes(c.id) && c.id !== caster.id
+        );
+        executeAoESpellCast(caster, matchingSheet, characterSpell, validTargets);
       }
-      return c;
-    });
-    
-    const sorted = nextIdx === 0 && autoInit ? [...next].sort((a, b) => b.initiative - a.initiative) : next;
 
-    setCombatants(sorted);
-    setCurrentTurnIndex(nextIdx);
-    setRoundCount(nextRoundCount);
-    setSelectedTargetId(undefined);
+      setActiveSpellTargeting(null);
+      setCasterTokenKey(null);
+      setSpellTargetPosition(null);
+    };
 
-    if (activeSceneRef.current) {
-      updateScene({ ...activeSceneRef.current, combatants: sorted });
+    window.addEventListener('masters_codex_confirm_spell_cast', handleConfirmSpell);
+    return () => window.removeEventListener('masters_codex_confirm_spell_cast', handleConfirmSpell);
+  }, [combatants, characterSheets, setActiveSpellTargeting, setCasterTokenKey, setSpellTargetPosition, setMagicMissileModalState]);
+
+  // Helper functions
+  const getMod = (stat?: number) => (stat ? Math.floor((stat - 10) / 2) : 0);
+
+  const getSpeedInMeters = (speedStr?: string): number => {
+    if (!speedStr) return 9;
+    const cleaned = speedStr.toLowerCase().replace(/[^0-9\.]/g, '');
+    const val = parseFloat(cleaned);
+    if (isNaN(val)) return 9;
+    if (speedStr.toLowerCase().includes('ft') || speedStr.toLowerCase().includes('pe')) {
+      return val * 0.3;
     }
+    return val;
   };
 
-  const handlePrevTurn = () => {
-    if (combatants.length === 0) return;
-    let prevIdx = currentTurnIndex - 1;
-    let prevRoundCount = roundCount;
-    if (prevIdx < 0) {
-      prevIdx = Math.max(0, combatants.length - 1);
-      if (prevRoundCount > 1) {
-        prevRoundCount -= 1;
-      }
-    }
-
-    const next = combatants.map((c, idx) => {
-      if (idx === prevIdx) {
-        const pos = tokenPositions3D[c.id] || { x: c.x || 0, z: c.z || 0 };
-        return {
-          ...c,
-          actionUsed: false,
-          bonusActionUsed: false,
-          reactionUsed: false,
-          movementUsed: 0,
-          hasDashed: false,
-          turnStartX: pos.x,
-          turnStartZ: pos.z,
-        };
-      }
-      return c;
-    });
-
-    setCombatants(next);
-    setCurrentTurnIndex(prevIdx);
-    setRoundCount(prevRoundCount);
-    setSelectedTargetId(undefined);
-
-    if (activeSceneRef.current) {
-      updateScene({ ...activeSceneRef.current, combatants: next });
-    }
-  };
-
-  const handleCardDrop = (targetIndex: number) => {
-    if (draggedCardIndex === null || draggedCardIndex === targetIndex) {
-      setDraggedCardIndex(null);
-      setDragOverCardIndex(null);
-      return;
-    }
-
-    const updatedList = [...combatants];
-    const [draggedItem] = updatedList.splice(draggedCardIndex, 1);
-    updatedList.splice(targetIndex, 0, draggedItem);
-
-    const activeId = combatants[currentTurnIndex]?.id;
-
-    // Recalcula as iniciativas seguindo a regra do usuário:
-    // Quando um personagem é movido para baixo na lista, a iniciativa passa a ser (iniciativa da criatura acima - 1)
-    const reorderedWithNewInit = updatedList.map((c, i) => {
-      if (c.id === draggedItem.id) {
-        if (i > 0) {
-          const initAbove = updatedList[i - 1].initiative;
-          return { ...c, initiative: initAbove - 1 };
-        } else {
-          const initBelow = updatedList[1]?.initiative ?? 10;
-          return { ...c, initiative: initBelow + 1 };
+  const deductAction = (combatantId: string, actionType: 'action' | 'bonus' | 'reaction') => {
+    setCombatants((prev) => {
+      const next = prev.map((c) => {
+        if (c.id === combatantId) {
+          if (actionType === 'action') return { ...c, actionUsed: true };
+          if (actionType === 'bonus') return { ...c, bonusActionUsed: true };
+          if (actionType === 'reaction') return { ...c, reactionUsed: true };
         }
+        return c;
+      });
+      if (activeScene) {
+        updateScene({ ...activeScene, combatants: next });
       }
-      return c;
+      broadcastToPlayerView({ combatants: next });
+      return next;
     });
-
-    setCombatants(reorderedWithNewInit);
-
-    if (activeId) {
-      const newTurnIdx = reorderedWithNewInit.findIndex((x) => x.id === activeId);
-      if (newTurnIdx !== -1) {
-        setCurrentTurnIndex(newTurnIdx);
-      }
-    }
-
-    if (activeSceneRef.current) {
-      updateScene({ ...activeSceneRef.current, combatants: reorderedWithNewInit });
-    }
-    broadcastToPlayerView({ combatants: reorderedWithNewInit });
-
-    const newInitVal = reorderedWithNewInit[targetIndex].initiative;
-    toast.success(`Iniciativa de ${draggedItem.name} ajustada para ${newInitVal}`);
-
-    setDraggedCardIndex(null);
-    setDragOverCardIndex(null);
   };
 
   const handleHpChange = (id: string, delta: number) => {
-    if (delta !== 0) {
-      window.dispatchEvent(new CustomEvent('masters_codex_combat_text', {
-        detail: { combatantId: id, type: delta < 0 ? 'damage' : 'heal', amount: Math.abs(delta) }
-      }));
+    setCombatants((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const newHp = Math.max(0, Math.min(c.maxHp, c.hp + delta));
+        return { ...c, hp: newHp };
+      })
+    );
+  };
+
+  const handleToggleCondition = (id: string, condition: ConditionType) => {
+    setCombatants((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const currentConditions = c.conditions || [];
+        const hasCondition = currentConditions.includes(condition);
+        const updatedConditions = hasCondition
+          ? currentConditions.filter((cond) => cond !== condition)
+          : [...currentConditions, condition];
+        return { ...c, conditions: updatedConditions };
+      })
+    );
+  };
+
+  const addLogEntry = async (entry: Omit<CombatLogEntry, 'id' | 'timestamp' | 'round'>) => {
+    const newLog: CombatLogEntry = {
+      ...entry,
+      id: `log-${Date.now()}-${Math.random()}`,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }),
+      round: roundCount,
+    };
+
+    setCombatLogs((prev) => {
+      const next = [...prev, newLog];
+      broadcastToPlayerView({ combatLogs: next });
+      broadcastCombatLogEntry(newLog);
+      return next;
+    });
+
+    if (activeCampaign) {
+      await createFeedEvent({
+        campaignId: activeCampaign.id,
+        sessionId: activeSession?.id,
+        eventType: 'battle_summary',
+        title: entry.description,
+        summary: entry.description,
+        isPublic: true,
+      });
+    }
+  };
+
+  const parseAndRollDamage = (desc?: string, defaultMod: number = 0): number => {
+    if (!desc) return Math.floor(Math.random() * 8) + 1 + defaultMod;
+    const match = desc.match(/([0-9]+)d([0-9]+)(?:\s*[\+\-]\s*([0-9]+))?/i);
+    if (match) {
+      const count = parseInt(match[1], 10);
+      const sides = parseInt(match[2], 10);
+      const bonus = match[3] ? parseInt(match[3], 10) : 0;
+
+      let total = 0;
+      for (let i = 0; i < count; i++) {
+        total += Math.floor(Math.random() * sides) + 1;
+      }
+      return Math.max(1, total + bonus);
+    }
+    return Math.max(1, Math.floor(Math.random() * 8) + 1 + defaultMod);
+  };
+
+  const rollDice = (
+    title: string,
+    mod: number,
+    actorCombatant?: Combatant,
+    actionDesc?: string,
+    forceNoTarget: boolean = false
+  ): boolean => {
+    const currentActor = actorCombatant || combatants[currentTurnIndex];
+    const target = combatants.find((c) => c.id === selectedTargetId);
+
+    if (title.startsWith('Ataque') && !target && !forceNoTarget) {
+      setPendingAttack({ title, mod, actorCombatant: currentActor, actionDesc });
+      return false;
     }
 
-    setCombatants((prev) => {
-      const next = prev.map((c) => {
-        if (c.id === id) {
-          const newHp = Math.max(0, Math.min(c.maxHp, c.hp + delta));
-          return { ...c, hp: newHp };
-        }
-        return c;
-      });
-      broadcastToPlayerView({ combatants: next });
-      return next;
+    const roll = Math.floor(Math.random() * 20) + 1;
+    const total = roll + mod;
+    const isCrit = roll === 20;
+    const isFail = roll === 1;
+
+    setDiceResult({
+      title,
+      roll,
+      total,
+      isCrit,
+      isFail,
     });
-  };
 
+    const isAttack = title.startsWith('Ataque');
+    const isHit = isAttack && target ? isCrit || total >= target.ac : undefined;
+    let dmgAmount: number | undefined = undefined;
 
+    if (isAttack && target && isHit) {
+      dmgAmount = parseAndRollDamage(actionDesc, mod);
+    }
 
-  const handleToggleCondition = (id: string, cond: ConditionType) => {
-    setCombatants((prev) => {
-      const next = prev.map((c) => {
-        if (c.id === id) {
-          const exists = c.conditions.includes(cond);
-          const newConds = exists ? c.conditions.filter((x) => x !== cond) : [...c.conditions, cond];
-          return { ...c, conditions: newConds };
-        }
-        return c;
-      });
-      broadcastToPlayerView({ combatants: next });
-      return next;
+    setBg3DiceOverlay({
+      title,
+      actorName: currentActor?.name,
+      targetName: target?.name,
+      d20Roll: roll,
+      modifier: mod,
+      totalRoll: total,
+      targetAc: target?.ac,
+      isHit,
+      isCrit,
+      isFail,
+      damageDiceFormula: actionDesc || '1d8',
+      damageAmount: dmgAmount,
+      isRolling: true,
+      phase: 'd20',
     });
-  };
 
-  const handleAddPresetMonster = (m: typeof INITIAL_MONSTERS[0], count: number = 1) => {
-    setCombatants((prev) => {
-      const next = [...prev];
-      const existingCount = prev.filter((c) => c.name.toLowerCase().startsWith(m.name.toLowerCase())).length;
+    setTimeout(() => {
+      setBg3DiceOverlay((prev) => (prev ? { ...prev, isRolling: false } : null));
 
-      for (let i = 0; i < count; i++) {
-        const num = existingCount + i + 1;
-        const name = count > 1 || existingCount > 0 ? `${m.name} #${num}` : m.name;
-        next.push({
-          id: `c-sc-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
-          name,
-          type: 'monster',
-          hp: m.hp,
-          maxHp: m.hp,
-          ac: m.ac,
-          initiative: Math.floor(Math.random() * 20) + 1,
-          conditions: [],
-          cr: m.cr,
-          speed: m.speed || '9m',
-        });
+      if (isHit && dmgAmount !== undefined) {
+        setTimeout(() => {
+          setBg3DiceOverlay((prev) => (prev ? { ...prev, phase: 'damage', isRolling: true } : null));
+          setTimeout(() => {
+            setBg3DiceOverlay((prev) => (prev ? { ...prev, isRolling: false } : null));
+          }, 600);
+        }, 1500);
       }
+    }, 700);
 
-      next.sort((a, b) => b.initiative - a.initiative);
-      broadcastToPlayerView({ combatants: next });
-      return next;
-    });
-    setIsCombatActive(true);
-  };
+    if (title.startsWith('Ataque') && currentActor) {
+      if (target) {
+        const isHit = isCrit || total >= target.ac;
+        const resultText = isCrit ? '💥 ACERTO CRÍTICO!' : isHit ? '✓ ACERTOU!' : '✕ ERROU!';
+        const desc = `${currentActor.name} executou ${title} contra ${target.name} (d20: ${roll} + ${mod} = ${total} vs CA ${target.ac}) → ${resultText}`;
 
-  const handleAddNpcToCombat = (npc: WorldEntity) => {
-    setCombatants((prev) => {
-      const hp = Number(npc.attributes?.hp || npc.attributes?.pv || npc.attributes?.PV || 20);
-      const ac = Number(npc.attributes?.ac || npc.attributes?.ca || npc.attributes?.CA || 12);
+        addLogEntry({
+          actorId: currentActor.id,
+          actorName: currentActor.name,
+          targetId: target.id,
+          targetName: target.name,
+          eventType: 'attack',
+          actionName: title,
+          d20Roll: roll,
+          totalRoll: total,
+          targetAc: target.ac,
+          isHit,
+          isCrit,
+          isFail,
+          description: desc,
+        });
 
-      const newC: Combatant = {
-        id: `c-npc-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
-        name: npc.name,
-        type: 'npc',
-        hp: hp,
-        maxHp: hp,
-        ac: ac,
-        initiative: Math.floor(Math.random() * 20) + 1,
-        conditions: [],
-        modelUrl: getModelUrlByNameOrPath(npc.name),
-        speed: npc.attributes?.speed || npc.attributes?.deslocamento || '9m',
-      };
+        if (isHit) {
+          const dmg = parseAndRollDamage(actionDesc, mod);
+          const prevHp = target.hp;
+          handleHpChange(target.id, -dmg);
+          const newHp = Math.max(0, target.hp - dmg);
 
-      const next = [...prev, newC];
-      next.sort((a, b) => b.initiative - a.initiative);
-      broadcastToPlayerView({ combatants: next });
-      return next;
-    });
-    setIsCombatActive(true);
-  };
+          addLogEntry({
+            actorId: currentActor.id,
+            actorName: currentActor.name,
+            targetId: target.id,
+            targetName: target.name,
+            eventType: 'damage',
+            amount: dmg,
+            description: `💥 ${currentActor.name} causou ${dmg} de dano em ${target.name} (HP: ${prevHp} → ${newHp})`,
+          });
 
-  const handleAddPlayerMember = (member: CampaignMember) => {
-    const charName = member.characterName || member.displayName || 'Jogador';
-    const alreadyIn = combatants.some((c) => c.name.toLowerCase() === charName.toLowerCase());
-    if (alreadyIn) return;
-
-    // 1. Usa o modelUrl vindo do cadastro do membro no Supabase (fonte de verdade cross-account)
-    let resolvedModelUrl: string | undefined = member.modelUrl;
-    let resolvedSpeed = '9m';
-
-    // 2. Se não estiver no cadastro do membro, busca na ficha salva no localStorage (fallback local)
-    if (!resolvedModelUrl || resolvedSpeed === '9m') {
-      try {
-        const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
-        if (saved) {
-          const sheets: any[] = JSON.parse(saved);
-          const cClean = charName.split('(')[0].trim().toLowerCase();
-          const found = sheets.find(
-            (s) =>
-              (s.characterName && s.characterName.split('(')[0].trim().toLowerCase() === cClean) ||
-              (s.characterName && charName.toLowerCase().includes(s.characterName.toLowerCase())) ||
-              (s.characterName && s.characterName.toLowerCase().includes(charName.toLowerCase()))
-          );
-          if (found) {
-            if (found.modelUrl) resolvedModelUrl = found.modelUrl;
-            else if (found.className) resolvedModelUrl = getModelUrlByNameOrPath(found.className);
-            if (found.speed) resolvedSpeed = found.speed;
+          if (newHp === 0) {
+            addLogEntry({
+              actorId: target.id,
+              actorName: target.name,
+              eventType: 'death',
+              description: `💀 ${target.name} foi derrotado em combate!`,
+            });
           }
         }
-      } catch (e) {}
+      } else {
+        addLogEntry({
+          actorId: currentActor.id,
+          actorName: currentActor.name,
+          eventType: 'attack',
+          actionName: title,
+          d20Roll: roll,
+          totalRoll: total,
+          isCrit,
+          isFail,
+          description: `${currentActor.name} rolou ${title}: ${roll} + ${mod} = ${total}`,
+        });
+      }
+    } else if (currentActor) {
+      addLogEntry({
+        actorId: currentActor.id,
+        actorName: currentActor.name,
+        eventType: 'save',
+        d20Roll: roll,
+        totalRoll: total,
+        description: `${currentActor.name} fez teste de ${title}: ${roll} + ${mod} = ${total}`,
+      });
     }
-
-    // 3. Fallback por nome
-    if (!resolvedModelUrl) {
-      resolvedModelUrl = getModelUrlByNameOrPath(charName);
-    }
-
-    const newC: Combatant = {
-      id: `p-${member.id || Date.now()}`,
-      name: charName,
-      type: 'player',
-      hp: 25,
-      maxHp: 25,
-      ac: 15,
-      initiative: Math.floor(Math.random() * 20) + 1,
-      conditions: [],
-      modelUrl: resolvedModelUrl,
-      speed: resolvedSpeed,
-    };
-
-    setCombatants((prev) => {
-      const next = [...prev, newC].sort((a, b) => b.initiative - a.initiative);
-      broadcastToPlayerView({ combatants: next });
-      return next;
-    });
-    setIsCombatActive(true);
+    return true;
   };
 
-  const handleAddCustomCombatant = () => {
-    if (!customName.trim()) return;
-    const newC: Combatant = {
-      id: `custom-${Date.now()}`,
-      name: customName.trim(),
-      type: customType,
-      hp: customHp,
-      maxHp: customHp,
-      ac: customAc,
-      initiative: customInit,
-      conditions: [],
-    };
-    setCombatants((prev) => {
-      const next = [...prev, newC].sort((a, b) => b.initiative - a.initiative);
-      broadcastToPlayerView({ combatants: next });
-      return next;
-    });
-    setCustomName('');
-    setIsCombatActive(true);
+  const handleCastSpellFromCard = (c: Combatant, sheet: CharacterSheet, spell: CharacterSpell) => {
+    const aoe = getSpellAoEDefinition(spell.name);
+
+    if (aoe) {
+      setActiveSpellTargeting(aoe);
+      const casterKey = c.id || c.name;
+      setCasterTokenKey(casterKey);
+
+      const pos =
+        tokenPositions3D[casterKey] ||
+        (c.id ? tokenPositions3D[c.id] : null) ||
+        (c.name ? tokenPositions3D[c.name] : null) ||
+        (c.x !== undefined && c.z !== undefined ? { x: c.x, z: c.z } : null);
+      const casterIdx = combatants.findIndex(
+        (x) =>
+          (x.id || x.name) === casterKey ||
+          x.id === c.id ||
+          x.name === c.name
+      );
+      const fallbackX = casterIdx !== -1 ? (casterIdx % 5) * 2 - 5 : 0;
+      const fallbackZ = casterIdx !== -1 ? Math.floor(casterIdx / 5) * 2 - 5 : 0;
+
+      const casterX = pos ? pos.x : fallbackX;
+      const casterZ = pos ? pos.z : fallbackZ;
+
+      setSpellTargetPosition({ x: casterX, z: casterZ });
+      if (aoe.shape === 'multi-target') {
+        toast.info(`Magia ${spell.name}: Clique no grid para alocar os mísseis nos alvos.`);
+      } else if (aoe.shape === 'target') {
+        toast.info(`Magia ${spell.name}: Clique no alvo dentro do raio de ${aoe.range}m no grid.`);
+      } else {
+        toast.info(
+          `Modo de mira de área ativado para ${spell.name} (${aoe.shape}). Mova o mouse no grid e clique para confirmar.`
+        );
+      }
+    } else {
+      executeSpellCastRoll(c, sheet, spell);
+    }
   };
 
-  const handleDeleteCombatant = (id: string) => {
-    setCombatants((prev) => {
-      const next = prev.filter((c) => c.id !== id);
-      broadcastToPlayerView({ combatants: next });
-      return next;
+  const executeSingleTargetSpell = async (
+    caster: Combatant,
+    sheet: CharacterSheet | undefined,
+    spell: CharacterSpell,
+    target?: Combatant
+  ) => {
+    if (sheet && spell.level > 0 && sheet.spellSlots?.[spell.level]) {
+      const currentSlots = sheet.spellSlots[spell.level];
+      if (currentSlots.used < currentSlots.total) {
+        const updatedSheet = {
+          ...sheet,
+          spellSlots: {
+            ...sheet.spellSlots,
+            [spell.level]: { ...currentSlots, used: currentSlots.used + 1 },
+          },
+        };
+        const { saveSheet } = useCharacterSync({ userId: user?.id || '' });
+        await saveSheet(updatedSheet);
+      } else {
+        toast.error(`Sem slots disponíveis para o Nível ${spell.level}!`);
+        return;
+      }
+    }
+
+    const cleanTime = (spell.castingTime || '').toLowerCase();
+    const isBonusAction = cleanTime.includes('bônus') || cleanTime.includes('bonus');
+    const isReaction = cleanTime.includes('reação') || cleanTime.includes('reaction');
+    const actionType = isBonusAction ? 'bonus' : isReaction ? 'reaction' : 'action';
+    deductAction(caster.id, actionType);
+
+    const profBonus = sheet ? Math.floor((sheet.level - 1) / 4) + 2 : 2;
+    const ability = sheet?.spellcastingAbility || 'int';
+    const modValue = sheet ? getAttributeModifier(sheet, ability) : 3;
+    const spellAttackBonus = sheet?.spellAttackBonusOverride ?? profBonus + modValue;
+
+    const roll = Math.floor(Math.random() * 20) + 1;
+    const total = roll + spellAttackBonus;
+    const isCrit = roll === 20;
+    const isFail = roll === 1;
+
+    let isHit = false;
+    let damage = 0;
+
+    if (target) {
+      isHit = isCrit || (!isFail && total >= target.ac);
+      if (isHit) {
+        const cleanName = spell.name.toLowerCase();
+        const diceSides =
+          cleanName.includes('eldritch') || cleanName.includes('explosao') ? 10 : 8;
+        damage = Math.floor(Math.random() * diceSides) + 1;
+        if (isCrit) damage += Math.floor(Math.random() * diceSides) + 1;
+
+        const newHp = Math.max(0, target.hp - damage);
+        setCombatants((prev) => {
+          const next = prev.map((c) => (c.id === target.id ? { ...c, hp: newHp } : c));
+          if (activeScene) updateScene({ ...activeScene, combatants: next });
+          return next;
+        });
+      }
+    }
+
+    setDiceResult({
+      title: `${spell.name} -> ${target ? target.name : 'Alvo'}`,
+      roll,
+      total,
+      isCrit,
+      isFail,
     });
+
+    const desc = target
+      ? `${caster.name} disparou ${spell.name} em ${target.name} (d20: ${roll} + ${spellAttackBonus} = ${total} vs CA ${target.ac}). ${
+          isHit
+            ? `💥 ACERTOU! Caused ${damage} de dano! (HP restante: ${Math.max(0, target.hp - damage)})`
+            : '✕ ERROU!'
+        }`
+      : `${caster.name} conjurou ${spell.name} (d20: ${roll} + ${spellAttackBonus} = ${total})`;
+
+    toast(
+      isHit
+        ? `Ataque acertou ${target?.name}! Dano: ${damage}`
+        : target
+        ? `Ataque errou ${target.name}`
+        : `Conjuração executada!`
+    );
+
+    addLogEntry({
+      actorId: caster.id,
+      actorName: caster.name,
+      targetId: target?.id,
+      targetName: target?.name,
+      eventType: 'attack',
+      description: desc,
+    });
+  };
+
+  const executeAoESpellCast = async (
+    caster: Combatant,
+    sheet: CharacterSheet | undefined,
+    spell: CharacterSpell,
+    targets: Combatant[]
+  ) => {
+    if (sheet && spell.level > 0 && sheet.spellSlots?.[spell.level]) {
+      const currentSlots = sheet.spellSlots[spell.level];
+      if (currentSlots.used < currentSlots.total) {
+        const updatedSheet = {
+          ...sheet,
+          spellSlots: {
+            ...sheet.spellSlots,
+            [spell.level]: { ...currentSlots, used: currentSlots.used + 1 },
+          },
+        };
+        const { saveSheet } = useCharacterSync({ userId: user?.id || '' });
+        await saveSheet(updatedSheet);
+      } else {
+        toast.error(`Sem slots disponíveis para o Nível ${spell.level}!`);
+        return;
+      }
+    }
+
+    const cleanTime = (spell.castingTime || '').toLowerCase();
+    const isBonusAction = cleanTime.includes('bônus') || cleanTime.includes('bonus');
+    const isReaction = cleanTime.includes('reação') || cleanTime.includes('reaction');
+    const actionType = isBonusAction ? 'bonus' : isReaction ? 'reaction' : 'action';
+    deductAction(caster.id, actionType);
+
+    const profBonus = sheet ? Math.floor((sheet.level - 1) / 4) + 2 : 2;
+    const ability = sheet?.spellcastingAbility || 'int';
+    const modValue = sheet ? getAttributeModifier(sheet, ability) : 3;
+    const spellSaveDc = sheet?.spellSaveDcOverride ?? 8 + profBonus + modValue;
+
+    const cleanName = spell.name.toLowerCase();
+    let diceCount = 3;
+    let diceSides = 6;
+    if (cleanName.includes('bola de fogo') || cleanName.includes('fireball')) {
+      diceCount = 8;
+      diceSides = 6;
+    }
+
+    let rawDamage = 0;
+    for (let i = 0; i < diceCount; i++) {
+      rawDamage += Math.floor(Math.random() * diceSides) + 1;
+    }
+
+    const damageMap: Record<string, number> = {};
+    const logDetails: string[] = [];
+
+    targets.forEach((t) => {
+      const dexMod = t.dex !== undefined ? Math.floor((t.dex - 10) / 2) : 0;
+      const dexSaveRoll = Math.floor(Math.random() * 20) + 1;
+      const dexSaveTotal = dexSaveRoll + dexMod;
+      const passed = dexSaveTotal >= spellSaveDc;
+      const finalDmg = passed ? Math.floor(rawDamage / 2) : rawDamage;
+
+      damageMap[t.id] = finalDmg;
+      logDetails.push(
+        `${t.name}: TR ${dexSaveRoll}+${dexMod}=${dexSaveTotal} vs CD ${spellSaveDc} (${
+          passed ? 'PASSOU -> ' + finalDmg + ' dano' : 'FALHOU -> ' + finalDmg + ' dano'
+        })`
+      );
+    });
+
+    if (targets.length > 0) {
+      setCombatants((prev) => {
+        const next = prev.map((c) => {
+          if (damageMap[c.id] !== undefined) {
+            return { ...c, hp: Math.max(0, c.hp - damageMap[c.id]) };
+          }
+          return c;
+        });
+        if (activeScene) updateScene({ ...activeScene, combatants: next });
+        return next;
+      });
+    }
+
+    const desc =
+      `${caster.name} conjurou ${spell.name} (Área)! Dano Base: ${rawDamage}. ` +
+      (logDetails.length > 0 ? logDetails.join(' | ') : 'Nenhum alvo na área.');
+
+    toast.info(
+      `Área de ${spell.name}: ${targets.length} alvo(s) atingido(s)! Dano base: ${rawDamage}`
+    );
+
+    addLogEntry({
+      actorId: caster.id,
+      actorName: caster.name,
+      eventType: 'damage',
+      description: desc,
+    });
+  };
+
+  const handleConfirmMagicMissiles = async () => {
+    if (!magicMissileModalState) return;
+
+    const { caster, spell, dartAllocations } = magicMissileModalState;
+    const matchingSheet = characterSheets.find((s) => {
+      const cClean = caster.name.split('(')[0].trim().toLowerCase();
+      return (
+        s.characterName.toLowerCase() === cClean ||
+        s.characterName.toLowerCase().includes(cClean) ||
+        cClean.includes(s.characterName.toLowerCase())
+      );
+    });
+
+    if (matchingSheet && spell.level > 0 && matchingSheet.spellSlots?.[spell.level]) {
+      const currentSlots = matchingSheet.spellSlots[spell.level];
+      if (currentSlots.used < currentSlots.total) {
+        const updatedSheet = {
+          ...matchingSheet,
+          spellSlots: {
+            ...matchingSheet.spellSlots,
+            [spell.level]: { ...currentSlots, used: currentSlots.used + 1 },
+          },
+        };
+        const { saveSheet } = useCharacterSync({ userId: user?.id || '' });
+        await saveSheet(updatedSheet);
+      }
+    }
+
+    const cleanTime = (spell.castingTime || '').toLowerCase();
+    const isBonusAction = cleanTime.includes('bônus') || cleanTime.includes('bonus');
+    const isReaction = cleanTime.includes('reação') || cleanTime.includes('reaction');
+    const actionType = isBonusAction ? 'bonus' : isReaction ? 'reaction' : 'action';
+    deductAction(caster.id, actionType);
+
+    const damageMap: Record<string, number> = {};
+    const logDetails: string[] = [];
+
+    Object.entries(dartAllocations).forEach(([targetId, count]) => {
+      if (count <= 0) return;
+      const targetC = combatants.find((c) => c.id === targetId);
+      if (!targetC) return;
+
+      let totalDmg = 0;
+      for (let i = 0; i < count; i++) {
+        totalDmg += Math.floor(Math.random() * 4) + 1 + 1;
+      }
+      damageMap[targetId] = totalDmg;
+      logDetails.push(`${count} dardo(s) em ${targetC.name} (${totalDmg} dano)`);
+    });
+
+    if (Object.keys(damageMap).length > 0) {
+      setCombatants((prev) => {
+        const next = prev.map((c) => {
+          if (damageMap[c.id] !== undefined) {
+            return { ...c, hp: Math.max(0, c.hp - damageMap[c.id]) };
+          }
+          return c;
+        });
+        if (activeScene) {
+          updateScene({ ...activeScene, combatants: next });
+        }
+        return next;
+      });
+    }
+
+    const desc =
+      `${caster.name} disparou ${spell.name}! ` +
+      (logDetails.join(', ') || 'Nenhum dardo alocado.');
+    toast.success(`Mísseis Mágicos disparados! ${logDetails.join(', ')}`);
+
+    addLogEntry({
+      actorId: caster.id,
+      actorName: caster.name,
+      eventType: 'damage',
+      description: desc,
+    });
+
+    setMagicMissileModalState(null);
+  };
+
+  const executeSpellCastRoll = async (
+    c: Combatant,
+    sheet: CharacterSheet,
+    spell: CharacterSpell
+  ) => {
+    if (spell.level > 0 && sheet.spellSlots?.[spell.level]) {
+      const currentSlots = sheet.spellSlots[spell.level];
+      if (currentSlots.used < currentSlots.total) {
+        const updatedSheet = {
+          ...sheet,
+          spellSlots: {
+            ...sheet.spellSlots,
+            [spell.level]: {
+              ...currentSlots,
+              used: currentSlots.used + 1,
+            },
+          },
+        };
+        const { saveSheet } = useCharacterSync({ userId: user?.id || '' });
+        await saveSheet(updatedSheet);
+        toast.success(`Magia ${spell.name} lançada! Slot de Nível ${spell.level} consumido.`);
+      } else {
+        toast.error(`Sem slots disponíveis para o Nível ${spell.level}!`);
+        return;
+      }
+    }
+
+    const cleanTime = (spell.castingTime || '').toLowerCase();
+    const isBonusAction = cleanTime.includes('bônus') || cleanTime.includes('bonus');
+    const isReaction = cleanTime.includes('reação') || cleanTime.includes('reaction');
+    const actionType = isBonusAction ? 'bonus' : isReaction ? 'reaction' : 'action';
+    deductAction(c.id, actionType);
+
+    const profBonus = Math.floor((sheet.level - 1) / 4) + 2;
+    const ability = sheet.spellcastingAbility || 'int';
+    const modValue = getAttributeModifier(sheet, ability);
+    const spellAttackBonus = sheet.spellAttackBonusOverride ?? profBonus + modValue;
+    const spellSaveDc = sheet.spellSaveDcOverride ?? 8 + profBonus + modValue;
+
+    const roll = Math.floor(Math.random() * 20) + 1;
+    const total = roll + spellAttackBonus;
+    const isCrit = roll === 20;
+    const isFail = roll === 1;
+
+    setDiceResult({
+      title: `Conjurar: ${spell.name}`,
+      roll,
+      total,
+      isCrit,
+      isFail,
+    });
+
+    const target = combatants.find((x) => x.id === selectedTargetId);
+    let desc = `${c.name} conjurou ${spell.name} (Nív. ${spell.level}) (CD TR: ${spellSaveDc})`;
+    if (target) {
+      desc = `${c.name} conjurou ${spell.name} contra ${target.name} (d20: ${roll} + ${spellAttackBonus} = ${total} vs CA ${target.ac}) (CD TR: ${spellSaveDc})`;
+    }
+
+    addLogEntry({
+      actorId: c.id,
+      actorName: c.name,
+      targetId: target?.id,
+      targetName: target?.name,
+      eventType: 'attack',
+      description: desc,
+    });
+  };
+
+  const handleAttackFromWidget = (target: Combatant) => {
+    setSelectedTargetId(target.id);
+    broadcastToPlayerView({ targetId: target.id });
+
+    const currentActor = combatants[currentTurnIndex];
+    if (!currentActor) {
+      toast.error('Nenhum combatente ativo no turno!');
+      return;
+    }
+
+    const matchingSheet = characterSheets.find((s) => {
+      const cClean = currentActor.name.split('(')[0].trim().toLowerCase();
+      return (
+        s.characterName.toLowerCase() === cClean ||
+        s.characterName.toLowerCase().includes(cClean) ||
+        cClean.includes(s.characterName.toLowerCase())
+      );
+    });
+
+    let atkName = 'Ataque';
+    let bonus = getMod(currentActor.str);
+    let dmgDesc = '1d8';
+
+    if (matchingSheet?.attacks && matchingSheet.attacks.length > 0) {
+      const atk = matchingSheet.attacks[0];
+      atkName = atk.name;
+      bonus = parseInt(atk.atkBonus.replace('+', '').trim()) || 0;
+      dmgDesc = atk.damage || '1d8';
+    } else if (currentActor.actions && currentActor.actions.length > 0) {
+      const act = currentActor.actions[0];
+      atkName = act.name;
+      const match = act.desc.match(/\+([0-9]+)/);
+      bonus = match ? parseInt(match[1]) : getMod(currentActor.str);
+      dmgDesc = act.desc;
+    }
+
+    const rolled = rollDice(`Ataque: ${atkName}`, bonus, currentActor, dmgDesc);
+    if (rolled) {
+      deductAction(currentActor.id, 'action');
+    }
+  };
+
+  const handleConfirmBattleSetup = (
+    mode: BattleSetupMode,
+    timeOfDay: 'day' | 'sunset' | 'night' | 'fog' | 'storm'
+  ) => {
+    setBattleSetupMode(mode);
+    setSelectedTimeOfDay(timeOfDay);
+    setIsPlacementPhase(true);
+    broadcastToPlayerView({
+      isPlacementPhase: true,
+      timeOfDay,
+    });
+
+    combatEngine.startCombat();
+    combatEngine.handleRollInitiativeAll();
+    setShowBattleSetupModal(false);
   };
 
   const handleStartImpromptuCombat = () => {
     setShowBattleSetupModal(true);
   };
 
-  const handleConfirmBattleSetup = (mode: BattleSetupMode, timeOfDay: 'day' | 'sunset' | 'night' | 'fog' | 'storm') => {
-    setBattleSetupMode(mode);
-    setSelectedTimeOfDay(timeOfDay);
-
-    const presetHours: Record<string, number> = { day: 12, sunset: 18, night: 24, fog: 6, storm: 2 };
-    const hour = presetHours[timeOfDay] ?? 12;
-    setLiveTimeOfDayHour(hour);
-    if (timeOfDay === 'fog') setLiveHasFog(true);
-    if (timeOfDay === 'storm') setLiveHasRain(true);
-
-    setIsPlacementPhase(true);
-    setIsCombatActive(true);
-    setLiveDisplayMode('combat');
-    setShowBattleSetupModal(false);
-    setShowAddCombatantModal(true);
-
-    broadcastToPlayerView({
-      mode: 'combat',
-      isPlacementPhase: true,
-      setupMode: mode,
-      timeOfDay,
-      timeOfDayHour: hour,
-      hasFog: timeOfDay === 'fog',
-      hasRain: timeOfDay === 'storm',
-    });
-  };
-
-  const handleEndCombat = async () => {
+  const handleEndCombat = () => {
+    combatEngine.endCombat();
     onGenerateLoot();
-    if (activeCampaign) {
-      const monstersDefeated = combatants.filter((c) => c.type === 'monster').length;
-      await createFeedEvent({
-        campaignId: activeCampaign.id,
-        sessionId: activeSession?.id,
-        eventType: 'battle_summary',
-        title: `⚔️ Vitória em Combate (Rodada ${roundCount})`,
-        summary: `O grupo venceu os inimigos em ${roundCount} rodadas de combate intenso.`,
-        details: {
-          inimigos_derrotados: monstersDefeated || 1,
-          tesouro: '24 Moedas de Prata, 12 Ouro, 1x Poção de Cura',
-        },
-        isPublic: true,
-      });
-    }
-
-    setCombatants([]);
-    setCurrentTurnIndex(0);
-    setRoundCount(1);
-    setIsCombatActive(false);
-    setLiveDisplayMode('artwork');
-    broadcastToPlayerView({ combatants: [] });
   };
 
-  const getSceneIcon = (type: SceneType) => {
-    switch (type) {
-      case 'social':
-        return <Beer className="w-3.5 h-3.5 text-amber-400" />;
-      case 'dialogue':
-        return <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />;
-      case 'combat':
-        return <Swords className="w-3.5 h-3.5 text-rose-400" />;
-      case 'exploration':
-        return <Compass className="w-3.5 h-3.5 text-emerald-400" />;
-      default:
-        return <Film className="w-3.5 h-3.5 text-purple-400" />;
-    }
+  const handleSlideChange = async (index: number) => {
+    if (!activeScene) return;
+    const updated = { ...activeScene, activeImageIndex: index };
+    await updateScene(updated);
+    sceneProjection.projectSceneToPlayerView(updated);
   };
 
-  const activeImageIndex = activeScene?.activeImageIndex ?? 0;
-  const activeSlideImage = activeScene?.sceneImages?.[activeImageIndex];
-  const displayImageUrl = activeSlideImage?.imageUrl 
-    ? normalizeImageUrl(activeSlideImage.imageUrl) 
-    : (activeScene?.imageUrl ? normalizeImageUrl(activeScene.imageUrl) : null);
+  const handleFireSceneLive = (scene: any) => {
+    setActiveScene(scene);
+    sceneProjection.projectSceneToPlayerView(scene);
+  };
 
   return (
-    <div className="flex-1 bg-[#0a0d14] flex flex-col h-full overflow-hidden select-none relative">
-      {statusMenuOpen && <div className="fixed inset-0 z-10" onClick={() => setStatusMenuOpen(null)} />}
-      
-      {/* Spell Targeting HUD Indicator Overlay */}
-      <SpellTargetingOverlay />
-      
-      {/* Top Cockpit Header Bar */}
-      <div className="bg-[#121824] border-b border-[#2a3449] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-md relative z-20">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 shadow-inner">
-            <Radio className="w-4 h-4 animate-pulse" />
-          </div>
+    <div className="flex h-screen w-full bg-[#0a0d14] overflow-hidden text-slate-100 font-sans">
+      {/* 1. Left Sidebar: Cenas/Timeline */}
+      <SceneTimelinePanel onFireSceneLive={handleFireSceneLive} />
 
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded font-mono">
-                Estúdio Cockpit Ao Vivo
-              </span>
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-mono flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" /> TRANSMITINDO
-              </span>
-            </div>
-            <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5 mt-0.5">
-              <span className="text-slate-400 font-mono text-[11px]">Transmissão ao Vivo:</span>
-              {activeScene ? (
-                <span className="text-amber-300 font-semibold flex items-center gap-1 truncate max-w-[300px]">
-                  {getSceneIcon(activeScene.sceneType)}
-                  <span className="truncate">{activeScene.title}</span>
-                </span>
-              ) : (
-                <span className="text-slate-500 italic text-xs">Nenhuma cena ativa</span>
-              )}
-            </div>
-          </div>
-        </div>
+      {/* 2. Main Middle: Projeção Visual / BattleGrid3D */}
+      <div className="flex-1 flex flex-col justify-between overflow-hidden relative">
+        <LiveCockpitHeader
+          activeScene={activeScene}
+          liveDisplayMode={liveDisplayMode}
+          setLiveDisplayMode={setLiveDisplayMode}
+          onOpenCreateScene={() => setShowCreateSceneModal(true)}
+          onOpenPlayerView={onOpenPlayerView}
+        />
 
-        {/* Live Mode Controls & Player View Trigger */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center bg-[#0a0d14] border border-[#2a3449] rounded-xl p-1 gap-1">
-            <button
-              onClick={() => {
-                setLiveDisplayMode('artwork');
-                broadcastToPlayerView({ mode: 'artwork' });
-              }}
-              className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
-                liveDisplayMode === 'artwork'
-                  ? 'bg-purple-600 text-slate-950 shadow font-black'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Film className="w-3 h-3" />
-              <span>Modo Arte</span>
-            </button>
+        <div className="flex-1 flex min-h-0 relative">
+          <LiveVisualMirror
+            onSlideChange={handleSlideChange}
+            onAttackFromWidget={handleAttackFromWidget}
+          />
 
-            <button
-              onClick={() => {
-                setLiveDisplayMode('combat');
-                broadcastToPlayerView({ mode: 'combat' });
-              }}
-              className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
-                liveDisplayMode === 'combat'
-                  ? 'bg-rose-600 text-slate-950 shadow font-black'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Swords className="w-3 h-3" />
-              <span>Modo Combate</span>
-            </button>
-          </div>
-
-          <button
-            onClick={onOpenPlayerView}
-            className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5"
-          >
-            <Tv className="w-3.5 h-3.5" />
-            <span>Tela do Jogador</span>
-          </button>
+          {/* 3. Right Sidebar: Iniciativa/Combate */}
+          <CombatInitiativePanel
+            characterSheets={characterSheets}
+            getSpeedInMeters={getSpeedInMeters}
+            rollDice={rollDice}
+            deductAction={deductAction}
+            handleHpChange={handleHpChange}
+            handleToggleCondition={handleToggleCondition}
+            handleCastSpellFromCard={handleCastSpellFromCard}
+            handleNextTurn={combatEngine.handleNextTurn}
+            handlePrevTurn={combatEngine.handlePrevTurn}
+            handleEndCombat={handleEndCombat}
+            handleStartImpromptuCombat={handleStartImpromptuCombat}
+            onSlideChange={handleSlideChange}
+          />
         </div>
       </div>
 
-      {/* Main 3-Column Cockpit Studio Body */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden tablet-landscape-cockpit">
-        {/* Column 1: Timeline de Cenas da Sessão (Left - Retractable: 288px / 64px) */}
-        <div className={`${isTimelineCollapsed ? 'w-16' : 'w-72'} bg-[#0c0f17] border-r border-[#2a3449] flex flex-col justify-between overflow-hidden transition-all duration-300 flex-shrink-0 relative z-10 tablet-landscape-sidebar`}>
-          <div className={`p-3 border-b border-[#2a3449] flex items-center ${isTimelineCollapsed ? 'justify-center flex-col gap-2' : 'justify-between'} bg-[#121824]/50`}>
-            {!isTimelineCollapsed && (
-              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1.5 truncate">
-                <Film className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
-                <span className="truncate">Timeline ({scenes.length})</span>
-              </span>
-            )}
-            <div className={`flex items-center gap-1 ${isTimelineCollapsed ? 'flex-col' : ''}`}>
-              <button
-                onClick={() => setShowCreateSceneModal(true)}
-                className="p-1 text-amber-400 hover:bg-[#1f2738] rounded-lg transition-colors cursor-pointer"
-                title="Nova Cena"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-              <button
-                onClick={toggleTimeline}
-                className="p-1 text-slate-400 hover:text-amber-400 hover:bg-[#1f2738] rounded-lg transition-colors cursor-pointer"
-                title={isTimelineCollapsed ? "Expandir Timeline de Cenas" : "Retrair Timeline de Cenas"}
-              >
-                {isTimelineCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
+      {/* 4. Overlay: Floating d20 Results / BG3 roller canvas */}
+      <FloatingDiceRollerHUD />
 
-          <div className={`flex-1 overflow-y-auto ${isTimelineCollapsed ? 'p-2 space-y-3' : 'p-3 space-y-2'}`}>
-            {scenes.length === 0 ? (
-              <div className={`p-4 text-center text-slate-500 text-xs border border-dashed border-[#2a3449] rounded-xl ${isTimelineCollapsed ? 'text-[10px] p-2' : ''}`}>
-                {isTimelineCollapsed ? 'Vazio' : 'Nenhuma cena criada nesta sessão. Crie uma cena para disparar recursos visuais.'}
-              </div>
-            ) : (
-              scenes.map((sc, idx) => {
-                const isActive = activeScene?.id === sc.id;
-                const isEditingThis = editingSceneId === sc.id;
-
-                if (isTimelineCollapsed) {
-                  return (
-                    <div
-                      key={`collapsed-${sc.id}-${idx}`}
-                      onClick={() => handleFireSceneLive(sc)}
-                      title={`Cena #${idx + 1}: ${sc.title} (${sc.sceneType})${isActive ? ' [AO VIVO]' : ''}`}
-                      className={`w-11 h-13 mx-auto p-1.5 rounded-xl border transition-all flex flex-col items-center justify-between cursor-pointer group relative ${
-                        isActive
-                          ? 'bg-gradient-to-b from-purple-950 via-[#161c28] to-[#121824] border-emerald-400 shadow-md ring-2 ring-emerald-500/50'
-                          : 'bg-[#161c28] border-[#2a3449] hover:bg-[#1f2738] hover:border-purple-500/40'
-                      }`}
-                    >
-                      <span className={`text-[10px] font-mono font-bold ${isActive ? 'text-emerald-400' : 'text-slate-400'}`}>
-                        #{idx + 1}
-                      </span>
-                      <div className="my-0.5">
-                        {getSceneIcon(sc.sceneType)}
-                      </div>
-                      {isActive ? (
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                      ) : (
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-600 group-hover:bg-amber-400 transition-colors"></span>
-                      )}
-                    </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={`${sc.id}-${idx}`}
-                    className={`p-3 rounded-xl border transition-all space-y-2 ${
-                      isActive
-                        ? 'bg-gradient-to-r from-purple-950/60 via-[#161c28] to-[#121824] border-purple-500 shadow-lg ring-1 ring-purple-500/40'
-                        : 'bg-[#161c28] border-[#2a3449] hover:bg-[#1f2738]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 truncate flex-1 pr-2">
-                        <span className="text-[10px] font-mono font-bold text-slate-500">#{idx + 1}</span>
-                        {getSceneIcon(sc.sceneType)}
-                        {isEditingThis ? (
-                          <div className="flex items-center gap-1 flex-1">
-                            <input
-                              type="text"
-                              autoFocus
-                              value={editedSceneTitle}
-                              onChange={(e) => setEditedSceneTitle(e.target.value)}
-                              className="bg-[#0a0d14] border border-purple-500 rounded px-1.5 py-0.5 text-xs text-slate-100 font-bold focus:outline-none w-full"
-                              onKeyDown={async (e) => {
-                                if (e.key === 'Enter') {
-                                  if (editedSceneTitle.trim()) await updateScene({ ...sc, title: editedSceneTitle.trim() });
-                                  setEditingSceneId(null);
-                                }
-                                if (e.key === 'Escape') setEditingSceneId(null);
-                              }}
-                            />
-                            <button
-                              onClick={async () => {
-                                if (editedSceneTitle.trim()) await updateScene({ ...sc, title: editedSceneTitle.trim() });
-                                setEditingSceneId(null);
-                              }}
-                              className="p-1 text-emerald-400 hover:text-emerald-300"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1 truncate group flex-1">
-                            <span className="text-xs font-bold text-slate-100 truncate">{sc.title}</span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingSceneId(sc.id);
-                                setEditedSceneTitle(sc.title);
-                              }}
-                              className="p-0.5 text-slate-500 hover:text-amber-400 rounded transition-colors opacity-70 group-hover:opacity-100"
-                              title="Editar Nome da Cena"
-                            >
-                              <Edit3 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      {isActive && !isEditingThis && (
-                        <span className="text-[9px] font-black uppercase bg-emerald-500 text-slate-950 px-1.5 py-0.5 rounded animate-pulse">
-                          AO VIVO
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Scene Media Capabilities Indicators */}
-                    <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                      {sc.imageUrl && (
-                        <span className="text-purple-300 flex items-center gap-0.5">🖼️ Imagem</span>
-                      )}
-                      {sc.npcAudioUrl && (
-                        <span className="text-cyan-300 flex items-center gap-0.5">🎙️ Voz NPC</span>
-                      )}
-                      {sc.combatants && sc.combatants.length > 0 && (
-                        <span className="text-rose-300 flex items-center gap-0.5">⚔️ {sc.combatants.length} Inimigos</span>
-                      )}
-                    </div>
-
-                    {/* Trigger Live Button */}
-                    <button
-                      onClick={() => handleFireSceneLive(sc)}
-                      className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                        isActive
-                          ? 'bg-emerald-500 text-slate-950 shadow-md hover:bg-emerald-400'
-                          : 'bg-purple-950/60 hover:bg-purple-900 border border-purple-800/60 text-purple-200'
-                      }`}
-                    >
-                      <Play className="w-3 h-3 fill-current" />
-                      <span>{isActive ? 'CENA TRANSMITINDO' : 'DISPARAR AO VIVO'}</span>
-                    </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Column 2: Espelho de Projeção & Tabuleiro (Center - Flex 1) */}
-        <div className="flex-1 bg-[#0a0d14] flex flex-col overflow-hidden border-r border-[#2a3449]">
-          <div className="bg-[#121824]/80 p-3 border-b border-[#2a3449] flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-200 uppercase font-mono flex items-center gap-1.5">
-              <Eye className="w-3.5 h-3.5 text-cyan-400" />
-              Projeção dos Jogadores (Espelho ao Vivo)
-            </span>
-            <span className="text-[10px] text-slate-400 font-mono">
-              Modo Atual: <strong className="text-amber-400 uppercase">{liveDisplayMode}</strong>
-            </span>
-          </div>
-
-          <div className="flex-1 p-4 flex flex-col min-h-0 space-y-4 overflow-hidden">
-            {/* Live Visual Mirror Display Container */}
-            <div className="flex-1 min-h-0 w-full flex items-center justify-center">
-              <div className="h-full w-full max-h-full max-w-full aspect-square bg-black rounded-2xl border border-[#2a3449] overflow-hidden relative shadow-2xl flex items-center justify-center">
-                {liveDisplayMode === 'combat' ? (
-                  <ThreeErrorBoundary>
-                    <BattleGrid3D
-                      combatants={combatants}
-                      onUpdateCombatants={(updated) => setCombatants(updated)}
-                      currentTurnIndex={currentTurnIndex}
-                      selectedTargetId={selectedTargetId}
-                      onSelectTarget={(target) => {
-                        setSelectedTargetId(target.id);
-                        broadcastToPlayerView({ targetId: target.id });
-                      }}
-                      onAttackTarget={handleAttackFromWidget}
-                      interactive={true}
-                      isPlacementPhase={isPlacementPhase}
-                      setupMode={battleSetupMode}
-                      timeOfDayHour={liveTimeOfDayHour}
-                      timeOfDayPreset={selectedTimeOfDay}
-                      hasFog={liveHasFog}
-                      hasRain={liveHasRain}
-                      onTimeOfDayChange={(preset) => {
-                        setSelectedTimeOfDay(preset);
-                        broadcastToPlayerView({
-                          timeOfDay: preset,
-                        });
-                      }}
-                      onEnvironmentChange={(env) => {
-                        setLiveTimeOfDayHour(env.timeOfDayHour);
-                        setLiveHasFog(env.hasFog);
-                        setLiveHasRain(env.hasRain);
-                        broadcastToPlayerView({
-                          timeOfDayHour: env.timeOfDayHour,
-                          hasFog: env.hasFog,
-                          hasRain: env.hasRain,
-                        });
-                      }}
-                      floorTextureUrl={liveFloorTextureUrl}
-                      onFloorTextureChange={(url) => {
-                        setLiveFloorTextureUrl(url);
-                        broadcastToPlayerView({ floorTextureUrl: url });
-                      }}
-                      onConfirmPlacement={() => {
-                        setIsPlacementPhase(false);
-                        broadcastToPlayerView({ isPlacementPhase: false });
-                      }}
-                      userRole="dm"
-                    />
-                  </ThreeErrorBoundary>
-                ) : displayImageUrl ? (
-                  <div className="w-full h-full relative">
-                    {(() => {
-                      const ytEmbed = getYouTubeEmbedUrl(displayImageUrl);
-                      if (ytEmbed) {
-                        return (
-                          <iframe
-                            src={ytEmbed}
-                            className="w-full h-full border-0 bg-black"
-                            allow="autoplay; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                          />
-                        );
-                      }
-                      const isVideo = activeSlideImage?.mediaType === 'video' ||
-                        (/\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(displayImageUrl));
-                      if (isVideo) {
-                        return (
-                          <video
-                            src={displayImageUrl}
-                            className="w-full h-full object-contain bg-black"
-                            autoPlay
-                            loop
-                            muted
-                            playsInline
-                            controls={false}
-                          />
-                        );
-                      }
-                      if (activeScene?.sceneImages && activeScene.sceneImages.length > 0) {
-                        return (
-                          <MagicShaderSlideshow
-                            imageUrl={displayImageUrl}
-                            className="w-full h-full"
-                          />
-                        );
-                      }
-                      return (
-                        <img src={displayImageUrl} alt="Arte ao vivo" className="w-full h-full object-cover animate-fade-in" />
-                      );
-                    })()}
-                    <div className="absolute bottom-4 left-4 right-4 p-3 rounded-xl bg-black/80 backdrop-blur-md border border-amber-500/30">
-                      <div className="text-xs font-bold text-amber-400 uppercase font-mono">{activeScene?.title}</div>
-                      {(() => {
-                        const txt = activeSlideImage?.overlayText || activeScene?.sensoryText;
-                        return txt ? (
-                          <p className="text-xs text-slate-200 mt-1 italic font-serif leading-relaxed line-clamp-2">
-                            "{txt}"
-                          </p>
-                        ) : null;
-                      })()}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center p-6 text-slate-500">
-                    <MapIcon className="w-12 h-12 mx-auto mb-2 opacity-40" />
-                    <p className="text-xs">Nenhuma arte ou mapa transmitido no momento.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Slideshow DM Controls */}
-            {activeScene?.sceneImages && activeScene.sceneImages.length > 1 && (
-              <div className="bg-[#121824] border border-[#2a3449] rounded-xl p-2.5 flex flex-col gap-2 shadow mx-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase font-mono">
-                    Controle do Slideshow ({activeImageIndex + 1} de {activeScene.sceneImages.length})
-                  </span>
-                  <div className="flex gap-1.5 font-sans">
-                    <button
-                      onClick={async () => {
-                        const prevIdx = (activeImageIndex - 1 + activeScene.sceneImages!.length) % activeScene.sceneImages!.length;
-                        await handleSlideChange(prevIdx);
-                      }}
-                      className="px-2 py-0.5 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] rounded text-[10px] font-bold text-amber-400 cursor-pointer"
-                    >
-                      Anterior
-                    </button>
-                    <button
-                      onClick={async () => {
-                        const nextIdx = (activeImageIndex + 1) % activeScene.sceneImages!.length;
-                        await handleSlideChange(nextIdx);
-                      }}
-                      className="px-2 py-0.5 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] rounded text-[10px] font-bold text-amber-400 cursor-pointer"
-                    >
-                      Próximo
-                    </button>
-                  </div>
-                </div>
-                
-                {/* Thumbnails strip */}
-                <div className="flex items-center gap-2 overflow-x-auto py-1 custom-scrollbar">
-                  {activeScene.sceneImages.map((imgObj, idx) => {
-                    const isSelected = idx === activeImageIndex;
-                    return (
-                      <button
-                        key={imgObj.id}
-                        onClick={async () => await handleSlideChange(idx)}
-                        className={`relative w-10 h-10 rounded border overflow-hidden shrink-0 transition-all cursor-pointer ${
-                          isSelected ? 'border-amber-400 ring-1 ring-amber-500/40 scale-105' : 'border-[#2a3449] hover:border-slate-500'
-                        }`}
-                      >
-                        {isYouTubeUrl(imgObj.imageUrl) ? (
-                          <img src={getYouTubeThumbnailUrl(imgObj.imageUrl) || ''} className="w-full h-full object-cover" />
-                        ) : imgObj.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(imgObj.imageUrl) ? (
-                          <video src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" muted playsInline />
-                        ) : (
-                          <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" />
-                        )}
-                        <span className="absolute bottom-0.5 right-0.5 bg-black/70 text-[8px] font-bold px-1 rounded text-white font-mono">
-                          {idx + 1}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Quick DM Media & Soundboard Toolbar */}
-            <div className="grid grid-cols-2 gap-3">
-              {/* NPC Voice Trigger Box */}
-              <div className="p-3 bg-[#121824] border border-[#2a3449] rounded-xl flex items-center justify-between">
-                <div>
-                  <div className="text-[10px] font-bold text-cyan-400 uppercase font-mono flex items-center gap-1">
-                    <Mic className="w-3 h-3" /> Voz de NPC (IA)
-                  </div>
-                  <div className="text-xs font-bold text-slate-200 truncate mt-0.5">
-                    {activeScene?.npcName || 'Nenhum NPC vinculado'}
-                  </div>
-                </div>
-                <button
-                  disabled={!activeScene?.npcAudioUrl}
-                  onClick={() => setPlayingNpcVoice(!playingNpcVoice)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                    activeScene?.npcAudioUrl
-                      ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
-                      : 'bg-[#1a2234] text-slate-600 cursor-not-allowed'
-                  }`}
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                  <span>{playingNpcVoice ? 'Pausar Voz' : 'Tocar Voz'}</span>
-                </button>
-              </div>
-
-              {/* Media & Soundboard Panel (Modular Component) */}
-              <LiveCockpitAudioController
-                campaignId={activeCampaign?.id}
-                activeBgmCategory={activeBgmCategory}
-                setActiveBgmCategory={setActiveBgmCategory}
-                playingNpcVoice={playingNpcVoice}
-                setPlayingNpcVoice={setPlayingNpcVoice}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Column 3: Painel de Iniciativa & Combate Ao Vivo (Right - 380px) */}
-        <div className="w-[380px] bg-[#0c0f17] flex flex-col justify-between overflow-hidden border-l border-[#2a3449] relative">
-          
-          {/* Floating Dice Result */}
-          {diceResult && (
-            <div className="absolute top-16 right-4 z-50 animate-in slide-in-from-right-8 fade-in duration-300">
-              <div className={`bg-[#0f141d]/95 backdrop-blur-xl border-2 rounded-2xl p-4 shadow-2xl flex items-center gap-4 min-w-[250px]
-                ${diceResult.isCrit ? 'border-amber-500 shadow-amber-500/20' : diceResult.isFail ? 'border-rose-600 shadow-rose-900/20' : 'border-slate-600'}
-              `}>
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-black font-mono shadow-inner
-                  ${diceResult.isCrit ? 'bg-amber-500 text-slate-950' : diceResult.isFail ? 'bg-rose-600 text-slate-950' : 'bg-[#1e293b] text-slate-100'}
-                `}>
-                  {diceResult.roll}
-                </div>
-                <div className="flex-1">
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{diceResult.title}</div>
-                  <div className="text-2xl font-black text-slate-100">Total: {diceResult.total}</div>
-                </div>
-                <button onClick={() => setDiceResult(null)} className="absolute -top-2 -right-2 w-6 h-6 bg-slate-800 rounded-full text-slate-400 hover:text-white border border-slate-600 flex items-center justify-center text-xs">×</button>
-              </div>
-            </div>
-          )}
-
-          {/* Header with Sub-tabs */}
-          <div className="p-2 border-b border-[#2a3449] bg-[#121824]/50 flex items-center justify-between gap-1">
-            <div className="flex bg-[#0a0d14] border border-[#2a3449] rounded-xl p-0.5 w-full gap-0.5">
-              <button
-                onClick={() => setRightPanelTab('init')}
-                className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
-                  rightPanelTab === 'init' ? 'bg-rose-600 text-slate-950 shadow font-black' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Swords className="w-3 h-3" />
-                <span>Iniciativa ({combatants.length})</span>
-              </button>
-              
-              <button
-                onClick={() => setRightPanelTab('teleprompter')}
-                className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
-                  rightPanelTab === 'teleprompter' ? 'bg-purple-600 text-slate-950 shadow font-black' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <BookOpen className="w-3 h-3" />
-                <span>Teleprompter</span>
-              </button>
-
-              <button
-                onClick={() => setRightPanelTab('log')}
-                className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
-                  rightPanelTab === 'log' ? 'bg-amber-500 text-slate-950 shadow font-black' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <ScrollText className="w-3 h-3" />
-                <span>Logs ({combatLogs.length})</span>
-              </button>
-            </div>
-          </div>
-
-          {rightPanelTab === 'teleprompter' ? (
-            <div className="flex-1 flex flex-col justify-between p-4 overflow-hidden bg-[#0c0f17]">
-              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1">
-                <div className="flex items-center justify-between border-b border-[#2a3449] pb-2">
-                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
-                    <BookOpen className="w-3.5 h-3.5 text-amber-400" /> Teleprompter do Narrador
-                  </span>
-                  
-                  {/* Font Size controls */}
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => setTeleprompterFontSize(prev => Math.max(12, prev - 2))}
-                      className="w-6 h-6 rounded bg-[#161c28] border border-[#2a3449] hover:border-slate-500 text-xs font-bold text-slate-300 flex items-center justify-center transition-all cursor-pointer"
-                      title="Diminuir Fonte"
-                    >
-                      A-
-                    </button>
-                    <span className="text-[10px] text-slate-400 font-bold font-mono">{teleprompterFontSize}px</span>
-                    <button
-                      onClick={() => setTeleprompterFontSize(prev => Math.min(32, prev + 2))}
-                      className="w-6 h-6 rounded bg-[#161c28] border border-[#2a3449] hover:border-slate-500 text-xs font-bold text-slate-300 flex items-center justify-center transition-all cursor-pointer"
-                      title="Aumentar Fonte"
-                    >
-                      A+
-                    </button>
-                  </div>
-                </div>
-
-                {/* Teleprompter text content */}
-                {activeScene ? (
-                  <div 
-                    className="font-serif leading-relaxed italic text-amber-200 select-text p-3 rounded-xl bg-[#121824]/40 border border-[#2a3449]/40 min-h-[120px] whitespace-pre-wrap"
-                    style={{ fontSize: `${teleprompterFontSize}px` }}
-                  >
-                    {(() => {
-                      const slideObj = activeScene.sceneImages?.[activeImageIndex];
-                      const targetText = slideObj ? (slideObj.secretNotes || slideObj.overlayText || activeScene.sensoryText) : activeScene.sensoryText;
-                      return targetText ? `"${targetText}"` : "Nenhum texto sensorial ou nota de teleprompter configurada para este slide.";
-                    })()}
-                  </div>
-                ) : (
-                  <div className="text-center p-6 text-slate-500 text-xs">
-                    Nenhuma cena ativa para exibir no teleprompter.
-                  </div>
-                )}
-                
-                {/* Notes visible only to DM */}
-                {activeScene?.secretNotes && (
-                  <div className="p-3 rounded-xl bg-purple-950/20 border border-purple-500/20 space-y-1">
-                    <div className="text-[9px] font-bold text-purple-400 uppercase tracking-widest font-mono">
-                      🔑 Notas Secretas da Cena (Apenas Narrador)
-                    </div>
-                    <p className="text-xs text-purple-200 leading-relaxed font-serif">
-                      {activeScene.secretNotes}
-                    </p>
-                  </div>
-                )}
-              </div>
-              
-              {/* Bottom Quick slide switcher inside teleprompter */}
-              {activeScene?.sceneImages && activeScene.sceneImages.length > 1 && (
-                <div className="pt-3 border-t border-[#2a3449] flex items-center justify-between">
-                  <button
-                    onClick={async () => {
-                      const prevIdx = (activeImageIndex - 1 + activeScene.sceneImages!.length) % activeScene.sceneImages!.length;
-                      await handleSlideChange(prevIdx);
-                    }}
-                    className="flex-1 py-1.5 mr-1 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] text-xs font-bold text-slate-200 rounded-lg text-center cursor-pointer"
-                  >
-                    ◀ Anterior
-                  </button>
-                  <span className="text-[10px] text-slate-400 font-mono px-3 font-semibold">
-                    {activeImageIndex + 1} / {activeScene.sceneImages.length}
-                  </span>
-                  <button
-                    onClick={async () => {
-                      const nextIdx = (activeImageIndex + 1) % activeScene.sceneImages!.length;
-                      await handleSlideChange(nextIdx);
-                    }}
-                    className="flex-1 py-1.5 ml-1 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] text-xs font-bold text-slate-200 rounded-lg text-center cursor-pointer"
-                  >
-                    Próximo ▶
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : rightPanelTab === 'log' ? (
-            <BattleLog 
-              logs={combatLogs}
-              activeAttacker={combatants[currentTurnIndex]}
-              activeTarget={combatants.find(c => c.id === selectedTargetId)}
-              onClearLogs={() => setCombatLogs([])}
-              onSelectTarget={(target) => {
-                setSelectedTargetId(target.id);
-                broadcastToPlayerView({ targetId: target.id });
-              }}
-            />
-          ) : !isCombatActive && combatants.length === 0 ? (
-            /* Clean Empty State when no combat active */
-            <div className="flex-1 p-6 flex flex-col items-center justify-center text-center space-y-4 my-auto">
-              <div className="w-14 h-14 rounded-2xl bg-[#121824] border border-[#2a3449] flex items-center justify-center shadow-inner">
-                <Swords className="w-7 h-7 text-rose-400 opacity-60" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="text-sm font-bold text-slate-200">Sem Combate Ativo</h4>
-                <p className="text-xs text-slate-400 leading-relaxed max-w-[240px]">
-                  Esta cena está em modo narrativo / exploração. Nenhum combate ativo no momento.
-                </p>
-              </div>
-              <button
-                onClick={handleStartImpromptuCombat}
-                className="w-full py-2.5 bg-gradient-to-r from-rose-600 via-rose-500 to-rose-600 hover:from-rose-500 hover:to-rose-400 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
-              >
-                <Swords className="w-4 h-4" />
-                <span>INICIAR COMBATE NESTA CENA</span>
-              </button>
-            </div>
-          ) : (
-            /* Active Combat Interface */
-            <>
-              {/* Turn & Add Combatants Toolbar */}
-              <div className="p-2 border-b border-[#2a3449] bg-[#161c28]/40 flex flex-col gap-2">
-                <div className="flex gap-2">
-                  <button
-                    onClick={handlePrevTurn}
-                    disabled={combatants.length === 0 || (currentTurnIndex === 0 && roundCount === 1)}
-                    className="py-1.5 px-3 bg-[#121824] hover:bg-[#1e293b] disabled:opacity-40 disabled:cursor-not-allowed border border-[#2a3449] text-slate-300 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1"
-                    title="Voltar Turno Anterior"
-                  >
-                    <ChevronLeft className="w-4 h-4 text-slate-400" />
-                    <span>Voltar</span>
-                  </button>
-
-                  <button
-                    onClick={handleNextTurn}
-                    disabled={combatants.length === 0}
-                    className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:bg-[#1f2738] disabled:text-slate-600 text-slate-950 font-black text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <span>AVANÇAR TURNO ({combatants.length > 0 ? currentTurnIndex + 1 : 0}/{combatants.length})</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-                
-                <div className="flex items-center gap-3 mt-1 pl-1">
-                  <label className="flex items-center gap-1.5 cursor-pointer group">
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${autoInit ? 'bg-amber-500 border-amber-500' : 'bg-[#0a0d14] border-[#2a3449] group-hover:border-amber-500/50'}`}>
-                      {autoInit && <Check className="w-3 h-3 text-slate-900" />}
-                    </div>
-                    <input type="checkbox" className="hidden" checked={autoInit} onChange={(e) => setAutoInit(e.target.checked)} />
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider group-hover:text-slate-300">
-                      Rolar Iniciativa todo turno
-                    </span>
-                  </label>
-                </div>
-
-                <button
-                  onClick={() => setShowAddCombatantModal(true)}
-                  className="w-full py-1.5 mt-1 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] text-amber-300 hover:text-amber-200 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5"
-                >
-                  <UserPlus className="w-3.5 h-3.5 text-amber-400" />
-                  <span>+ Adicionar Combatentes</span>
-                </button>
-              </div>
-
-              {/* Live Combatants List */}
-              <div className="flex-1 p-3 space-y-2 overflow-y-auto">
-                {combatants.map((c, idx) => {
-                  const isTurn = idx === currentTurnIndex;
-                  const isTarget = c.id === selectedTargetId;
-                  const hpPercent = Math.max(0, Math.min(100, (c.hp / c.maxHp) * 100));
-                  const isExpanded = expandedId === c.id;
-                  const isStatusOpen = statusMenuOpen === c.id;
-
-                  // Busca ficha associada
-                  const matchingSheet = characterSheets.find(s => {
-                    const cClean = c.name.split('(')[0].trim().toLowerCase();
-                    return s.characterName.toLowerCase() === cClean || 
-                           s.characterName.toLowerCase().includes(cClean) || 
-                           cClean.includes(s.characterName.toLowerCase());
-                  });
-
-                  const initMod = matchingSheet
-                    ? (matchingSheet.initiativeBonus ?? getAttributeModifier(matchingSheet, 'dex'))
-                    : (c.dex !== undefined ? Math.floor((c.dex - 10) / 2) : 0);
-                  const initModStr = initMod >= 0 ? `+${initMod}` : `${initMod}`;
-
-                  const maxSpeed = getSpeedInMeters(matchingSheet?.speed || c.notes) * (c.hasDashed ? 2 : 1);
-                  const remainingMovement = Math.max(0, maxSpeed - (c.movementUsed || 0));
-
-                  const groupedSpells = matchingSheet ? (() => {
-                    const groups: Record<number, CharacterSpell[]> = {};
-                    matchingSheet.spells?.forEach(spell => {
-                      const lvl = spell.level ?? 0;
-                      if (!groups[lvl]) groups[lvl] = [];
-                      groups[lvl].push(spell);
-                    });
-                    return groups;
-                  })() : {};
-
-                  return (
-                    <div
-                      key={`${c.id}-${idx}`}
-                      draggable={true}
-                      onDragStart={(e) => {
-                        setDraggedCardIndex(idx);
-                        e.dataTransfer.effectAllowed = 'move';
-                      }}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        if (dragOverCardIndex !== idx) setDragOverCardIndex(idx);
-                      }}
-                      onDragLeave={() => {
-                        if (dragOverCardIndex === idx) setDragOverCardIndex(null);
-                      }}
-                      onDrop={() => handleCardDrop(idx)}
-                      onDragEnd={() => {
-                        setDraggedCardIndex(null);
-                        setDragOverCardIndex(null);
-                      }}
-                      onClick={() => {
-                        setSelectedTargetId(c.id);
-                        broadcastToPlayerView({ targetId: c.id });
-                      }}
-                      className={`p-3 rounded-xl border transition-all flex flex-col gap-2 cursor-pointer relative ${
-                        draggedCardIndex === idx
-                          ? 'opacity-30 scale-[0.98] border-dashed border-amber-500/80 bg-amber-500/10'
-                          : dragOverCardIndex === idx
-                          ? 'border-amber-400 ring-2 ring-amber-400/50 bg-amber-500/10'
-                          : isTarget
-                          ? 'ring-2 ring-rose-500 border-rose-500 shadow-rose-900/30'
-                          : isTurn
-                          ? 'bg-gradient-to-r from-rose-950/40 via-[#161c28] to-[#121824] border-rose-500/80 shadow-xl'
-                          : 'bg-[#121824] border-[#2a3449] opacity-90 hover:opacity-100'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        {/* Left Info */}
-                        <div className="flex items-start gap-2 flex-1 min-w-0">
-                          {/* Drag Handle Icon */}
-                          <div 
-                            className="py-2.5 px-0.5 text-slate-600 hover:text-amber-400 cursor-grab active:cursor-grabbing flex-shrink-0 transition-colors" 
-                            title="Clique e arraste para reordenar a iniciativa"
-                          >
-                            <GripVertical className="w-4 h-4" />
-                          </div>
-                          <div 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const d20 = Math.floor(Math.random() * 20) + 1;
-                              const total = d20 + initMod;
-                              setCombatants((prev) => {
-                                const next = prev.map((x) => (x.id === c.id ? { ...x, initiative: total } : x))
-                                  .sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
-                                if (activeSceneRef.current) updateScene({ ...activeSceneRef.current, combatants: next });
-                                broadcastToPlayerView({ combatants: next });
-                                return next;
-                              });
-                              toast.success(`Nova iniciativa de ${c.name}: d20(${d20}) ${initModStr} = ${total}`);
-                            }}
-                            className="px-2 py-1 min-w-[54px] h-10 rounded-xl bg-[#0a0d14] border border-[#2a3449] hover:border-amber-500/50 flex flex-col items-center justify-center font-mono shadow-inner flex-shrink-0 cursor-pointer transition-colors group"
-                            title={`Clique para rolar nova iniciativa! Bônus Base: ${initModStr} | Total Rolado: ${c.initiative}`}
-                          >
-                            <span className="text-[7px] font-bold text-slate-500 font-sans tracking-wider uppercase group-hover:text-amber-400/80 transition-colors">INIC</span>
-                            <div className="flex items-baseline gap-1 mt-0.5">
-                              <span className="text-xs font-extrabold text-amber-400 leading-none">{c.initiative}</span>
-                              <span className="text-[9px] font-bold text-slate-400 leading-none">({initModStr})</span>
-                            </div>
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h4 
-                                onClick={(e) => {
-                                  e.stopPropagation(); // Evita selecionar o alvo ao abrir a ficha
-                                  openSheet(c.id || c.name, c.type === 'player' ? 'pc' : c.type, c.name, c);
-                                }}
-                                className="font-bold text-slate-100 text-xs flex items-center gap-1 cursor-pointer hover:text-amber-400 hover:underline transition-colors truncate"
-                              >
-                                {c.name}
-                                {isTarget && <span className="text-[9px] text-rose-400 font-mono font-bold flex-shrink-0">(ALVO)</span>}
-                              </h4>
-                              {isTurn && (
-                                <span className="text-[8px] font-black uppercase bg-rose-500 text-slate-950 px-1.5 py-0.5 rounded animate-pulse flex-shrink-0">ATUAL</span>
-                              )}
-                            </div>
-
-                            {/* Condition Badges */}
-                            <div className="flex flex-wrap gap-1 mt-1 relative">
-                              {c.conditions.map((cond) => (
-                                <span key={cond} onClick={(e) => { e.stopPropagation(); handleToggleCondition(c.id, cond); }} className="text-[8px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-rose-500/40">
-                                  {cond} ×
-                                </span>
-                              ))}
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); setStatusMenuOpen(isStatusOpen ? null : c.id); }}
-                                className="text-[8px] font-bold text-slate-400 bg-[#0f141d] hover:bg-[#1e293b] border border-[#2a3449] px-1.5 py-0.5 rounded-full transition-colors flex items-center gap-1"
-                              >
-                                + Status
-                              </button>
-                              
-                              {/* Status Popover */}
-                              {isStatusOpen && (
-                                <div className="absolute top-full left-0 mt-2 w-48 bg-[#0f141d] border border-slate-700 rounded-xl shadow-2xl p-2 z-20 grid grid-cols-2 gap-1">
-                                  {CONDITIONS.map(cond => {
-                                    const active = c.conditions.includes(cond);
-                                    return (
-                                      <button
-                                        key={cond}
-                                        onClick={(e) => { e.stopPropagation(); handleToggleCondition(c.id, cond); }}
-                                        className={`text-[9px] text-left px-2 py-1 rounded ${active ? 'bg-rose-500/20 text-rose-300 font-bold' : 'text-slate-400 hover:bg-[#1e293b]'}`}
-                                      >
-                                        {active ? '✓ ' : ''}{cond}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Action Economy Tracker */}
-                            <div className="flex flex-wrap items-center gap-1 mt-2.5" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                onClick={() => {
-                                  setCombatants(prev => {
-                                    const next = prev.map(x => x.id === c.id ? { ...x, actionUsed: !x.actionUsed } : x);
-                                    if (activeSceneRef.current) updateScene({ ...activeSceneRef.current, combatants: next });
-                                    broadcastToPlayerView({ combatants: next });
-                                    return next;
-                                  });
-                                }}
-                                className={`px-2 py-0.5 text-[9px] font-extrabold rounded border transition-colors ${
-                                  c.actionUsed
-                                    ? 'bg-slate-800 text-slate-500 border-slate-700/60'
-                                    : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30'
-                                }`}
-                                title="Ação do Turno (Atacar, Conjurar Magia, etc.)"
-                              >
-                                Ação
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  setCombatants(prev => {
-                                    const next = prev.map(x => x.id === c.id ? { ...x, bonusActionUsed: !x.bonusActionUsed } : x);
-                                    if (activeSceneRef.current) updateScene({ ...activeSceneRef.current, combatants: next });
-                                    broadcastToPlayerView({ combatants: next });
-                                    return next;
-                                  });
-                                }}
-                                className={`px-2 py-0.5 text-[9px] font-extrabold rounded border transition-colors ${
-                                  c.bonusActionUsed
-                                    ? 'bg-slate-800 text-slate-500 border-slate-700/60'
-                                    : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/30'
-                                }`}
-                                title="Ação Bônus"
-                              >
-                                Bônus
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  setCombatants(prev => {
-                                    const next = prev.map(x => x.id === c.id ? { ...x, reactionUsed: !x.reactionUsed } : x);
-                                    if (activeSceneRef.current) updateScene({ ...activeSceneRef.current, combatants: next });
-                                    broadcastToPlayerView({ combatants: next });
-                                    return next;
-                                  });
-                                }}
-                                className={`px-2 py-0.5 text-[9px] font-extrabold rounded border transition-colors ${
-                                  c.reactionUsed
-                                    ? 'bg-slate-800 text-slate-500 border-slate-700/60'
-                                    : 'bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500/30'
-                                }`}
-                                title="Reação (Ataques de Oportunidade)"
-                              >
-                                Reação
-                              </button>
-
-                              {isTurn && (
-                                <button
-                                  disabled={c.actionUsed}
-                                  onClick={() => {
-                                    setCombatants(prev => {
-                                      const next = prev.map(x => {
-                                        if (x.id === c.id) {
-                                          return {
-                                            ...x,
-                                            actionUsed: true,
-                                            hasDashed: true
-                                          };
-                                        }
-                                        return x;
-                                      });
-                                      if (activeSceneRef.current) updateScene({ ...activeSceneRef.current, combatants: next });
-                                      broadcastToPlayerView({ combatants: next });
-                                      return next;
-                                    });
-                                    toast.success(`${c.name} usou Disparada (Dash)! Deslocamento duplicado.`);
-                                  }}
-                                  className={`px-2 py-0.5 text-[9px] font-extrabold rounded border transition-colors ${
-                                    c.hasDashed
-                                      ? 'bg-orange-600/30 text-orange-400 border-orange-500/40 font-black'
-                                      : c.actionUsed
-                                      ? 'bg-slate-900/50 text-slate-600 border-slate-800 cursor-not-allowed'
-                                      : 'bg-orange-500/20 text-orange-400 border-orange-500/40 hover:bg-orange-500/30'
-                                  }`}
-                                  title="Usar Ação para Disparada (Dash)"
-                                >
-                                  Disparada
-                                </button>
-                              )}
-
-                              <span className="text-[9px] text-slate-400 font-mono ml-1.5 font-bold">
-                                Mov: {remainingMovement.toFixed(1)}m / {maxSpeed.toFixed(1)}m
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <button onClick={() => setExpandedId(isExpanded ? null : c.id)} className={`p-1.5 rounded-lg border transition-colors ${isExpanded ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-[#0f141d] border-[#2a3449] text-slate-400 hover:text-slate-200'}`} title="Ações e Rolagens">
-                            <Dices className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setConfirmDeleteCombatant(c)}
-                            className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                            title="Remover combatente da batalha"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Precise HP System (Modular Component) */}
-                      <CombatantHpManager
-                        combatant={c}
-                        onHpChange={handleHpChange}
-                      />
-
-                      {/* Prominent Quick Attack Actions */}
-                      <div className="mt-2 pt-2 border-t border-[#2a3449]/60 flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                        <span className="text-[9px] font-bold text-rose-400/80 uppercase font-mono tracking-wider mr-1">Ataques:</span>
-                        {c.type === 'player' && matchingSheet && matchingSheet.attacks && matchingSheet.attacks.length > 0 ? (
-                          matchingSheet.attacks.map(atk => {
-                            const bonus = parseInt(atk.atkBonus.replace('+', '').trim()) || 0;
-                            return (
-                              <button
-                                key={atk.id}
-                                disabled={c.actionUsed}
-                                onClick={() => {
-                                  if (rollDice(`Ataque: ${atk.name}`, bonus, c, atk.damage)) {
-                                    deductAction(c.id, 'action');
-                                  }
-                                }}
-                                className={`px-2.5 py-1 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border ${
-                                  c.actionUsed
-                                    ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
-                                    : 'bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-slate-950 border-rose-400/40 cursor-pointer animate-fade-in'
-                                }`}
-                                title={`Rolar ${atk.name} (${atk.damage} de dano)`}
-                              >
-                                <Swords className="w-3 h-3 text-slate-950" />
-                                <span>{atk.name} (+{bonus})</span>
-                              </button>
-                            );
-                          })
-                        ) : c.actions && c.actions.length > 0 ? (
-                          c.actions.map(act => {
-                            const match = act.desc.match(/\+([0-9]+)/);
-                            const bonus = match ? parseInt(match[1]) : getMod(c.str);
-                            return (
-                              <button
-                                key={act.name}
-                                disabled={c.actionUsed}
-                                onClick={() => {
-                                  if (rollDice(`Ataque: ${act.name}`, bonus, c, act.desc)) {
-                                    deductAction(c.id, 'action');
-                                  }
-                                }}
-                                className={`px-2.5 py-1 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border ${
-                                  c.actionUsed
-                                    ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
-                                    : 'bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-slate-950 border-rose-400/40 cursor-pointer'
-                                }`}
-                                title={act.desc}
-                              >
-                                <Swords className="w-3 h-3 text-slate-950" />
-                                <span>{act.name} (+{bonus})</span>
-                              </button>
-                            );
-                          })
-                        ) : (
-                          <button
-                            disabled={c.actionUsed}
-                            onClick={() => {
-                              if (rollDice(`Ataque: Corpo a Corpo`, getMod(c.str), c, '1d8')) {
-                                deductAction(c.id, 'action');
-                              }
-                            }}
-                            className={`px-2.5 py-1 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border ${
-                              c.actionUsed
-                                ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
-                                : 'bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-slate-950 border-rose-400/40 cursor-pointer'
-                            }`}
-                          >
-                            <Swords className="w-3 h-3 text-slate-950" />
-                            <span>Atacar (+{getMod(c.str) >= 0 ? '+' : ''}{getMod(c.str)})</span>
-                          </button>
-                        )}
-
-                        {/* Botão e Menu Dropdown de Magias (Se houver ficha e magias atreladas) */}
-                        {matchingSheet && matchingSheet.spells && matchingSheet.spells.length > 0 && (
-                          <div className="relative inline-block">
-                            <button
-                              onClick={() => setOpenSpellDropdownId(openSpellDropdownId === c.id ? null : c.id)}
-                              className="px-2.5 py-1 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-500 hover:to-indigo-600 text-slate-950 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border border-sky-400/40"
-                            >
-                              <Sparkles className="w-3 h-3 text-slate-950" />
-                              <span>Magias</span>
-                            </button>
-
-                            {openSpellDropdownId === c.id && (
-                              <div className="absolute left-0 top-full mt-2 w-64 bg-[#0f141d]/95 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl p-2.5 z-40 max-h-72 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-150">
-                                <div className="flex justify-between items-center pb-1.5 mb-2 border-b border-slate-800">
-                                  <span className="text-[10px] font-bold text-amber-400 font-mono">Grimório de {matchingSheet.characterName}</span>
-                                  <button onClick={() => setOpenSpellDropdownId(null)} className="text-slate-500 hover:text-slate-200">
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </div>
-                                {Object.keys(groupedSpells).length === 0 ? (
-                                  <div className="text-[10px] text-slate-500 italic p-2 text-center">Nenhuma magia adicionada na ficha.</div>
-                                ) : (
-                                  Object.keys(groupedSpells)
-                                    .map(Number)
-                                    .sort((a, b) => a - b)
-                                    .map(level => {
-                                      const levelSpells = groupedSpells[level] || [];
-                                      const slots = matchingSheet.spellSlots?.[level] || { total: 0, used: 0 };
-                                      const hasSlots = level === 0 || slots.used < slots.total;
-
-                                      return (
-                                        <div key={level} className="mb-3 last:mb-0">
-                                          <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1 border-b border-slate-800/40 pb-0.5">
-                                            <span>{level === 0 ? 'Truques' : `${level}º Círculo`}</span>
-                                            {level > 0 && (
-                                              <span className={hasSlots ? 'text-emerald-400' : 'text-rose-500'}>
-                                                Slots: {slots.total - slots.used} / {slots.total}
-                                              </span>
-                                            )}
-                                          </div>
-                                          <div className="space-y-1">
-                                            {levelSpells.map(spell => {
-                                              const cleanTime = (spell.castingTime || '').toLowerCase();
-                                              const isBonus = cleanTime.includes('bônus') || cleanTime.includes('bonus');
-                                              const isReact = cleanTime.includes('reação') || cleanTime.includes('reaction');
-                                              const isAct = !isBonus && !isReact;
-                                              const actionBlocked = (isAct && c.actionUsed) || (isBonus && c.bonusActionUsed) || (isReact && c.reactionUsed);
-                                              const canCast = hasSlots && !actionBlocked;
-
-                                              return (
-                                                <button
-                                                  key={spell.id}
-                                                  disabled={!canCast}
-                                                  onClick={() => {
-                                                    handleCastSpellFromCard(c, matchingSheet, spell);
-                                                    setOpenSpellDropdownId(null);
-                                                  }}
-                                                  className={`w-full text-left px-2 py-1.5 rounded-lg border text-[10px] transition-all flex justify-between items-center ${
-                                                    canCast
-                                                      ? 'bg-[#161c28] border-[#2a3449] hover:bg-[#1e293b] hover:border-slate-500 text-slate-200 cursor-pointer active:scale-95'
-                                                      : 'bg-[#121620]/40 border-[#2a3449]/40 text-slate-500 cursor-not-allowed'
-                                                  }`}
-                                                >
-                                                  <span className="font-semibold truncate max-w-[130px]">{spell.name}</span>
-                                                  <span className="text-[8px] font-mono text-slate-400 uppercase">{spell.school || 'Magia'}</span>
-                                                </button>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      );
-                                    })
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Expanded Action Panel */}
-                      {isExpanded && (
-                        <div className="mt-1 pt-2 border-t border-[#2a3449] animate-in slide-in-from-top-2 fade-in duration-200" onClick={(e) => e.stopPropagation()}>
-                          
-                          {/* Saves & Skills */}
-                          <div className="mb-2">
-                            <h5 className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Rolagens (Salva-Guardas & Skills)</h5>
-                            <div className="flex flex-wrap gap-1">
-                              <button onClick={() => rollDice(`${c.name} - Percepção`, getMod(c.wis), c)} className="px-2 py-1 bg-[#1e293b] hover:bg-[#334155] border border-slate-700 rounded text-[9px] font-semibold text-slate-300">
-                                Percepção ({getMod(c.wis) >= 0 ? '+' : ''}{getMod(c.wis)})
-                              </button>
-                              <button onClick={() => rollDice(`${c.name} - Salva STR`, getMod(c.str), c)} className="px-2 py-1 bg-[#1e293b] hover:bg-[#334155] border border-slate-700 rounded text-[9px] font-semibold text-slate-300">
-                                STR ({getMod(c.str) >= 0 ? '+' : ''}{getMod(c.str)})
-                              </button>
-                              <button onClick={() => rollDice(`${c.name} - Salva DEX`, getMod(c.dex), c)} className="px-2 py-1 bg-[#1e293b] hover:bg-[#334155] border border-slate-700 rounded text-[9px] font-semibold text-slate-300">
-                                DEX ({getMod(c.dex) >= 0 ? '+' : ''}{getMod(c.dex)})
-                              </button>
-                              <button onClick={() => rollDice(`${c.name} - Salva CON`, getMod(c.con), c)} className="px-2 py-1 bg-[#1e293b] hover:bg-[#334155] border border-slate-700 rounded text-[9px] font-semibold text-slate-300">
-                                CON ({getMod(c.con) >= 0 ? '+' : ''}{getMod(c.con)})
-                              </button>
-                              <button onClick={() => rollDice(`${c.name} - Salva WIS`, getMod(c.wis), c)} className="px-2 py-1 bg-[#1e293b] hover:bg-[#334155] border border-slate-700 rounded text-[9px] font-semibold text-slate-300">
-                                WIS ({getMod(c.wis) >= 0 ? '+' : ''}{getMod(c.wis)})
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Attacks */}
-                          <div>
-                             <h5 className="text-[9px] font-bold text-rose-500/70 uppercase tracking-wider mb-1.5">Ações Ofensivas</h5>
-                             {c.actions && c.actions.length > 0 ? (
-                               <div className="space-y-1">
-                                 {c.actions.map(act => (
-                                   <div key={act.name} className="p-1.5 bg-[#0a0d14] border border-[#2a3449] rounded-lg">
-                                     <div className="flex justify-between items-start mb-1">
-                                       <strong className="text-[10px] text-amber-300">{act.name}</strong>
-                                       {(() => {
-                                          const match = act.desc.match(/\+([0-9]+)/);
-                                          if (match) {
-                                            const bonus = parseInt(match[1]);
-                                            return (
-                                              <button onClick={() => rollDice(`Ataque: ${act.name}`, bonus, c, act.desc)} className="text-[8px] px-1.5 py-0.5 bg-rose-600 hover:bg-rose-500 text-white rounded font-bold">
-                                                Atq +{bonus}
-                                              </button>
-                                            );
-                                          }
-                                          return null;
-                                       })()}
-                                     </div>
-                                     <p className="text-[9px] text-slate-400 leading-snug">{act.desc}</p>
-                                   </div>
-                                 ))}
-                               </div>
-                             ) : (
-                               <div className="text-[10px] text-slate-500 italic">Nenhuma ação listada.</div>
-                             )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* End Combat Footer */}
-              <div className="p-3 border-t border-[#2a3449] bg-[#121824]/60">
-                <button
-                  onClick={handleEndCombat}
-                  className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Encerrar Combate & Gerar Loot</span>
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Target Required Warning Modal */}
-      {pendingAttack && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0f141d] border-2 border-rose-500/50 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3 text-rose-400">
-              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center font-black text-lg">🎯</div>
-              <div>
-                <h4 className="text-sm font-bold text-slate-100">Selecione um Alvo no Grid</h4>
-                <p className="text-xs text-slate-400">Para realizar {pendingAttack.title}, você precisa definir o alvo primeiro.</p>
-              </div>
-            </div>
-
-            <div className="p-3 bg-[#121824] border border-[#2a3449] rounded-xl text-xs text-slate-300 leading-relaxed">
-              💡 <strong>Como selecionar:</strong> Clique sobre qualquer criatura no <strong>Grid 3D</strong> ou na lista de combate. Um círculo de mira vermelho aparecerá sobre o alvo!
-            </div>
-
-            <div className="flex flex-col gap-2 pt-1">
-              <button
-                onClick={() => setPendingAttack(null)}
-                className="w-full py-2 bg-rose-600 hover:bg-rose-500 text-slate-950 font-black text-xs rounded-xl transition-all shadow"
-              >
-                🎯 Entendi, vou selecionar no Grid!
-              </button>
-
-              <button
-                onClick={() => {
-                  const att = pendingAttack;
-                  setPendingAttack(null);
-                  if (att && att.actorCombatant) {
-                    rollDice(att.title, att.mod, att.actorCombatant, att.actionDesc, true);
-                    deductAction(att.actorCombatant.id, 'action');
-                  }
-                }}
-                className="w-full py-2 bg-[#161c28] hover:bg-[#232d40] border border-[#2a3449] text-slate-300 font-bold text-xs rounded-xl transition-all"
-              >
-                💥 Rolar como Ataque em Área / Sem Alvo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Baldur's Gate 3 Style Floating HUD Dice Roller (NO Dark Overlay!) */}
-      {bg3DiceOverlay && (
-        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-in slide-in-from-top-6 fade-in duration-300">
-          <div 
-            className={`pointer-events-auto min-w-[340px] max-w-md p-5 rounded-3xl backdrop-blur-2xl border-2 text-center transition-all duration-300 shadow-2xl flex flex-col items-center gap-4 ${
-              bg3DiceOverlay.isRolling
-                ? 'bg-[#0f141d]/95 border-amber-500/60 shadow-[0_0_40px_rgba(245,158,11,0.2)]'
-                : bg3DiceOverlay.isCrit
-                ? 'bg-[#181308]/98 border-amber-400 shadow-[0_0_60px_rgba(245,158,11,0.7)] animate-bg3-crit'
-                : bg3DiceOverlay.isFail
-                ? 'bg-[#1c080e]/98 border-rose-600 shadow-[0_0_60px_rgba(244,63,94,0.7)] animate-bg3-shake'
-                : bg3DiceOverlay.isHit
-                ? 'bg-[#181308]/98 border-amber-400 shadow-[0_0_50px_rgba(245,158,11,0.5)]'
-                : 'bg-[#1a0b10]/98 border-rose-600/80 shadow-[0_0_50px_rgba(244,63,94,0.4)]'
-            }`}
-          >
-            {/* Top Action Title Banner */}
-            <div className="space-y-0.5">
-              <div className="text-[10px] font-mono font-bold tracking-widest text-amber-400 uppercase">
-                {bg3DiceOverlay.actorName ? `${bg3DiceOverlay.actorName} • ` : ''}{bg3DiceOverlay.title}
-              </div>
-              {bg3DiceOverlay.targetName && (
-                <div className="text-xs text-slate-200 font-sans">
-                  Alvo: <span className="font-bold text-rose-400">{bg3DiceOverlay.targetName}</span> 
-                  {bg3DiceOverlay.targetAc !== undefined && <span className="font-mono text-slate-400"> (CA {bg3DiceOverlay.targetAc})</span>}
-                </div>
-              )}
-            </div>
-
-            {/* 3D WebGL Polyhedral Dice Display */}
-            {bg3DiceOverlay.phase === 'd20' ? (
-              <div className="relative flex items-center justify-center my-1">
-                <Dice3DCanvas
-                  dieType="d20"
-                  isRolling={bg3DiceOverlay.isRolling}
-                  isHit={bg3DiceOverlay.isHit}
-                  isFail={bg3DiceOverlay.isFail}
-                  isCrit={bg3DiceOverlay.isCrit}
-                  number={bg3DiceOverlay.isRolling ? animatedRollNumber : bg3DiceOverlay.d20Roll}
-                  modifier={bg3DiceOverlay.modifier}
-                />
-              </div>
-            ) : (
-              /* Phase 2: Damage Dice Visual (3D Polyhedra) */
-              <div className="relative flex items-center justify-center my-1 animate-in zoom-in-95 duration-200">
-                {(() => {
-                  const formula = (bg3DiceOverlay.damageDiceFormula || '').toLowerCase();
-                  let damageDieType: DieType = 'd8';
-                  if (formula.includes('d20')) damageDieType = 'd20';
-                  else if (formula.includes('d12')) damageDieType = 'd12';
-                  else if (formula.includes('d10')) damageDieType = 'd10';
-                  else if (formula.includes('d6')) damageDieType = 'd6';
-                  else if (formula.includes('d4')) damageDieType = 'd4';
-
-                  return (
-                    <Dice3DCanvas
-                      dieType={damageDieType}
-                      isRolling={bg3DiceOverlay.isRolling}
-                      isHit={true}
-                      number={bg3DiceOverlay.isRolling ? animatedRollNumber : (bg3DiceOverlay.damageAmount || 0)}
-                    />
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* Outcome Result Text */}
-            {!bg3DiceOverlay.isRolling && (
-              <div className="space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                {bg3DiceOverlay.phase === 'd20' ? (
-                  <>
-                    <div className="text-2xl font-black text-slate-100 font-mono">
-                      TOTAL: <span className="text-amber-400">{bg3DiceOverlay.totalRoll}</span>
-                    </div>
-
-                    <div className="text-xs font-black uppercase tracking-wider">
-                      {bg3DiceOverlay.isCrit ? (
-                        <span className="text-amber-400 font-extrabold flex items-center justify-center gap-1">
-                          💥 ACERTO CRÍTICO! (20 NATURAL)
-                        </span>
-                      ) : bg3DiceOverlay.isFail ? (
-                        <span className="text-rose-500 font-extrabold flex items-center justify-center gap-1">
-                          💀 ERRO CRÍTICO! (1 NATURAL)
-                        </span>
-                      ) : bg3DiceOverlay.isHit ? (
-                        <span className="text-amber-400 font-bold">✓ ACERTOU O ALVO!</span>
-                      ) : (
-                        <span className="text-rose-400 font-bold">✕ ERROU O ALVO!</span>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-xl font-black text-rose-400 font-mono">
-                    💥 {bg3DiceOverlay.damageAmount} PONTOS DE DANO!
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Quick Dismiss Button */}
-            {!bg3DiceOverlay.isRolling && (
-              <button
-                onClick={() => setBg3DiceOverlay(null)}
-                className="px-6 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-[11px] rounded-xl shadow-lg transition-all active:scale-95 border border-amber-300"
-              >
-                OK
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      <CreateSceneModal
-        isOpen={showCreateSceneModal}
-        onClose={() => setShowCreateSceneModal(false)}
-      />
-
-      <AddCombatantModal
-        isOpen={showAddCombatantModal}
-        onClose={() => setShowAddCombatantModal(false)}
+      {/* 5. Modals Controller */}
+      <LiveCockpitModalManager
         campaignMembers={campaignMembers || []}
-        onAddCombatant={(newCombatant) => {
-          setCombatants((prev) => {
-            const currentActiveId = prev[currentTurnIndex]?.id;
-            const next = [...prev, newCombatant].sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
-            if (currentActiveId) {
-              const newActiveIdx = next.findIndex(x => x.id === currentActiveId);
-              if (newActiveIdx !== -1) {
-                setCurrentTurnIndex(newActiveIdx);
-              }
-            }
-            if (activeSceneRef.current) {
-              updateScene({ ...activeSceneRef.current, combatants: next });
-            }
-            broadcastToPlayerView({ combatants: next });
-            return next;
-          });
-          toast.success(`${newCombatant.name} adicionado ao combate!`);
-          setShowAddCombatantModal(false);
-        }}
+        handleConfirmBattleSetup={(options) =>
+          handleConfirmBattleSetup(options.setupMode, options.timeOfDay)
+        }
+        handleConfirmMagicMissiles={handleConfirmMagicMissiles}
       />
-
-      <BattleSetupModal
-        isOpen={showBattleSetupModal}
-        onClose={() => setShowBattleSetupModal(false)}
-        onConfirmSetup={handleConfirmBattleSetup}
-      />
-
-      {confirmDeleteCombatant && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl text-center">
-            <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
-              <Trash2 className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-100 text-base">Remover Combatente?</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Tem certeza de que deseja remover <strong className="text-slate-200">{confirmDeleteCombatant.name}</strong> da batalha?
-              </p>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => setConfirmDeleteCombatant(null)}
-                className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  const targetId = confirmDeleteCombatant.id;
-                  const updatedList = combatants.filter((x) => x.id !== targetId);
-                  setCombatants(updatedList);
-                  if (activeSceneRef.current) {
-                    updateScene({ ...activeSceneRef.current, combatants: updatedList });
-                  }
-                  broadcastToPlayerView({ combatants: updatedList });
-                  if (selectedTargetId === targetId) {
-                    setSelectedTargetId(undefined);
-                  }
-                  toast.success(`${confirmDeleteCombatant.name} removido da batalha.`);
-                  setConfirmDeleteCombatant(null);
-                }}
-                className="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-slate-100 text-xs font-bold rounded-xl transition-colors shadow-lg shadow-rose-600/20"
-              >
-                Sim, Remover
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {magicMissileModalState && magicMissileModalState.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-bold text-slate-100 text-base">Alocar Mísseis Mágicos</h3>
-              </div>
-              <button
-                onClick={() => setMagicMissileModalState(null)}
-                className="text-slate-400 hover:text-slate-200 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="text-xs text-slate-300 space-y-1">
-              <p>Dardos Disponíveis: <span className="font-bold text-indigo-400">{magicMissileModalState.availableDarts - Object.values(magicMissileModalState.dartAllocations).reduce((a, b) => a + b, 0)}</span> de {magicMissileModalState.availableDarts}</p>
-              <p className="text-[11px] text-slate-400">Cada dardo causa <span className="text-amber-300 font-mono">1d4+1</span> de dano de energia automático.</p>
-            </div>
-
-            <div className="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-              {combatants
-                .filter((c) => c.id !== magicMissileModalState.caster.id)
-                .map((c) => {
-                  const allocated = magicMissileModalState.dartAllocations[c.id] || 0;
-                  const totalAllocated = Object.values(magicMissileModalState.dartAllocations).reduce((a, b) => a + b, 0);
-                  const remaining = magicMissileModalState.availableDarts - totalAllocated;
-                  return (
-                    <div key={c.id} className="flex items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-slate-200">
-                          {c.name.substring(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-slate-200">{c.name}</div>
-                          <div className="text-[10px] text-slate-400">HP: {c.hp}/{c.maxHp} | CA: {c.ac}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          disabled={allocated <= 0}
-                          onClick={() => {
-                            setMagicMissileModalState((prev) =>
-                              prev
-                                ? {
-                                    ...prev,
-                                    dartAllocations: {
-                                      ...prev.dartAllocations,
-                                      [c.id]: Math.max(0, (prev.dartAllocations[c.id] || 0) - 1),
-                                    },
-                                  }
-                                : null
-                            );
-                          }}
-                          className="w-7 h-7 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 rounded-lg flex items-center justify-center text-slate-200 font-bold"
-                        >
-                          -
-                        </button>
-                        <span className="w-5 text-center font-bold font-mono text-indigo-400 text-sm">{allocated}</span>
-                        <button
-                          disabled={remaining <= 0}
-                          onClick={() => {
-                            setMagicMissileModalState((prev) =>
-                              prev
-                                ? {
-                                    ...prev,
-                                    dartAllocations: {
-                                      ...prev.dartAllocations,
-                                      [c.id]: (prev.dartAllocations[c.id] || 0) + 1,
-                                    },
-                                  }
-                                : null
-                            );
-                          }}
-                          className="w-7 h-7 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 rounded-lg flex items-center justify-center text-slate-100 font-bold"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
-              <button
-                onClick={() => setMagicMissileModalState(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleConfirmMagicMissiles}
-                disabled={Object.values(magicMissileModalState.dartAllocations).reduce((a, b) => a + b, 0) === 0}
-                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg disabled:opacity-50"
-              >
-                Disparar Mísseis
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

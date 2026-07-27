@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { offlineQueue } from '@/lib/sync/OfflineQueueManager';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { CombatLogEntry, PlayerRollEvent } from '@/lib/types';
 
 export interface RealtimeSyncPayloads {
   TOKEN_MOVE_3D: { combatantId: string; characterName?: string; newX: number; newZ: number };
@@ -28,6 +29,8 @@ export interface RealtimeSyncPayloads {
   };
   DICE_ROLL: { rollerName: string; rollType: string; diceFormula: string; result: number; isCrit?: boolean; isFail?: boolean };
   COMBAT_UPDATE: { combatants: any[]; currentTurnIndex: number; roundCount: number };
+  COMBAT_LOG_ENTRY: { entry: CombatLogEntry };
+  PLAYER_ROLL: { roll: PlayerRollEvent };
 }
 
 export interface UseRealtimeSyncOptions {
@@ -37,6 +40,8 @@ export interface UseRealtimeSyncOptions {
   onLiveProjectionChange?: (payload: RealtimeSyncPayloads['LIVE_PROJECTION_UPDATE']) => void;
   onDiceRoll?: (payload: RealtimeSyncPayloads['DICE_ROLL']) => void;
   onCombatUpdate?: (payload: RealtimeSyncPayloads['COMBAT_UPDATE']) => void;
+  onCombatLogEntry?: (payload: RealtimeSyncPayloads['COMBAT_LOG_ENTRY']) => void;
+  onPlayerRoll?: (payload: RealtimeSyncPayloads['PLAYER_ROLL']) => void;
 }
 
 export function useRealtimeSync({
@@ -46,6 +51,8 @@ export function useRealtimeSync({
   onLiveProjectionChange,
   onDiceRoll,
   onCombatUpdate,
+  onCombatLogEntry,
+  onPlayerRoll,
 }: UseRealtimeSyncOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const isSubscribedRef = useRef<boolean>(false);
@@ -57,6 +64,8 @@ export function useRealtimeSync({
     onLiveProjectionChange,
     onDiceRoll,
     onCombatUpdate,
+    onCombatLogEntry,
+    onPlayerRoll,
   });
 
   useEffect(() => {
@@ -66,8 +75,10 @@ export function useRealtimeSync({
       onLiveProjectionChange,
       onDiceRoll,
       onCombatUpdate,
+      onCombatLogEntry,
+      onPlayerRoll,
     };
-  }, [onTokenMove, onTokenRotate, onLiveProjectionChange, onDiceRoll, onCombatUpdate]);
+  }, [onTokenMove, onTokenRotate, onLiveProjectionChange, onDiceRoll, onCombatUpdate, onCombatLogEntry, onPlayerRoll]);
 
   // Cross-tab BroadcastChannel fallback
   const bcRef = useRef<BroadcastChannel | null>(null);
@@ -83,6 +94,8 @@ export function useRealtimeSync({
         if (type === 'LIVE_PROJECTION_UPDATE' && cb.onLiveProjectionChange) cb.onLiveProjectionChange(data);
         if (type === 'DICE_ROLL' && cb.onDiceRoll) cb.onDiceRoll(data);
         if (type === 'COMBAT_UPDATE' && cb.onCombatUpdate) cb.onCombatUpdate(data);
+        if (type === 'COMBAT_LOG_ENTRY' && cb.onCombatLogEntry) cb.onCombatLogEntry(data);
+        if (type === 'PLAYER_ROLL' && cb.onPlayerRoll) cb.onPlayerRoll(data);
       };
     } catch (e) {}
 
@@ -125,6 +138,14 @@ export function useRealtimeSync({
       .on('broadcast', { event: 'COMBAT_UPDATE' }, ({ payload }) => {
         const cb = callbacksRef.current;
         if (cb.onCombatUpdate) cb.onCombatUpdate(payload);
+      })
+      .on('broadcast', { event: 'COMBAT_LOG_ENTRY' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onCombatLogEntry) cb.onCombatLogEntry(payload);
+      })
+      .on('broadcast', { event: 'PLAYER_ROLL' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onPlayerRoll) cb.onPlayerRoll(payload);
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -211,11 +232,21 @@ export function useRealtimeSync({
     sendBroadcast('COMBAT_UPDATE', payload);
   }, [sendBroadcast]);
 
+  const broadcastCombatLogEntry = useCallback((payload: RealtimeSyncPayloads['COMBAT_LOG_ENTRY']) => {
+    sendBroadcast('COMBAT_LOG_ENTRY', payload);
+  }, [sendBroadcast]);
+
+  const broadcastPlayerRoll = useCallback((payload: RealtimeSyncPayloads['PLAYER_ROLL']) => {
+    sendBroadcast('PLAYER_ROLL', payload);
+  }, [sendBroadcast]);
+
   return {
     broadcastTokenMove,
     broadcastTokenRotate,
     broadcastLiveProjection,
     broadcastDiceRoll,
     broadcastCombatUpdate,
+    broadcastCombatLogEntry,
+    broadcastPlayerRoll,
   };
 }

@@ -272,6 +272,7 @@ export function createEmptyCharacterSheet(userId: string, campaignId?: string): 
     id: generateUuid(),
     userId,
     campaignId,
+    isPublic: true,
     characterName: 'Novo Aventureiro',
     className: 'Guerreiro',
     level: 1,

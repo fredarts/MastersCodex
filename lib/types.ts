@@ -238,6 +238,20 @@ export interface CombatLogEntry {
   description: string;
 }
 
+export interface PlayerRollEvent {
+  id: string;
+  characterName: string;
+  rollType: 'skill' | 'save' | 'attack' | 'spell' | 'custom';
+  label: string;
+  d20Roll: number;
+  modifier: number;
+  total: number;
+  isCrit?: boolean;
+  isFail?: boolean;
+  advantageMode?: AdvantageMode;
+  timestamp: string;
+}
+
 export interface SRDMonster {
   id: string;
   name: string;
@@ -458,6 +472,7 @@ export interface CharacterSheet {
   id: string;
   userId: string;
   campaignId?: string;
+  isPublic?: boolean;
 
   // Página 1: Identidade & Cabeçalho
   characterName: string;

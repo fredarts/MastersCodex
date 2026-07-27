@@ -145,14 +145,7 @@ export const Header: React.FC<HeaderProps> = ({
           </kbd>
         </button>
 
-        {/* Player View Button */}
-        <button
-          onClick={onOpenPlayerView}
-          className="flex items-center gap-2 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 text-slate-950 font-semibold px-3 py-1.5 rounded-lg text-xs transition-all shadow-md shadow-cyan-900/30 active:scale-95"
-        >
-          <Tv className="w-4 h-4" />
-          <span className="hidden sm:inline">Tela do Jogador</span>
-        </button>
+
 
         {/* User Account / Auth Button */}
         {user ? (

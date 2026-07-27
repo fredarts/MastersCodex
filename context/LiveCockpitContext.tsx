@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { Combatant } from '@/lib/types';
+import { Combatant, CombatLogEntry, PlayerRollEvent } from '@/lib/types';
 import { useRealtimeSync } from '@/lib/hooks/useRealtimeSync';
 import { useCampaign } from '@/context/CampaignContext';
 
@@ -45,6 +45,10 @@ interface LiveCockpitContextType {
   minimizeSheet: (id: string) => void;
   maximizeSheet: (id: string) => void;
   closeSheet: (id: string) => void;
+  combatLogs: CombatLogEntry[];
+  setCombatLogs: React.Dispatch<React.SetStateAction<CombatLogEntry[]>>;
+  broadcastCombatLogEntry: (entry: CombatLogEntry) => void;
+  broadcastPlayerRoll: (roll: PlayerRollEvent) => void;
 }
 
 const LiveCockpitContext = createContext<LiveCockpitContextType | undefined>(undefined);
@@ -67,6 +71,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [casterTokenKey, setCasterTokenKeyState] = useState<string | null>(null);
   const [spellTargetPosition, setSpellTargetPositionState] = useState<{ x: number; z: number } | null>(null);
   const [activeSheets, setActiveSheets] = useState<ActiveSheetState[]>([]);
+  const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>([]);
 
   // Ref to track the last synchronized combat state to avoid feedback loops
   const lastSyncStateRef = useRef<{
@@ -115,6 +120,8 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     broadcastLiveProjection,
     broadcastDiceRoll,
     broadcastCombatUpdate,
+    broadcastCombatLogEntry: syncBroadcastCombatLogEntry,
+    broadcastPlayerRoll: syncBroadcastPlayerRoll,
   } = useRealtimeSync({
     campaignId,
     onTokenMove: (payload) => {
@@ -175,6 +182,33 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       if (payload.currentTurnIndex !== undefined) setCurrentTurnIndex(payload.currentTurnIndex);
       if (payload.roundCount !== undefined) setRoundCount(payload.roundCount);
     },
+    onCombatLogEntry: (payload) => {
+      if (payload.entry) {
+        setCombatLogs((prev) => {
+          if (prev.some((l) => l.id === payload.entry.id)) return prev;
+          return [...prev, payload.entry];
+        });
+      }
+    },
+    onPlayerRoll: (payload) => {
+      if (payload.roll) {
+        const r = payload.roll;
+        const entry: CombatLogEntry = {
+          id: r.id || `roll-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          timestamp: r.timestamp || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          round: roundCount,
+          actorId: r.characterName,
+          actorName: r.characterName,
+          eventType: r.rollType === 'attack' ? 'attack' : 'system',
+          d20Roll: r.d20Roll,
+          totalRoll: r.total,
+          isCrit: r.isCrit,
+          isFail: r.isFail,
+          description: `[JOGADOR] ${r.characterName} rolou ${r.label}: d20(${r.d20Roll}) ${r.modifier >= 0 ? '+' : ''}${r.modifier} = Total ${r.total}`,
+        };
+        setCombatLogs((prev) => [...prev, entry]);
+      }
+    },
   });
 
   // Sincroniza estado de combate em tempo real do Mestre para os Jogadores
@@ -194,29 +228,29 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   }, [combatants, currentTurnIndex, roundCount, activeCampaign?.role, broadcastCombatUpdate, isCombatStateEqual]);
 
-  const setLiveDisplayMode = (mode: 'artwork' | 'map' | 'combat') => {
+  const setLiveDisplayMode = useCallback((mode: 'artwork' | 'map' | 'combat') => {
     setLiveDisplayModeState(mode);
     broadcastLiveProjection({ mode });
-  };
+  }, [broadcastLiveProjection]);
 
-  const broadcastToPlayerView = (payload: any) => {
+  const broadcastToPlayerView = useCallback((payload: any) => {
     broadcastLiveProjection(payload);
-  };
+  }, [broadcastLiveProjection]);
 
-  const setActiveSpellTargeting = (targeting: any) => {
+  const setActiveSpellTargeting = useCallback((targeting: any) => {
     setActiveSpellTargetingState(targeting);
     broadcastToPlayerView({ activeSpellTargeting: targeting });
-  };
+  }, [broadcastToPlayerView]);
 
-  const setCasterTokenKey = (key: string | null) => {
+  const setCasterTokenKey = useCallback((key: string | null) => {
     setCasterTokenKeyState(key);
     broadcastToPlayerView({ casterTokenKey: key });
-  };
+  }, [broadcastToPlayerView]);
 
-  const setSpellTargetPosition = (pos: { x: number; z: number } | null) => {
+  const setSpellTargetPosition = useCallback((pos: { x: number; z: number } | null) => {
     setSpellTargetPositionState(pos);
     broadcastToPlayerView({ spellTargetPosition: pos });
-  };
+  }, [broadcastToPlayerView]);
 
   const openSheet = useCallback((id: string, type: 'pc' | 'player' | 'monster' | 'npc', name: string, data?: any) => {
     const normalizedType: 'pc' | 'monster' | 'npc' = (type as string) === 'player' ? 'pc' : (type as 'pc' | 'monster' | 'npc');
@@ -286,6 +320,14 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
   };
 
+  const broadcastCombatLogEntry = useCallback((entry: CombatLogEntry) => {
+    syncBroadcastCombatLogEntry({ entry });
+  }, [syncBroadcastCombatLogEntry]);
+
+  const broadcastPlayerRoll = useCallback((roll: PlayerRollEvent) => {
+    syncBroadcastPlayerRoll({ roll });
+  }, [syncBroadcastPlayerRoll]);
+
   return (
     <LiveCockpitContext.Provider
       value={{
@@ -317,6 +359,10 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         minimizeSheet,
         maximizeSheet,
         closeSheet,
+        combatLogs,
+        setCombatLogs,
+        broadcastCombatLogEntry,
+        broadcastPlayerRoll,
       }}
     >
       {children}

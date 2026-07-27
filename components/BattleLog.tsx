@@ -26,6 +26,7 @@ interface BattleLogProps {
   activeTarget?: Combatant;
   onClearLogs?: () => void;
   onSelectTarget?: (combatant: Combatant) => void;
+  readOnly?: boolean;
 }
 
 export const BattleLog: React.FC<BattleLogProps> = ({
@@ -33,7 +34,8 @@ export const BattleLog: React.FC<BattleLogProps> = ({
   activeAttacker,
   activeTarget,
   onClearLogs,
-  onSelectTarget
+  onSelectTarget,
+  readOnly = false,
 }) => {
   const [filter, setFilter] = useState<'all' | 'attack' | 'damage' | 'status'>('all');
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -99,39 +101,43 @@ export const BattleLog: React.FC<BattleLogProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          {onClearLogs && logs.length > 0 && (
-            <button onClick={onClearLogs} className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-[#161c28] transition-colors" title="Limpar Log">
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {logs.length > 0 && (
-            <button onClick={exportLogs} className="p-1.5 text-slate-500 hover:text-amber-300 rounded-lg hover:bg-[#161c28] transition-colors" title="Exportar Log (.txt)">
-              <Download className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
+        {!readOnly && (
+          <div className="flex items-center gap-1">
+            {onClearLogs && logs.length > 0 && (
+              <button onClick={onClearLogs} className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-[#161c28] transition-colors" title="Limpar Log">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {logs.length > 0 && (
+              <button onClick={exportLogs} className="p-1.5 text-slate-500 hover:text-amber-300 rounded-lg hover:bg-[#161c28] transition-colors" title="Exportar Log (.txt)">
+                <Download className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Target Status Banner */}
-      <div className="p-2.5 bg-[#0a0d14] border-b border-[#2a3449] flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="flex items-center gap-1 text-[10px] font-mono text-slate-400">
-            <span className="font-bold text-slate-200 truncate max-w-[90px]">{activeAttacker ? activeAttacker.name : 'Nenhum'}</span>
-            <ChevronRight className="w-3 h-3 text-slate-600 flex-shrink-0" />
-            <Target className="w-3.5 h-3.5 text-rose-500 animate-pulse flex-shrink-0" />
-          </div>
-          
-          {activeTarget ? (
-            <div className="flex items-center gap-1.5 bg-rose-950/40 border border-rose-500/50 px-2 py-0.5 rounded-lg truncate">
-              <span className="text-[10px] font-bold text-rose-300 truncate">{activeTarget.name}</span>
-              <span className="text-[9px] font-mono text-cyan-300 bg-cyan-950/60 px-1 rounded">CA {activeTarget.ac}</span>
+      {!readOnly && (
+        <div className="p-2.5 bg-[#0a0d14] border-b border-[#2a3449] flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-1 text-[10px] font-mono text-slate-400">
+              <span className="font-bold text-slate-200 truncate max-w-[90px]">{activeAttacker ? activeAttacker.name : 'Nenhum'}</span>
+              <ChevronRight className="w-3 h-3 text-slate-600 flex-shrink-0" />
+              <Target className="w-3.5 h-3.5 text-rose-500 animate-pulse flex-shrink-0" />
             </div>
-          ) : (
-            <span className="text-[10px] italic text-slate-500 truncate">Nenhum alvo (clique na mini 3D)</span>
-          )}
+            
+            {activeTarget ? (
+              <div className="flex items-center gap-1.5 bg-rose-950/40 border border-rose-500/50 px-2 py-0.5 rounded-lg truncate">
+                <span className="text-[10px] font-bold text-rose-300 truncate">{activeTarget.name}</span>
+                <span className="text-[9px] font-mono text-cyan-300 bg-cyan-950/60 px-1 rounded">CA {activeTarget.ac}</span>
+              </div>
+            ) : (
+              <span className="text-[10px] italic text-slate-500 truncate">Nenhum alvo (clique na mini 3D)</span>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Filter Tabs */}
       <div className="flex border-b border-[#2a3449] bg-[#121824]/30 p-1 gap-1">

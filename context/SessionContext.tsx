@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { GameSession, GameScene } from '@/lib/types';
 import { sessionService } from '@/lib/services/sessionService';
 import { useCampaign } from '@/context/CampaignContext';
@@ -31,6 +31,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeSession, setActiveSessionState] = useState<GameSession | null>(null);
   const [scenes, setScenes] = useState<GameScene[]>([]);
   const [activeScene, setActiveSceneState] = useState<GameScene | null>(null);
+  const activeSceneIdRef = useRef<string | null>(null);
+
+  // Keep ref in sync for stable callback closures
+  useEffect(() => {
+    activeSceneIdRef.current = activeScene?.id ?? null;
+  }, [activeScene?.id]);
 
   const { activeCampaign } = useCampaign();
   const campaignId = activeCampaign?.id || 'camp-demo-1';
@@ -168,7 +174,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return newScene;
   };
 
-  const updateScene = async (updatedScene: GameScene) => {
+  const updateScene = useCallback(async (updatedScene: GameScene) => {
     const res = await sessionService.updateScene(updatedScene, campaignId);
     if (!res.ok) {
       toast.error(res.error.message);
@@ -182,10 +188,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return updated;
     });
 
-    if (activeScene?.id === updatedScene.id) {
+    if (activeSceneIdRef.current === updatedScene.id) {
       setActiveSceneState(updatedScene);
     }
-  };
+  }, [campaignId]);
 
   const deleteScene = async (id: string) => {
     const res = await sessionService.deleteScene(id, campaignId);

@@ -17,10 +17,17 @@ import {
   Users,
   Compass,
   LogOut,
-  FileText
+  FileText,
+  Heart,
+  Swords,
+  Activity,
+  Lock,
+  Eye,
+  EyeOff,
+  Ghost
 } from 'lucide-react';
 import { useCampaign } from '@/lib/hooks/useCampaign';
-import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
+import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { UserCampaign, CharacterSheet } from '@/lib/types';
 import { CharacterSheetModal } from './character-sheet/CharacterSheetModal';
 import { CharacterManagerModal } from './character-sheet/CharacterManagerModal';
@@ -35,7 +42,7 @@ interface PlayerLobbyProps {
 
 export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) => {
   const { activeCampaign, setActiveCampaign, userCampaigns, joinCampaignByCode, leaveCampaign, feedEvents, updateCampaignMemberModelUrl } = useCampaign();
-  const { tokenPositions3D, updateTokenPosition3D } = useLiveCockpit();
+  const { tokenPositions3D, updateTokenPosition3D, combatants, currentTurnIndex, roundCount, liveDisplayMode } = useLiveCockpit();
   const { user } = useAuth();
   
   // Navigation & Modal States
@@ -78,6 +85,12 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   const [activeSheet, setActiveSheet] = useState<CharacterSheet>(() => characterSheets[0] || createEmptyCharacterSheet('player-1'));
   const [isSheetModalOpen, setIsSheetModalOpen] = useState(false);
   const [isManagerModalOpen, setIsManagerModalOpen] = useState(false);
+
+  // Group members state
+  const [campaignMembers, setCampaignMembers] = useState<{id: string; userId: string; characterName?: string; avatarUrl?: string; role: string}[]>([]);
+  const [viewingSheet, setViewingSheet] = useState<CharacterSheet | null>(null);
+  const [isViewingSheetOpen, setIsViewingSheetOpen] = useState(false);
+  const [loadingMemberSheet, setLoadingMemberSheet] = useState<string | null>(null);
 
   // Efeito para salvar fichas no localStorage sempre que houver alteração
   useEffect(() => {
@@ -134,6 +147,68 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     
     fetchSheetsFromDb();
   }, [user?.id]);
+
+  // We track currentCampaignId for the member fetch effect
+  const currentCampaignIdForMembers = selectedCampaignId || activeCampaign?.id || null;
+
+  // Fetch campaign members when campaign changes
+  useEffect(() => {
+    if (!currentCampaignIdForMembers) { setCampaignMembers([]); return; }
+    const loadMembers = async () => {
+      // Try Supabase first
+      if (isSupabaseConfigured() && isValidUuid(currentCampaignIdForMembers)) {
+        try {
+          const { data, error } = await supabase
+            .from('campaign_members')
+            .select('*')
+            .eq('campaign_id', currentCampaignIdForMembers);
+          if (!error && data) {
+            setCampaignMembers(data.map((m: any) => ({
+              id: m.id, userId: m.user_id, characterName: m.character_name, avatarUrl: m.avatar_url, role: m.role || 'player',
+            })));
+            return;
+          }
+        } catch (_) {}
+      }
+      // Fallback to localStorage
+      try {
+        const saved = localStorage.getItem('codex_members');
+        const all: any[] = saved ? JSON.parse(saved) : [];
+        setCampaignMembers(all.filter((m) => m.campaignId === currentCampaignIdForMembers).map((m) => ({
+          id: m.id, userId: m.userId || '', characterName: m.characterName, role: m.role || 'player',
+        })));
+      } catch (_) { setCampaignMembers([]); }
+    };
+    loadMembers();
+  }, [currentCampaignIdForMembers]);
+
+  const handleViewMemberSheet = async (member: {id: string; userId: string; characterName?: string; role: string}) => {
+    setLoadingMemberSheet(member.id);
+    let foundSheet: CharacterSheet | null = null;
+    if (isSupabaseConfigured() && isValidUuid(member.userId)) {
+      try {
+        const { data } = await supabase.from('character_sheets').select('*').eq('user_id', member.userId).limit(1);
+        if (data && data.length > 0) {
+          foundSheet = { ...data[0].data, id: data[0].id, userId: data[0].user_id, campaignId: data[0].campaign_id, characterName: data[0].character_name || data[0].data?.characterName };
+        }
+      } catch (_) {}
+    }
+    if (!foundSheet && member.characterName) {
+      try {
+        const saved = localStorage.getItem('masters_codex_character_sheets_v1');
+        const sheets: CharacterSheet[] = saved ? JSON.parse(saved) : [];
+        foundSheet = sheets.find((s) => s.characterName?.toLowerCase() === member.characterName!.toLowerCase()) || null;
+      } catch (_) {}
+    }
+    setLoadingMemberSheet(null);
+    if (!foundSheet) { alert(`Nenhuma ficha encontrada para ${member.characterName || 'este jogador'}.`); return; }
+    if (foundSheet.isPublic === false) {
+      alert(`\ud83d\udd12 ${member.characterName || 'Este jogador'} bloqueou a visualiza\u00e7\u00e3o da sua ficha.`);
+      return;
+    }
+    setViewingSheet(foundSheet);
+    setIsViewingSheetOpen(true);
+  };
 
   const handleOpenSheetForCampaign = (camp?: UserCampaign) => {
     // Procura se já existe uma ficha vinculada à campanha ou com o nome do personagem
@@ -297,7 +372,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     setIsJoinModalOpen(true);
   };
 
-  const playerCampaigns = userCampaigns.filter((c) => c.role === 'player');
+  const playerCampaigns = userCampaigns;
 
   // Find currently selected campaign
   const currentCampaign = playerCampaigns.find((c) => c.id === selectedCampaignId) || activeCampaign;
@@ -555,14 +630,6 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                 <Plus className="w-4 h-4" />
                 <span>Entrar em Mesa (Código)</span>
               </button>
-
-              <button
-                onClick={onOpenPlayerView}
-                className="flex items-center gap-2 bg-[#161c28] border border-cyan-500/40 hover:border-cyan-400 text-cyan-400 hover:text-cyan-300 font-bold px-4 py-2.5 rounded-xl text-xs shadow-lg transition-all active:scale-95"
-              >
-                <Tv className="w-4 h-4" />
-                <span>Tela de Exibição (TV/Discord)</span>
-              </button>
             </div>
           </div>
 
@@ -761,82 +828,216 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                 </div>
               </div>
 
-              {/* 3D Battle Grid Smartphone D-Pad Controller */}
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-[#161c28] to-[#0f141d] border border-cyan-500/30 shadow-2xl space-y-4">
+              {/* Widget de Status do Personagem ao Vivo */}
+              {(() => {
+                const playerCharName = currentCampaign?.characterName || 'Aventureiro';
+                const playerCombatant = combatants.find(
+                  (c) => c.name.toLowerCase().includes(playerCharName.toLowerCase()) || playerCharName.toLowerCase().includes(c.name.toLowerCase())
+                );
+                const isCombatActive = liveDisplayMode === 'combat';
+                const isMyTurn = isCombatActive && combatants[currentTurnIndex]?.name.toLowerCase().includes(playerCharName.toLowerCase());
+                const hpPercent = playerCombatant ? Math.max(0, Math.min(100, (playerCombatant.hp / playerCombatant.maxHp) * 100)) : 100;
+
+                return (
+                  <div className="p-5 rounded-2xl bg-gradient-to-br from-[#161c28] to-[#121824] border border-amber-500/40 shadow-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-amber-400" />
+                        <h3 className="text-xs font-bold text-slate-100 uppercase font-mono tracking-wider">
+                          Status ao Vivo (Combate)
+                        </h3>
+                      </div>
+                      <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded ${
+                        isCombatActive
+                          ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/40 animate-pulse'
+                          : 'bg-slate-900 text-slate-400 border border-[#2a3449]'
+                      }`}>
+                        {isCombatActive ? `🟢 EM COMBATE (Rodada ${roundCount})` : '⚪ EXPLORAÇÃO / NARRATIVA'}
+                      </span>
+                    </div>
+
+                    {playerCombatant ? (
+                      <div className="space-y-2.5">
+                        {/* HP Bar */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs font-mono">
+                            <span className="text-slate-400 flex items-center gap-1">
+                              <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500/20" /> HP:
+                            </span>
+                            <span className="font-bold text-slate-200">{playerCombatant.hp} / {playerCombatant.maxHp}</span>
+                          </div>
+                          <div className="w-full h-2 bg-[#0a0d14] rounded-full overflow-hidden border border-[#2a3449]">
+                            <div
+                              className={`h-full transition-all duration-300 ${
+                                hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 20 ? 'bg-amber-500' : 'bg-rose-600'
+                              }`}
+                              style={{ width: `${hpPercent}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* AC, Initiative, Conditions */}
+                        <div className="flex items-center justify-between text-xs font-mono pt-1 border-t border-[#2a3449]/50">
+                          <span className="text-cyan-300 bg-cyan-950/50 border border-cyan-500/30 px-2 py-0.5 rounded flex items-center gap-1">
+                            <Shield className="w-3 h-3 text-cyan-400" /> CA {playerCombatant.ac}
+                          </span>
+                          <span className="text-amber-300 bg-amber-950/50 border border-amber-500/30 px-2 py-0.5 rounded">
+                            Iniciativa: #{playerCombatant.initiative}
+                          </span>
+                        </div>
+
+                        {/* Active Conditions */}
+                        {playerCombatant.conditions.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {playerCombatant.conditions.map((cond) => (
+                              <span key={cond} className="text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded-full font-mono">
+                                {cond}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Turn Status Alert */}
+                        {isCombatActive && (
+                          <div className={`p-2 rounded-xl text-xs font-bold font-mono text-center flex items-center justify-center gap-2 ${
+                            isMyTurn
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-md animate-pulse'
+                              : 'bg-[#0a0d14] text-slate-400 border border-[#2a3449]'
+                          }`}>
+                            <Swords className="w-3.5 h-3.5" />
+                            <span>{isMyTurn ? '🗡️ É A SUA VEZ! ABRA A TELA DO JOGADOR' : `Aguardando Turno... (${combatants[currentTurnIndex]?.name || 'Próximo'})`}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-400 italic bg-[#0a0d14] p-3 rounded-xl border border-[#2a3449]">
+                        Seu personagem ainda não foi adicionado ao combate ativo pelo Mestre.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Widget: Posição na Iniciativa */}
+              {liveDisplayMode === 'combat' && combatants.length > 0 && (
+                <div className="p-4 rounded-2xl bg-[#161c28] border border-[#2a3449] shadow-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-slate-100 flex items-center gap-2 uppercase font-mono">
+                      <Swords className="w-4 h-4 text-amber-400" />
+                      Fila de Iniciativa
+                    </h3>
+                  </div>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {combatants.map((c, i) => {
+                      const isCurrentTurn = i === currentTurnIndex;
+                      const playerCharName = currentCampaign?.characterName || 'Aventureiro';
+                      const isMe = c.name.toLowerCase().includes(playerCharName.toLowerCase()) || playerCharName.toLowerCase().includes(c.name.toLowerCase());
+                      return (
+                        <div key={c.id} className={`flex items-center justify-between p-2 rounded-lg text-[11px] font-mono border ${isCurrentTurn ? 'bg-amber-500/10 border-amber-500/50 text-amber-300 font-bold shadow-sm shadow-amber-500/10' : isMe ? 'bg-cyan-950/40 border-cyan-500/30 text-cyan-300' : 'bg-[#0a0d14] border-[#2a3449] text-slate-400'}`}>
+                          <div className="flex items-center gap-2">
+                            <span className="opacity-60">#{i + 1}</span>
+                            <span>{c.name}</span>
+                          </div>
+                          {isMe && <span className="text-[9px] bg-cyan-900/60 border border-cyan-500/40 px-1.5 py-0.5 rounded text-cyan-300">VOCÊ</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {/* Widget: Membros do Grupo */}
+              <div className="p-4 rounded-2xl bg-[#161c28] border border-[#2a3449] shadow-xl space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-cyan-300 flex items-center gap-2 uppercase font-mono">
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                    Controle de Pino no Grid 3D
+                  <h3 className="text-xs font-bold text-slate-100 flex items-center gap-2 uppercase font-mono">
+                    <Users className="w-4 h-4 text-cyan-400" />
+                    Membros do Grupo
                   </h3>
-                  <span className="text-[10px] font-mono text-slate-400 bg-[#0a0d14] px-2 py-0.5 rounded border border-[#2a3449]">
-                    1 Passo = 1,5m (5ft)
+                  <span className="text-[9px] font-mono text-slate-500 bg-[#0a0d14] border border-[#2a3449] px-2 py-0.5 rounded">
+                    {campaignMembers.length} membro{campaignMembers.length !== 1 ? 's' : ''}
                   </span>
                 </div>
 
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Use o controle direcional abaixo no seu smartphone para mover o seu personagem pelo mapa 3D da batalha ao vivo:
-                </p>
-
-                <div className="flex flex-col items-center justify-center p-3 bg-[#0a0d14] rounded-2xl border border-[#2a3449] space-y-2">
-                  <button
-                    onClick={() => {
-                      const charName = currentCampaign?.characterName || 'player';
-                      const cur = tokenPositions3D[charName] || { x: 0, z: 2 };
-                      const nextZ = Math.max(-5, Math.min(5, cur.z - 1));
-                      updateTokenPosition3D(charName, undefined, undefined, cur.x, nextZ);
-                    }}
-                    className="w-12 h-12 rounded-xl bg-gradient-to-b from-cyan-500 to-cyan-600 active:scale-95 text-slate-950 font-black shadow-lg shadow-cyan-900/40 flex items-center justify-center text-lg transition-all"
-                    title="Mover 1,5m para Frente"
-                  >
-                    ▲
-                  </button>
-
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => {
-                        const charName = currentCampaign?.characterName || 'player';
-                        const cur = tokenPositions3D[charName] || { x: 0, z: 2 };
-                        const nextX = Math.max(-5, Math.min(5, cur.x - 1));
-                        updateTokenPosition3D(charName, undefined, undefined, nextX, cur.z);
-                      }}
-                      className="w-12 h-12 rounded-xl bg-gradient-to-b from-cyan-500 to-cyan-600 active:scale-95 text-slate-950 font-black shadow-lg shadow-cyan-900/40 flex items-center justify-center text-lg transition-all"
-                      title="Mover 1,5m para Esquerda"
-                    >
-                      ◀
-                    </button>
-
-                    <div className="w-10 h-10 rounded-full bg-[#161c28] border border-cyan-500/40 flex items-center justify-center text-[10px] font-mono text-cyan-400 font-bold">
-                      1.5m
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        const charName = currentCampaign?.characterName || 'player';
-                        const cur = tokenPositions3D[charName] || { x: 0, z: 2 };
-                        const nextX = Math.max(-5, Math.min(5, cur.x + 1));
-                        updateTokenPosition3D(charName, undefined, undefined, nextX, cur.z);
-                      }}
-                      className="w-12 h-12 rounded-xl bg-gradient-to-b from-cyan-500 to-cyan-600 active:scale-95 text-slate-950 font-black shadow-lg shadow-cyan-900/40 flex items-center justify-center text-lg transition-all"
-                      title="Mover 1,5m para Direita"
-                    >
-                      ▶
-                    </button>
+                {campaignMembers.length === 0 ? (
+                  <div className="text-center py-4 text-slate-500 space-y-1">
+                    <Ghost className="w-6 h-6 mx-auto text-slate-600" />
+                    <p className="text-[11px]">Nenhum membro encontrado nesta campanha.</p>
                   </div>
+                ) : (
+                  <div className="space-y-2">
+                    {campaignMembers.map((member) => {
+                      const isMe = member.characterName?.toLowerCase() === currentCampaign?.characterName?.toLowerCase();
+                      const initials = (member.characterName || '?').slice(0, 2).toUpperCase();
+                      const isDM = member.role === 'dm';
+                      return (
+                        <div
+                          key={member.id}
+                          className={`flex items-center justify-between gap-3 p-2.5 rounded-xl border transition-all ${
+                            isMe ? 'bg-cyan-950/30 border-cyan-500/40' : isDM ? 'bg-amber-950/20 border-amber-500/30' : 'bg-[#0a0d14] border-[#2a3449] hover:border-slate-500'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            {member.avatarUrl ? (
+                              <img src={member.avatarUrl} alt={member.characterName} className="w-8 h-8 rounded-lg object-cover border border-[#2a3449]" />
+                            ) : (
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold font-mono border ${isDM ? 'bg-amber-500/20 border-amber-500/30 text-amber-300' : isMe ? 'bg-cyan-500/20 border-cyan-500/30 text-cyan-300' : 'bg-[#161c28] border-[#2a3449] text-slate-300'}`}>
+                                {initials}
+                              </div>
+                            )}
+                            <div>
+                              <p className="text-xs font-bold text-slate-200 leading-tight">
+                                {member.characterName || 'Aventureiro'}
+                                {isMe && <span className="ml-1 text-[9px] bg-cyan-900/60 text-cyan-300 border border-cyan-500/30 px-1 rounded font-mono">VOCÊ</span>}
+                              </p>
+                              <p className="text-[9px] font-mono text-slate-500 uppercase">
+                                {isDM ? '🎲 Dungeon Master' : '⚔️ Jogador'}
+                              </p>
+                            </div>
+                          </div>
 
-                  <button
-                    onClick={() => {
-                      const charName = currentCampaign?.characterName || 'player';
-                      const cur = tokenPositions3D[charName] || { x: 0, z: 2 };
-                      const nextZ = Math.max(-5, Math.min(5, cur.z + 1));
-                      updateTokenPosition3D(charName, undefined, undefined, cur.x, nextZ);
-                    }}
-                    className="w-12 h-12 rounded-xl bg-gradient-to-b from-cyan-500 to-cyan-600 active:scale-95 text-slate-950 font-black shadow-lg shadow-cyan-900/40 flex items-center justify-center text-lg transition-all"
-                    title="Mover 1,5m para Trás"
-                  >
-                    ▼
-                  </button>
-                </div>
+                          {!isMe && !isDM && (
+                            <button
+                              onClick={() => handleViewMemberSheet(member)}
+                              disabled={loadingMemberSheet === member.id}
+                              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#161c28] hover:bg-cyan-950/40 border border-[#2a3449] hover:border-cyan-500/40 text-slate-400 hover:text-cyan-300 rounded-lg text-[10px] font-bold transition-all disabled:opacity-50"
+                              title="Ver Ficha deste Jogador"
+                            >
+                              {loadingMemberSheet === member.id ? <span className="animate-spin text-sm">⟳</span> : <Eye className="w-3.5 h-3.5" />}
+                              <span>Ficha</span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Privacy toggle for own sheet */}
+                {(() => {
+                  const mySheet = characterSheets.find(
+                    (s) => s.characterName?.toLowerCase() === currentCampaign?.characterName?.toLowerCase()
+                  ) || characterSheets[0];
+                  if (!mySheet) return null;
+                  const isPublic = mySheet.isPublic !== false;
+                  return (
+                    <div className="pt-2 border-t border-[#2a3449]">
+                      <button
+                        onClick={() => { const updated = { ...mySheet, isPublic: !isPublic }; handleSaveSheet(updated); setActiveSheet(updated); }}
+                        className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-[11px] font-bold transition-all ${isPublic ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300 hover:border-emerald-400' : 'bg-rose-950/30 border-rose-500/40 text-rose-300 hover:border-rose-400'}`}
+                        title={isPublic ? 'Ficha visível ao grupo. Clique para tornar privada.' : 'Ficha privada. Clique para tornar visível.'}
+                      >
+                        <div className="flex items-center gap-2">
+                          {isPublic ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                          <span>{isPublic ? 'Minha ficha: Visível ao grupo' : 'Minha ficha: Privada'}</span>
+                        </div>
+                        <div className={`w-8 h-4 rounded-full border flex items-center transition-all ${isPublic ? 'bg-emerald-500/30 border-emerald-500/50 justify-end' : 'bg-rose-500/10 border-rose-500/30 justify-start'}`}>
+                          <div className={`w-3 h-3 rounded-full mx-0.5 ${isPublic ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                        </div>
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
+
             </div>
 
             {/* Right Main Column: Campaign Feed Timeline */}
@@ -898,6 +1099,20 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
         onClose={() => setIsSheetModalOpen(false)}
         onSave={handleSaveSheet}
       />
+
+      {/* ==================== VIEWER MODAL: FICHA DE OUTRO JOGADOR (SOMENTE LEITURA) ==================== */}
+      {isViewingSheetOpen && viewingSheet && (
+        <CharacterSheetModal
+          sheet={viewingSheet}
+          isOpen={isViewingSheetOpen}
+          onClose={() => {
+            setIsViewingSheetOpen(false);
+            setViewingSheet(null);
+          }}
+          onSave={() => {}}
+          readOnly={true}
+        />
+      )}
     </div>
   );
 };
