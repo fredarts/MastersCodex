@@ -20,10 +20,11 @@ import {
   Crown,
   Play,
   UserCheck,
-  Shield,
   UserPlus,
   RefreshCw,
-  Pencil
+  Pencil,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -33,7 +34,7 @@ import { CreateCampaignModal } from '@/components/CreateCampaignModal';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
 
 export const CampaignSettingsStudio: React.FC = () => {
-  const { user, loadDemoEverything } = useAuth();
+  const { user } = useAuth();
   const { userWorlds, activeWorld } = useWorld();
   const { 
     userCampaigns,
@@ -59,12 +60,29 @@ export const CampaignSettingsStudio: React.FC = () => {
   });
 
   const [activeTab, setActiveTab] = useState<'feed' | 'roster' | 'houserules' | 'ai' | 'export'>('feed');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('masters_codex_campaign_settings_sidebar_collapsed');
+      return saved === 'true';
+    }
+    return false;
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('masters_codex_campaign_settings_sidebar_collapsed', String(next));
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (activeCampaign) {
       fetchCampaignMembers(activeCampaign.id);
     }
-  }, [activeCampaign?.id, activeTab]);
+  }, [activeCampaign, activeTab, fetchCampaignMembers]);
   const [feedFilter, setFeedFilter] = useState<CampaignFeedEventType | 'all'>('all');
   const [copiedCode, setCopiedCode] = useState(false);
 
@@ -382,71 +400,100 @@ export const CampaignSettingsStudio: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs Bar */}
-      <div className="flex items-center border-b border-[#2a3449] bg-[#0f141d] px-4 space-x-1 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('feed')}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 ${
-            activeTab === 'feed'
-              ? 'border-amber-400 text-amber-300 bg-[#161c28]'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-          <span>Feed Chronológico ({feedEvents.length})</span>
-        </button>
+      {/* Vertical Collapsible Sub-Tabs & Editor Content Layout */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Collapsible Sub-Tabs Sidebar (Sandwich Menu Style) */}
+        <aside className={`bg-[#0f141d] border-r border-[#2a3449] flex flex-col justify-between transition-all duration-300 z-10 flex-shrink-0 ${
+          isSidebarCollapsed ? 'w-full md:w-16' : 'w-full md:w-64'
+        }`}>
+          <div>
+            <div className={`p-3 border-b border-[#2a3449]/60 flex items-center ${isSidebarCollapsed ? 'justify-center flex-col gap-2' : 'justify-between'} bg-[#121824]/50`}>
+              {!isSidebarCollapsed && (
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                  Menu Painel
+                </span>
+              )}
+              <button
+                onClick={toggleSidebar}
+                className="p-1.5 rounded-lg bg-[#161c28] text-slate-400 hover:text-amber-400 hover:bg-[#1f2738] transition-colors mx-auto"
+                title={isSidebarCollapsed ? 'Expandir Menu' : 'Recolher Menu'}
+              >
+                {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              </button>
+            </div>
 
-        <button
-          onClick={() => setActiveTab('roster')}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 ${
-            activeTab === 'roster'
-              ? 'border-amber-400 text-amber-300 bg-[#161c28]'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Users className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Elenco & Jogadores ({rosterMembers.length})</span>
-        </button>
+            {/* Vertical Menu Buttons */}
+            <div className="p-2 space-y-1">
+              <button
+                onClick={() => setActiveTab('feed')}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'feed'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                }`}
+                title={`Feed Chronológico (${feedEvents.length})`}
+              >
+                <BookOpen className={`w-4 h-4 flex-shrink-0 ${activeTab === 'feed' ? 'text-slate-950' : 'text-amber-400'}`} />
+                {!isSidebarCollapsed && <span className="truncate">Feed Chronológico ({feedEvents.length})</span>}
+              </button>
 
-        <button
-          onClick={() => setActiveTab('houserules')}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 ${
-            activeTab === 'houserules'
-              ? 'border-amber-400 text-amber-300 bg-[#161c28]'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Scroll className="w-3.5 h-3.5 text-purple-400" />
-          <span>Regras da Casa ({houseRules.length})</span>
-        </button>
+              <button
+                onClick={() => setActiveTab('roster')}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'roster'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                }`}
+                title={`Elenco & Jogadores (${rosterMembers.length})`}
+              >
+                <Users className={`w-4 h-4 flex-shrink-0 ${activeTab === 'roster' ? 'text-slate-950' : 'text-cyan-400'}`} />
+                {!isSidebarCollapsed && <span className="truncate">Elenco & Jogadores ({rosterMembers.length})</span>}
+              </button>
 
-        <button
-          onClick={() => setActiveTab('ai')}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 ${
-            activeTab === 'ai'
-              ? 'border-amber-400 text-amber-300 bg-[#161c28]'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Sparkles className="w-3.5 h-3.5 text-pink-400" />
-          <span>Preferências da IA</span>
-        </button>
+              <button
+                onClick={() => setActiveTab('houserules')}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'houserules'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                }`}
+                title={`Regras da Casa (${houseRules.length})`}
+              >
+                <Scroll className={`w-4 h-4 flex-shrink-0 ${activeTab === 'houserules' ? 'text-slate-950' : 'text-purple-400'}`} />
+                {!isSidebarCollapsed && <span className="truncate">Regras da Casa ({houseRules.length})</span>}
+              </button>
 
-        <button
-          onClick={() => setActiveTab('export')}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 ${
-            activeTab === 'export'
-              ? 'border-amber-400 text-amber-300 bg-[#161c28]'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Download className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Exportar Diário</span>
-        </button>
-      </div>
+              <button
+                onClick={() => setActiveTab('ai')}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'ai'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                }`}
+                title="Preferências da IA"
+              >
+                <Sparkles className={`w-4 h-4 flex-shrink-0 ${activeTab === 'ai' ? 'text-slate-950' : 'text-pink-400'}`} />
+                {!isSidebarCollapsed && <span className="truncate">Preferências da IA</span>}
+              </button>
 
-      {/* Main Tab Content */}
-      <div className="flex-1 overflow-y-auto p-6">
+              <button
+                onClick={() => setActiveTab('export')}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'export'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                }`}
+                title="Exportar Diário"
+              >
+                <Download className={`w-4 h-4 flex-shrink-0 ${activeTab === 'export' ? 'text-slate-950' : 'text-emerald-400'}`} />
+                {!isSidebarCollapsed && <span className="truncate">Exportar Diário</span>}
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Tab Content */}
+        <div className="flex-1 overflow-y-auto p-6">
         {activeTab === 'feed' && (
           <div className="max-w-4xl mx-auto space-y-4">
             {/* Feed Filter & Add Button */}
@@ -767,6 +814,7 @@ export const CampaignSettingsStudio: React.FC = () => {
             </button>
           </div>
         )}
+        </div>
       </div>
 
       {/* Modal Add Feed Event */}
@@ -782,7 +830,7 @@ export const CampaignSettingsStudio: React.FC = () => {
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Tipo de Evento:</label>
                 <select
                   value={newFeedType}
-                  onChange={(e) => setNewFeedType(e.target.value as any)}
+                  onChange={(e) => setNewFeedType(e.target.value as CampaignFeedEventType)}
                   className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
                 >
                   <option value="session_recap">📖 Resumo da Sessão (Recap)</option>
