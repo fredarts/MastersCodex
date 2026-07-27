@@ -5,6 +5,7 @@ import { X, Plus, Sparkles, Layers, BookOpen, FileText, Image as ImageIcon, Tras
 import { useWorld } from '@/lib/hooks/useWorld';
 import { WorldEntityCategory, WorldEntity } from '@/lib/types';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
+import { storageService } from '@/lib/services/storageService';
 
 interface WorldEntityModalProps {
   isOpen: boolean;
@@ -40,6 +41,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   const [aiWarningMessage, setAiWarningMessage] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   useEffect(() => {
     if (editingEntity) {
@@ -68,18 +70,20 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
 
   if (!isOpen || !activeWorld) return null;
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setImages((prev) => [...prev, event.target!.result as string]);
-      }
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+    try {
+      setIsUploadingImage(true);
+      const publicUrl = await storageService.uploadAsset(file, 'avatars');
+      setImages((prev) => [...prev, publicUrl]);
+    } catch (err) {
+      console.error('Failed to upload entity image:', err);
+    } finally {
+      setIsUploadingImage(false);
+      e.target.value = '';
+    }
   };
 
   const handleAddImageUrl = () => {
@@ -562,10 +566,10 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
 
               {/* Upload & Add URL buttons */}
               <div className="flex items-center gap-2">
-                <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] rounded-xl text-xs font-bold text-slate-200 cursor-pointer transition-all">
-                  <Upload className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Upload de Arquivo</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+                <label className={`flex items-center gap-1.5 px-3 py-1.5 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] rounded-xl text-xs font-bold text-slate-200 cursor-pointer transition-all ${isUploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  <Upload className={`w-3.5 h-3.5 text-amber-400 ${isUploadingImage ? 'animate-bounce' : ''}`} />
+                  <span>{isUploadingImage ? 'Enviando...' : 'Upload de Arquivo'}</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} disabled={isUploadingImage} />
                 </label>
               </div>
             </div>

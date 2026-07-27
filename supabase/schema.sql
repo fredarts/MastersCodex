@@ -60,7 +60,7 @@ ON public.campaign_members (campaign_id, user_id, character_name);
 CREATE TABLE IF NOT EXISTS public.world_entities (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   world_id UUID NOT NULL REFERENCES public.worlds(id) ON DELETE CASCADE,
-  category TEXT NOT NULL CHECK (category IN ('npc', 'location', 'faction', 'religion', 'lore_event')),
+  category TEXT NOT NULL CHECK (category IN ('npc', 'location', 'faction', 'religion', 'lore_event', 'species', 'ethnicity', 'tradition', 'profession', 'natural_law', 'spell', 'disease', 'item', 'material', 'technology', 'document', 'language', 'military_conflict', 'military_unit', 'currency', 'trade_route', 'beast', 'flora', 'magic_system', 'plane', 'cosmology')),
   name TEXT NOT NULL,
   sub_type TEXT,
   status TEXT DEFAULT 'active',
@@ -77,6 +77,12 @@ ALTER TABLE public.world_entities ADD COLUMN IF NOT EXISTS short_desc TEXT;
 ALTER TABLE public.world_entities ADD COLUMN IF NOT EXISTS full_content TEXT;
 ALTER TABLE public.world_entities ADD COLUMN IF NOT EXISTS attributes JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE public.world_entities ADD COLUMN IF NOT EXISTS connections JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.world_entities ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT '{}'::text[];
+
+-- Garantir que a constraint de category esteja atualizada para todas as categorias
+ALTER TABLE public.world_entities DROP CONSTRAINT IF EXISTS world_entities_category_check;
+ALTER TABLE public.world_entities ADD CONSTRAINT world_entities_category_check 
+CHECK (category IN ('npc', 'location', 'faction', 'religion', 'lore_event', 'species', 'ethnicity', 'tradition', 'profession', 'natural_law', 'spell', 'disease', 'item', 'material', 'technology', 'document', 'language', 'military_conflict', 'military_unit', 'currency', 'trade_route', 'beast', 'flora', 'magic_system', 'plane', 'cosmology'));
 
 -- 1.6 Tabela Sessions
 CREATE TABLE IF NOT EXISTS public.sessions (
@@ -123,6 +129,10 @@ ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS time_of_day TEXT;
 ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS time_of_day_hour REAL DEFAULT 12;
 ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS has_fog BOOLEAN DEFAULT false;
 ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS has_rain BOOLEAN DEFAULT false;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS scene_images JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS active_image_index INT DEFAULT 0;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS bgm_tracks JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS floor_texture_url TEXT;
 
 -- 1.8 Tabela Campaign Feed Events
 CREATE TABLE IF NOT EXISTS public.campaign_feed_events (
@@ -194,35 +204,68 @@ BEGIN
 END $$;
 
 -- ==============================================================================
--- REHABILITAR RLS COM POLÍTICAS SIMPLES SEM RECURSÃO
+-- RLS - POLÍTICAS SEGURAS POR USUÁRIO E PAPEL
 -- ==============================================================================
 
+-- PROFILES: Todos autenticados leem, mas apenas o próprio usuário edita.
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow_All_Profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Profiles_Select" ON public.profiles FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Profiles_Modify" ON public.profiles FOR ALL USING (auth.uid()::text = id::text) WITH CHECK (auth.uid()::text = id::text);
 
+-- WORLDS: Todos autenticados leem (necessário para RAG), apenas o DM cria/edita.
 ALTER TABLE public.worlds ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow_All_Worlds" ON public.worlds FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Worlds_Select" ON public.worlds FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Worlds_Modify" ON public.worlds FOR ALL USING (auth.uid()::text = dm_id::text) WITH CHECK (auth.uid()::text = dm_id::text);
 
+-- CAMPAIGNS: Todos autenticados leem (para acessar via convite), apenas DM edita.
 ALTER TABLE public.campaigns ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow_All_Campaigns" ON public.campaigns FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Campaigns_Select" ON public.campaigns FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Campaigns_Modify" ON public.campaigns FOR ALL USING (auth.uid()::text = dm_id::text) WITH CHECK (auth.uid()::text = dm_id::text);
 
+-- CAMPAIGN_MEMBERS: Todos autenticados leem, usuários inserem a si mesmos, DM ou usuário deleta.
 ALTER TABLE public.campaign_members ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow_All_Campaign_Members" ON public.campaign_members FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Members_Select" ON public.campaign_members FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Members_Insert" ON public.campaign_members FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
+CREATE POLICY "Members_UpdateDelete" ON public.campaign_members FOR ALL USING (
+  auth.uid()::text = user_id::text OR 
+  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
+);
 
+-- WORLD_ENTITIES: Todos leem, apenas DM do mundo edita.
 ALTER TABLE public.world_entities ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow_All_Entities" ON public.world_entities FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Entities_Select" ON public.world_entities FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Entities_Modify" ON public.world_entities FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.worlds w WHERE w.id = world_id AND w.dm_id::text = auth.uid()::text)
+);
 
+-- SESSIONS: Todos leem, apenas DM da campanha edita.
 ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow_All_Sessions" ON public.sessions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Sessions_Select" ON public.sessions FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Sessions_Modify" ON public.sessions FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
+);
 
+-- SCENES: Todos leem, apenas DM da campanha edita.
 ALTER TABLE public.scenes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow_All_Scenes" ON public.scenes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Scenes_Select" ON public.scenes FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Scenes_Modify" ON public.scenes FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.sessions s JOIN public.campaigns c ON s.campaign_id = c.id WHERE s.id = session_id AND c.dm_id::text = auth.uid()::text)
+);
 
+-- CAMPAIGN_FEED_EVENTS: Todos leem, apenas DM da campanha edita.
 ALTER TABLE public.campaign_feed_events ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow_All_Feed" ON public.campaign_feed_events FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Feed_Select" ON public.campaign_feed_events FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Feed_Modify" ON public.campaign_feed_events FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
+);
 
+-- CHARACTER_SHEETS: Todos leem (necessário para a mesa ver o combate), Dono da ficha ou DM edita.
 ALTER TABLE public.character_sheets ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow_All_Character_Sheets" ON public.character_sheets FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Characters_Select" ON public.character_sheets FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Characters_Modify" ON public.character_sheets FOR ALL USING (
+  auth.uid()::text = user_id::text OR 
+  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
+);
 
 
 -- ==============================================================================
@@ -249,6 +292,10 @@ SELECT
   time_of_day_hour,
   has_fog,
   has_rain,
+  scene_images,
+  active_image_index,
+  bgm_tracks,
+  floor_texture_url,
   created_at
 FROM public.scenes;
 
@@ -271,5 +318,142 @@ EXCEPTION
     -- Ignorar erro caso a tabela já pertença à publicação
     NULL;
 END $$;
+
+-- ==============================================================================
+-- NOVAS TABELAS: LORE, AUDIO, SRD & MAPS
+-- ==============================================================================
+
+-- LORE EMBEDDINGS (RAG)
+CREATE TABLE IF NOT EXISTS public.lore_embeddings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  world_id UUID REFERENCES public.worlds(id) ON DELETE CASCADE,
+  campaign_id UUID REFERENCES public.campaigns(id) ON DELETE CASCADE,
+  entity_id UUID REFERENCES public.world_entities(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  embedding vector,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.lore_embeddings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Lore_Select" ON public.lore_embeddings FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Lore_Modify" ON public.lore_embeddings FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
+  OR EXISTS (SELECT 1 FROM public.worlds w WHERE w.id = world_id AND w.dm_id::text = auth.uid()::text)
+);
+
+-- CAMPAIGN AUDIO ASSETS
+CREATE TABLE IF NOT EXISTS public.campaign_audio_assets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id UUID NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  type TEXT NOT NULL,
+  category TEXT DEFAULT 'custom',
+  is_loop BOOLEAN DEFAULT false,
+  icon_name TEXT DEFAULT 'Music',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.campaign_audio_assets ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "AudioAssets_Select" ON public.campaign_audio_assets FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "AudioAssets_Modify" ON public.campaign_audio_assets FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
+);
+
+-- CAMPAIGN AUDIO FAVORITES
+CREATE TABLE IF NOT EXISTS public.campaign_audio_favorites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id UUID NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
+  audio_id TEXT NOT NULL,
+  is_custom BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.campaign_audio_favorites ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "AudioFav_Select" ON public.campaign_audio_favorites FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "AudioFav_Modify" ON public.campaign_audio_favorites FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
+);
+
+-- SCENE MAPS
+CREATE TABLE IF NOT EXISTS public.scene_maps (
+  scene_id UUID PRIMARY KEY REFERENCES public.scenes(id) ON DELETE CASCADE,
+  grid_data JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE public.scene_maps ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "SceneMaps_Select" ON public.scene_maps FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "SceneMaps_Modify" ON public.scene_maps FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.scenes s 
+    JOIN public.sessions sess ON s.session_id = sess.id 
+    JOIN public.campaigns c ON sess.campaign_id = c.id 
+    WHERE s.id = scene_maps.scene_id AND c.dm_id::text = auth.uid()::text
+  )
+);
+
+-- SRD ITEMS
+CREATE TABLE IF NOT EXISTS public.srd_items (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  rarity TEXT NOT NULL,
+  description TEXT NOT NULL,
+  value TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  fts tsvector
+);
+
+ALTER TABLE public.srd_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "SRD_Items_Select" ON public.srd_items FOR SELECT USING (auth.role() = 'authenticated');
+
+-- SRD MONSTERS
+CREATE TABLE IF NOT EXISTS public.srd_monsters (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  size TEXT NOT NULL,
+  alignment TEXT,
+  ac INT NOT NULL,
+  hp INT NOT NULL,
+  speed TEXT,
+  cr TEXT NOT NULL,
+  xp INT,
+  str INT DEFAULT 10,
+  dex INT DEFAULT 10,
+  con INT DEFAULT 10,
+  int INT DEFAULT 10,
+  wis INT DEFAULT 10,
+  cha INT DEFAULT 10,
+  abilities JSONB DEFAULT '[]'::jsonb,
+  actions JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  fts tsvector
+);
+
+ALTER TABLE public.srd_monsters ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "SRD_Monsters_Select" ON public.srd_monsters FOR SELECT USING (auth.role() = 'authenticated');
+
+-- SRD SPELLS
+CREATE TABLE IF NOT EXISTS public.srd_spells (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  level INT NOT NULL,
+  school TEXT NOT NULL,
+  casting_time TEXT NOT NULL,
+  range TEXT NOT NULL,
+  components TEXT NOT NULL,
+  duration TEXT NOT NULL,
+  description TEXT NOT NULL,
+  classes JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  fts tsvector
+);
+
+ALTER TABLE public.srd_spells ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "SRD_Spells_Select" ON public.srd_spells FOR SELECT USING (auth.role() = 'authenticated');
 
 

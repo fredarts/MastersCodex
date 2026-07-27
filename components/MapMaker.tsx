@@ -15,6 +15,7 @@ import {
 import { Combatant } from '@/lib/types';
 import { useSession } from '@/context/SessionContext';
 import { toast } from 'sonner';
+import { storageService } from '@/lib/services/storageService';
 
 interface MapMakerProps {
   combatants: Combatant[];
@@ -102,16 +103,21 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     return () => clearTimeout(delayDebounce);
   }, [grid, bgImageUrl, activeScene]);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setBgImageUrl(event.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        setIsUploadingImage(true);
+        const publicUrl = await storageService.uploadAsset(file, 'scenes');
+        setBgImageUrl(publicUrl);
+      } catch (err) {
+        console.error('Failed to upload map image:', err);
+      } finally {
+        setIsUploadingImage(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -274,11 +280,12 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 text-xs bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-500/40 px-3 py-1.5 rounded-lg font-bold transition-all"
+            disabled={isUploadingImage}
+            className={`flex items-center gap-1.5 text-xs bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-500/40 px-3 py-1.5 rounded-lg font-bold transition-all ${isUploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
             title="Upload de Imagem Customizada de Mapa"
           >
-            <Upload className="w-3.5 h-3.5" />
-            Carregar Mapa (JPG/PNG)
+            <Upload className={`w-3.5 h-3.5 ${isUploadingImage ? 'animate-bounce' : ''}`} />
+            {isUploadingImage ? 'Enviando...' : 'Carregar Mapa (JPG/PNG)'}
           </button>
           {bgImageUrl && (
             <button
