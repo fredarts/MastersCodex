@@ -28,3 +28,39 @@ export const normalizeImageUrl = (rawUrl: string): string => {
 
   return trimmed;
 };
+
+/**
+ * Detects if a URL is a YouTube link.
+ */
+export const isYouTubeUrl = (url: string): boolean => {
+  if (!url || typeof url !== 'string') return false;
+  return /youtube\.com|youtu\.be/i.test(url.trim());
+};
+
+/**
+ * Extracts YouTube video ID from standard watch links, share links, or embeds.
+ */
+export const getYouTubeVideoId = (url: string): string | null => {
+  if (!url || typeof url !== 'string') return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.trim().match(regExp);
+  return (match && match[2].length === 11) ? match[2] : null;
+};
+
+/**
+ * Constructs a YouTube embed URL configured for loop, mute, and autoplay without controls.
+ */
+export const getYouTubeEmbedUrl = (url: string): string | null => {
+  const videoId = getYouTubeVideoId(url);
+  if (!videoId) return null;
+  return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&modestbranding=1&rel=0`;
+};
+
+/**
+ * Returns a static high-quality thumbnail image URL for a YouTube video.
+ */
+export const getYouTubeThumbnailUrl = (url: string): string | null => {
+  const videoId = getYouTubeVideoId(url);
+  if (!videoId) return null;
+  return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+};

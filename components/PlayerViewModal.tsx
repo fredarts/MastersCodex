@@ -6,7 +6,7 @@ import { Combatant } from '@/lib/types';
 import { useSession } from '@/context/SessionContext';
 import { useCampaign } from '@/context/CampaignContext';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
-import { normalizeImageUrl } from '@/lib/imageUtils';
+import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl } from '@/lib/imageUtils';
 import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
 import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
@@ -78,16 +78,83 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
           ) : (currentScene?.sceneImages && currentScene.sceneImages.length > 0) || currentScene?.imageUrl ? (
             <div className="w-full h-full relative flex items-center justify-center">
               {currentScene.sceneImages && currentScene.sceneImages.length > 0 ? (
-                <MagicShaderSlideshow
-                  imageUrl={normalizeImageUrl(currentScene.sceneImages[currentScene.activeImageIndex ?? 0]?.imageUrl || '')}
-                  className="w-full h-full"
-                />
+                (() => {
+                  const currentSlide = currentScene.sceneImages[currentScene.activeImageIndex ?? 0];
+                  const rawUrl = currentSlide?.imageUrl || '';
+                  const ytEmbed = getYouTubeEmbedUrl(rawUrl);
+                  
+                  if (ytEmbed) {
+                    return (
+                      <iframe
+                        src={ytEmbed}
+                        className="w-full h-full border-0 bg-black"
+                        allow="autoplay; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    );
+                  }
+                  
+                  const isVideo = currentSlide?.mediaType === 'video' ||
+                    (/\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(rawUrl));
+                  
+                  if (isVideo) {
+                    return (
+                      <video
+                        src={normalizeImageUrl(rawUrl)}
+                        className="w-full h-full object-contain bg-black"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        controls={false}
+                      />
+                    );
+                  }
+                  return (
+                    <MagicShaderSlideshow
+                      imageUrl={normalizeImageUrl(rawUrl)}
+                      className="w-full h-full"
+                    />
+                  );
+                })()
               ) : (
-                <img
-                  src={normalizeImageUrl(currentScene.imageUrl)}
-                  alt="Arte da cena"
-                  className="w-full h-full object-cover animate-fade-in"
-                />
+                (() => {
+                  const rawUrl = currentScene.imageUrl || '';
+                  const ytEmbed = getYouTubeEmbedUrl(rawUrl);
+                  
+                  if (ytEmbed) {
+                    return (
+                      <iframe
+                        src={ytEmbed}
+                        className="w-full h-full border-0 bg-black"
+                        allow="autoplay; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    );
+                  }
+                  
+                  const isVideo = /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(rawUrl);
+                  if (isVideo) {
+                    return (
+                      <video
+                        src={normalizeImageUrl(rawUrl)}
+                        className="w-full h-full object-contain bg-black"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        controls={false}
+                      />
+                    );
+                  }
+                  return (
+                    <img
+                      src={normalizeImageUrl(rawUrl)}
+                      alt="Arte da cena"
+                      className="w-full h-full object-cover animate-fade-in"
+                    />
+                  );
+                })()
               )}
               {/* Legenda cinemática para jogadores */}
               {(() => {

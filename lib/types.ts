@@ -107,6 +107,7 @@ export interface SceneImage {
   imageUrl: string;
   overlayText?: string;
   secretNotes?: string;
+  mediaType?: 'image' | 'video';
 }
 
 export interface GameScene {

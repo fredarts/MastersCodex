@@ -24,7 +24,9 @@ import {
   Shield,
   Search,
   Users,
-  User
+  User,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -35,7 +37,7 @@ import { INITIAL_MONSTERS, SFX_BUTTONS, BGM_TRACKS } from '@/lib/srd-data';
 import { storageService } from '@/lib/services/storageService';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
-import { normalizeImageUrl } from '@/lib/imageUtils';
+import { normalizeImageUrl, isYouTubeUrl, getYouTubeThumbnailUrl } from '@/lib/imageUtils';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
 import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
@@ -61,6 +63,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
 
   const [selectedScene, setSelectedScene] = useState<GameScene | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'image' | 'audio' | 'combat' | 'voice' | 'notes' | 'worldbuilding'>('image');
+  const [isScenesSidebarCollapsed, setIsScenesSidebarCollapsed] = useState(false);
+  const [isSubTabsCollapsed, setIsSubTabsCollapsed] = useState(false);
   const [worldSearch, setWorldSearch] = useState('');
   const [worldFilterCat, setWorldFilterCat] = useState('all');
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
@@ -353,112 +357,75 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
 
   return (
     <div className="flex-1 bg-[#0a0d14] flex flex-col overflow-hidden select-none">
-      {/* Top Banner */}
-      <div className="bg-gradient-to-r from-[#161c28] via-[#1a2234] to-[#0f141d] border-b border-[#2a3449] p-4 flex flex-wrap items-center justify-between gap-3 shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 font-bold shadow-inner">
-            <Film className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded font-mono">
-                ESTÚDIO DE SESSÕES & CENAS
-              </span>
-            </div>
-            <div className="flex items-center gap-2 mt-0.5">
-              <Calendar className="w-3.5 h-3.5 text-amber-400" />
-              <select
-                value={activeSession?.id || ''}
-                onChange={(e) => {
-                  const s = sessions.find((x) => x.id === e.target.value);
-                  if (s) setActiveSession(s);
-                }}
-                className="bg-[#0a0d14] border border-[#2a3449] rounded px-2 py-0.5 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-500"
-              >
-                {sessions.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    Sessão {s.sessionNumber}: {s.title}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                onClick={() => setShowNewSessionInput(true)}
-                className="p-1 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] text-amber-400 rounded-lg text-xs"
-                title="Criar Nova Sessão"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Create Session Inline Form */}
-        {showNewSessionInput && (
-          <form onSubmit={handleCreateSessionSubmit} className="flex items-center gap-1">
-            <input
-              type="text"
-              required
-              autoFocus
-              value={newSessionTitle}
-              onChange={(e) => setNewSessionTitle(e.target.value)}
-              placeholder="Ex: Sessão 3: O Assalto à Torre"
-              className="bg-[#0a0d14] border border-amber-500 rounded px-2.5 py-1 text-xs text-slate-100 font-bold focus:outline-none"
-            />
-            <button type="submit" className="px-3 py-1 bg-amber-500 text-slate-950 font-bold text-xs rounded">
-              Criar
-            </button>
-            <button type="button" onClick={() => setShowNewSessionInput(false)} className="px-2 py-1 text-slate-400 text-xs">
-              x
-            </button>
-          </form>
-        )}
-
-        <div className="flex items-center gap-2">
-          {selectedScene && (
-            <button
-              onClick={() => {
-                onEquipScene(selectedScene);
-              }}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-slate-950 font-black rounded-xl text-xs shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
-            >
-              <Play className="w-4 h-4 fill-slate-950" />
-              <span>▶ DISPARAR CENA AO VIVO</span>
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Main Studio Body: Left Timeline Panel + Right Scene Editor */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* Left Scenes Timeline Sidebar */}
-        <div className="w-full md:w-64 bg-[#0f141d] border-b md:border-b-0 md:border-r border-[#2a3449] flex flex-col justify-between p-3 select-none">
+        <div className={`bg-[#0f141d] border-b md:border-b-0 md:border-r border-[#2a3449] flex flex-col justify-between p-3 select-none transition-all duration-300 flex-shrink-0 overflow-hidden relative z-10 ${
+          isScenesSidebarCollapsed ? 'w-full md:w-16' : 'w-full md:w-64'
+        }`}>
           <div>
-            <div className="flex items-center justify-between px-2 mb-2">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-mono">
-                TIMELINE DE CENAS ({scenes.length}):
-              </span>
-              <button
-                onClick={() => setShowCreateSceneModal(true)}
-                className="text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center gap-0.5"
-              >
-                <Plus className="w-3.5 h-3.5" /> Nova
-              </button>
+            <div className={`flex items-center ${isScenesSidebarCollapsed ? 'justify-center flex-col gap-2 mb-3' : 'justify-between px-2 mb-2'}`}>
+              {!isScenesSidebarCollapsed ? (
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-mono flex items-center gap-1">
+                  <Film className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Timeline ({scenes.length})</span>
+                </span>
+              ) : (
+                <span className="text-[10px] font-mono font-bold text-slate-500" title={`Timeline (${scenes.length})`}>
+                  #{scenes.length}
+                </span>
+              )}
+              
+              <div className={`flex items-center gap-1 ${isScenesSidebarCollapsed ? 'flex-col' : ''}`}>
+                <button
+                  onClick={() => setShowCreateSceneModal(true)}
+                  className="p-1 text-amber-400 hover:bg-[#161c28] rounded-lg transition-colors"
+                  title="Nova Cena"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setIsScenesSidebarCollapsed(!isScenesSidebarCollapsed)}
+                  className="p-1 text-slate-400 hover:text-amber-400 hover:bg-[#161c28] rounded-lg transition-colors"
+                  title={isScenesSidebarCollapsed ? 'Expandir Timeline' : 'Recolher Timeline'}
+                >
+                  {isScenesSidebarCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-1.5 overflow-y-auto max-h-[calc(100vh-220px)]">
+            <div className="space-y-1.5 overflow-y-auto max-h-[calc(100vh-220px)] animate-fade-in">
               {scenes.length === 0 ? (
-                <div className="p-4 text-center text-slate-500 bg-[#161c28] border border-dashed border-[#2a3449] rounded-xl text-xs">
-                  Nenhuma cena criada nesta sessão.
+                <div className={`p-4 text-center text-slate-500 bg-[#161c28] border border-dashed border-[#2a3449] rounded-xl text-xs ${isScenesSidebarCollapsed ? 'text-[10px] p-1' : ''}`}>
+                  {isScenesSidebarCollapsed ? 'Vazio' : 'Nenhuma cena criada nesta sessão.'}
                 </div>
               ) : (
                 scenes.map((sc, idx) => {
                   const isSelected = selectedScene?.id === sc.id;
+                  
+                  if (isScenesSidebarCollapsed) {
+                    return (
+                      <div
+                        key={`collapsed-ss-${sc.id}`}
+                        onClick={() => setSelectedScene(sc)}
+                        title={`Cena #${idx + 1}: ${sc.title}`}
+                        className={`w-10 h-10 mx-auto p-1.5 rounded-xl border transition-all flex flex-col items-center justify-center cursor-pointer group relative ${
+                          isSelected
+                            ? 'bg-gradient-to-b from-purple-950 via-[#161c28] to-[#121824] border-purple-500 text-purple-300 font-bold shadow'
+                            : 'bg-[#161c28] border-[#2a3449] text-slate-300 hover:bg-[#1f2738]'
+                        }`}
+                      >
+                        <span className="text-[9px] font-mono font-bold text-slate-500">#{idx + 1}</span>
+                        <div>{getSceneIcon(sc.sceneType)}</div>
+                      </div>
+                    );
+                  }
+
                   return (
                     <div
                       key={sc.id}
                       onClick={() => setSelectedScene(sc)}
-                      className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                      className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between group ${
                         isSelected
                           ? 'bg-gradient-to-r from-purple-950/40 via-[#161c28] to-[#121824] border-purple-500 text-purple-300 font-bold shadow'
                           : 'bg-[#161c28] border-[#2a3449] text-slate-300 hover:bg-[#1f2738]'
@@ -522,6 +489,15 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => onEquipScene(selectedScene)}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-slate-950 font-black rounded-xl text-xs shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                    title="Disparar esta cena para a visualização dos jogadores"
+                  >
+                    <Play className="w-4 h-4 fill-slate-950" />
+                    <span>▶ DISPARAR CENA AO VIVO</span>
+                  </button>
+
                   {isSaved && <span className="text-xs text-emerald-400 font-bold">✓ Alterações Salvas!</span>}
                   <button
                     onClick={handleSaveSceneChanges}
@@ -532,92 +508,153 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                 </div>
               </div>
 
-              {/* Sub-Tabs for Scene Media Editor */}
-              <div className="flex items-center border-b border-[#2a3449] bg-[#0f141d] px-4 space-x-1">
-                <button
-                  onClick={() => setActiveSubTab('image')}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 ${
-                    activeSubTab === 'image' ? 'border-purple-400 text-purple-300 bg-[#161c28]' : 'border-transparent text-slate-400'
-                  }`}
-                >
-                  <ImageIcon className="w-3.5 h-3.5 text-purple-400" />
-                  <span>🖼️ Arte / Imagem da Cena</span>
-                </button>
+              {/* Vertical Collapsible Sub-Tabs & Editor Content Layout */}
+              <div className="flex-1 flex overflow-hidden">
+                {/* Collapsible Sub-Tabs Sidebar (Sandwich Menu Style) */}
+                <aside className={`bg-[#0f141d] border-r border-[#2a3449] flex flex-col justify-between transition-all duration-300 z-10 flex-shrink-0 ${
+                  isSubTabsCollapsed ? 'w-full md:w-16' : 'w-full md:w-64'
+                }`}>
+                  <div>
+                    <div className={`p-3 border-b border-[#2a3449]/60 flex items-center ${isSubTabsCollapsed ? 'justify-center flex-col gap-2' : 'justify-between'} bg-[#121824]/50`}>
+                      {!isSubTabsCollapsed && (
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                          Recursos da Cena
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setIsSubTabsCollapsed(!isSubTabsCollapsed)}
+                        className="p-1.5 rounded-lg bg-[#161c28] text-slate-400 hover:text-purple-400 hover:bg-[#1f2738] transition-colors mx-auto"
+                        title={isSubTabsCollapsed ? 'Expandir Menu' : 'Recolher Menu'}
+                      >
+                        {isSubTabsCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+                      </button>
+                    </div>
 
-                <button
-                  onClick={() => setActiveSubTab('audio')}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 ${
-                    activeSubTab === 'audio' ? 'border-purple-400 text-purple-300 bg-[#161c28]' : 'border-transparent text-slate-400'
-                  }`}
-                >
-                  <Music className="w-3.5 h-3.5 text-pink-400" />
-                  <span>🎵 BGM & SFX</span>
-                </button>
+                    {/* Vertical Menu Buttons */}
+                    <div className="p-2 space-y-1">
+                      <button
+                        onClick={() => setActiveSubTab('image')}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                          activeSubTab === 'image'
+                            ? 'bg-purple-600 text-slate-950 shadow-md font-black'
+                            : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                        }`}
+                        title="Arte / Imagem da Cena"
+                      >
+                        <ImageIcon className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                        {!isSubTabsCollapsed && <span className="truncate">Arte da Cena</span>}
+                      </button>
 
-                <button
-                  onClick={() => setActiveSubTab('combat')}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 ${
-                    activeSubTab === 'combat' ? 'border-purple-400 text-purple-300 bg-[#161c28]' : 'border-transparent text-slate-400'
-                  }`}
-                >
-                  <Swords className="w-3.5 h-3.5 text-rose-400" />
-                  <span>⚔️ Encontro ({sceneCombatants.length})</span>
-                </button>
+                      <button
+                        onClick={() => setActiveSubTab('audio')}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                          activeSubTab === 'audio'
+                            ? 'bg-purple-600 text-slate-950 shadow-md font-black'
+                            : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                        }`}
+                        title="BGM & SFX"
+                      >
+                        <Music className="w-4 h-4 text-pink-400 flex-shrink-0" />
+                        {!isSubTabsCollapsed && <span className="truncate">Áudio (BGM & SFX)</span>}
+                      </button>
 
-                <button
-                  onClick={() => setActiveSubTab('voice')}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 ${
-                    activeSubTab === 'voice' ? 'border-purple-400 text-purple-300 bg-[#161c28]' : 'border-transparent text-slate-400'
-                  }`}
-                >
-                  <Mic className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>🎙️ Voz de NPC por IA</span>
-                </button>
+                      <button
+                        onClick={() => setActiveSubTab('combat')}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                          activeSubTab === 'combat'
+                            ? 'bg-purple-600 text-slate-950 shadow-md font-black'
+                            : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                        }`}
+                        title={`Encontro (${sceneCombatants.length})`}
+                      >
+                        <div className="flex items-center gap-2.5 truncate">
+                          <Swords className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                          {!isSubTabsCollapsed && <span className="truncate">Encontro</span>}
+                        </div>
+                        {!isSubTabsCollapsed && sceneCombatants.length > 0 && (
+                          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full ${
+                            activeSubTab === 'combat' ? 'bg-slate-950 text-purple-300' : 'bg-[#161c28] text-slate-400 border border-[#2a3449]'
+                          }`}>
+                            {sceneCombatants.length}
+                          </span>
+                        )}
+                      </button>
 
-                <button
-                  onClick={() => setActiveSubTab('notes')}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 ${
-                    activeSubTab === 'notes' ? 'border-purple-400 text-purple-300 bg-[#161c28]' : 'border-transparent text-slate-400'
-                  }`}
-                >
-                  <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-                  <span>📜 Texto Sensorial & Segredos</span>
-                </button>
+                      <button
+                        onClick={() => setActiveSubTab('voice')}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                          activeSubTab === 'voice'
+                            ? 'bg-purple-600 text-slate-950 shadow-md font-black'
+                            : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                        }`}
+                        title="Voz de NPC por IA"
+                      >
+                        <Mic className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                        {!isSubTabsCollapsed && <span className="truncate">Voz de NPC por IA</span>}
+                      </button>
 
-                <button
-                  onClick={() => setActiveSubTab('worldbuilding')}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 ${
-                    activeSubTab === 'worldbuilding' ? 'border-amber-400 text-amber-300 bg-[#161c28]' : 'border-transparent text-slate-400'
-                  }`}
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span>🌐 Transmitir Worldbuilding ({worldEntities.length})</span>
-                </button>
-              </div>
+                      <button
+                        onClick={() => setActiveSubTab('notes')}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                          activeSubTab === 'notes'
+                            ? 'bg-purple-600 text-slate-950 shadow-md font-black'
+                            : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                        }`}
+                        title="Texto Sensorial & Segredos"
+                      >
+                        <BookOpen className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                        {!isSubTabsCollapsed && <span className="truncate">Texto & Segredos</span>}
+                      </button>
 
-              {/* Sub-Tab Editor Content */}
-              <div className="flex-1 overflow-y-auto p-6">
+                      <button
+                        onClick={() => setActiveSubTab('worldbuilding')}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                          activeSubTab === 'worldbuilding'
+                            ? 'bg-purple-600 text-slate-950 shadow-md font-black'
+                            : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                        }`}
+                        title={`Transmitir Worldbuilding (${worldEntities.length})`}
+                      >
+                        <div className="flex items-center gap-2.5 truncate">
+                          <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                          {!isSubTabsCollapsed && <span className="truncate">Transmitir World</span>}
+                        </div>
+                        {!isSubTabsCollapsed && worldEntities.length > 0 && (
+                          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full ${
+                            activeSubTab === 'worldbuilding' ? 'bg-slate-950 text-amber-300' : 'bg-[#161c28] text-slate-400 border border-[#2a3449]'
+                          }`}>
+                            {worldEntities.length}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </aside>
+
+                {/* Sub-Tab Editor Content */}
+                <div className="flex-1 overflow-y-auto p-6 bg-[#0a0d14]">
                 {activeSubTab === 'image' && (
                   <div className="max-w-2xl mx-auto space-y-6">
                     {/* Add Image Options */}
                     <div className="bg-[#121824] p-4 rounded-xl border border-[#2a3449] space-y-4">
                       <div className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                        Adicionar Nova Arte/Imagem ao Slideshow
+                        Adicionar Nova Arte/Mídia ao Slideshow
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Option 1: File Upload */}
                         <div className="space-y-2">
                           <label className="block text-[10px] font-bold text-slate-400 uppercase">
-                            Upload de Arquivo (Supabase)
+                            Upload de Imagem ou Vídeo (Supabase)
                           </label>
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/*,video/*"
                             disabled={!isSupabaseConfigured()}
                             onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
+                              const isVideo = file.type.startsWith('video/');
                               try {
                                 const publicUrl = await storageService.uploadAsset(file, 'scenes');
                                 const newImg: SceneImage = {
@@ -625,11 +662,12 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                                   imageUrl: publicUrl,
                                   overlayText: '',
                                   secretNotes: '',
+                                  mediaType: isVideo ? 'video' : 'image',
                                 };
                                 setSceneImages(prev => [...prev, newImg]);
                                 if (!imageUrl) setImageUrl(publicUrl); // set primary fallback if empty
                               } catch (err: any) {
-                                alert(err.message || 'Erro ao fazer upload da imagem.');
+                                alert(err.message || 'Erro ao fazer upload do arquivo.');
                               }
                             }}
                             className={`w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2 py-1 text-xs text-slate-300 file:bg-purple-600/20 file:border-0 file:text-purple-300 file:px-3 file:py-1 file:rounded-md file:text-[10px] file:font-bold file:cursor-pointer ${
@@ -643,25 +681,29 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                           )}
                         </div>
 
-                        {/* Option 2: Image URL */}
+                        {/* Option 2: Image/Video URL */}
                         <div className="space-y-2">
                           <label className="block text-[10px] font-bold text-slate-400 uppercase">
-                            Ou Colar URL Direta da Imagem
+                            Ou Colar URL Direta da Imagem / Vídeo
                           </label>
                           <div className="flex gap-2">
                             <input
                               type="url"
-                              placeholder="https://exemplo.com/imagem.png"
+                              placeholder="https://exemplo.com/mídia.png ou .mp4"
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                   const target = e.target as HTMLInputElement;
                                   if (target.value.trim()) {
-                                    const normalized = normalizeImageUrl(target.value.trim());
+                                    const rawVal = target.value.trim();
+                                    const normalized = normalizeImageUrl(rawVal);
+                                    const isYouTube = isYouTubeUrl(rawVal);
+                                    const isVideo = isYouTube || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(normalized);
                                     const newImg: SceneImage = {
                                       id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                                       imageUrl: normalized,
                                       overlayText: '',
                                       secretNotes: '',
+                                      mediaType: isVideo ? 'video' : 'image',
                                     };
                                     setSceneImages(prev => [...prev, newImg]);
                                     if (!imageUrl) setImageUrl(normalized);
@@ -676,12 +718,16 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                               onClick={(e) => {
                                 const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
                                 if (input.value.trim()) {
-                                  const normalized = normalizeImageUrl(input.value.trim());
+                                  const rawVal = input.value.trim();
+                                  const normalized = normalizeImageUrl(rawVal);
+                                  const isYouTube = isYouTubeUrl(rawVal);
+                                  const isVideo = isYouTube || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(normalized);
                                   const newImg: SceneImage = {
                                     id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
                                     imageUrl: normalized,
                                     overlayText: '',
                                     secretNotes: '',
+                                    mediaType: isVideo ? 'video' : 'image',
                                   };
                                   setSceneImages(prev => [...prev, newImg]);
                                   if (!imageUrl) setImageUrl(normalized);
@@ -725,7 +771,23 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                             <div key={imgObj.id} className="p-4 bg-[#121824] rounded-xl border border-[#2a3449] flex flex-col md:flex-row gap-4 shadow">
                               {/* Preview Column */}
                               <div className="relative w-full md:w-32 h-24 bg-black rounded-lg overflow-hidden border border-[#2a3449]/80 shrink-0">
-                                <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" />
+                                {isYouTubeUrl(imgObj.imageUrl) ? (
+                                  <>
+                                    <img src={getYouTubeThumbnailUrl(imgObj.imageUrl) || ''} className="w-full h-full object-cover" alt="YouTube Preview" />
+                                    <span className="absolute top-1 right-1 bg-red-600/95 text-[8px] font-bold text-white px-1 rounded uppercase tracking-wider font-mono">
+                                      YOUTUBE
+                                    </span>
+                                  </>
+                                ) : imgObj.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(imgObj.imageUrl) ? (
+                                  <>
+                                    <video src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover bg-black" muted playsInline />
+                                    <span className="absolute top-1 right-1 bg-purple-900/95 text-[8px] font-bold text-purple-200 px-1 rounded uppercase tracking-wider font-mono">
+                                      VÍDEO
+                                    </span>
+                                  </>
+                                ) : (
+                                  <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" />
+                                )}
                                 <span className="absolute top-1 left-1 bg-black/80 text-[9px] font-bold text-amber-400 px-1.5 py-0.5 rounded font-mono">
                                   Slide {idx + 1}
                                 </span>
@@ -1434,6 +1496,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                 )}
               </div>
             </div>
+          </div>
           )}
         </div>
       </div>

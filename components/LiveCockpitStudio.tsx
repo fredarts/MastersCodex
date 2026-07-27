@@ -47,7 +47,7 @@ import { getAttributeModifier } from '@/lib/dnd5e-calculator';
 import { getSpellAoEDefinition } from '@/lib/dnd5e-spells-shapes';
 import { GameScene, SceneType, Combatant, ConditionType, CampaignMember, WorldEntity, CharacterSheet, CharacterSpell } from '@/lib/types';
 import { INITIAL_MONSTERS, SFX_BUTTONS, CONDITIONS, BGM_TRACKS } from '@/lib/srd-data';
-import { normalizeImageUrl } from '@/lib/imageUtils';
+import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from '@/lib/imageUtils';
 import { useAudio } from '@/context/AudioContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -1877,14 +1877,45 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                   </ThreeErrorBoundary>
                 ) : displayImageUrl ? (
                   <div className="w-full h-full relative">
-                    {activeScene?.sceneImages && activeScene.sceneImages.length > 0 ? (
-                      <MagicShaderSlideshow
-                        imageUrl={displayImageUrl}
-                        className="w-full h-full"
-                      />
-                    ) : (
-                      <img src={displayImageUrl} alt="Arte ao vivo" className="w-full h-full object-cover" />
-                    )}
+                    {(() => {
+                      const ytEmbed = getYouTubeEmbedUrl(displayImageUrl);
+                      if (ytEmbed) {
+                        return (
+                          <iframe
+                            src={ytEmbed}
+                            className="w-full h-full border-0 bg-black"
+                            allow="autoplay; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        );
+                      }
+                      const isVideo = activeSlideImage?.mediaType === 'video' ||
+                        (/\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(displayImageUrl));
+                      if (isVideo) {
+                        return (
+                          <video
+                            src={displayImageUrl}
+                            className="w-full h-full object-contain bg-black"
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            controls={false}
+                          />
+                        );
+                      }
+                      if (activeScene?.sceneImages && activeScene.sceneImages.length > 0) {
+                        return (
+                          <MagicShaderSlideshow
+                            imageUrl={displayImageUrl}
+                            className="w-full h-full"
+                          />
+                        );
+                      }
+                      return (
+                        <img src={displayImageUrl} alt="Arte ao vivo" className="w-full h-full object-cover animate-fade-in" />
+                      );
+                    })()}
                     <div className="absolute bottom-4 left-4 right-4 p-3 rounded-xl bg-black/80 backdrop-blur-md border border-amber-500/30">
                       <div className="text-xs font-bold text-amber-400 uppercase font-mono">{activeScene?.title}</div>
                       {(() => {
@@ -1947,7 +1978,13 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
                           isSelected ? 'border-amber-400 ring-1 ring-amber-500/40 scale-105' : 'border-[#2a3449] hover:border-slate-500'
                         }`}
                       >
-                        <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" />
+                        {isYouTubeUrl(imgObj.imageUrl) ? (
+                          <img src={getYouTubeThumbnailUrl(imgObj.imageUrl) || ''} className="w-full h-full object-cover" />
+                        ) : imgObj.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(imgObj.imageUrl) ? (
+                          <video src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" muted playsInline />
+                        ) : (
+                          <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" />
+                        )}
                         <span className="absolute bottom-0.5 right-0.5 bg-black/70 text-[8px] font-bold px-1 rounded text-white font-mono">
                           {idx + 1}
                         </span>
