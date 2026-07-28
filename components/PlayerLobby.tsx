@@ -212,7 +212,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
   const handleOpenSheetForCampaign = (camp?: UserCampaign) => {
     // Procura se já existe uma ficha vinculada à campanha ou com o nome do personagem
-    const charName = camp?.characterName || 'Aventureiro';
+    const charName = resolveCharName(camp);
     const foundSheet = characterSheets.find(
       (s) => (camp?.id && s.campaignId === camp.id) || s.characterName.toLowerCase() === charName.toLowerCase()
     );
@@ -376,6 +376,24 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
   // Find currently selected campaign
   const currentCampaign = playerCampaigns.find((c) => c.id === selectedCampaignId) || activeCampaign;
+
+  // Resolve character name from multiple sources (campaign → sheets → members → fallback)
+  const resolveCharName = (camp?: UserCampaign | null): string => {
+    if (camp?.characterName) return camp.characterName;
+    // Try to find a character sheet linked to this campaign
+    const linkedSheet = camp?.id
+      ? characterSheets.find((s) => s.campaignId === camp.id)
+      : null;
+    if (linkedSheet?.characterName && linkedSheet.characterName !== 'Novo Aventureiro') {
+      return linkedSheet.characterName;
+    }
+    // Try to find the name from campaign members (the user's own entry)
+    if (camp?.id) {
+      const myMember = campaignMembers.find((m) => m.userId === user?.id && m.characterName);
+      if (myMember?.characterName) return myMember.characterName;
+    }
+    return 'Aventureiro';
+  };
 
   // Filter feed for current active campaign (or public feed)
   const campaignFeed = feedEvents.filter((e) => e.isPublic && (!currentCampaign || e.campaignId === currentCampaign.id || !e.campaignId));
@@ -716,7 +734,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                           <UserCheck className="w-3.5 h-3.5 text-cyan-400" />
                           <span>Personagem:</span>
                         </span>
-                        <strong className="text-cyan-300 font-semibold">{camp.characterName || 'Aventureiro'}</strong>
+                        <strong className="text-cyan-300 font-semibold">{resolveCharName(camp)}</strong>
                       </div>
 
                       <div className="flex items-center justify-between text-xs">
@@ -777,7 +795,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
               <span className="text-xs font-mono font-bold bg-[#0a0d14] text-slate-300 border border-[#2a3449] px-3 py-1.5 rounded-xl flex items-center gap-2">
                 <UserCheck className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Personagem: <strong className="text-cyan-300">{currentCampaign?.characterName || 'Aventureiro'}</strong></span>
+                <span>Personagem: <strong className="text-cyan-300">{resolveCharName(currentCampaign)}</strong></span>
               </span>
               <button
                 onClick={onOpenPlayerView}
@@ -823,14 +841,14 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
                   <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#0a0d14] border border-[#2a3449]">
                     <span className="text-slate-400">Seu Personagem:</span>
-                    <span className="font-semibold text-cyan-300">{currentCampaign?.characterName || 'Aventureiro'}</span>
+                    <span className="font-semibold text-cyan-300">{resolveCharName(currentCampaign)}</span>
                   </div>
                 </div>
               </div>
 
               {/* Widget de Status do Personagem ao Vivo */}
               {(() => {
-                const playerCharName = currentCampaign?.characterName || 'Aventureiro';
+                const playerCharName = resolveCharName(currentCampaign);
                 const playerCombatant = combatants.find(
                   (c) => c.name.toLowerCase().includes(playerCharName.toLowerCase()) || playerCharName.toLowerCase().includes(c.name.toLowerCase())
                 );
@@ -930,7 +948,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                   <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                     {combatants.map((c, i) => {
                       const isCurrentTurn = i === currentTurnIndex;
-                      const playerCharName = currentCampaign?.characterName || 'Aventureiro';
+                      const playerCharName = resolveCharName(currentCampaign);
                       const isMe = c.name.toLowerCase().includes(playerCharName.toLowerCase()) || playerCharName.toLowerCase().includes(c.name.toLowerCase());
                       return (
                         <div key={c.id} className={`flex items-center justify-between p-2 rounded-lg text-[11px] font-mono border ${isCurrentTurn ? 'bg-amber-500/10 border-amber-500/50 text-amber-300 font-bold shadow-sm shadow-amber-500/10' : isMe ? 'bg-cyan-950/40 border-cyan-500/30 text-cyan-300' : 'bg-[#0a0d14] border-[#2a3449] text-slate-400'}`}>

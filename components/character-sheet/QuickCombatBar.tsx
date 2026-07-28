@@ -3,6 +3,7 @@ import { CharacterSheet } from '@/lib/types';
 import { calculatePassivePerception, formatModifier, getAttributeModifier } from '@/lib/dnd5e-calculator';
 import { Shield, Eye, Dices, Heart, X, Moon } from 'lucide-react';
 import { RestModal } from './Modals/RestModal';
+import { useAudio } from '@/context/AudioContext';
 
 interface QuickCombatBarProps {
   sheet: CharacterSheet;
@@ -21,9 +22,12 @@ export const QuickCombatBar: React.FC<QuickCombatBarProps> = ({ sheet, onChange 
     onChange({ ...sheet, currentHp: newHp });
   };
 
+  const { playDiceSound } = useAudio();
+
   const handleRollDice = (label: string, mod: number) => {
     const d20 = Math.floor(Math.random() * 20) + 1;
     const total = d20 + mod;
+    playDiceSound(1);
     setLastRoll({ d20, mod, total, label });
   };
 

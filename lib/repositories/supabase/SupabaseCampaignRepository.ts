@@ -16,7 +16,7 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
 
     const { data: memCamps, error: memErr } = await supabase
       .from('campaign_members')
-      .select('campaign_id, role, campaigns(*)')
+      .select('campaign_id, role, character_name, campaigns(*)')
       .eq('user_id', userId);
 
     if (dmErr) throw dmErr;
@@ -30,7 +30,7 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
     if (memCamps) {
       memCamps.forEach((m: Record<string, any>) => {
         if (m.campaigns && !allCamps.some((c) => c.id === m.campaigns.id)) {
-          allCamps.push(mapCampaignRowToDomain(m.campaigns as CampaignRow, m.role || 'player'));
+          allCamps.push(mapCampaignRowToDomain(m.campaigns as CampaignRow, m.role || 'player', m.character_name));
         }
       });
     }
@@ -124,7 +124,7 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
 
     if (campErr || !campData) return null;
 
-    const campaign = mapCampaignRowToDomain(campData as CampaignRow, 'player');
+    const campaign = mapCampaignRowToDomain(campData as CampaignRow, 'player', characterName);
 
     let member: CampaignMember | undefined;
     if (characterName) {

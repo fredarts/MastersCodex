@@ -76,7 +76,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     campaignId: activeCampaign?.id,
   });
 
-  const { playSfx } = useAudio();
+  const { playSfx, playDiceSound } = useAudio();
 
   // Zustand Store states & actions
   const {
@@ -495,12 +495,17 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   };
 
   const parseAndRollDamage = (desc?: string, defaultMod: number = 0): number => {
-    if (!desc) return Math.floor(Math.random() * 8) + 1 + defaultMod;
+    if (!desc) {
+      playDiceSound(1);
+      return Math.floor(Math.random() * 8) + 1 + defaultMod;
+    }
     const match = desc.match(/([0-9]+)d([0-9]+)(?:\s*[\+\-]\s*([0-9]+))?/i);
     if (match) {
       const count = parseInt(match[1], 10);
       const sides = parseInt(match[2], 10);
       const bonus = match[3] ? parseInt(match[3], 10) : 0;
+
+      playDiceSound(count);
 
       let total = 0;
       for (let i = 0; i < count; i++) {
@@ -508,6 +513,8 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       }
       return Math.max(1, total + bonus);
     }
+    
+    playDiceSound(1);
     return Math.max(1, Math.floor(Math.random() * 8) + 1 + defaultMod);
   };
 
@@ -530,6 +537,16 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     const total = roll + mod;
     const isCrit = roll === 20;
     const isFail = roll === 1;
+
+    let numberOfDice = 1;
+    if (actionDesc) {
+      const dmgMatch = actionDesc.match(/(\d+)d\d+(?:\s*[\+\-]\s*\d+)?/i);
+      if (dmgMatch) {
+        numberOfDice += parseInt(dmgMatch[1], 10);
+      }
+    }
+
+    playDiceSound(numberOfDice);
 
     setDiceResult({
       title,
@@ -916,11 +933,14 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
 
     const damageMap: Record<string, number> = {};
     const logDetails: string[] = [];
+    let totalDartsToRoll = 0;
 
     Object.entries(dartAllocations).forEach(([targetId, count]) => {
       if (count <= 0) return;
       const targetC = combatants.find((c) => c.id === targetId);
       if (!targetC) return;
+
+      totalDartsToRoll += count;
 
       let totalDmg = 0;
       for (let i = 0; i < count; i++) {
@@ -929,6 +949,10 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       damageMap[targetId] = totalDmg;
       logDetails.push(`${count} dardo(s) em ${targetC.name} (${totalDmg} dano)`);
     });
+
+    if (totalDartsToRoll > 0) {
+      playDiceSound(totalDartsToRoll);
+    }
 
     if (Object.keys(damageMap).length > 0) {
       setCombatants((prev) => {

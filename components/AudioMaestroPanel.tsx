@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  Play, Pause, Heart, Trash2, Upload, Search, Music, Radio, Volume2
+  Play, Pause, Heart, Trash2, Upload, Search, Music, Radio, Volume2, PlusCircle, CheckCircle2
 } from 'lucide-react';
 import { useCampaign } from '@/context/CampaignContext';
 import { useAudio } from '@/context/AudioContext';
+import { useSession } from '@/lib/hooks/useSession';
 import { storageService } from '@/lib/services/storageService';
 import { supabase, isValidUuid } from '@/lib/supabase';
 import { BGM_TRACKS, SFX_BUTTONS } from '@/lib/srd-data';
@@ -14,6 +15,7 @@ export const AudioMaestroPanel: React.FC = () => {
   const { activeCampaign } = useCampaign();
   const campaignId = activeCampaign?.id;
   const { playBgm, pauseBgm, activeBgm, isPlayingBgm, playSfx } = useAudio();
+  const { activeScene, updateScene } = useSession();
 
   const [customAudios, setCustomAudios] = useState<any[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -56,6 +58,24 @@ export const AudioMaestroPanel: React.FC = () => {
       .eq('campaign_id', campaignId);
 
     if (data) setFavorites(data.map((f: any) => f.audio_id));
+  };
+
+  const handleToggleSceneTrack = async (track: any) => {
+    if (!activeScene) return;
+    
+    if (track.type === 'bgm') {
+      const current = activeScene.bgmTracks || [];
+      const updated = current.includes(track.id)
+        ? current.filter(id => id !== track.id)
+        : [...current, track.id];
+      await updateScene({ ...activeScene, bgmTracks: updated });
+    } else {
+      const current = activeScene.sfxShortcuts || [];
+      const updated = current.includes(track.id)
+        ? current.filter(id => id !== track.id)
+        : [...current, track.id];
+      await updateScene({ ...activeScene, sfxShortcuts: updated });
+    }
   };
 
 
@@ -288,6 +308,10 @@ export const AudioMaestroPanel: React.FC = () => {
               const isFav = favorites.includes(track.id);
               const isCurrentBgm = activeBgm?.id === track.id;
               const isPlaying = previewingId === track.id || (isCurrentBgm && isPlayingBgm);
+              
+              const isAddedToScene = track.type === 'bgm' 
+                ? activeScene?.bgmTracks?.includes(track.id)
+                : activeScene?.sfxShortcuts?.includes(track.id);
 
               return (
                 <div 
@@ -352,6 +376,19 @@ export const AudioMaestroPanel: React.FC = () => {
                         <Volume2 className="w-3.5 h-3.5" />
                       </button>
                     )}
+
+                    {/* Add to Scene/AudioBar Button */}
+                    <button
+                      onClick={() => handleToggleSceneTrack(track)}
+                      className={`p-1.5 rounded-lg transition-all ${
+                        isAddedToScene 
+                          ? 'text-emerald-500 hover:text-emerald-400 scale-105' 
+                          : 'text-slate-400 hover:text-emerald-400'
+                      }`}
+                      title={isAddedToScene ? 'Remover da Barra de Áudio' : 'Adicionar à Barra de Áudio'}
+                    >
+                      {isAddedToScene ? <CheckCircle2 className="w-4 h-4 fill-emerald-500/20" /> : <PlusCircle className="w-4 h-4" />}
+                    </button>
 
                     {/* Favorite Button */}
                     <button

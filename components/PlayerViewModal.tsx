@@ -37,7 +37,19 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
   const [rightPanelTab, setRightPanelTab] = useState<'init' | 'log'>('init');
   const [isSheetModalOpen, setIsSheetModalOpen] = useState<boolean>(false);
 
-  const playerCharName = activeCampaign?.characterName || 'Aventureiro';
+  const playerCharName = (() => {
+    if (activeCampaign?.characterName) return activeCampaign.characterName;
+    // Fallback: try to find character name from localStorage sheets linked to this campaign
+    try {
+      const saved = localStorage.getItem('masters_codex_character_sheets_v1');
+      if (saved && activeCampaign?.id) {
+        const sheets: CharacterSheet[] = JSON.parse(saved);
+        const linked = sheets.find((s) => s.campaignId === activeCampaign.id);
+        if (linked?.characterName && linked.characterName !== 'Novo Aventureiro') return linked.characterName;
+      }
+    } catch (_) {}
+    return 'Aventureiro';
+  })();
 
   // Carrega a ficha correspondente ao personagem do jogador no localStorage
   const [activeSheet, setActiveSheet] = useState<CharacterSheet>(() => {

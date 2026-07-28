@@ -6,6 +6,7 @@ import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useWorld } from '@/lib/hooks/useWorld';
+import { useAudio } from '@/context/AudioContext';
 
 interface HeaderProps {
   onOpenSearch: () => void;
@@ -29,11 +30,13 @@ export const Header: React.FC<HeaderProps> = ({
   const { user, roleMode, setRoleMode } = useAuth();
   const { activeCampaign } = useCampaign();
   const { activeWorld } = useWorld();
+  const { playDiceSound } = useAudio();
   const [diceResult, setDiceResult] = useState<number | null>(null);
   const [lastDiceType, setLastDiceType] = useState<string>('');
 
   const rollDice = (sides: number) => {
     const res = Math.floor(Math.random() * sides) + 1;
+    playDiceSound(1);
     setDiceResult(res);
     setLastDiceType(`d${sides}`);
   };

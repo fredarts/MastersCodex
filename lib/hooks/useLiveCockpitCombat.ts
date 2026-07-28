@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Combatant } from '@/lib/types';
+import { useAudio } from '@/context/AudioContext';
 
 export interface Bg3DiceOverlayState {
   title: string;
@@ -30,6 +31,8 @@ export function useLiveCockpitCombat(
   const [showAddCombatantModal, setShowAddCombatantModal] = useState<boolean>(false);
   const [activeAddTab, setActiveAddTab] = useState<'monsters' | 'players' | 'custom' | 'npcs'>('monsters');
   const [combatantSearchQuery, setCombatantSearchQuery] = useState<string>('');
+
+  const { playDiceSound } = useAudio();
 
   const [pendingAttack, setPendingAttack] = useState<{
     title: string;
@@ -94,12 +97,16 @@ export function useLiveCockpitCombat(
     }
 
     let damageFormula: string | undefined = undefined;
+    let numberOfDice = 1; // Default to 1 for d20 roll
     if (actionDesc) {
-      const dmgMatch = actionDesc.match(/(\d+d\d+(?:\s*[\+\-]\s*\d+)?)/i);
+      const dmgMatch = actionDesc.match(/(\d+)d\d+(?:\s*[\+\-]\s*\d+)?/i);
       if (dmgMatch) {
-        damageFormula = dmgMatch[1];
+        damageFormula = actionDesc.match(/(\d+d\d+(?:\s*[\+\-]\s*\d+)?)/i)?.[1];
+        numberOfDice += parseInt(dmgMatch[1], 10);
       }
     }
+
+    playDiceSound(numberOfDice);
 
     setAnimatedRollNumber(d20);
     setBg3DiceOverlay({

@@ -14,6 +14,7 @@ interface AudioContextType {
   pauseBgm: () => void;
   stopBgm: () => void;
   playSfx: (sfxUrl: string, volumeScale?: number) => void;
+  playDiceSound: (diceCount?: number) => void;
   toggleBgmLoop: (trackId: string) => void;
   isLooping: (trackId: string) => boolean;
   currentTime: number;
@@ -191,6 +192,32 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     sound.play().catch(() => {});
   };
 
+  const playDiceSound = (diceCount = 1) => {
+    const diceSounds = [
+      '/audio/sfx/dice-01.mp3',
+      '/audio/sfx/dice-02.mp3',
+      '/audio/sfx/dice-03.mp3',
+      '/audio/sfx/dice-04.mp3',
+      '/audio/sfx/dice-06.mp3',
+      '/audio/sfx/dice-07.mp3',
+      '/audio/sfx/dice-09.mp3',
+      '/audio/sfx/dice-10.mp3',
+    ];
+
+    // Shuffle array and pick `diceCount` sounds, limit to max available sounds
+    const shuffled = [...diceSounds].sort(() => 0.5 - Math.random());
+    const count = Math.min(diceCount, diceSounds.length);
+    const selectedSounds = shuffled.slice(0, count);
+
+    selectedSounds.forEach((sfxUrl, index) => {
+      // Add a small jitter delay to make it sound natural when rolling multiple dice
+      const delay = Math.random() * 50 + (index * 20);
+      setTimeout(() => {
+        playSfx(sfxUrl, 1.0);
+      }, delay);
+    });
+  };
+
   return (
     <AudioContext.Provider value={{
       activeBgm,
@@ -203,6 +230,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       pauseBgm,
       stopBgm,
       playSfx,
+      playDiceSound,
       toggleBgmLoop,
       isLooping,
       currentTime,

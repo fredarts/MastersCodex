@@ -25,6 +25,7 @@ import { CONDITIONS, INITIAL_MONSTERS } from '@/lib/srd-data';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
+import { useAudio } from '@/context/AudioContext';
 
 interface CombatTrackerProps {
   combatants: Combatant[];
@@ -50,6 +51,7 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
   const { activeCampaign, createFeedEvent } = useCampaign();
   const { activeSession } = useSession();
   const { openSheet } = useLiveCockpit();
+  const { playDiceSound } = useAudio();
   const [showAddModal, setShowAddModal] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState<'player' | 'monster' | 'npc'>('monster');
@@ -186,6 +188,7 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
 
   const rollDice = (title: string, mod: number) => {
     const roll = Math.floor(Math.random() * 20) + 1;
+    playDiceSound(1);
     setDiceResult({
       title,
       roll,

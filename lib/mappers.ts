@@ -45,7 +45,7 @@ export function mapWorldEntityRowToDomain(row: WorldEntityRow): WorldEntity {
   };
 }
 
-export function mapCampaignRowToDomain(row: CampaignRow, role: 'dm' | 'player' = 'dm'): UserCampaign {
+export function mapCampaignRowToDomain(row: CampaignRow, role: 'dm' | 'player' = 'dm', characterName?: string): UserCampaign {
   return {
     id: row.id,
     dmId: row.dm_id,
@@ -54,6 +54,7 @@ export function mapCampaignRowToDomain(row: CampaignRow, role: 'dm' | 'player' =
     description: row.description || undefined,
     inviteCode: row.invite_code,
     role,
+    characterName: characterName || undefined,
   };
 }
 

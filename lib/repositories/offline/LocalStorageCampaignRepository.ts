@@ -89,6 +89,8 @@ export class LocalStorageCampaignRepository implements ICampaignRepository {
       
       if (!campaign) return null;
 
+      const joinedCampaign = { ...campaign, characterName };
+
       let member: CampaignMember | undefined;
       if (characterName) {
         member = {
@@ -104,7 +106,7 @@ export class LocalStorageCampaignRepository implements ICampaignRepository {
         localStorage.setItem('codex_members', JSON.stringify(members));
       }
 
-      return { campaign, member };
+      return { campaign: joinedCampaign, member };
     } catch (_e) {
       return null;
     }
