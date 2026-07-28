@@ -84,6 +84,7 @@ export const CampaignSettingsStudio: React.FC = () => {
     }
   }, [activeCampaign, activeTab, fetchCampaignMembers]);
   const [feedFilter, setFeedFilter] = useState<CampaignFeedEventType | 'all'>('all');
+  const [isFeedFilterCollapsed, setIsFeedFilterCollapsed] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Campaign Header Edit State
@@ -493,66 +494,95 @@ export const CampaignSettingsStudio: React.FC = () => {
         </aside>
 
         {/* Main Tab Content */}
-        <div className="flex-1 overflow-y-auto p-6">
         {activeTab === 'feed' && (
-          <div className="max-w-4xl mx-auto space-y-4">
-            {/* Feed Filter & Add Button */}
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-[#161c28] p-3 rounded-xl border border-[#2a3449]">
-              <div className="flex items-center gap-1.5 overflow-x-auto">
-                <span className="text-[10px] font-bold text-slate-500 uppercase font-mono mr-1">Filtrar:</span>
+          <div className="flex flex-col md:flex-row w-full min-h-full">
+            {/* Collapsible Secondary Sidebar for Filters */}
+            <div className={`bg-[#0f141d] border-r border-[#2a3449] flex flex-col transition-all duration-300 ${isFeedFilterCollapsed ? 'w-full md:w-16' : 'w-full md:w-56'} flex-shrink-0 md:sticky md:top-0`}>
+              <div className={`p-3 border-b border-[#2a3449]/60 flex items-center ${isFeedFilterCollapsed ? 'justify-center flex-col gap-2' : 'justify-between'} bg-[#121824]/50`}>
+                {!isFeedFilterCollapsed && (
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                    Filtros
+                  </span>
+                )}
                 <button
-                  onClick={() => setFeedFilter('all')}
-                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                    feedFilter === 'all' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
-                  }`}
+                  onClick={() => setIsFeedFilterCollapsed(!isFeedFilterCollapsed)}
+                  className="p-1.5 rounded-lg bg-[#161c28] text-slate-400 hover:text-amber-400 hover:bg-[#1f2738] transition-colors mx-auto"
+                  title={isFeedFilterCollapsed ? 'Expandir Filtros' : 'Recolher Filtros'}
                 >
-                  Todos ({feedEvents.length})
-                </button>
-                <button
-                  onClick={() => setFeedFilter('battle_summary')}
-                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                    feedFilter === 'battle_summary' ? 'bg-rose-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  ⚔️ Batalhas
-                </button>
-                <button
-                  onClick={() => setFeedFilter('npc_encounter')}
-                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                    feedFilter === 'npc_encounter' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  🗣️ NPCs
-                </button>
-                <button
-                  onClick={() => setFeedFilter('session_recap')}
-                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                    feedFilter === 'session_recap' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  📖 Recaps
-                </button>
-                <button
-                  onClick={() => setFeedFilter('world_lore')}
-                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                    feedFilter === 'world_lore' ? 'bg-purple-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  📜 Lore do Mundo
+                  {isFeedFilterCollapsed ? <ChevronRight className="w-4 h-4 hidden md:block" /> : <ChevronLeft className="w-4 h-4 hidden md:block" />}
+                  {isFeedFilterCollapsed && <Settings className="w-4 h-4 md:hidden" />}
                 </button>
               </div>
 
-              <button
-                onClick={() => setShowAddFeedModal(true)}
-                className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs shadow transition-all active:scale-95"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Adicionar ao Feed</span>
-              </button>
+              <div className={`flex md:flex-col gap-1 overflow-x-auto md:overflow-visible p-2`}>
+                <button
+                  onClick={() => setFeedFilter('all')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all min-w-max ${
+                    feedFilter === 'all' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:bg-[#161c28] hover:text-slate-200'
+                  }`}
+                  title="Todos os Registros"
+                >
+                  <Scroll className={`w-4 h-4 flex-shrink-0 ${feedFilter === 'all' ? 'text-slate-950' : 'text-amber-400'}`} />
+                  {(!isFeedFilterCollapsed || (typeof window !== 'undefined' && window.innerWidth < 768)) && <span className="truncate">Todos ({feedEvents.length})</span>}
+                </button>
+                <button
+                  onClick={() => setFeedFilter('battle_summary')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all min-w-max ${
+                    feedFilter === 'battle_summary' ? 'bg-rose-500 text-slate-950 shadow-md' : 'text-slate-400 hover:bg-[#161c28] hover:text-slate-200'
+                  }`}
+                  title="Batalhas"
+                >
+                  <Swords className={`w-4 h-4 flex-shrink-0 ${feedFilter === 'battle_summary' ? 'text-slate-950' : 'text-rose-400'}`} />
+                  {(!isFeedFilterCollapsed || (typeof window !== 'undefined' && window.innerWidth < 768)) && <span className="truncate">Batalhas</span>}
+                </button>
+                <button
+                  onClick={() => setFeedFilter('npc_encounter')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all min-w-max ${
+                    feedFilter === 'npc_encounter' ? 'bg-cyan-500 text-slate-950 shadow-md' : 'text-slate-400 hover:bg-[#161c28] hover:text-slate-200'
+                  }`}
+                  title="NPCs"
+                >
+                  <MessageSquare className={`w-4 h-4 flex-shrink-0 ${feedFilter === 'npc_encounter' ? 'text-slate-950' : 'text-cyan-400'}`} />
+                  {(!isFeedFilterCollapsed || (typeof window !== 'undefined' && window.innerWidth < 768)) && <span className="truncate">NPCs</span>}
+                </button>
+                <button
+                  onClick={() => setFeedFilter('session_recap')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all min-w-max ${
+                    feedFilter === 'session_recap' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:bg-[#161c28] hover:text-slate-200'
+                  }`}
+                  title="Recaps de Sessão"
+                >
+                  <BookOpen className={`w-4 h-4 flex-shrink-0 ${feedFilter === 'session_recap' ? 'text-slate-950' : 'text-amber-400'}`} />
+                  {(!isFeedFilterCollapsed || (typeof window !== 'undefined' && window.innerWidth < 768)) && <span className="truncate">Recaps</span>}
+                </button>
+                <button
+                  onClick={() => setFeedFilter('world_lore')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all min-w-max ${
+                    feedFilter === 'world_lore' ? 'bg-purple-500 text-slate-950 shadow-md' : 'text-slate-400 hover:bg-[#161c28] hover:text-slate-200'
+                  }`}
+                  title="Lore do Mundo"
+                >
+                  <BookOpen className={`w-4 h-4 flex-shrink-0 ${feedFilter === 'world_lore' ? 'text-slate-950' : 'text-purple-400'}`} />
+                  {(!isFeedFilterCollapsed || (typeof window !== 'undefined' && window.innerWidth < 768)) && <span className="truncate">Lore do Mundo</span>}
+                </button>
+              </div>
+
+              <div className="p-2 mt-auto">
+                <button
+                  onClick={() => setShowAddFeedModal(true)}
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold px-3 py-2.5 rounded-xl text-xs shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+                  title="Novo Evento no Feed"
+                >
+                  <Plus className="w-4 h-4 flex-shrink-0" />
+                  {(!isFeedFilterCollapsed || (typeof window !== 'undefined' && window.innerWidth < 768)) && <span>Novo Evento</span>}
+                </button>
+              </div>
             </div>
 
-            {/* Chronicle Timeline Log List */}
-            <div className="space-y-3 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#2a3449]">
+            {/* Main Feed Content */}
+            <div className="flex-1 space-y-4 p-6 max-w-4xl mx-auto w-full">
+              {/* Chronicle Timeline Log List */}
+              <div className="space-y-3 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#2a3449]">
               {filteredFeed.length === 0 ? (
                 <div className="p-8 text-center text-slate-500 bg-[#0f141d]/40 rounded-2xl border border-dashed border-[#2a3449]">
                   Nenhum registro encontrado no Feed da Jornada.
@@ -618,10 +648,11 @@ export const CampaignSettingsStudio: React.FC = () => {
               )}
             </div>
           </div>
+        </div>
         )}
 
         {activeTab === 'roster' && (
-          <div className="max-w-2xl mx-auto space-y-4">
+          <div className="max-w-2xl mx-auto space-y-4 p-6">
             <div className="p-5 bg-[#161c28] border border-amber-500/30 rounded-2xl shadow-xl space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -722,7 +753,7 @@ export const CampaignSettingsStudio: React.FC = () => {
         )}
 
         {activeTab === 'houserules' && (
-          <div className="max-w-2xl mx-auto space-y-4">
+          <div className="max-w-2xl mx-auto space-y-4 p-6">
             <div className="p-5 bg-[#161c28] border border-[#2a3449] rounded-2xl shadow-xl space-y-4">
               <h3 className="font-bold text-sm text-slate-100 flex items-center gap-2">
                 <Scroll className="w-4 h-4 text-purple-400" /> Regras da Casa (House Rules)
@@ -766,7 +797,7 @@ export const CampaignSettingsStudio: React.FC = () => {
         )}
 
         {activeTab === 'ai' && (
-          <div className="max-w-2xl mx-auto space-y-4">
+          <div className="max-w-2xl mx-auto space-y-4 p-6">
             <div className="p-5 bg-[#161c28] border border-[#2a3449] rounded-2xl shadow-xl space-y-4">
               <h3 className="font-bold text-sm text-slate-100 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-pink-400" /> Tom da Narração do Co-Mestre IA
@@ -800,7 +831,8 @@ export const CampaignSettingsStudio: React.FC = () => {
         )}
 
         {activeTab === 'export' && (
-          <div className="max-w-md mx-auto text-center space-y-4 p-8 bg-[#161c28] border border-[#2a3449] rounded-2xl shadow-xl">
+          <div className="p-6">
+            <div className="max-w-md mx-auto text-center space-y-4 p-8 bg-[#161c28] border border-[#2a3449] rounded-2xl shadow-xl">
             <Download className="w-12 h-12 text-emerald-400 mx-auto" />
             <h3 className="font-bold text-slate-100 text-base">Exportar Diário da Jornada</h3>
             <p className="text-xs text-slate-400">
@@ -812,9 +844,9 @@ export const CampaignSettingsStudio: React.FC = () => {
             >
               📥 Baixar Diário (.md)
             </button>
+            </div>
           </div>
         )}
-        </div>
       </div>
 
       {/* Modal Add Feed Event */}

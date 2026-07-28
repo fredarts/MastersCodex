@@ -16,6 +16,7 @@ import { AICoPilot } from '@/components/AICoPilot';
 import { LoreGraph } from '@/components/LoreGraph';
 import { AudioMaestro } from '@/components/AudioMaestro';
 import { AudioMaestroPanel } from '@/components/AudioMaestroPanel';
+import { AudioMaestroModal } from '@/components/AudioMaestroModal';
 import { CompendiumModal } from '@/components/CompendiumModal';
 import { PlayerViewModal } from '@/components/PlayerViewModal';
 import { AuthModal } from '@/components/AuthModal';
@@ -57,6 +58,7 @@ function MainApp() {
   const [isCompendiumOpen, setIsCompendiumOpen] = useState(false);
   const [isPlayerViewOpen, setIsPlayerViewOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
   const [isCreateCampaignOpen, setIsCreateCampaignOpen] = useState(false);
   const [selectedWorldForCampaign, setSelectedWorldForCampaign] = useState<World | null>(null);
   const [generatedLootResult, setGeneratedLootResult] = useState<string | null>(null);
@@ -340,7 +342,7 @@ function MainApp() {
       )}
 
       {/* Bottom Audio Control Footer */}
-      <AudioMaestro />
+      {activeTab === 'live_cockpit' && <AudioMaestro onOpenAudioPanel={() => setIsAudioModalOpen(true)} />}
 
       {/* Global Compendium Search Modal (`Ctrl + Space`) */}
       <CompendiumModal
@@ -355,6 +357,12 @@ function MainApp() {
         combatants={combatants}
         currentTurnIndex={currentTurnIndex}
         roundCount={roundCount}
+      />
+
+      {/* Audio Maestro Modal */}
+      <AudioMaestroModal 
+        isOpen={isAudioModalOpen}
+        onClose={() => setIsAudioModalOpen(false)}
       />
 
       {/* User Auth Modal (Google OAuth & Email Login) */}

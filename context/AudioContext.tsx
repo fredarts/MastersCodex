@@ -14,6 +14,12 @@ interface AudioContextType {
   pauseBgm: () => void;
   stopBgm: () => void;
   playSfx: (sfxUrl: string, volumeScale?: number) => void;
+  toggleBgmLoop: (trackId: string) => void;
+  isLooping: (trackId: string) => boolean;
+  currentTime: number;
+  duration: number;
+  seekBgm: (time: number) => void;
+  resumeBgm: () => void;
 }
 
 const AudioContext = createContext<AudioContextType | undefined>(undefined);
@@ -23,6 +29,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isPlayingBgm, setIsPlayingBgm] = useState(false);
   const [volume, setVolume] = useState(0.6);
   const [isMuted, setIsMuted] = useState(false);
+  const [loopOverrides, setLoopOverrides] = useState<Record<string, boolean>>({});
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -85,8 +94,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const startNewTrack = (track: BGMTrack, targetVol: number) => {
     const audio = new Audio(track.url);
-    audio.loop = track.isLoop !== false;
+    const shouldLoop = loopOverrides[track.id] ?? track.isLoop !== false;
+    audio.loop = shouldLoop;
     audio.volume = 0; // Inicia em silêncio
+    
+    audio.addEventListener('timeupdate', () => setCurrentTime(audio.currentTime));
+    audio.addEventListener('loadedmetadata', () => setDuration(audio.duration));
+
     audioRef.current = audio;
     setActiveBgm(track);
     setIsPlayingBgm(true);
@@ -134,7 +148,41 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       audioRef.current = null;
       setActiveBgm(null);
       setIsPlayingBgm(false);
+      setCurrentTime(0);
+      setDuration(0);
     }
+  };
+
+  const resumeBgm = () => {
+    if (audioRef.current && !isPlayingBgm) {
+      audioRef.current.play().catch(() => {});
+      setIsPlayingBgm(true);
+    }
+  };
+
+  const seekBgm = (time: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+      setCurrentTime(time);
+    }
+  };
+
+  const toggleBgmLoop = (trackId: string) => {
+    setLoopOverrides(prev => {
+      const currentDefault = true;
+      const currentVal = prev[trackId] ?? currentDefault;
+      const newVal = !currentVal;
+
+      if (audioRef.current && activeBgm?.id === trackId) {
+        audioRef.current.loop = newVal;
+      }
+
+      return { ...prev, [trackId]: newVal };
+    });
+  };
+
+  const isLooping = (trackId: string): boolean => {
+    return loopOverrides[trackId] ?? true;
   };
 
   const playSfx = (sfxUrl: string, volumeScale = 1.0) => {
@@ -154,7 +202,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       playBgm,
       pauseBgm,
       stopBgm,
-      playSfx
+      playSfx,
+      toggleBgmLoop,
+      isLooping,
+      currentTime,
+      duration,
+      seekBgm,
+      resumeBgm
     }}>
       {children}
     </AudioContext.Provider>
