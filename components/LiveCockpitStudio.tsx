@@ -135,6 +135,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const savePositionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSceneRef = useRef(activeScene);
   const combatantsRef = useRef(combatants);
+  const lastInitializedSceneIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     activeSceneRef.current = activeScene;
@@ -276,12 +277,22 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         const sorted = [...scene.combatants].sort(
           (a, b) => (b.initiative || 0) - (a.initiative || 0)
         );
-        setCombatants(sorted);
-        setCurrentTurnIndex(0);
-        setRoundCount(1);
-        setIsCombatActive(true);
-        broadcastToPlayerView({ combatants: sorted });
-        initializeFromCombatants(sorted);
+
+        const isNewScene = lastInitializedSceneIdRef.current !== scene.id;
+
+        if (isNewScene) {
+          // Only reset turn index and round on initial scene load
+          lastInitializedSceneIdRef.current = scene.id;
+          setCombatants(sorted);
+          setCurrentTurnIndex(0);
+          setRoundCount(1);
+          setIsCombatActive(true);
+          broadcastToPlayerView({ combatants: sorted });
+          initializeFromCombatants(sorted);
+        } else {
+          // Same scene: sync token positions/models but DO NOT reset turn order
+          initializeFromCombatants(sorted);
+        }
       }
     }
   }, [activeScene?.id, activeScene?.combatants, activeScene?.isBattleStarted, setCombatants, initializeFromCombatants, setCurrentTurnIndex, setRoundCount, setIsCombatActive, setActiveBgmCategory, setLiveTimeOfDayHour, setLiveHasFog, setLiveHasRain, setLiveFloorTextureUrl, setLiveEnvironmentSettings, setSelectedTimeOfDay, setIsBattleStarted, broadcastToPlayerView]);
@@ -1132,6 +1143,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   };
 
   const handleEndCombat = () => {
+    lastInitializedSceneIdRef.current = null;
     combatEngine.endCombat();
     onGenerateLoot();
   };
@@ -1144,6 +1156,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   };
 
   const handleFireSceneLive = (scene: any) => {
+    lastInitializedSceneIdRef.current = null;
     setActiveScene(scene);
     sceneProjection.projectSceneToPlayerView(scene);
   };

@@ -257,7 +257,10 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
             {/* Action Economy Tracker */}
             <div className="flex flex-wrap items-center gap-1 mt-2.5" onClick={(e) => e.stopPropagation()}>
               <button
-                onClick={() => {
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   onUpdateCombatants((prev) => {
                     const next = prev.map((x) => (x.id === c.id ? { ...x, actionUsed: !x.actionUsed } : x));
                     if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
@@ -276,7 +279,10 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
               </button>
 
               <button
-                onClick={() => {
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   onUpdateCombatants((prev) => {
                     const next = prev.map((x) => (x.id === c.id ? { ...x, bonusActionUsed: !x.bonusActionUsed } : x));
                     if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
@@ -295,7 +301,10 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
               </button>
 
               <button
-                onClick={() => {
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   onUpdateCombatants((prev) => {
                     const next = prev.map((x) => (x.id === c.id ? { ...x, reactionUsed: !x.reactionUsed } : x));
                     if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
@@ -315,8 +324,11 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
 
               {isTurn && (
                 <button
+                  type="button"
                   disabled={c.actionUsed}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     onUpdateCombatants((prev) => {
                       const next = prev.map((x) => {
                         if (x.id === c.id) {
