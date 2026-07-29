@@ -44,6 +44,7 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
     liveHasFog,
     liveHasRain,
     liveFloorTextureUrl,
+    liveEnvironmentSettings,
     playingNpcVoice,
     activeBgmCategory,
     selectedTargetId,
@@ -53,6 +54,7 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
     setLiveHasFog,
     setLiveHasRain,
     setLiveFloorTextureUrl,
+    setLiveEnvironmentSettings,
     setIsPlacementPhase,
     setPlayingNpcVoice,
     setActiveBgmCategory,
@@ -195,6 +197,7 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                   timeOfDayPreset={selectedTimeOfDay}
                   hasFog={liveHasFog}
                   hasRain={liveHasRain}
+                  {...(liveEnvironmentSettings || {})}
                   onTimeOfDayChange={(preset) => {
                     setSelectedTimeOfDay(preset);
                     broadcastToPlayerView({
@@ -205,10 +208,15 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                     setLiveTimeOfDayHour(env.timeOfDayHour);
                     setLiveHasFog(env.hasFog);
                     setLiveHasRain(env.hasRain);
+                    
+                    const newSettings = { ...(liveEnvironmentSettings || {}), ...env };
+                    setLiveEnvironmentSettings(newSettings);
+
                     broadcastToPlayerView({
                       timeOfDayHour: env.timeOfDayHour,
                       hasFog: env.hasFog,
                       hasRain: env.hasRain,
+                      environmentSettings: newSettings
                     });
                   }}
                   floorTextureUrl={liveFloorTextureUrl}

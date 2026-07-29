@@ -13,7 +13,8 @@ import { applySceneEnvironment } from './battle-3d/BattleEnvironment';
 import { setupCameraAndOrbit, DEFAULT_CAMERA_PRESETS } from './battle-3d/BattleCameraControls';
 import { createTokenMesh, updateTokenMeshState, TokenMeshOptions } from './battle-3d/Token3DMesh';
 import { createBattleSkyDome, SkyDomeInstance } from './battle-3d/BattleSkyDome';
-import { createRainParticleSystem } from './battle-3d/WeatherEffects';
+import { createCloudSystem, CloudSystemInstance } from './battle-3d/BattleClouds';
+import { createRainParticleSystem, createGroundFogSystem } from './battle-3d/WeatherEffects';
 import { BattleControlsToolbar } from './battle-3d/BattleControlsToolbar';
 import { InstancedTokenManager } from './battle-3d/InstancedTokenManager';
 import { disposeHierarchy } from '@/lib/3d-asset-manager';
@@ -34,8 +35,54 @@ export interface BattleGrid3DProps {
   timeOfDayHour?: number;
   hasFog?: boolean;
   hasRain?: boolean;
+  cloudDensity?: number;
+  moonSize?: number;
+  moonLuminosity?: number;
+  moonOffsetAngle?: number;
+  moonAltitude?: number;
+  sunSize?: number;
+  sunLightIntensity?: number;
+  ambientLightIntensity?: number;
+  skyTurbidity?: number;
+  skyRayleigh?: number;
+  mieCoefficient?: number;
+  mieDirectionalG?: number;
+  rainIntensity?: number;
+  rainSpeed?: number;
+  rainDropSize?: number;
+  windAngle?: number;
+  windStrength?: number;
+  groundFogDensity?: number;
+  groundFogHeight?: number;
+  groundFogSpeed?: number;
+  globalFogDensity?: number;
   onTimeOfDayChange?: (time: 'day' | 'sunset' | 'night' | 'fog' | 'storm') => void;
-  onEnvironmentChange?: (env: { timeOfDayHour: number; hasFog: boolean; hasRain: boolean }) => void;
+  onEnvironmentChange?: (env: {
+    timeOfDayHour: number;
+    hasFog: boolean;
+    hasRain: boolean;
+    cloudDensity?: number;
+    moonSize?: number;
+    moonLuminosity?: number;
+    moonOffsetAngle?: number;
+    moonAltitude?: number;
+    sunSize?: number;
+    sunLightIntensity?: number;
+    ambientLightIntensity?: number;
+    skyTurbidity?: number;
+    skyRayleigh?: number;
+    mieCoefficient?: number;
+    mieDirectionalG?: number;
+    rainIntensity?: number;
+    rainSpeed?: number;
+    rainDropSize?: number;
+    windAngle?: number;
+    windStrength?: number;
+    groundFogDensity?: number;
+    groundFogHeight?: number;
+    groundFogSpeed?: number;
+    globalFogDensity?: number;
+  }) => void;
   onConfirmPlacement?: () => void;
   userRole?: 'dm' | 'player';
   floorTextureUrl?: string;
@@ -76,12 +123,33 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   interactive = true,
   isPlacementPhase = false,
   setupMode = 'normal',
-  timeOfDayPreset = 'day',
-  timeOfDayHour = 12,
-  hasFog = false,
-  hasRain = false,
+  timeOfDayPreset: propTimeOfDayPreset = 'day',
+  timeOfDayHour: propTimeOfDayHour = 12,
+  hasFog: propHasFog = false,
+  hasRain: propHasRain = false,
+  cloudDensity: propCloudDensity = 30,
+  moonSize: propMoonSize = 1.5,
+  moonLuminosity: propMoonLuminosity = 1.0,
+  moonOffsetAngle: propMoonOffsetAngle = 180,
+  moonAltitude: propMoonAltitude = -1,
+  sunSize: propSunSize = 1.0,
+  sunLightIntensity: propSunLightIntensity,
+  ambientLightIntensity: propAmbientLightIntensity,
+  skyTurbidity: propSkyTurbidity,
+  skyRayleigh: propSkyRayleigh,
+  mieCoefficient: propMieCoefficient,
+  mieDirectionalG: propMieDirectionalG,
+  rainIntensity: propRainIntensity = 2000,
+  rainSpeed: propRainSpeed = 1.0,
+  rainDropSize: propRainDropSize = 1.0,
+  windAngle: propWindAngle = 180,
+  windStrength: propWindStrength = 0.2,
+  groundFogDensity: propGroundFogDensity = 150,
+  groundFogHeight: propGroundFogHeight = 1.0,
+  groundFogSpeed: propGroundFogSpeed = 1.0,
+  globalFogDensity: propGlobalFogDensity = 0.003,
   onTimeOfDayChange,
-  onEnvironmentChange,
+  onEnvironmentChange: propOnEnvironmentChange,
   onConfirmPlacement,
   userRole,
   floorTextureUrl,
@@ -167,7 +235,9 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const dragTrailRef = useRef<{ x: number; z: number }[]>([]);
   const tokenMeshMapRef = useRef<Map<string, THREE.Group>>(new Map());
   const rainSysRef = useRef<ReturnType<typeof createRainParticleSystem> | null>(null);
+  const groundFogSysRef = useRef<ReturnType<typeof createGroundFogSystem> | null>(null);
   const skyDomeRef = useRef<SkyDomeInstance | null>(null);
+  const cloudSystemRef = useRef<CloudSystemInstance | null>(null);
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
   const dirLightRef = useRef<THREE.DirectionalLight | null>(null);
   const floorMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
@@ -178,12 +248,121 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     floorTextureUrlRef.current = floorTextureUrl;
   }, [floorTextureUrl]);
 
-  // Environment ref to avoid stale closures in the animate loop
-  const envRef = useRef({ timeOfDayHour, timeOfDayPreset, hasFog, hasRain });
+  // Local environment state for immediate UI slider responsiveness
+  const [internalEnv, setInternalEnv] = useState({
+    timeOfDayHour: propTimeOfDayHour,
+    timeOfDayPreset: propTimeOfDayPreset,
+    hasFog: propHasFog,
+    hasRain: propHasRain,
+    cloudDensity: propCloudDensity,
+    moonSize: propMoonSize,
+    moonLuminosity: propMoonLuminosity,
+    moonOffsetAngle: propMoonOffsetAngle,
+    moonAltitude: propMoonAltitude,
+    sunSize: propSunSize,
+    sunLightIntensity: propSunLightIntensity,
+    ambientLightIntensity: propAmbientLightIntensity,
+    skyTurbidity: propSkyTurbidity,
+    skyRayleigh: propSkyRayleigh,
+    mieCoefficient: propMieCoefficient,
+    mieDirectionalG: propMieDirectionalG,
+    rainIntensity: propRainIntensity,
+    rainSpeed: propRainSpeed,
+    rainDropSize: propRainDropSize,
+    windAngle: propWindAngle,
+    windStrength: propWindStrength,
+    groundFogDensity: propGroundFogDensity,
+    groundFogHeight: propGroundFogHeight,
+    groundFogSpeed: propGroundFogSpeed,
+    globalFogDensity: propGlobalFogDensity,
+  });
 
   useEffect(() => {
-    envRef.current = { timeOfDayHour, timeOfDayPreset, hasFog, hasRain };
-  }, [timeOfDayHour, timeOfDayPreset, hasFog, hasRain]);
+    setInternalEnv(prev => ({
+      ...prev,
+      // Only sync props that parent components actually manage
+      timeOfDayHour: propTimeOfDayHour,
+      timeOfDayPreset: propTimeOfDayPreset,
+      hasFog: propHasFog,
+      hasRain: propHasRain,
+      cloudDensity: propCloudDensity,
+    }));
+  }, [
+    propTimeOfDayHour,
+    propTimeOfDayPreset,
+    propHasFog,
+    propHasRain,
+    propCloudDensity,
+  ]);
+
+  const handleEnvironmentChange = useCallback(
+    (env: {
+      timeOfDayHour: number;
+      hasFog: boolean;
+      hasRain: boolean;
+      cloudDensity?: number;
+      moonSize?: number;
+      moonLuminosity?: number;
+      moonOffsetAngle?: number;
+      moonAltitude?: number;
+      sunSize?: number;
+      sunLightIntensity?: number;
+      ambientLightIntensity?: number;
+      skyTurbidity?: number;
+      skyRayleigh?: number;
+      mieCoefficient?: number;
+      mieDirectionalG?: number;
+      rainIntensity?: number;
+      rainSpeed?: number;
+      rainDropSize?: number;
+      windAngle?: number;
+      windStrength?: number;
+      groundFogDensity?: number;
+      groundFogHeight?: number;
+      groundFogSpeed?: number;
+      globalFogDensity?: number;
+    }) => {
+      const prev = envRef.current;
+      const next = {
+        ...prev,
+        ...env,
+        cloudDensity: env.cloudDensity ?? prev.cloudDensity,
+        moonSize: env.moonSize ?? prev.moonSize,
+        moonLuminosity: env.moonLuminosity ?? prev.moonLuminosity,
+        moonOffsetAngle: env.moonOffsetAngle ?? prev.moonOffsetAngle,
+        moonAltitude: env.moonAltitude ?? prev.moonAltitude,
+        sunSize: env.sunSize ?? prev.sunSize,
+        sunLightIntensity: env.sunLightIntensity ?? prev.sunLightIntensity,
+        ambientLightIntensity: env.ambientLightIntensity ?? prev.ambientLightIntensity,
+        skyTurbidity: env.skyTurbidity ?? prev.skyTurbidity,
+        skyRayleigh: env.skyRayleigh ?? prev.skyRayleigh,
+        mieCoefficient: env.mieCoefficient ?? prev.mieCoefficient,
+        mieDirectionalG: env.mieDirectionalG ?? prev.mieDirectionalG,
+        rainIntensity: env.rainIntensity ?? prev.rainIntensity,
+        rainSpeed: env.rainSpeed ?? prev.rainSpeed,
+        rainDropSize: env.rainDropSize ?? prev.rainDropSize,
+        windAngle: env.windAngle ?? prev.windAngle,
+        windStrength: env.windStrength ?? prev.windStrength,
+        groundFogDensity: env.groundFogDensity ?? prev.groundFogDensity,
+        groundFogHeight: env.groundFogHeight ?? prev.groundFogHeight,
+        groundFogSpeed: env.groundFogSpeed ?? prev.groundFogSpeed,
+        globalFogDensity: env.globalFogDensity ?? prev.globalFogDensity,
+      };
+      
+      setInternalEnv(next);
+      if (propOnEnvironmentChange) {
+        propOnEnvironmentChange(next);
+      }
+    },
+    [propOnEnvironmentChange]
+  );
+
+  // Environment ref to avoid stale closures in the animate loop
+  const envRef = useRef(internalEnv);
+
+  useEffect(() => {
+    envRef.current = internalEnv;
+  }, [internalEnv]);
 
   // Dragging state references
   const isDraggingRef = useRef(false);
@@ -655,7 +834,30 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     // Skysphere Dome
     const skyDome = createBattleSkyDome(scene);
     skyDomeRef.current = skyDome;
-    skyDome.update(timeOfDayHour, timeOfDayPreset, hasFog, hasRain);
+
+    const {
+      timeOfDayHour: h,
+      timeOfDayPreset: p,
+      hasFog: f,
+      hasRain: r,
+      cloudDensity: cd,
+      moonSize: ms,
+      moonLuminosity: ml,
+      moonOffsetAngle: ma,
+      moonAltitude: malt,
+      sunSize: ss,
+      skyTurbidity: st,
+      skyRayleigh: sr,
+      mieCoefficient: mc,
+      mieDirectionalG: mg,
+    } = envRef.current;
+
+    skyDome.update(h, p, f, r, ms, ml, ma, malt, ss, st, sr, mc, mg);
+
+    // Stylized Cloud System
+    const cloudSystem = createCloudSystem(scene);
+    cloudSystemRef.current = cloudSystem;
+    cloudSystem.update(0.016, p, cd, h);
 
     // Immediately sync tokens upon scene creation
     syncTokens();
@@ -1029,14 +1231,43 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
     // Animation loop
     let animId: number;
+    let lastTime = performance.now();
     const animate = () => {
       animId = requestAnimationFrame(animate);
+      const now = performance.now();
+      const delta = (now - lastTime) / 1000;
+      lastTime = now;
+
       controls.update();
       if (skyDomeRef.current) {
-        const { timeOfDayHour: h, timeOfDayPreset: p, hasFog: f, hasRain: r } = envRef.current;
-        skyDomeRef.current.update(h, p, f, r);
+        const {
+          timeOfDayHour: h,
+          timeOfDayPreset: p,
+          hasFog: f,
+          hasRain: r,
+          moonSize: ms,
+          moonLuminosity: ml,
+          moonOffsetAngle: ma,
+          moonAltitude: malt,
+          sunSize: ss,
+          skyTurbidity: st,
+          skyRayleigh: sr,
+          mieCoefficient: mc,
+          mieDirectionalG: mg,
+        } = envRef.current;
+        skyDomeRef.current.update(h, p, f, r, ms, ml, ma, malt, ss, st, sr, mc, mg);
+
+        // Align directional light with sun position for accurate shadows & specular highlights
+        if (dirLightRef.current && skyDomeRef.current.sunPosition) {
+          dirLightRef.current.position.copy(skyDomeRef.current.sunPosition);
+        }
       }
-      if (rainSysRef.current) rainSysRef.current.update();
+      if (cloudSystemRef.current) {
+        const { timeOfDayPreset: p, cloudDensity: cd, timeOfDayHour: h } = envRef.current;
+        cloudSystemRef.current.update(delta, p, cd, h);
+      }
+      if (rainSysRef.current) rainSysRef.current.update(delta);
+      if (groundFogSysRef.current) groundFogSysRef.current.update(delta);
       renderer.render(scene, camera);
     };
     animate();
@@ -1067,9 +1298,17 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         skyDomeRef.current.dispose();
         skyDomeRef.current = null;
       }
+      if (cloudSystemRef.current) {
+        cloudSystemRef.current.dispose();
+        cloudSystemRef.current = null;
+      }
       if (rainSysRef.current) {
         rainSysRef.current.dispose();
         rainSysRef.current = null;
+      }
+      if (groundFogSysRef.current) {
+        groundFogSysRef.current.dispose();
+        groundFogSysRef.current = null;
       }
       renderer.dispose();
       disposeHierarchy(scene);
@@ -1084,11 +1323,53 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     };
   }, []);
 
-  // 2. Update Scene Environment (Lighting / Fog / Rain / SkyDome) dynamically
+  // 2. Update Scene Environment (Lighting / Fog / Rain / SkyDome / Clouds) dynamically
   useEffect(() => {
     if (!sceneRef.current) return;
 
-    const env = applySceneEnvironment(sceneRef.current, timeOfDayHour, timeOfDayPreset, hasFog, hasRain);
+    const {
+      timeOfDayHour,
+      timeOfDayPreset,
+      hasFog,
+      hasRain,
+      cloudDensity,
+      moonSize,
+      moonLuminosity,
+      moonOffsetAngle,
+      moonAltitude,
+      sunSize,
+      sunLightIntensity,
+      ambientLightIntensity,
+      skyTurbidity,
+      skyRayleigh,
+      mieCoefficient,
+      mieDirectionalG,
+      rainIntensity,
+      rainSpeed,
+      rainDropSize,
+      windAngle,
+      windStrength,
+      groundFogDensity,
+      groundFogHeight,
+      groundFogSpeed,
+      globalFogDensity,
+    } = internalEnv;
+
+    const env = applySceneEnvironment(
+      sceneRef.current,
+      timeOfDayHour,
+      timeOfDayPreset,
+      hasFog,
+      hasRain,
+      cloudDensity,
+      moonSize,
+      moonOffsetAngle,
+      moonAltitude,
+      sunSize,
+      sunLightIntensity,
+      ambientLightIntensity,
+      globalFogDensity
+    );
 
     // Dynamically adjust ambient light intensity and color
     if (ambientLightRef.current) {
@@ -1100,26 +1381,63 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       dirLightRef.current.intensity = env.sunIntensity;
       dirLightRef.current.color.set(env.sunColor);
 
-      // Procedural Sun angle position based on the timeOfDayHour prop
-      const angle = ((timeOfDayHour - 6) % 24) * (Math.PI / 12); // peak at 12pm, sunrise at 6am
-      const x = 18 * Math.cos(angle);
-      const y = 18 * Math.sin(angle);
-      dirLightRef.current.position.set(x, Math.max(3, y), 10);
+      if (skyDomeRef.current && skyDomeRef.current.sunPosition) {
+        dirLightRef.current.position.copy(skyDomeRef.current.sunPosition);
+      }
     }
 
     if (skyDomeRef.current) {
-      skyDomeRef.current.update(timeOfDayHour, timeOfDayPreset, hasFog, hasRain);
+      skyDomeRef.current.update(
+        timeOfDayHour,
+        timeOfDayPreset,
+        hasFog,
+        hasRain,
+        moonSize,
+        moonLuminosity,
+        moonOffsetAngle,
+        moonAltitude,
+        sunSize,
+        skyTurbidity,
+        skyRayleigh,
+        mieCoefficient,
+        mieDirectionalG
+      );
+    }
+
+    if (cloudSystemRef.current) {
+      cloudSystemRef.current.update(0.016, timeOfDayPreset, cloudDensity, timeOfDayHour);
     }
 
     if (hasRain || timeOfDayPreset === 'storm') {
       if (!rainSysRef.current) {
         rainSysRef.current = createRainParticleSystem(sceneRef.current);
       }
+      rainSysRef.current.updateParams({
+        intensity: rainIntensity,
+        speed: rainSpeed,
+        dropSize: rainDropSize,
+        windAngle: windAngle,
+        windStrength: windStrength
+      });
     } else if (rainSysRef.current) {
       rainSysRef.current.dispose();
       rainSysRef.current = null;
     }
-  }, [timeOfDayHour, timeOfDayPreset, hasFog, hasRain]);
+
+    if (hasFog || timeOfDayPreset === 'fog' || timeOfDayPreset === 'storm') {
+      if (!groundFogSysRef.current) {
+        groundFogSysRef.current = createGroundFogSystem(sceneRef.current);
+      }
+      groundFogSysRef.current.updateParams({
+        intensity: groundFogDensity,
+        height: groundFogHeight,
+        speed: groundFogSpeed
+      });
+    } else if (groundFogSysRef.current) {
+      groundFogSysRef.current.dispose();
+      groundFogSysRef.current = null;
+    }
+  }, [internalEnv]);
 
   // Handle floor texture updates dynamically
   useEffect(() => {
@@ -1363,13 +1681,34 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         selectedRotation={selectedRotation}
         directionLabel={getDirectionLabel(selectedRotation)}
         canControlSelected={selectedCombatant ? canUserControlCombatant(selectedCombatant) : false}
-        timeOfDayHour={timeOfDayHour}
-        timeOfDayPreset={timeOfDayPreset}
-        hasFog={hasFog}
-        hasRain={hasRain}
+        timeOfDayHour={internalEnv.timeOfDayHour}
+        timeOfDayPreset={internalEnv.timeOfDayPreset}
+        hasFog={internalEnv.hasFog}
+        hasRain={internalEnv.hasRain}
+        cloudDensity={internalEnv.cloudDensity}
+        moonSize={internalEnv.moonSize}
+        moonLuminosity={internalEnv.moonLuminosity}
+        moonOffsetAngle={internalEnv.moonOffsetAngle}
+        moonAltitude={internalEnv.moonAltitude}
+        sunSize={internalEnv.sunSize}
+        sunLightIntensity={internalEnv.sunLightIntensity}
+        ambientLightIntensity={internalEnv.ambientLightIntensity}
+        skyTurbidity={internalEnv.skyTurbidity}
+        skyRayleigh={internalEnv.skyRayleigh}
+        mieCoefficient={internalEnv.mieCoefficient}
+        mieDirectionalG={internalEnv.mieDirectionalG}
+        rainIntensity={internalEnv.rainIntensity}
+        rainSpeed={internalEnv.rainSpeed}
+        rainDropSize={internalEnv.rainDropSize}
+        windAngle={internalEnv.windAngle}
+        windStrength={internalEnv.windStrength}
+        groundFogDensity={internalEnv.groundFogDensity}
+        groundFogHeight={internalEnv.groundFogHeight}
+        groundFogSpeed={internalEnv.groundFogSpeed}
+        globalFogDensity={internalEnv.globalFogDensity}
         onRotateSelected={handleRotateSelected}
         onSelectCameraPreset={handleSelectCameraPreset}
-        onEnvironmentChange={onEnvironmentChange}
+        onEnvironmentChange={handleEnvironmentChange}
         onTimeOfDayChange={onTimeOfDayChange}
         floorTextureUrl={floorTextureUrl}
         onFloorTextureChange={onFloorTextureChange}

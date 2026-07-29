@@ -92,6 +92,7 @@ interface LiveCockpitStudioState {
   liveHasFog: boolean;
   liveHasRain: boolean;
   liveFloorTextureUrl: string | undefined;
+  liveEnvironmentSettings: Record<string, any> | null;
 
   // Audio
   playingNpcVoice: boolean;
@@ -147,6 +148,7 @@ interface LiveCockpitStudioState {
   setLiveHasFog: (v: boolean) => void;
   setLiveHasRain: (v: boolean) => void;
   setLiveFloorTextureUrl: (url: string | undefined) => void;
+  setLiveEnvironmentSettings: (settings: Record<string, any> | null) => void;
 
   // Audio
   setPlayingNpcVoice: (v: boolean) => void;
@@ -203,6 +205,7 @@ export const useLiveCockpitStudioStore = create<LiveCockpitStudioState>((set) =>
   liveHasFog: false,
   liveHasRain: false,
   liveFloorTextureUrl: undefined,
+  liveEnvironmentSettings: null,
 
   // Audio
   playingNpcVoice: false,
@@ -271,6 +274,7 @@ export const useLiveCockpitStudioStore = create<LiveCockpitStudioState>((set) =>
   setLiveHasFog: (v) => set({ liveHasFog: v }),
   setLiveHasRain: (v) => set({ liveHasRain: v }),
   setLiveFloorTextureUrl: (url) => set({ liveFloorTextureUrl: url }),
+  setLiveEnvironmentSettings: (s) => set({ liveEnvironmentSettings: s }),
 
   setPlayingNpcVoice: (v) => set({ playingNpcVoice: v }),
   setActiveBgmCategory: (c) => set({ activeBgmCategory: c }),

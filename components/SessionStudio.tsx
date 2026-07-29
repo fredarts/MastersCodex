@@ -146,6 +146,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
   const [timeOfDayHour, setTimeOfDayHour] = useState<number>(12);
   const [hasFog, setHasFog] = useState(false);
   const [hasRain, setHasRain] = useState(false);
+  const [environmentSettings, setEnvironmentSettings] = useState<Record<string, any>>({});
   const [floorTextureUrl, setFloorTextureUrl] = useState<string | undefined>(undefined);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -175,6 +176,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       setTimeOfDayHour(selectedScene.timeOfDayHour ?? 12);
       setHasFog(selectedScene.hasFog ?? false);
       setHasRain(selectedScene.hasRain ?? false);
+      setEnvironmentSettings(selectedScene.environmentSettings || {});
       setFloorTextureUrl(selectedScene.floorTextureUrl || undefined);
       setSceneImages(selectedScene.sceneImages || []);
     } else {
@@ -192,6 +194,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       setTimeOfDayHour(12);
       setHasFog(false);
       setHasRain(false);
+      setEnvironmentSettings({});
       setFloorTextureUrl(undefined);
       setSceneImages([]);
     }
@@ -251,6 +254,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       hasRain,
       floorTextureUrl,
       sceneImages,
+      environmentSettings,
     };
 
     await updateScene(updated);
@@ -1296,10 +1300,12 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                               }
                               hasFog={hasFog}
                               hasRain={hasRain}
+                              {...environmentSettings}
                               onEnvironmentChange={(env) => {
                                 setTimeOfDayHour(env.timeOfDayHour);
                                 setHasFog(env.hasFog);
                                 setHasRain(env.hasRain);
+                                setEnvironmentSettings(prev => ({ ...prev, ...env }));
                               }}
                               floorTextureUrl={floorTextureUrl}
                               onFloorTextureChange={setFloorTextureUrl}

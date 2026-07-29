@@ -120,6 +120,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     setLiveHasRain,
     liveFloorTextureUrl,
     setLiveFloorTextureUrl,
+    setLiveEnvironmentSettings,
     playingNpcVoice,
     activeBgmCategory,
     setActiveBgmCategory,
@@ -260,6 +261,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     setLiveHasFog(targetFog);
     setLiveHasRain(targetRain);
     setLiveFloorTextureUrl(scene.floorTextureUrl || undefined);
+    setLiveEnvironmentSettings(scene.environmentSettings || null);
 
     if (scene.timeOfDay) {
       setSelectedTimeOfDay(scene.timeOfDay);
@@ -282,7 +284,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         initializeFromCombatants(sorted);
       }
     }
-  }, [activeScene?.id, activeScene?.combatants, activeScene?.isBattleStarted, setCombatants, initializeFromCombatants, setCurrentTurnIndex, setRoundCount, setIsCombatActive, setActiveBgmCategory, setLiveTimeOfDayHour, setLiveHasFog, setLiveHasRain, setLiveFloorTextureUrl, setSelectedTimeOfDay, setIsBattleStarted, broadcastToPlayerView]);
+  }, [activeScene?.id, activeScene?.combatants, activeScene?.isBattleStarted, setCombatants, initializeFromCombatants, setCurrentTurnIndex, setRoundCount, setIsCombatActive, setActiveBgmCategory, setLiveTimeOfDayHour, setLiveHasFog, setLiveHasRain, setLiveFloorTextureUrl, setLiveEnvironmentSettings, setSelectedTimeOfDay, setIsBattleStarted, broadcastToPlayerView]);
 
 
 

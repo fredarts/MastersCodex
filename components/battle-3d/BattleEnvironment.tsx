@@ -1,18 +1,55 @@
-import React from 'react';
 import * as THREE from 'three';
 
-interface BattleEnvironmentProps {
+export interface BattleEnvironmentProps {
   timeOfDayPreset?: 'day' | 'sunset' | 'night' | 'fog' | 'storm';
   timeOfDayHour?: number;
   hasFog?: boolean;
   hasRain?: boolean;
+  cloudDensity?: number;
+  moonSize?: number;
+  moonLuminosity?: number;
+  moonOffsetAngle?: number;
+  moonAltitude?: number;
+  
+  // Custom solar / lighting parameters
+  sunSize?: number;
+  sunLightIntensity?: number;
+  ambientLightIntensity?: number;
+  
+  // Sky shader parameters
+  skyTurbidity?: number;
+  skyRayleigh?: number;
+  mieCoefficient?: number;
+  mieDirectionalG?: number;
+
+  // Custom rain parameters
+  rainIntensity?: number;
+  rainSpeed?: number;
+  rainDropSize?: number;
+  windAngle?: number;
+  windStrength?: number;
+
+  // Custom fog parameters
+  groundFogDensity?: number;
+  groundFogHeight?: number;
+  groundFogSpeed?: number;
+  globalFogDensity?: number;
 }
 
 export const calculateEnvironmentSettings = (
   timeOfDayHour = 12,
   timeOfDayPreset = 'day',
   hasFog = false,
-  hasRain = false
+  hasRain = false,
+  cloudDensity = 30,
+  moonSize = 1.5,
+  moonLuminosity = 1.0,
+  moonOffsetAngle = 180,
+  moonAltitude = -1,
+  sunSize = 1.0,
+  sunLightIntensity?: number,
+  ambientLightIntensity?: number,
+  globalFogDensity?: number
 ) => {
   const isNight = timeOfDayPreset === 'night' || timeOfDayHour < 6 || timeOfDayHour > 19;
   const isSunset = timeOfDayPreset === 'sunset' || (timeOfDayHour >= 17 && timeOfDayHour <= 19);
@@ -38,8 +75,14 @@ export const calculateEnvironmentSettings = (
   if (hasFog || timeOfDayPreset === 'fog') {
     bgColor = '#1e293b';
   }
-  // Rain/storm: NO ambient or sky darkening — the skydome handles sky appearance,
-  // rain is purely a particle overlay effect
+
+  // Override intensities if manually specified
+  if (ambientLightIntensity !== undefined) {
+    ambientIntensity = ambientLightIntensity;
+  }
+  if (sunLightIntensity !== undefined) {
+    sunIntensity = sunLightIntensity;
+  }
 
   return {
     bgColor,
@@ -48,6 +91,12 @@ export const calculateEnvironmentSettings = (
     sunColor,
     isNight,
     isSunset,
+    cloudDensity,
+    moonSize,
+    moonLuminosity,
+    moonOffsetAngle,
+    moonAltitude,
+    sunSize,
   };
 };
 
@@ -56,17 +105,36 @@ export const applySceneEnvironment = (
   timeOfDayHour = 12,
   timeOfDayPreset = 'day',
   hasFog = false,
-  hasRain = false
+  hasRain = false,
+  cloudDensity = 30,
+  moonSize = 1.5,
+  moonOffsetAngle = 180,
+  moonAltitude = -1,
+  sunSize = 1.0,
+  sunLightIntensity?: number,
+  ambientLightIntensity?: number,
+  globalFogDensity?: number
 ) => {
-  const env = calculateEnvironmentSettings(timeOfDayHour, timeOfDayPreset, hasFog, hasRain);
-  // scene.background = null para dar lugar à Skysphere procedural 3D
+  const env = calculateEnvironmentSettings(
+    timeOfDayHour,
+    timeOfDayPreset,
+    hasFog,
+    hasRain,
+    cloudDensity,
+    moonSize,
+    moonOffsetAngle,
+    moonAltitude,
+    sunSize,
+    sunLightIntensity,
+    ambientLightIntensity,
+    globalFogDensity
+  );
   scene.background = null;
 
   if (hasFog || timeOfDayPreset === 'fog') {
-    // Densidade baixa (0.003) para manter o skydome visível atrás do nevoeiro
-    scene.fog = new THREE.FogExp2(0x1e293b, 0.003);
+    const fogDensityVal = globalFogDensity !== undefined ? globalFogDensity : 0.003;
+    scene.fog = new THREE.FogExp2(0x1e293b, fogDensityVal);
   } else {
-    // Sem fog: limpar completamente para nunca cobrir o skydome
     scene.fog = null;
   }
 

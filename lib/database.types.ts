@@ -75,6 +75,7 @@ export interface SceneRow {
   floor_texture_url?: string | null;
   scene_images?: any[] | null;
   active_image_index?: number | null;
+  environment_settings?: Record<string, any> | null;
   created_at?: string;
 }
 

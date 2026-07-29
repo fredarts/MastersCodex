@@ -181,6 +181,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 hasFog={currentScene?.hasFog}
                 hasRain={currentScene?.hasRain}
                 floorTextureUrl={currentScene?.floorTextureUrl}
+                {...(currentScene?.environmentSettings || {})}
                 interactive={true}
                 userRole="player"
               />

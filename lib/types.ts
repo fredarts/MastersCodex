@@ -134,6 +134,7 @@ export interface GameScene {
   placementZoneRadius?: number;
   sceneImages?: SceneImage[];
   activeImageIndex?: number;
+  environmentSettings?: Record<string, any>;
   isBattleStarted?: boolean;
   battleStartSnapshot?: Combatant[];
   createdAt?: string;

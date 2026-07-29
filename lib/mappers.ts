@@ -106,6 +106,7 @@ export function mapSceneRowToDomain(row: SceneRow): GameScene {
     floorTextureUrl: row.floor_texture_url || undefined,
     sceneImages: row.scene_images || [],
     activeImageIndex: row.active_image_index || 0,
+    environmentSettings: row.environment_settings || undefined,
     createdAt: row.created_at,
   };
 }

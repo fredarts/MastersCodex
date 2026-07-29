@@ -93,6 +93,7 @@ export class SupabaseSessionRepository implements ISessionRepository {
         floor_texture_url: sceneData.floorTextureUrl,
         scene_images: sceneData.sceneImages || [],
         active_image_index: sceneData.activeImageIndex || 0,
+        environment_settings: sceneData.environmentSettings || {},
       })
       .select()
       .single();
@@ -125,6 +126,7 @@ export class SupabaseSessionRepository implements ISessionRepository {
         floor_texture_url: scene.floorTextureUrl,
         scene_images: scene.sceneImages || [],
         active_image_index: scene.activeImageIndex || 0,
+        environment_settings: scene.environmentSettings || {},
       })
       .eq('id', scene.id);
 
