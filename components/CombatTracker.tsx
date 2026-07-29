@@ -75,6 +75,7 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
 
   const handleNextTurn = () => {
     if (combatants.length === 0) return;
+    let nextIdx = 0;
     if (currentTurnIndex >= combatants.length - 1) {
       setCurrentTurnIndex(0);
       setRoundCount((prev) => prev + 1);
@@ -85,12 +86,53 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
              const dexMod = c.dex ? Math.floor((c.dex - 10) / 2) : 0;
              return { ...c, initiative: Math.floor(Math.random() * 20) + 1 + dexMod };
           });
-          return rolled.sort((a,b) => b.initiative - a.initiative);
+          const sorted = rolled.sort((a,b) => b.initiative - a.initiative);
+          
+          return sorted.map((c, idx) => {
+             if (idx === 0) {
+               const hasImmobilizingCondition = c.conditions?.some(cond => 
+                 ['Agarrado', 'Paralisado', 'Petrificado', 'Restrito', 'Inconsciente', 'Incapacitado'].includes(cond)
+               );
+               return {
+                 ...c,
+                 actionUsed: false,
+                 bonusActionUsed: false,
+                 reactionUsed: false,
+                 hasDashed: false,
+                 movementUsed: hasImmobilizingCondition ? c.movementUsed : 0,
+                 turnStartX: c.x,
+                 turnStartZ: c.z
+               };
+             }
+             return c;
+          });
         });
+        return;
       }
     } else {
       setCurrentTurnIndex((prev) => prev + 1);
+      nextIdx = currentTurnIndex + 1;
     }
+
+    setCombatants(prev => prev.map((c, idx) => {
+      if (idx === nextIdx) {
+        const hasImmobilizingCondition = c.conditions?.some(cond => 
+          ['Agarrado', 'Paralisado', 'Petrificado', 'Restrito', 'Inconsciente', 'Incapacitado'].includes(cond)
+        );
+
+        return {
+          ...c,
+          actionUsed: false,
+          bonusActionUsed: false,
+          reactionUsed: false,
+          hasDashed: false,
+          movementUsed: hasImmobilizingCondition ? c.movementUsed : 0,
+          turnStartX: c.x,
+          turnStartZ: c.z
+        };
+      }
+      return c;
+    }));
   };
 
   const applyHpChange = (id: string, delta: number) => {

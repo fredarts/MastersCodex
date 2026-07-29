@@ -37,7 +37,27 @@ export function useCombatEngine() {
     }
 
     setCurrentTurnIndex(nextIndex);
-  }, [combatants.length, currentTurnIndex, roundCount, setCurrentTurnIndex, setRoundCount]);
+
+    setCombatants((prev) => prev.map((c, idx) => {
+      if (idx === nextIndex) {
+        const hasImmobilizingCondition = c.conditions?.some(cond => 
+          ['Agarrado', 'Paralisado', 'Petrificado', 'Restrito', 'Inconsciente', 'Incapacitado'].includes(cond)
+        );
+
+        return {
+          ...c,
+          actionUsed: false,
+          bonusActionUsed: false,
+          reactionUsed: false,
+          hasDashed: false,
+          movementUsed: hasImmobilizingCondition ? c.movementUsed : 0,
+          turnStartX: c.x,
+          turnStartZ: c.z
+        };
+      }
+      return c;
+    }));
+  }, [combatants.length, currentTurnIndex, roundCount, setCurrentTurnIndex, setRoundCount, setCombatants]);
 
   const handlePrevTurn = useCallback(() => {
     if (combatants.length === 0) return;

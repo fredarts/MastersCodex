@@ -80,6 +80,7 @@ interface LiveCockpitStudioState {
   activeAddTab: AddCombatantTab;
   combatantSearchQuery: string;
   autoInit: boolean;
+  isBattleStarted: boolean;
 
   // Battle Setup & Placement
   isPlacementPhase: boolean;
@@ -134,6 +135,7 @@ interface LiveCockpitStudioState {
   setActiveAddTab: (tab: AddCombatantTab) => void;
   setCombatantSearchQuery: (q: string) => void;
   setAutoInit: (v: boolean) => void;
+  setIsBattleStarted: (v: boolean) => void;
 
   // Battle Setup & Placement
   setIsPlacementPhase: (v: boolean) => void;
@@ -189,6 +191,7 @@ export const useLiveCockpitStudioStore = create<LiveCockpitStudioState>((set) =>
   activeAddTab: 'monsters',
   combatantSearchQuery: '',
   autoInit: false,
+  isBattleStarted: false,
 
   // Battle Setup
   isPlacementPhase: false,
@@ -258,6 +261,7 @@ export const useLiveCockpitStudioStore = create<LiveCockpitStudioState>((set) =>
   setActiveAddTab: (tab) => set({ activeAddTab: tab }),
   setCombatantSearchQuery: (q) => set({ combatantSearchQuery: q }),
   setAutoInit: (v) => set({ autoInit: v }),
+  setIsBattleStarted: (v) => set({ isBattleStarted: v }),
 
   setIsPlacementPhase: (v) => set({ isPlacementPhase: v }),
   setBattleSetupMode: (m) => set({ battleSetupMode: m }),

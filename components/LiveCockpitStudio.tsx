@@ -124,6 +124,8 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     setShowCreateSceneModal,
     setShowAddCombatantModal,
     setShowBattleSetupModal,
+    isBattleStarted,
+    setIsBattleStarted,
   } = useLiveCockpitStudioStore();
 
   const savePositionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -260,6 +262,10 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       setSelectedTimeOfDay(scene.timeOfDay);
     }
 
+    if (scene.isBattleStarted !== undefined) {
+      setIsBattleStarted(scene.isBattleStarted);
+    }
+
     if (scene.id) {
       if (scene.combatants && scene.combatants.length > 0) {
         const sorted = [...scene.combatants].sort(
@@ -273,7 +279,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         initializeFromCombatants(sorted);
       }
     }
-  }, [activeScene?.id, setCombatants, initializeFromCombatants, setCurrentTurnIndex, setRoundCount, setIsCombatActive, setActiveBgmCategory, setLiveTimeOfDayHour, setLiveHasFog, setLiveHasRain, setLiveFloorTextureUrl, setSelectedTimeOfDay, broadcastToPlayerView]);
+  }, [activeScene?.id, activeScene?.isBattleStarted, setCombatants, initializeFromCombatants, setCurrentTurnIndex, setRoundCount, setIsCombatActive, setActiveBgmCategory, setLiveTimeOfDayHour, setLiveHasFog, setLiveHasRain, setLiveFloorTextureUrl, setSelectedTimeOfDay, setIsBattleStarted, broadcastToPlayerView]);
 
 
 

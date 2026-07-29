@@ -41,12 +41,34 @@ export const CombatInitiativeTracker: React.FC<CombatInitiativeTrackerProps> = (
 
   const nextTurn = () => {
     if (combatants.length === 0) return;
-    if (currentTurnIndex + 1 >= combatants.length) {
-      setCurrentTurnIndex(0);
+    
+    let nextIdx = currentTurnIndex + 1;
+    if (nextIdx >= combatants.length) {
+      nextIdx = 0;
       setRoundCount((r) => r + 1);
-    } else {
-      setCurrentTurnIndex((prev) => prev + 1);
     }
+    
+    setCurrentTurnIndex(nextIdx);
+
+    setCombatants(prev => prev.map((c, idx) => {
+      if (idx === nextIdx) {
+        const hasImmobilizingCondition = c.conditions?.some(cond => 
+          ['Agarrado', 'Paralisado', 'Petrificado', 'Restrito', 'Inconsciente', 'Incapacitado'].includes(cond)
+        );
+
+        return {
+          ...c,
+          actionUsed: false,
+          bonusActionUsed: false,
+          reactionUsed: false,
+          hasDashed: false,
+          movementUsed: hasImmobilizingCondition ? c.movementUsed : 0,
+          turnStartX: c.x,
+          turnStartZ: c.z
+        };
+      }
+      return c;
+    }));
   };
 
   const handleRollAllInitiatives = () => {

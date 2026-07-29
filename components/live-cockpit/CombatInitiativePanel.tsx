@@ -69,6 +69,7 @@ export const CombatInitiativePanel: React.FC<CombatInitiativePanelProps> = ({
     selectedTargetId,
     setSelectedTargetId,
     setShowAddCombatantModal,
+    isBattleStarted,
   } = useLiveCockpitStudioStore();
 
   return (
@@ -155,7 +156,7 @@ export const CombatInitiativePanel: React.FC<CombatInitiativePanelProps> = ({
             <div className="flex gap-2">
               <button
                 onClick={handlePrevTurn}
-                disabled={combatants.length === 0 || (currentTurnIndex === 0 && roundCount === 1)}
+                disabled={!isBattleStarted || combatants.length === 0 || (currentTurnIndex === 0 && roundCount === 1)}
                 className="py-1.5 px-3 bg-[#121824] hover:bg-[#1e293b] disabled:opacity-40 disabled:cursor-not-allowed border border-[#2a3449] text-slate-300 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1"
                 title="Voltar Turno Anterior"
               >
@@ -165,11 +166,11 @@ export const CombatInitiativePanel: React.FC<CombatInitiativePanelProps> = ({
 
               <button
                 onClick={handleNextTurn}
-                disabled={combatants.length === 0}
+                disabled={!isBattleStarted || combatants.length === 0}
                 className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:bg-[#1f2738] disabled:text-slate-600 text-slate-950 font-black text-xs rounded-xl shadow transition-all flex items-center justify-center gap-1.5"
               >
                 <span>
-                  AVANÇAR TURNO ({combatants.length > 0 ? currentTurnIndex + 1 : 0}/{combatants.length})
+                  {!isBattleStarted ? 'BATALHA NÃO INICIADA' : `AVANÇAR TURNO (${combatants.length > 0 ? currentTurnIndex + 1 : 0}/${combatants.length})`}
                 </span>
                 <ChevronRight className="w-4 h-4" />
               </button>

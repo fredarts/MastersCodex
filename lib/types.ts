@@ -134,6 +134,8 @@ export interface GameScene {
   placementZoneRadius?: number;
   sceneImages?: SceneImage[];
   activeImageIndex?: number;
+  isBattleStarted?: boolean;
+  battleStartSnapshot?: Combatant[];
   createdAt?: string;
   updatedAt?: string;
 }
