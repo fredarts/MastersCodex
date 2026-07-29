@@ -8,6 +8,7 @@ import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useBattleGridState } from '@/lib/hooks/useBattleGridState';
 import { useRealtimeBattleSync } from '@/lib/hooks/useRealtimeBattleSync';
+import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { applySceneEnvironment } from './battle-3d/BattleEnvironment';
 import { setupCameraAndOrbit, DEFAULT_CAMERA_PRESETS } from './battle-3d/BattleCameraControls';
 import { createTokenMesh, updateTokenMeshState, TokenMeshOptions } from './battle-3d/Token3DMesh';
@@ -23,7 +24,7 @@ export interface BattleGrid3DProps {
   combatants: Combatant[];
   currentTurnIndex?: number;
   selectedTargetId?: string;
-  onSelectTarget?: (c: Combatant) => void;
+  onSelectTarget?: (c: Combatant | undefined) => void;
   onSelectCombatant?: (c: Combatant) => void;
   onUpdateCombatants?: (updated: Combatant[]) => void;
   interactive?: boolean;
@@ -102,6 +103,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     spellTargetPosition,
     setSpellTargetPosition,
   } = useLiveCockpit();
+
+  const pendingAttack = useLiveCockpitStudioStore((state) => state.pendingAttack);
 
   const handleRemoteTokenMove = useCallback((tokenKey: string, position: { x: number; y: number; z: number }, rotation?: number) => {
     updateTokenPosition3D(tokenKey, position.x, position.z);
@@ -410,7 +413,10 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     setLocalPositions,
     renderMovementHighlights,
     renderDragTrail,
-    getCombatantPos
+    getCombatantPos,
+    pendingAttack,
+    targetIdState,
+    propOnAttackTarget
   });
 
   useEffect(() => {
@@ -426,7 +432,10 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       setLocalPositions,
       renderMovementHighlights,
       renderDragTrail,
-      getCombatantPos
+      getCombatantPos,
+      pendingAttack,
+      targetIdState,
+      propOnAttackTarget
     };
   });
 
@@ -752,12 +761,36 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
               const currentActor = activeCombatants[turnIdx];
               if (currentActor && clicked.id !== currentActor.id) {
+                const { pendingAttack: currentPending, targetIdState: currentTargetId, propOnAttackTarget: attackCb } = callbacksRef.current;
+                if (currentTargetId === clicked.id) {
+                  isDraggingRef.current = false;
+                  draggedTokenKeyRef.current = null;
+                  controls.enabled = true;
+                  setTargetIdState(undefined);
+                  if (onSelT) onSelT(undefined);
+                } else if (currentPending) {
+                  isDraggingRef.current = false;
+                  draggedTokenKeyRef.current = null;
+                  controls.enabled = true;
+                  setTargetIdState(clicked.id);
+                  if (onSelT) onSelT(clicked);
+                }
+              }
+            } else {
+              const { pendingAttack: currentPending, targetIdState: currentTargetId, propOnAttackTarget: attackCb } = callbacksRef.current;
+              if (currentTargetId === clicked.id) {
+                isDraggingRef.current = false;
+                draggedTokenKeyRef.current = null;
+                controls.enabled = true;
+                setTargetIdState(undefined);
+                if (onSelT) onSelT(undefined);
+              } else if (currentPending) {
+                isDraggingRef.current = false;
+                draggedTokenKeyRef.current = null;
+                controls.enabled = true;
                 setTargetIdState(clicked.id);
                 if (onSelT) onSelT(clicked);
               }
-            } else {
-              setTargetIdState(clicked.id);
-              if (onSelT) onSelT(clicked);
             }
           }
         }
@@ -919,7 +952,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     const handlePointerUp = () => {
       if (isDraggingRef.current) {
         const key = draggedTokenKeyRef.current;
-        if (key && !isPlacementPhase) {
+        if (key) {
           const group = tokenMeshMapRef.current.get(key);
           if (group) {
             const snappedX = group.position.x;
@@ -928,23 +961,38 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
             const { combatants: activeCombatants } = callbacksRef.current;
             const targetC = activeCombatants.find((c) => c.id === key || c.name === key || (c.id || c.name) === key);
             if (targetC) {
-              const trailSquares = Math.max(0, dragTrailRef.current.length - 1);
-              const trailCostMeters = trailSquares * 1.5;
+              if (isPlacementPhase) {
+                // Placement phase: only update position without tracking movement cost
+                const nextCombatants = activeCombatants.map((c) => {
+                  if (c.id === targetC.id || c.name === targetC.name) {
+                    return { ...c, x: snappedX, z: snappedZ };
+                  }
+                  return c;
+                });
 
-              const nextCombatants = activeCombatants.map((c) => {
-                if (c.id === targetC.id || c.name === targetC.name) {
-                  return {
-                    ...c,
-                    x: snappedX,
-                    z: snappedZ,
-                    movementUsed: (c.movementUsed || 0) + trailCostMeters,
-                  };
+                if (callbacksRef.current.onUpdateCombatants) {
+                  callbacksRef.current.onUpdateCombatants(nextCombatants);
                 }
-                return c;
-              });
+              } else {
+                // Combat phase: track movement cost via trail
+                const trailSquares = Math.max(0, dragTrailRef.current.length - 1);
+                const trailCostMeters = trailSquares * 1.5;
 
-              if (callbacksRef.current.onUpdateCombatants) {
-                callbacksRef.current.onUpdateCombatants(nextCombatants);
+                const nextCombatants = activeCombatants.map((c) => {
+                  if (c.id === targetC.id || c.name === targetC.name) {
+                    return {
+                      ...c,
+                      x: snappedX,
+                      z: snappedZ,
+                      movementUsed: (c.movementUsed || 0) + trailCostMeters,
+                    };
+                  }
+                  return c;
+                });
+
+                if (callbacksRef.current.onUpdateCombatants) {
+                  callbacksRef.current.onUpdateCombatants(nextCombatants);
+                }
               }
             }
           }

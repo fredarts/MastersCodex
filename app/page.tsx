@@ -257,6 +257,7 @@ function MainApp() {
                 <LiveCockpitStudio
                   onGenerateLoot={handleGenerateLootForCombat}
                   onOpenPlayerView={() => setIsPlayerViewOpen(true)}
+                  onOpenAudioPanel={() => setIsAudioModalOpen(true)}
                 />
               )}
 
@@ -340,9 +341,6 @@ function MainApp() {
           </div>
         </div>
       )}
-
-      {/* Bottom Audio Control Footer */}
-      {activeTab === 'live_cockpit' && <AudioMaestro onOpenAudioPanel={() => setIsAudioModalOpen(true)} />}
 
       {/* Global Compendium Search Modal (`Ctrl + Space`) */}
       <CompendiumModal

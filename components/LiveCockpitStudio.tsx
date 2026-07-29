@@ -17,6 +17,7 @@ import { LiveVisualMirror } from '@/components/live-cockpit/LiveVisualMirror';
 import { CombatInitiativePanel } from '@/components/live-cockpit/CombatInitiativePanel';
 import { FloatingDiceRollerHUD } from '@/components/live-cockpit/FloatingDiceRollerHUD';
 import { LiveCockpitModalManager } from '@/components/live-cockpit/LiveCockpitModalManager';
+import { AudioMaestro } from '@/components/AudioMaestro';
 
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { useCombatEngine } from '@/lib/hooks/useCombatEngine';
@@ -30,11 +31,13 @@ import { BattleSetupMode } from '@/components/live-cockpit/BattleSetupModal';
 interface LiveCockpitStudioProps {
   onGenerateLoot: () => void;
   onOpenPlayerView: () => void;
+  onOpenAudioPanel: () => void;
 }
 
 export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   onGenerateLoot,
   onOpenPlayerView,
+  onOpenAudioPanel,
 }) => {
   const { worldEntities } = useWorld();
   const { activeCampaign, campaignMembers, createFeedEvent } = useCampaign();
@@ -236,7 +239,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   // save effect → updateScene → loop. Using the ref for reads breaks this cycle.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const scene = activeSceneRef.current;
+    const scene = activeScene;
     if (!scene) return;
 
     if (scene.bgmCategory) {
@@ -279,7 +282,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         initializeFromCombatants(sorted);
       }
     }
-  }, [activeScene?.id, activeScene?.isBattleStarted, setCombatants, initializeFromCombatants, setCurrentTurnIndex, setRoundCount, setIsCombatActive, setActiveBgmCategory, setLiveTimeOfDayHour, setLiveHasFog, setLiveHasRain, setLiveFloorTextureUrl, setSelectedTimeOfDay, setIsBattleStarted, broadcastToPlayerView]);
+  }, [activeScene?.id, activeScene?.combatants, activeScene?.isBattleStarted, setCombatants, initializeFromCombatants, setCurrentTurnIndex, setRoundCount, setIsCombatActive, setActiveBgmCategory, setLiveTimeOfDayHour, setLiveHasFog, setLiveHasRain, setLiveFloorTextureUrl, setSelectedTimeOfDay, setIsBattleStarted, broadcastToPlayerView]);
 
 
 
@@ -529,13 +532,15 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     mod: number,
     actorCombatant?: Combatant,
     actionDesc?: string,
-    forceNoTarget: boolean = false
+    forceNoTarget: boolean = false,
+    explicitTarget?: Combatant
   ): boolean => {
     const currentActor = actorCombatant || combatants[currentTurnIndex];
-    const target = combatants.find((c) => c.id === selectedTargetId);
+    const target = explicitTarget || combatants.find((c) => c.id === selectedTargetId);
 
     if (title.startsWith('Ataque') && !target && !forceNoTarget) {
       setPendingAttack({ title, mod, actorCombatant: currentActor, actionDesc });
+      toast.info(`Mirando ${title}: Selecione o alvo no Grid 3D.`);
       return false;
     }
 
@@ -1094,9 +1099,12 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       dmgDesc = act.desc;
     }
 
-    const rolled = rollDice(`Ataque: ${atkName}`, bonus, currentActor, dmgDesc);
+    const rolled = rollDice(`Ataque: ${atkName}`, bonus, currentActor, dmgDesc, false, target);
     if (rolled) {
       deductAction(currentActor.id, 'action');
+      setPendingAttack(null);
+      setSelectedTargetId(undefined);
+      broadcastToPlayerView({ targetId: undefined });
     }
   };
 
@@ -1139,7 +1147,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   };
 
   return (
-    <div className="flex h-screen w-full bg-[#0a0d14] overflow-hidden text-slate-100 font-sans">
+    <div className="flex h-full w-full bg-[#0a0d14] overflow-hidden text-slate-100 font-sans">
       {/* 1. Left Sidebar: Cenas/Timeline */}
       <SceneTimelinePanel onFireSceneLive={handleFireSceneLive} />
 
@@ -1154,10 +1162,13 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         />
 
         <div className="flex-1 flex min-h-0 relative">
-          <LiveVisualMirror
-            onSlideChange={handleSlideChange}
-            onAttackFromWidget={handleAttackFromWidget}
-          />
+          <div className="flex-1 flex flex-col min-w-0">
+            <LiveVisualMirror
+              onSlideChange={handleSlideChange}
+              onAttackFromWidget={handleAttackFromWidget}
+            />
+            <AudioMaestro onOpenAudioPanel={onOpenAudioPanel} />
+          </div>
 
           {/* 3. Right Sidebar: Iniciativa/Combate */}
           <CombatInitiativePanel
@@ -1187,6 +1198,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
           handleConfirmBattleSetup(options.setupMode, options.timeOfDay)
         }
         handleConfirmMagicMissiles={handleConfirmMagicMissiles}
+        handleAttackFromWidget={handleAttackFromWidget}
       />
     </div>
   );

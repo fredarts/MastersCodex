@@ -15,12 +15,14 @@ interface LiveCockpitModalManagerProps {
   campaignMembers: any[];
   handleConfirmBattleSetup: (options: any) => void;
   handleConfirmMagicMissiles: () => void;
+  handleAttackFromWidget?: (target: Combatant) => void;
 }
 
 export const LiveCockpitModalManager: React.FC<LiveCockpitModalManagerProps> = ({
   campaignMembers,
   handleConfirmBattleSetup,
   handleConfirmMagicMissiles,
+  handleAttackFromWidget,
 }) => {
   const {
     combatants,
@@ -137,34 +139,33 @@ export const LiveCockpitModalManager: React.FC<LiveCockpitModalManagerProps> = (
         </div>
       )}
 
-      {/* Target Required Warning Modal */}
-      {pendingAttack && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0f141d] border-2 border-rose-500/50 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3 text-rose-400">
-              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center font-black text-lg">
-                🎯
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-slate-100">Selecione um Alvo no Grid</h4>
-                <p className="text-xs text-slate-400">
-                  Para realizar {pendingAttack.title}, você precisa definir o alvo primeiro.
-                </p>
-              </div>
+      {/* Target Confirmation Overlay */}
+      {pendingAttack && selectedTargetId && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-bottom-5 fade-in duration-200">
+          <div className="bg-slate-900 border border-rose-500/50 shadow-2xl shadow-rose-500/20 rounded-2xl p-4 flex items-center gap-4">
+            <div className="text-rose-400 font-bold text-sm">
+              Confirmar <span className="text-slate-100">{pendingAttack.title}</span> contra o alvo selecionado?
             </div>
-
-            <div className="p-3 bg-[#121824] border border-[#2a3449] rounded-xl text-xs text-slate-300 leading-relaxed">
-              💡 <strong>Como selecionar:</strong> Clique sobre qualquer criatura no{' '}
-              <strong>Grid 3D</strong> ou na lista de combate. Um círculo de mira vermelho aparecerá
-              sobre o alvo!
-            </div>
-
-            <div className="flex flex-col gap-2 pt-1">
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => setPendingAttack(null)}
-                className="w-full py-2 bg-rose-600 hover:bg-rose-500 text-slate-950 font-black text-xs rounded-xl transition-all shadow"
+                onClick={() => {
+                  setSelectedTargetId(undefined);
+                  broadcastToPlayerView({ targetId: undefined });
+                }}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-colors"
               >
-                🎯 Entendi, vou selecionar no Grid!
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const target = combatants.find(c => c.id === selectedTargetId);
+                  if (target && handleAttackFromWidget) {
+                    handleAttackFromWidget(target);
+                  }
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-slate-100 text-xs font-bold rounded-xl transition-colors shadow-lg shadow-rose-600/20"
+              >
+                Atacar!
               </button>
             </div>
           </div>

@@ -119,6 +119,7 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
     
     const updatedScene = {
       ...activeScene,
+      combatants: restoredCombatants,
       isBattleStarted: false
     };
     
@@ -183,8 +184,8 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                   currentTurnIndex={currentTurnIndex}
                   selectedTargetId={selectedTargetId}
                   onSelectTarget={(target) => {
-                    setSelectedTargetId(target.id);
-                    broadcastToPlayerView({ targetId: target.id });
+                    setSelectedTargetId(target?.id);
+                    broadcastToPlayerView({ targetId: target?.id });
                   }}
                   onAttackTarget={onAttackFromWidget}
                   interactive={true}

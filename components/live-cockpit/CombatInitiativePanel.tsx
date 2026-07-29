@@ -124,8 +124,8 @@ export const CombatInitiativePanel: React.FC<CombatInitiativePanelProps> = ({
           activeTarget={combatants.find((c) => c.id === selectedTargetId)}
           onClearLogs={() => setCombatLogs([])}
           onSelectTarget={(target) => {
-            setSelectedTargetId(target.id);
-            broadcastToPlayerView({ targetId: target.id });
+            setSelectedTargetId(target?.id);
+            broadcastToPlayerView({ targetId: target?.id });
           }}
         />
       ) : !isCombatActive && combatants.length === 0 ? (

@@ -41,6 +41,7 @@ import { normalizeImageUrl, isYouTubeUrl, getYouTubeThumbnailUrl } from '@/lib/i
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
 import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
+import { useBattleGridStore } from '@/lib/stores/useBattleGridStore';
 
 interface SessionStudioProps {
   onEquipScene: (scene: GameScene) => void;
@@ -217,6 +218,20 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
         ? 'sunset'
         : 'day';
 
+    // Merge 3D grid positions/rotations into combatants before saving
+    const { tokenPositions3D, tokenRotations3D } = useBattleGridStore.getState();
+    const combatantsWithPositions = sceneCombatants.map((c) => {
+      const key = c.id || c.name;
+      const pos = tokenPositions3D[key];
+      const rot = tokenRotations3D[key];
+      return {
+        ...c,
+        x: pos !== undefined ? pos.x : c.x,
+        z: pos !== undefined ? pos.z : c.z,
+        rotation: rot !== undefined ? rot : c.rotation,
+      };
+    });
+
     const updated: GameScene = {
       ...selectedScene,
       title,
@@ -229,7 +244,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       npcAudioUrl: npcAudioUrl || undefined,
       sensoryText: sensoryText || undefined,
       secretNotes: secretNotes || undefined,
-      combatants: sceneCombatants,
+      combatants: combatantsWithPositions,
       timeOfDay: computedPreset,
       timeOfDayHour,
       hasFog,
@@ -240,6 +255,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
 
     await updateScene(updated);
     setSelectedScene(updated);
+    setSceneCombatants(combatantsWithPositions);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
   };
@@ -490,7 +506,26 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => onEquipScene(selectedScene)}
+                    onClick={() => {
+                      if (selectedScene) {
+                        // Merge latest 3D positions/rotations into scene combatants
+                        const { tokenPositions3D, tokenRotations3D } = useBattleGridStore.getState();
+                        const mergedCombatants = (selectedScene.combatants || []).map((c) => {
+                          const key = c.id || c.name;
+                          const pos = tokenPositions3D[key];
+                          const rot = tokenRotations3D[key];
+                          return {
+                            ...c,
+                            x: pos !== undefined ? pos.x : c.x,
+                            z: pos !== undefined ? pos.z : c.z,
+                            rotation: rot !== undefined ? rot : c.rotation,
+                          };
+                        });
+                        const sceneWithPositions = { ...selectedScene, combatants: mergedCombatants };
+                        setActiveScene(sceneWithPositions);
+                        onEquipScene(sceneWithPositions);
+                      }
+                    }}
                     className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-slate-950 font-black rounded-xl text-xs shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
                     title="Disparar esta cena para a visualização dos jogadores"
                   >
