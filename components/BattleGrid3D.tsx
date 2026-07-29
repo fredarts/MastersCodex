@@ -786,7 +786,9 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
           const currentPos = spellTargetPositionRef.current || { x: 9999, z: 9999 };
           const dist = Math.sqrt((nextX - currentPos.x) ** 2 + (nextZ - currentPos.z) ** 2);
           if (dist > 0.3) {
-            setSpellTargetPosition({ x: nextX, z: nextZ });
+            const nextPos = { x: nextX, z: nextZ };
+            spellTargetPositionRef.current = nextPos;
+            setSpellTargetPosition(nextPos);
           }
         }
         return;
