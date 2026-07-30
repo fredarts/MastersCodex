@@ -6,6 +6,9 @@ import { useWorld } from '@/lib/hooks/useWorld';
 import { WorldEntityCategory, WorldEntity } from '@/lib/types';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
 import { storageService } from '@/lib/services/storageService';
+import { isSupabaseConfigured } from '@/lib/supabase';
+import { useUserSettings } from '@/lib/hooks/useUserSettings';
+import { WorldEntityAiGeneratorModal } from '@/components/WorldEntityAiGeneratorModal';
 
 interface WorldEntityModalProps {
   isOpen: boolean;
@@ -21,6 +24,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   editingEntity = null,
 }) => {
   const { activeWorld, createWorldEntity, updateWorldEntity } = useWorld();
+  const { settings } = useUserSettings();
   const [category, setCategory] = useState<WorldEntityCategory>(defaultCategory);
   const [name, setName] = useState('');
   const [subType, setSubType] = useState('');
@@ -42,6 +46,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
   useEffect(() => {
     if (editingEntity) {
@@ -96,7 +101,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Nano Banana / Gemini AI Image Generator
+  // IA Image Generator (Gemini/Nano Banana ou modelo selecionado)
   const handleGenerateAiImage = async () => {
     // Description validation check as requested
     if (!shortDesc.trim() && !fullContent.trim()) {
@@ -111,28 +116,41 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       const categoryName = getCategoryTitle().replace('Adicionar Novo ', '').replace('Adicionar Nova ', '');
       
       // Construct rich prompt
-      const promptText = `High detailed fantasy RPG concept art of ${name.trim() || categoryName}: ${baseDescription}. Genre: ${activeWorld.genre}. ${extraPrompt.trim() ? `Additional style details: ${extraPrompt.trim()}` : 'Digital painting, atmospheric lighting, 8k resolution, cinematic composition.'}`;
+      const promptText = `High detailed fantasy RPG concept art of ${name.trim() || categoryName}: ${baseDescription}. Genre: ${activeWorld.genre}. ${extraPrompt.trim() ? `Additional style details: ${extraPrompt.trim()}` : 'Digital painting, atmospheric lighting, 8k resolution, cinematic composition, white background.'}`;
       
-      // Pollinations / AI Image endpoint URL generator
-      const encodedPrompt = encodeURIComponent(promptText);
-      const randomSeed = Math.floor(Math.random() * 1000000);
-      const generatedUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&seed=${randomSeed}&nologo=true`;
+      const response = await fetch('/api/ai/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          prompt: promptText,
+          userSettings: settings,
+        }),
+      });
 
-      // Preload image to ensure validity
-      const img = new Image();
-      img.src = generatedUrl;
-      img.onload = () => {
-        setImages((prev) => [...prev, generatedUrl]);
-        setIsGeneratingAiImage(false);
-      };
-      img.onerror = () => {
-        // Fallback demo image if network fails
-        const fallbackUrl = `https://picsum.photos/seed/${randomSeed}/1024/1024`;
-        setImages((prev) => [...prev, fallbackUrl]);
-        setIsGeneratingAiImage(false);
-      };
-    } catch (err) {
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Falha ao gerar imagem.');
+
+      const base64Data = data.base64;
+      let finalUrl = `data:image/jpeg;base64,${base64Data}`;
+
+      if (isSupabaseConfigured()) {
+        try {
+          const res = await fetch(finalUrl);
+          const blob = await res.blob();
+          const file = new File([blob], `${categoryName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.jpg`, { type: 'image/jpeg' });
+          const publicUrl = await storageService.uploadAsset(file, 'avatars');
+          finalUrl = publicUrl;
+        } catch (uploadErr) {
+          console.warn('Failed to upload entity image, falling back to base64', uploadErr);
+        }
+      }
+
+      setImages((prev) => [...prev, finalUrl]);
+
+    } catch (err: any) {
       console.error('Failed to generate AI image', err);
+      setAiWarningMessage(err.message || 'Erro ao gerar imagem.');
+    } finally {
       setIsGeneratingAiImage(false);
     }
   };
@@ -379,7 +397,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 z-50 animate-fade-in select-none">
       {/* Widescreen PC Modal Container */}
-      <div className="bg-[#121722] border-2 border-amber-500/50 rounded-2xl w-full max-w-5xl lg:max-w-6xl xl:max-w-7xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+      <form onSubmit={handleSubmit} className="bg-[#121722] border-2 border-amber-500/50 rounded-2xl w-full max-w-5xl lg:max-w-6xl xl:max-w-7xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Modal Header */}
         <div className="bg-gradient-to-r from-[#161c28] via-[#1a2234] to-[#0f141d] px-6 py-4 border-b border-[#2a3449] flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -393,22 +411,53 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
               <h3 className="text-lg font-bold text-slate-100 mt-0.5">{getCategoryTitle()}</h3>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-100 hover:bg-[#2a3449] rounded-xl transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2.5 bg-[#0f141d] hover:bg-[#1f2738] text-slate-300 text-xs font-bold rounded-xl transition-all"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{editingEntity ? '✓ Salvar Alterações' : getSubmitButtonText()}</span>
+            </button>
+            <div className="h-8 w-px bg-[#2a3449] mx-1"></div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-slate-100 hover:bg-[#2a3449] rounded-xl transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Category Dropdown Selector */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Category Dropdown Selector & AI Button */}
           <div>
-            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-amber-400" />
-              <span>Categoria de Worldbuilding:</span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                <Layers className="w-4 h-4 text-amber-400" />
+                <span>Categoria de Worldbuilding:</span>
+              </label>
+              
+              {/* AI Auto-Fill Button */}
+              <button
+                type="button"
+                onClick={() => setIsAiModalOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-600/20 to-indigo-600/20 hover:from-purple-600/40 hover:to-indigo-600/40 border border-purple-500/30 hover:border-purple-500/60 text-purple-300 text-xs font-bold rounded-lg transition-all shadow-inner group"
+              >
+                <Wand2 className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
+                <span>Gerar Textos com IA</span>
+              </button>
+            </div>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value as WorldEntityCategory)}
@@ -675,26 +724,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
               </div>
             )}
           </div>
-
-          {/* Modal Footer Controls */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#2a3449]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2.5 bg-[#0f141d] hover:bg-[#1f2738] text-slate-300 text-xs font-bold rounded-xl transition-all"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>{editingEntity ? '✓ Salvar Alterações' : getSubmitButtonText()}</span>
-            </button>
-          </div>
-        </form>
+        </div>
 
         {/* Lightbox / Zoom Carousel Modal */}
         <ImageLightboxModal
@@ -703,7 +733,28 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
           images={images}
           initialIndex={lightboxIndex}
         />
-      </div>
+        
+        {/* AI Entity Generator Modal */}
+        <WorldEntityAiGeneratorModal
+          isOpen={isAiModalOpen}
+          onClose={() => setIsAiModalOpen(false)}
+          categoryContext={{
+            categoryTitle: getCategoryTitle(),
+            namePlaceholder: getNamePlaceholder(),
+            attr1Label: getAttrLabel1(),
+            attr2Label: getAttrLabel2()
+          }}
+          onApply={(data) => {
+            setName(data.name || name);
+            setSubType(data.subType || subType);
+            setShortDesc(data.shortDesc || shortDesc);
+            setFullContent(data.fullContent || fullContent);
+            setExtraAttr1(data.extraAttr1 || extraAttr1);
+            setExtraAttr2(data.extraAttr2 || extraAttr2);
+            // We do not overwrite images here.
+          }}
+        />
+      </form>
     </div>
   );
 };

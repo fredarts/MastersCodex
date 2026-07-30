@@ -294,90 +294,92 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
           </div>
 
           {/* Right Side Panels: Slideshow & NPC Voice */}
-          <div className="flex flex-row gap-3 shrink-0">
-            
-            {/* Slideshow DM Controls */}
-            {activeScene?.sceneImages && activeScene.sceneImages.length > 1 && (
-              <div className="w-[150px] bg-[#121824] border border-[#2a3449] rounded-xl p-3 flex flex-col gap-3 shadow overflow-hidden">
-                <div className="flex flex-col gap-2 shrink-0">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase font-mono leading-tight">
-                    Controle do Slideshow <br/> ({activeImageIndex + 1} de {activeScene.sceneImages.length})
-                  </span>
-                  <div className="flex gap-1.5 font-sans w-full">
-                    <button
-                      onClick={async () => {
-                        const prevIdx = (activeImageIndex - 1 + activeScene.sceneImages!.length) % activeScene.sceneImages!.length;
-                        await onSlideChange(prevIdx);
-                      }}
-                      className="flex-1 py-1 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] rounded text-[10px] font-bold text-amber-400 cursor-pointer"
-                    >
-                      Ant
-                    </button>
-                    <button
-                      onClick={async () => {
-                        const nextIdx = (activeImageIndex + 1) % activeScene.sceneImages!.length;
-                        await onSlideChange(nextIdx);
-                      }}
-                      className="flex-1 py-1 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] rounded text-[10px] font-bold text-amber-400 cursor-pointer"
-                    >
-                      Próx
-                    </button>
+          {liveDisplayMode === 'artwork' && (
+            <div className="flex flex-row gap-3 shrink-0">
+              
+              {/* Slideshow DM Controls */}
+              {activeScene?.sceneImages && activeScene.sceneImages.length > 1 && (
+                <div className="w-[150px] bg-[#121824] border border-[#2a3449] rounded-xl p-3 flex flex-col gap-3 shadow overflow-hidden">
+                  <div className="flex flex-col gap-2 shrink-0">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase font-mono leading-tight">
+                      Controle do Slideshow <br/> ({activeImageIndex + 1} de {activeScene.sceneImages.length})
+                    </span>
+                    <div className="flex gap-1.5 font-sans w-full">
+                      <button
+                        onClick={async () => {
+                          const prevIdx = (activeImageIndex - 1 + activeScene.sceneImages!.length) % activeScene.sceneImages!.length;
+                          await onSlideChange(prevIdx);
+                        }}
+                        className="flex-1 py-1 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] rounded text-[10px] font-bold text-amber-400 cursor-pointer"
+                      >
+                        Ant
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const nextIdx = (activeImageIndex + 1) % activeScene.sceneImages!.length;
+                          await onSlideChange(nextIdx);
+                        }}
+                        className="flex-1 py-1 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] rounded text-[10px] font-bold text-amber-400 cursor-pointer"
+                      >
+                        Próx
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Thumbnails list (Vertical) */}
+                  <div className="flex flex-col gap-2 overflow-y-auto py-1 custom-scrollbar flex-1 min-h-0 pr-1">
+                    {activeScene.sceneImages.map((imgObj, idx) => {
+                      const isSelected = idx === activeImageIndex;
+                      return (
+                        <button
+                          key={imgObj.id}
+                          onClick={async () => await onSlideChange(idx)}
+                          className={`relative w-full aspect-video rounded border overflow-hidden shrink-0 transition-all cursor-pointer ${
+                            isSelected ? 'border-amber-400 ring-1 ring-amber-500/40 scale-[1.02]' : 'border-[#2a3449] hover:border-slate-500'
+                          }`}
+                        >
+                          {isYouTubeUrl(imgObj.imageUrl) ? (
+                            <img src={getYouTubeThumbnailUrl(imgObj.imageUrl) || ''} className="w-full h-full object-cover" />
+                          ) : imgObj.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(imgObj.imageUrl) ? (
+                            <video src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" muted playsInline />
+                          ) : (
+                            <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" />
+                          )}
+                          <span className="absolute bottom-1 right-1 bg-black/80 text-[10px] font-bold px-1.5 rounded text-white font-mono backdrop-blur-sm">
+                            {idx + 1}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
+              )}
 
-                {/* Thumbnails list (Vertical) */}
-                <div className="flex flex-col gap-2 overflow-y-auto py-1 custom-scrollbar flex-1 min-h-0 pr-1">
-                  {activeScene.sceneImages.map((imgObj, idx) => {
-                    const isSelected = idx === activeImageIndex;
-                    return (
-                      <button
-                        key={imgObj.id}
-                        onClick={async () => await onSlideChange(idx)}
-                        className={`relative w-full aspect-video rounded border overflow-hidden shrink-0 transition-all cursor-pointer ${
-                          isSelected ? 'border-amber-400 ring-1 ring-amber-500/40 scale-[1.02]' : 'border-[#2a3449] hover:border-slate-500'
-                        }`}
-                      >
-                        {isYouTubeUrl(imgObj.imageUrl) ? (
-                          <img src={getYouTubeThumbnailUrl(imgObj.imageUrl) || ''} className="w-full h-full object-cover" />
-                        ) : imgObj.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(imgObj.imageUrl) ? (
-                          <video src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" muted playsInline />
-                        ) : (
-                          <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" />
-                        )}
-                        <span className="absolute bottom-1 right-1 bg-black/80 text-[10px] font-bold px-1.5 rounded text-white font-mono backdrop-blur-sm">
-                          {idx + 1}
-                        </span>
-                      </button>
-                    );
-                  })}
+              {/* NPC Voice Trigger Box */}
+              <div className="w-[140px] bg-[#121824] border border-[#2a3449] rounded-xl p-3 flex flex-col gap-2 shadow h-fit shrink-0">
+                <div className="flex flex-col gap-0.5">
+                  <div className="text-[10px] font-bold text-cyan-400 uppercase font-mono flex items-center gap-1">
+                    <Mic className="w-3 h-3" /> Voz de NPC
+                  </div>
+                  <div className="text-xs font-bold text-slate-200 truncate" title={activeScene?.npcName || 'Nenhum NPC'}>
+                    {activeScene?.npcName || 'Nenhum NPC'}
+                  </div>
                 </div>
+                <button
+                  disabled={!activeScene?.npcAudioUrl}
+                  onClick={() => setPlayingNpcVoice(!playingNpcVoice)}
+                  className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    activeScene?.npcAudioUrl
+                      ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
+                      : 'bg-[#1a2234] text-slate-600 cursor-not-allowed'
+                  }`}
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  <span>{playingNpcVoice ? 'Pausar' : 'Tocar'}</span>
+                </button>
               </div>
-            )}
-
-            {/* NPC Voice Trigger Box */}
-            <div className="w-[140px] bg-[#121824] border border-[#2a3449] rounded-xl p-3 flex flex-col gap-2 shadow h-fit shrink-0">
-              <div className="flex flex-col gap-0.5">
-                <div className="text-[10px] font-bold text-cyan-400 uppercase font-mono flex items-center gap-1">
-                  <Mic className="w-3 h-3" /> Voz de NPC
-                </div>
-                <div className="text-xs font-bold text-slate-200 truncate" title={activeScene?.npcName || 'Nenhum NPC'}>
-                  {activeScene?.npcName || 'Nenhum NPC'}
-                </div>
-              </div>
-              <button
-                disabled={!activeScene?.npcAudioUrl}
-                onClick={() => setPlayingNpcVoice(!playingNpcVoice)}
-                className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  activeScene?.npcAudioUrl
-                    ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
-                    : 'bg-[#1a2234] text-slate-600 cursor-not-allowed'
-                }`}
-              >
-                <Volume2 className="w-3.5 h-3.5" />
-                <span>{playingNpcVoice ? 'Pausar' : 'Tocar'}</span>
-              </button>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
