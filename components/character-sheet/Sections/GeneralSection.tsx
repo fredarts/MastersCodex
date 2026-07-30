@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CharacterSheet } from '@/lib/types';
 import { DND_ALIGNMENTS, DND_BACKGROUNDS, DND_CLASSES, DND_RACES } from '@/lib/dnd5e-data';
 import { applyClassPreset, applyLevelChange, applyRacePreset } from '@/lib/dnd5e-calculator';
@@ -7,6 +7,7 @@ import { CHARACTER_MODELS_3D, getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { storageService } from '@/lib/services/storageService';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { Model3DViewer } from '../Model3DViewer';
+import { LevelUpModal } from '../Modals/LevelUpModal';
 
 interface GeneralSectionProps {
   sheet: CharacterSheet;
@@ -34,13 +35,32 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
     });
   };
 
+  const [levelUpTarget, setLevelUpTarget] = useState<number | null>(null);
+
   const handleLevelChange = (newLevel: number) => {
-    const updated = applyLevelChange(sheet, newLevel);
-    onChange(updated);
+    if (newLevel > sheet.level) {
+      setLevelUpTarget(newLevel);
+    } else {
+      const updated = applyLevelChange(sheet, newLevel);
+      onChange(updated);
+    }
   };
 
   return (
     <div className="space-y-6 pb-20 animate-fade-in select-none">
+      {levelUpTarget !== null && (
+        <LevelUpModal
+          isOpen={true}
+          onClose={() => setLevelUpTarget(null)}
+          sheet={sheet}
+          targetLevel={levelUpTarget}
+          onConfirm={(updated) => {
+            onChange(updated);
+            setLevelUpTarget(null);
+          }}
+        />
+      )}
+
       {/* CARD: FOTO E NOME DO PERSONAGEM */}
       <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-4">
         <div className="flex items-center gap-3">

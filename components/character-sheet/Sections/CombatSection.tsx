@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AdvantageMode, AttributeKey, CharacterSheet, CharacterWeaponAttack, DiceRollEvent } from '@/lib/types';
-import { formatModifier, getAttributeModifier, recalculateSheetDerivedStats, ARMOR_TABLE, calculateArmorClass } from '@/lib/dnd5e-calculator';
-import { executeCheckRoll, executeWeaponAttackRoll } from '@/lib/dnd5e-dice';
+import { formatModifier, getAttributeModifier, recalculateSheetDerivedStats, ARMOR_TABLE, calculateArmorClass, hasClass } from '@/lib/dnd5e-calculator';
+import { executeCheckRoll, executeWeaponAttackRoll, broadcastDiceRoll } from '@/lib/dnd5e-dice';
 import { Shield, Heart, Zap, Crosshair, Plus, Minus, Trash2, Skull, Dices, Lock, Unlock, RotateCcw, CheckCircle2, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { WeaponCompendiumModal } from '../Modals/WeaponCompendiumModal';
 
@@ -39,6 +39,9 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [show4d6Modal, setShow4d6Modal] = useState(false);
   const [rolled4d6Set, setRolled4d6Set] = useState<Record<AttributeKey, Roll4d6Result> | null>(null);
+  const [pendingSmiteAtk, setPendingSmiteAtk] = useState<CharacterWeaponAttack | null>(null);
+  const [pendingAttackRoll, setPendingAttackRoll] = useState<DiceRollEvent | null>(null);
+  const [showSmitePrompt, setShowSmitePrompt] = useState(false);
 
   // Estado da sessão baseline para possibilitar o botão de Resetar
   const [sessionBaseline, setSessionBaseline] = useState<{
@@ -148,7 +151,8 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
     ensureSessionBaseline();
 
     const currentScore = sheet.attributes[attrKey].score;
-    if (currentScore >= 30) return;
+    const currentBase = sheet.attributes[attrKey].baseScore ?? currentScore;
+    if (currentBase >= 15) return;
 
     const updatedSheet: CharacterSheet = {
       ...sheet,
@@ -183,12 +187,22 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
 
   const handleScoreDirectChange = (attrKey: AttributeKey, newScore: number) => {
     ensureSessionBaseline();
-    const safeScore = Math.max(1, Math.min(30, newScore));
+    const currentScore = sheet.attributes[attrKey].score;
+    const currentBase = sheet.attributes[attrKey].baseScore ?? currentScore;
+    const bonus = currentScore - currentBase;
+    
+    // Calculates new base, capped at 15 max invested
+    let newBase = newScore - bonus;
+    if (newBase > 15) newBase = 15;
+    if (newBase < 1) newBase = 1;
+    
+    const safeScore = newBase + bonus;
+
     const updatedSheet = {
       ...sheet,
       attributes: {
         ...sheet.attributes,
-        [attrKey]: { ...sheet.attributes[attrKey], score: safeScore, baseScore: safeScore - (sheet.attributes[attrKey].score - (sheet.attributes[attrKey].baseScore ?? sheet.attributes[attrKey].score)) },
+        [attrKey]: { ...sheet.attributes[attrKey], score: safeScore, baseScore: newBase },
       },
     };
     onChange(recalculateSheetDerivedStats(updatedSheet));
@@ -265,18 +279,220 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
     if (onRoll) onRoll(result);
   };
 
+  const rollWeaponDamage = (atk: CharacterWeaponAttack, isCrit: boolean): DiceRollEvent => {
+    let damageStr = atk.damage;
+    const isMelee = !atk.name.toLowerCase().includes('arco') && 
+                    !atk.name.toLowerCase().includes('besta') && 
+                    !atk.name.toLowerCase().includes('dardo') &&
+                    !(atk.type || '').toLowerCase().includes('distância');
+
+    const isRageActive = sheet.activeClassBuffs?.some(b => b.type === 'rage');
+    let rageBonus = 0;
+    if (isRageActive && isMelee) {
+      if (sheet.level >= 16) rageBonus = 4;
+      else if (sheet.level >= 9) rageBonus = 3;
+      else rageBonus = 2;
+    }
+
+    let damageTotal = 0;
+    let numDice = 1;
+    let diceFaces = 6;
+    let sign = 1;
+    let bonus = 0;
+
+    try {
+      const match = damageStr.match(/(\d+)d(\d+)(?:\s*([+-])\s*(\d+))?/i);
+      if (match) {
+        numDice = parseInt(match[1], 10) || 1;
+        diceFaces = parseInt(match[2], 10) || 6;
+        sign = match[3] === '-' ? -1 : 1;
+        bonus = parseInt(match[4] || '0', 10);
+
+        // Se for crítico, dobra o número de dados
+        const finalNumDice = isCrit ? numDice * 2 : numDice;
+
+        let diceSum = 0;
+        for (let i = 0; i < finalNumDice; i++) {
+          diceSum += Math.floor(Math.random() * diceFaces) + 1;
+        }
+        
+        // Adiciona bônus de dano + bônus de Fúria
+        damageTotal = diceSum + (sign * bonus) + rageBonus;
+        
+        // Atualiza a fórmula exibida no log
+        const totalBonus = (sign * bonus) + rageBonus;
+        damageStr = `${finalNumDice}d${diceFaces}${totalBonus >= 0 ? ' +' : ' '}${totalBonus}`;
+      } else {
+        damageTotal = (parseInt(damageStr, 10) || 1) + rageBonus;
+      }
+    } catch (e) {
+      damageTotal = 1 + rageBonus;
+    }
+
+    const label = isRageActive && isMelee ? `Dano (${atk.name}) + Fúria` : `Dano (${atk.name})`;
+
+    const damageRoll: DiceRollEvent = {
+      id: (Date.now() + 1).toString(),
+      characterId: sheet.id,
+      characterName: sheet.characterName || 'Personagem',
+      avatarUrl: sheet.avatarUrl,
+      rollType: 'damage',
+      label,
+      modifier: 0,
+      total: Math.max(1, damageTotal),
+      damageDice: damageStr,
+      damageType: atk.type || 'Físico',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    };
+
+    broadcastDiceRoll(damageRoll);
+    return damageRoll;
+  };
+
+  const handleResolveSmite = (lvl: number | null) => {
+    if (!pendingSmiteAtk || !pendingAttackRoll) return;
+
+    if (lvl !== null) {
+      // 1. Deduz o slot de magia
+      const slot = sheet.spellSlots[lvl];
+      const updatedSlots = { ...sheet.spellSlots };
+      updatedSlots[lvl] = {
+        ...slot,
+        used: slot.used + 1,
+      };
+
+      // 2. Rola o dano do Smite
+      let diceCount = 1 + lvl;
+      if (pendingAttackRoll.isCrit) diceCount *= 2; // Dobra os dados no crítico!
+      
+      let smiteDmgTotal = 0;
+      for (let i = 0; i < diceCount; i++) {
+        smiteDmgTotal += Math.floor(Math.random() * 8) + 1;
+      }
+
+      const smiteDmgRoll: DiceRollEvent = {
+        id: (Date.now() + 2).toString(),
+        characterId: sheet.id,
+        characterName: sheet.characterName,
+        avatarUrl: sheet.avatarUrl,
+        rollType: 'damage',
+        label: `Destruição Divina (${lvl}º Nível)`,
+        modifier: 0,
+        total: smiteDmgTotal,
+        damageDice: `${diceCount}d8`,
+        damageType: 'Radiante',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      };
+
+      // 3. Rola o dano da arma normal
+      const normalDmgRoll = rollWeaponDamage(pendingSmiteAtk, !!pendingAttackRoll.isCrit);
+
+      // Broadcast e dispara
+      broadcastDiceRoll(smiteDmgRoll);
+
+      if (onRoll) {
+        onRoll(normalDmgRoll);
+        setTimeout(() => onRoll(smiteDmgRoll), 500);
+      }
+
+      // Atualiza a ficha
+      onChange({
+        ...sheet,
+        spellSlots: updatedSlots,
+      });
+    } else {
+      // Apenas rola o dano normal
+      const normalDmgRoll = rollWeaponDamage(pendingSmiteAtk, !!pendingAttackRoll.isCrit);
+      if (onRoll) {
+        onRoll(normalDmgRoll);
+      }
+    }
+
+    // Limpa estado
+    setPendingSmiteAtk(null);
+    setPendingAttackRoll(null);
+    setShowSmitePrompt(false);
+  };
+
   const handleRollWeapon = (atk: CharacterWeaponAttack) => {
-    const { attackRoll, damageRoll } = executeWeaponAttackRoll({
+    // 1. Rola o ataque normalmente
+    const atkModifier = parseInt(atk.atkBonus.replace('+', ''), 10) || 0;
+    const attackRoll = executeCheckRoll({
       sheet,
-      weaponName: atk.name,
-      atkBonusStr: atk.atkBonus,
-      damageStr: atk.damage,
-      damageType: atk.type,
+      label: `Ataque: ${atk.name}`,
+      modifier: atkModifier,
+      rollType: 'attack',
       advantageMode,
     });
+
     if (onRoll) {
       onRoll(attackRoll);
-      setTimeout(() => onRoll(damageRoll), 500);
+    }
+
+    // 2. Verifica se tem Smite preparado na aba de habilidades
+    const smiteBuff = sheet.activeClassBuffs?.find(b => b.type === 'smite');
+    const isMelee = !atk.name.toLowerCase().includes('arco') && 
+                    !atk.name.toLowerCase().includes('besta') && 
+                    !atk.name.toLowerCase().includes('dardo') &&
+                    !(atk.type || '').toLowerCase().includes('distância');
+
+    if (smiteBuff && isMelee) {
+      const updatedBuffs = (sheet.activeClassBuffs || []).filter(b => b.id !== smiteBuff.id);
+      
+      const slotLvl = smiteBuff.spellSlotLevelUsed || 1;
+      let diceCount = 1 + slotLvl;
+      if (attackRoll.isCrit) diceCount *= 2; // Crítico dobra os dados!
+      
+      let smiteDmgTotal = 0;
+      for (let i = 0; i < diceCount; i++) {
+        smiteDmgTotal += Math.floor(Math.random() * 8) + 1;
+      }
+
+      const normalDmgRoll = rollWeaponDamage(atk, !!attackRoll.isCrit);
+      
+      const smiteDmgRoll: DiceRollEvent = {
+        id: (Date.now() + 2).toString(),
+        characterId: sheet.id,
+        characterName: sheet.characterName,
+        avatarUrl: sheet.avatarUrl,
+        rollType: 'damage',
+        label: `Destruição Divina (${slotLvl}º Nível)`,
+        modifier: 0,
+        total: smiteDmgTotal,
+        damageDice: `${diceCount}d8`,
+        damageType: 'Radiante',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      };
+
+      broadcastDiceRoll(smiteDmgRoll);
+      
+      if (onRoll) {
+        setTimeout(() => onRoll(normalDmgRoll), 500);
+        setTimeout(() => onRoll(smiteDmgRoll), 1000);
+      }
+
+      onChange({
+        ...sheet,
+        activeClassBuffs: updatedBuffs,
+      });
+      return;
+    }
+
+    // 3. Caso contrário, se for Paladino e tiver slots de magia e for melee, mostra o prompt interativo (Opção B)
+    const hasAvailableSpellSlots = Object.values(sheet.spellSlots || {}).some(
+      (slot) => slot.total > 0 && slot.used < slot.total
+    );
+
+    if (hasClass(sheet, 'Paladino') && hasAvailableSpellSlots && isMelee) {
+      setPendingSmiteAtk(atk);
+      setPendingAttackRoll(attackRoll);
+      setShowSmitePrompt(true);
+    } else {
+      // Rola dano normal
+      const damageRoll = rollWeaponDamage(atk, !!attackRoll.isCrit);
+      if (onRoll) {
+        setTimeout(() => onRoll(damageRoll), 500);
+      }
     }
   };
 
@@ -426,9 +642,9 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
             const info = ATTRIBUTE_LABELS[attrKey];
             const score = sheet.attributes[attrKey].score;
             const mod = getAttributeModifier(sheet, attrKey);
-            const baselineScore = sessionBaseline?.attributes[attrKey] ?? score;
-            const canDecrease = !isLocked && score > Math.min(baselineScore, 1);
-            const canIncrease = !isLocked && pointsAvailable > 0 && score < 30;
+            const baseScore = sheet.attributes[attrKey].baseScore ?? score;
+            const canDecrease = !isLocked && score > Math.min(sessionBaseline?.attributes[attrKey] ?? score, 1);
+            const canIncrease = !isLocked && pointsAvailable > 0 && baseScore < 15;
 
             return (
               <div
@@ -951,6 +1167,72 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
                   Aplicar à Ficha
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROMPT INTERATIVO PARA DESTRUIÇÃO DIVINA (SMITE) */}
+      {showSmitePrompt && pendingAttackRoll && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85 backdrop-blur-sm animate-fade-in p-4">
+          <div className="bg-[#0d1117] border border-amber-500/40 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <span className="text-xs font-black uppercase text-amber-400 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                Destruição Divina (Divine Smite)
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <div className="bg-[#141b2d] border border-slate-800 rounded-xl p-3 text-center">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">Resultado do Ataque</span>
+                <div className="text-2xl font-mono font-black text-amber-400 my-0.5">
+                  {pendingAttackRoll.total}
+                </div>
+                <span className="text-[10px] text-slate-500">
+                  d20: {pendingAttackRoll.selectedD20} {pendingAttackRoll.modifier >= 0 ? `+${pendingAttackRoll.modifier}` : pendingAttackRoll.modifier}
+                  {pendingAttackRoll.isCrit ? ' (CRÍTICO! 🎯)' : ''}
+                </span>
+              </div>
+
+              <p className="text-[11px] text-slate-300 text-center leading-relaxed">
+                Você acertou o ataque? Se sim, você pode gastar um espaço de magia para causar dano radiante extra.
+              </p>
+
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Espaços Disponíveis:</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {[1, 2, 3, 4, 5].map((lvl) => {
+                    const slot = sheet.spellSlots[lvl];
+                    const hasSlot = slot && slot.total > 0;
+                    const available = slot ? slot.total - slot.used : 0;
+
+                    if (!hasSlot || available <= 0) return null;
+
+                    return (
+                      <button
+                        key={lvl}
+                        type="button"
+                        onClick={() => handleResolveSmite(lvl)}
+                        className="p-2 bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/30 hover:border-amber-500 text-amber-300 rounded-xl text-[10px] font-black text-left flex flex-col items-center justify-center cursor-pointer transition-all"
+                      >
+                        <span className="font-mono">{lvl}º Nível (+{lvl + 1}d8)</span>
+                        <span className="text-[8px] text-amber-400/70">{available} disponíveis</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => handleResolveSmite(null)}
+                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold text-center cursor-pointer transition-colors"
+              >
+                Apenas Dano Normal
+              </button>
             </div>
           </div>
         </div>

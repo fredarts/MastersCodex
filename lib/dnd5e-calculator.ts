@@ -1,5 +1,5 @@
-import { AttributeKey, CharacterSheet, DndSkillKey, SkillProficiencyLevel } from './types';
-import { DND_CLASSES, DND_RACES, SKILL_DEFINITIONS } from './dnd5e-data';
+import { AttributeKey, CharacterSheet, DndSkillKey, SkillProficiencyLevel, ClassFeature, CharacterResource, CharacterClassProgress } from './types';
+import { DND_CLASSES, DND_RACES, SKILL_DEFINITIONS, CLASS_FEATURES_DB } from './dnd5e-data';
 
 /**
  * Retorna o Modificador de Atributo padrão D&D 5e: floor((score - 10) / 2)
@@ -99,6 +99,83 @@ export function calculateSpellAttackBonus(sheet: CharacterSheet): number {
 }
 
 /**
+ * Helpers para Multiclasse
+ */
+export function getCharacterClasses(sheet: CharacterSheet): CharacterClassProgress[] {
+  if (sheet.classes && sheet.classes.length > 0) {
+    return sheet.classes;
+  }
+  return [{ name: sheet.className, level: sheet.level, subclass: sheet.subclass, isPrimary: true }];
+}
+
+export function hasClass(sheet: CharacterSheet, className: string): boolean {
+  return getCharacterClasses(sheet).some(c => c.name === className);
+}
+
+export function getClassLevel(sheet: CharacterSheet, className: string): number {
+  const found = getCharacterClasses(sheet).find(c => c.name === className);
+  return found ? found.level : 0;
+}
+
+/**
+ * Retorna os recursos de classe baseados no nível e atributos do personagem
+ */
+export function getClassResourcesForLevel(
+  sheet: CharacterSheet,
+  totalLevel: number
+): Record<string, CharacterResource> {
+  const resources: Record<string, CharacterResource> = {};
+  
+  const classes = getCharacterClasses(sheet);
+  
+  classes.forEach(c => {
+    if (c.name === 'Bárbaro') {
+      let furiaMax = 2;
+      if (c.level >= 20) furiaMax = 9999;
+      else if (c.level >= 17) furiaMax = 6;
+      else if (c.level >= 12) furiaMax = 5;
+      else if (c.level >= 6) furiaMax = 4;
+      else if (c.level >= 3) furiaMax = 3;
+      
+      resources['furia'] = {
+        name: 'furia',
+        label: 'Fúrias',
+        current: furiaMax,
+        max: furiaMax
+      };
+    } else if (c.name === 'Paladino') {
+      const chaMod = Math.floor(((sheet.attributes.cha?.score || 10) - 10) / 2);
+      const divinoMax = Math.max(1, 1 + chaMod);
+      
+      resources['lay_on_hands'] = {
+        name: 'lay_on_hands',
+        label: 'Mãos Curativas (PVs)',
+        current: 5 * c.level,
+        max: 5 * c.level
+      };
+      
+      resources['sentido_divino'] = {
+        name: 'sentido_divino',
+        label: 'Sentido Divino',
+        current: divinoMax,
+        max: divinoMax
+      };
+      
+      if (c.level >= 3) {
+        resources['canalizar_divindade'] = {
+          name: 'canalizar_divindade',
+          label: 'Canalizar Divindade',
+          current: 1,
+          max: 1
+        };
+      }
+    }
+  });
+  
+  return resources;
+}
+
+/**
  * Aplica autocompletar ao selecionar uma Raça
  */
 export function applyRacePreset(sheet: CharacterSheet, raceName: string, subraceName?: string): CharacterSheet {
@@ -163,6 +240,33 @@ export function applyClassPreset(sheet: CharacterSheet, className: string): Char
   const hitDieVal = parseInt(classData.hitDie.replace('1d', ''), 10) || 8;
   const estimatedMaxHp = hitDieVal + conMod + Math.max(0, sheet.level - 1) * (Math.floor(hitDieVal / 2) + 1 + conMod);
 
+  // Carrega as habilidades da classe
+  const classFeaturesList: ClassFeature[] = [];
+  const db = CLASS_FEATURES_DB[className];
+  if (db) {
+    let idCounter = 1;
+    for (let lvl = 1; lvl <= sheet.level; lvl++) {
+      if (db[lvl]) {
+        db[lvl].forEach(feat => {
+          if (!feat.requiresSubclass || feat.requiresSubclass === sheet.subclass) {
+            classFeaturesList.push({
+              ...feat,
+              id: `${className.toLowerCase()}-${lvl}-${idCounter++}`
+            });
+          }
+        });
+      }
+    }
+  }
+
+  // Prepara o objeto temporário da ficha para obter modificadores corretos
+  const tempSheet: CharacterSheet = {
+    ...sheet,
+    className,
+    level: sheet.level,
+  };
+  const classResources = getClassResourcesForLevel(tempSheet, sheet.level);
+
   return {
     ...sheet,
     className,
@@ -174,34 +278,111 @@ export function applyClassPreset(sheet: CharacterSheet, className: string): Char
     spellcastingAbility: classData.spellcastingAbility || sheet.spellcastingAbility,
     spellcastingClass: classData.spellcastingAbility ? className : sheet.spellcastingClass,
     otherProficienciesAndLanguages: `Proficiências de Armadura: ${classData.armorProficiencies}.\nProficiências de Armas: ${classData.weaponProficiencies}.\n${sheet.otherProficienciesAndLanguages || ''}`.trim(),
+    classFeatures: classFeaturesList,
+    classResources,
+    activeClassBuffs: [],
   };
 }
 
 /**
  * Recalcula a ficha quando o Nível muda
  */
-export function applyLevelChange(sheet: CharacterSheet, level: number): CharacterSheet {
+export function applyLevelChange(sheet: CharacterSheet, level: number, leveledClassName?: string): CharacterSheet {
   const safeLevel = Math.max(1, Math.min(20, level));
-  const classData = DND_CLASSES[sheet.className];
-  const hitDie = classData ? classData.hitDie : '1d8';
+  
+  // Se não informar qual classe subiu, assume que foi a primária (ou a única)
+  const targetClass = leveledClassName || sheet.className;
+  const classData = DND_CLASSES[sheet.className]; // mantem primária pra hitDie inicial se necessário
+  
+  // Calcula array atualizado de classes
+  let classes = getCharacterClasses(sheet);
+  
+  // Atualiza ou adiciona a classe no array
+  const classIndex = classes.findIndex(c => c.name === targetClass);
+  if (classIndex >= 0) {
+    // Para simplificar a lógica do Modal, o LevelUpModal passa o nivel TOTAL.
+    // Precisamos saber quantos níveis a classe subiu? Não necessariamente, podemos apenas usar a soma.
+    // Mas para manter a conta exata, deixaremos o Modal cuidar da array `classes` diretamente.
+    // Portanto, applyLevelChange apenas LÊ o array classes para formatar os HitDice e Slots.
+  }
+  
+  // Para evitar bugs no `LevelUpModal` que passa a ficha já com as classes atualizadas ou não, 
+  // vamos usar getCharacterClasses para ler o estado atual:
+  const currentClasses = getCharacterClasses(sheet);
+  
+  // Backward compatibility: Se a ficha só tem 1 classe e a soma dos níveis não bate com o safeLevel passado
+  // (ex: GeneralSection, testes ou CharacterBuilder alterando o nível diretamente), atualizamos o nível da classe.
+  const totalClassesLevel = currentClasses.reduce((acc, c) => acc + c.level, 0);
+  if (currentClasses.length === 1 && totalClassesLevel !== safeLevel) {
+    currentClasses[0].level = safeLevel;
+  }
 
-  const conMod = getAttributeModifier(sheet, 'con');
-  const hitDieVal = parseInt(hitDie.replace('1d', ''), 10) || 8;
-  const estimatedMaxHp = hitDieVal + conMod + Math.max(0, safeLevel - 1) * (Math.floor(hitDieVal / 2) + 1 + conMod);
+  // Calcula Hit Dice Total e Usado
+  const hitDiceTotal = currentClasses.map(c => `${c.level}${DND_CLASSES[c.name]?.hitDie || '1d8'}`).join(', ');
+  // Preserva os dados usados anteriores se possível, ou formata zerado
+  const hitDiceUsed = currentClasses.map(c => `0${DND_CLASSES[c.name]?.hitDie || '1d8'}`).join(', ');
 
-  // Ajusta Slots de Magia básicos por nível se for classe conjuradora
+  // HP: Apenas calculamos estimated se a ficha não tiver HP ou for nível 1 (Criação)
+  // Caso contrário, respeitamos o maxHp existente (que o Modal atualizou com a rolagem)
+  let newMaxHp = sheet.maxHp;
+  if (!newMaxHp || safeLevel === 1) {
+    const conMod = getAttributeModifier(sheet, 'con');
+    const hitDieVal = parseInt((DND_CLASSES[sheet.className]?.hitDie || '1d8').replace('1d', ''), 10);
+    newMaxHp = Math.max(1, hitDieVal + conMod + Math.max(0, safeLevel - 1) * (Math.floor(hitDieVal / 2) + 1 + conMod));
+  }
+
+  // Ajusta Slots de Magia (Lógica de Multiclasse)
   const newSlots = { ...sheet.spellSlots };
-  if (sheet.spellcastingAbility) {
+  let casterLevel = 0;
+  let spellcastingClassCount = 0;
+  let singleCasterClass = '';
+
+  currentClasses.forEach(c => {
+    if (c.name === 'Mago' || c.name === 'Clérigo' || c.name === 'Bardo' || c.name === 'Druida' || c.name === 'Feiticeiro') {
+      casterLevel += c.level;
+      spellcastingClassCount++;
+      singleCasterClass = c.name;
+    } else if (c.name === 'Paladino' || c.name === 'Patrulheiro') {
+      casterLevel += Math.floor(c.level / 2);
+      spellcastingClassCount++;
+      singleCasterClass = c.name;
+    } else if (c.name === 'Artífice') {
+      casterLevel += Math.ceil(c.level / 2);
+      spellcastingClassCount++;
+      singleCasterClass = c.name;
+    }
+  });
+
+  if (spellcastingClassCount === 1) {
+    // Se só tem 1 classe conjuradora, usa a tabela oficial daquela classe
+    const cLevel = currentClasses.find(c => c.name === singleCasterClass)?.level || 0;
+    if (singleCasterClass === 'Paladino' || singleCasterClass === 'Patrulheiro') {
+      for (let l = 1; l <= 9; l++) {
+        if (l === 1) newSlots[l] = { total: cLevel >= 2 ? (cLevel >= 5 ? 4 : (cLevel >= 3 ? 3 : 2)) : 0, used: 0 };
+        else if (l === 2) newSlots[l] = { total: cLevel >= 5 ? (cLevel >= 9 ? 3 : 2) : 0, used: 0 };
+        else if (l === 3) newSlots[l] = { total: cLevel >= 9 ? (cLevel >= 13 ? 3 : 2) : 0, used: 0 };
+        else if (l === 4) newSlots[l] = { total: cLevel >= 13 ? (cLevel >= 17 ? 3 : 2) : 0, used: 0 };
+        else if (l === 5) newSlots[l] = { total: cLevel >= 17 ? (cLevel >= 19 ? 2 : 1) : 0, used: 0 };
+        else newSlots[l] = { total: 0, used: 0 };
+      }
+    } else {
+      // Conjurador total
+      casterLevel = cLevel;
+    }
+  }
+
+  // Tabela Única de Conjurador (Multiclasse ou Conjurador Total Único)
+  if (spellcastingClassCount > 1 || (spellcastingClassCount === 1 && casterLevel === currentClasses.find(c => c.name === singleCasterClass)?.level)) {
     for (let l = 1; l <= 9; l++) {
-      if (l === 1) newSlots[l] = { total: safeLevel >= 1 ? Math.min(4, safeLevel + 1) : 0, used: 0 };
-      else if (l === 2) newSlots[l] = { total: safeLevel >= 3 ? (safeLevel >= 4 ? 3 : 2) : 0, used: 0 };
-      else if (l === 3) newSlots[l] = { total: safeLevel >= 5 ? (safeLevel >= 6 ? 3 : 2) : 0, used: 0 };
-      else if (l === 4) newSlots[l] = { total: safeLevel >= 7 ? (safeLevel >= 8 ? 3 : 2) : 0, used: 0 };
-      else if (l === 5) newSlots[l] = { total: safeLevel >= 9 ? (safeLevel >= 10 ? 3 : 2) : 0, used: 0 };
-      else if (l === 6) newSlots[l] = { total: safeLevel >= 11 ? 1 : 0, used: 0 };
-      else if (l === 7) newSlots[l] = { total: safeLevel >= 13 ? 1 : 0, used: 0 };
-      else if (l === 8) newSlots[l] = { total: safeLevel >= 15 ? 1 : 0, used: 0 };
-      else if (l === 9) newSlots[l] = { total: safeLevel >= 17 ? 1 : 0, used: 0 };
+      if (l === 1) newSlots[l] = { total: casterLevel >= 1 ? (casterLevel >= 3 ? 4 : (casterLevel >= 2 ? 3 : 2)) : 0, used: 0 };
+      else if (l === 2) newSlots[l] = { total: casterLevel >= 3 ? (casterLevel >= 4 ? 3 : 2) : 0, used: 0 };
+      else if (l === 3) newSlots[l] = { total: casterLevel >= 5 ? (casterLevel >= 6 ? 3 : 2) : 0, used: 0 };
+      else if (l === 4) newSlots[l] = { total: casterLevel >= 7 ? (casterLevel >= 8 ? 3 : 2) : 0, used: 0 };
+      else if (l === 5) newSlots[l] = { total: casterLevel >= 9 ? (casterLevel >= 10 ? 3 : 2) : 0, used: 0 };
+      else if (l === 6) newSlots[l] = { total: casterLevel >= 11 ? (casterLevel >= 19 ? 2 : 1) : 0, used: 0 };
+      else if (l === 7) newSlots[l] = { total: casterLevel >= 13 ? (casterLevel >= 20 ? 2 : 1) : 0, used: 0 };
+      else if (l === 8) newSlots[l] = { total: casterLevel >= 15 ? 1 : 0, used: 0 };
+      else if (l === 9) newSlots[l] = { total: casterLevel >= 17 ? 1 : 0, used: 0 };
     }
   }
 
@@ -215,15 +396,59 @@ export function applyLevelChange(sheet: CharacterSheet, level: number): Characte
     isUnlocked = false;
   }
 
+  // Carrega as habilidades da classe para o novo nível
+  const classFeaturesList: ClassFeature[] = [];
+  let idCounter = 1;
+  currentClasses.forEach(c => {
+    const db = CLASS_FEATURES_DB[c.name];
+    if (db) {
+      for (let lvl = 1; lvl <= c.level; lvl++) {
+        if (db[lvl]) {
+          db[lvl].forEach(feat => {
+            if (!feat.requiresSubclass || feat.requiresSubclass === c.subclass) {
+              classFeaturesList.push({
+                ...feat,
+                id: `${c.name.toLowerCase()}-${lvl}-${idCounter++}`
+              });
+            }
+          });
+        }
+      }
+    }
+  });
+
+  // Atualiza os recursos de classe
+  const baseResources = getClassResourcesForLevel({ ...sheet, level: safeLevel }, safeLevel);
+  const updatedResources = { ...sheet.classResources };
+  for (const key in baseResources) {
+    if (updatedResources[key]) {
+      const diff = baseResources[key].max - updatedResources[key].max;
+      updatedResources[key] = {
+        ...updatedResources[key],
+        max: baseResources[key].max,
+        current: Math.min(baseResources[key].max, Math.max(0, updatedResources[key].current + diff))
+      };
+    } else {
+      updatedResources[key] = baseResources[key];
+    }
+  }
+  for (const key in updatedResources) {
+    if (!baseResources[key]) {
+      delete updatedResources[key];
+    }
+  }
+
   return {
     ...sheet,
     level: safeLevel,
     attributePointsAvailable: extraPoints,
     attributesLocked: isUnlocked,
-    hitDiceTotal: `${safeLevel}${hitDie}`,
-    maxHp: Math.max(1, estimatedMaxHp),
-    currentHp: Math.max(1, estimatedMaxHp),
+    hitDiceTotal,
+    maxHp: newMaxHp,
+    currentHp: sheet.currentHp > newMaxHp ? newMaxHp : (safeLevel === 1 ? newMaxHp : sheet.currentHp),
     spellSlots: newSlots,
+    classFeatures: classFeaturesList,
+    classResources: updatedResources,
   };
 }
 
@@ -454,11 +679,21 @@ export function applyShortRest(
   usedCount += actualSpend;
   const newCurrentHp = Math.min(sheet.maxHp, sheet.currentHp + hpRecovered);
 
+  // Recupera recursos que restauram em descanso curto (ex: Canalizar Divindade)
+  const newResources = { ...sheet.classResources };
+  if (newResources['canalizar_divindade']) {
+    newResources['canalizar_divindade'] = {
+      ...newResources['canalizar_divindade'],
+      current: newResources['canalizar_divindade'].max
+    };
+  }
+
   return {
     updatedSheet: {
       ...sheet,
       currentHp: newCurrentHp,
       hitDiceUsed: `${usedCount}${hitDie}`,
+      classResources: newResources,
     },
     hpRecovered,
   };
@@ -488,6 +723,12 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
     newSlots[parseInt(level, 10)] = { ...newSlots[parseInt(level, 10)], used: 0 };
   }
 
+  // Reseta recursos de classe
+  const newResources = { ...sheet.classResources };
+  for (const key in newResources) {
+    newResources[key] = { ...newResources[key], current: newResources[key].max };
+  }
+
   return {
     ...sheet,
     currentHp: sheet.maxHp,
@@ -495,6 +736,7 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
     hitDiceUsed: `${usedCount}${hitDie}`,
     deathSaves: { successes: 0, failures: 0 },
     spellSlots: newSlots,
+    classResources: newResources,
   };
 }
 
@@ -555,11 +797,51 @@ export function recalculateSheetDerivedStats(sheet: CharacterSheet): CharacterSh
     };
   });
 
+  // Recalcula habilidades da classe dinamicamente para garantir integridade
+  const classFeaturesList: ClassFeature[] = [];
+  const db = CLASS_FEATURES_DB[sheet.className];
+  if (db) {
+    let idCounter = 1;
+    for (let lvl = 1; lvl <= sheet.level; lvl++) {
+      if (db[lvl]) {
+        db[lvl].forEach(feat => {
+          classFeaturesList.push({
+            ...feat,
+            id: `${sheet.className.toLowerCase()}-${lvl}-${idCounter++}`
+          });
+        });
+      }
+    }
+  }
+
+  // Recalcula recursos baseado no nível e nos atributos recalculados
+  const baseResources = getClassResourcesForLevel(sheet, sheet.level);
+  const updatedResources = { ...sheet.classResources };
+  for (const key in baseResources) {
+    if (updatedResources[key]) {
+      const diff = baseResources[key].max - updatedResources[key].max;
+      updatedResources[key] = {
+        ...updatedResources[key],
+        max: baseResources[key].max,
+        current: Math.min(baseResources[key].max, Math.max(0, updatedResources[key].current + diff))
+      };
+    } else {
+      updatedResources[key] = baseResources[key];
+    }
+  }
+  for (const key in updatedResources) {
+    if (!baseResources[key]) {
+      delete updatedResources[key];
+    }
+  }
+
   return {
     ...sheet,
     armorClass: newAC,
     maxHp: newMaxHp,
     currentHp: Math.max(1, newCurrentHp),
     attacks: updatedAttacks,
+    classFeatures: classFeaturesList,
+    classResources: updatedResources,
   };
 }

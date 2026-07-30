@@ -1,6 +1,6 @@
 import React from 'react';
 import { AdvantageMode, AttributeKey, CharacterSheet, DiceRollEvent, DndSkillKey, SkillProficiencyLevel } from '@/lib/types';
-import { SKILL_DEFINITIONS } from '@/lib/dnd5e-data';
+import { SKILL_DEFINITIONS, DND_CLASSES, DND_RACES } from '@/lib/dnd5e-data';
 import {
   calculatePassivePerception,
   calculateProficiencyBonus,
@@ -9,7 +9,7 @@ import {
   formatModifier,
 } from '@/lib/dnd5e-calculator';
 import { executeCheckRoll } from '@/lib/dnd5e-dice';
-import { Target, Eye, ShieldAlert, Award, Dices } from 'lucide-react';
+import { Target, Eye, ShieldAlert, Award, Dices, Lock, Unlock } from 'lucide-react';
 
 interface SkillsSectionProps {
   sheet: CharacterSheet;
@@ -36,6 +36,55 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
   const profBonus = calculateProficiencyBonus(sheet.level);
   const passivePerception = calculatePassivePerception(sheet);
 
+  const classData = DND_CLASSES[sheet.className];
+  const raceData = DND_RACES[sheet.race];
+  
+  const classSkillChoices = classData ? classData.skillChoices : 2;
+  const raceSkillChoices = raceData?.skillChoices || 0;
+  const backgroundSkillChoices = 2; // Padrão D&D 5e
+  
+  const maxAllowedSkills = classSkillChoices + backgroundSkillChoices + raceSkillChoices + (raceData?.fixedSkills?.length || 0);
+
+  const selectedSkills = (Object.keys(sheet.skills) as DndSkillKey[]).filter(
+    (k) => sheet.skills[k] === 'proficient' || sheet.skills[k] === 'expertise'
+  );
+
+  const isValidSkillSelection = (proposedSkills: DndSkillKey[]) => {
+    if (!classData) return true;
+    
+    const classOptions = classData.skillOptions;
+    const maxClass = classData.skillChoices;
+    const maxBackground = 2;
+    const maxRace = raceData?.skillChoices || 0;
+    const raceFixed = raceData?.fixedSkills || [];
+    
+    let remainingToValidate = [...proposedSkills];
+    
+    // 1. Remove race fixed skills
+    raceFixed.forEach(fk => {
+      const idx = remainingToValidate.indexOf(fk);
+      if (idx !== -1) {
+        remainingToValidate.splice(idx, 1);
+      }
+    });
+    
+    // 2. Count how many can be absorbed by class slots
+    let absorbedByClass = 0;
+    const notAbsorbedByClass: DndSkillKey[] = [];
+    
+    for (const sk of remainingToValidate) {
+      if (absorbedByClass < maxClass && (classOptions === 'all' || classOptions.includes(sk))) {
+        absorbedByClass++;
+      } else {
+        notAbsorbedByClass.push(sk);
+      }
+    }
+    
+    // 3. The rest must be absorbed by background + any-race slots
+    const availableAnySlots = maxBackground + maxRace;
+    return notAbsorbedByClass.length <= availableAnySlots;
+  };
+
   const handleSavingThrowToggle = (attrKey: AttributeKey) => {
     onChange({
       ...sheet,
@@ -59,12 +108,25 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
     if (onRoll) onRoll(result);
   };
 
+  const isLocked = sheet.skillsLocked ?? false;
+
   const handleSkillCycleLevel = (skillKey: DndSkillKey) => {
+    if (isLocked) return;
+    
     const current = sheet.skills[skillKey] || 'none';
     let nextLevel: SkillProficiencyLevel = 'none';
-    if (current === 'none') nextLevel = 'proficient';
-    else if (current === 'proficient') nextLevel = 'expertise';
-    else nextLevel = 'none';
+    
+    if (current === 'none') {
+      const proposed = [...selectedSkills, skillKey];
+      if (!isValidSkillSelection(proposed)) {
+        return; // Excedeu limite ou não pertence à lista da classe
+      }
+      nextLevel = 'proficient';
+    } else if (current === 'proficient') {
+      nextLevel = 'expertise';
+    } else {
+      nextLevel = 'none';
+    }
 
     onChange({
       ...sheet,
@@ -88,6 +150,27 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
     });
     if (onRoll) onRoll(result);
   };
+
+  // Calcular detalhes do uso de perícias para exibir na UI
+  const classOptions = classData?.skillOptions || [];
+  const maxClass = classData?.skillChoices || 2;
+  const maxBackground = 2;
+  const maxRace = raceData?.skillChoices || 0;
+  const raceFixed = raceData?.fixedSkills || [];
+
+  let usedClass = 0;
+  let usedWildcard = 0;
+  let usedRaceFixed = 0;
+  
+  selectedSkills.forEach(sk => {
+    if (raceFixed.includes(sk)) {
+      usedRaceFixed++;
+    } else if (usedClass < maxClass && (classOptions === 'all' || classOptions.includes(sk))) {
+      usedClass++;
+    } else {
+      usedWildcard++;
+    }
+  });
 
   return (
     <div className="space-y-6 pb-20 animate-fade-in select-none">
@@ -171,12 +254,41 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
 
       {/* 18 PERÍCIAS D&D 5E */}
       <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-            <Target className="w-4 h-4 text-amber-400" />
-            Perícias (18 Oficial 5e)
-          </h3>
-          <span className="text-[10px] text-slate-400">Toque na bolinha p/ nivel, valor p/ rolar</span>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+              <Target className="w-4 h-4 text-amber-400" />
+              Perícias ({selectedSkills.length} / {maxAllowedSkills})
+            </h3>
+            <div className="flex items-center gap-2">
+              {!isLocked && (
+                <span className="text-[10px] text-slate-400 hidden sm:inline">Toque na bolinha p/ nivel</span>
+              )}
+              <button
+                type="button"
+                onClick={() => onChange({ ...sheet, skillsLocked: !isLocked })}
+                className={`flex items-center justify-center w-6 h-6 rounded-lg transition-colors ${
+                  isLocked ? 'bg-red-500/20 text-red-400' : 'bg-slate-800 text-slate-400 hover:text-white'
+                }`}
+                title={isLocked ? "Destravar Perícias" : "Travar Perícias"}
+              >
+                {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 text-[10px] font-semibold mt-1">
+            <span className={usedClass === maxClass ? "text-amber-400" : "text-amber-400/60"}>
+              Classe: {usedClass}/{maxClass}
+            </span>
+            <span className={usedWildcard === (maxBackground + maxRace) ? "text-slate-300" : "text-slate-500"}>
+              Livres (Antecedente): {usedWildcard}/{maxBackground + maxRace}
+            </span>
+            {raceFixed.length > 0 && (
+              <span className={usedRaceFixed === raceFixed.length ? "text-purple-400" : "text-purple-400/60"}>
+                Raça: {usedRaceFixed}/{raceFixed.length}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="space-y-1.5">
@@ -198,8 +310,8 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
               >
                 <div
                   onClick={() => handleSkillCycleLevel(skillKey)}
-                  className="flex items-center gap-2.5 flex-1 cursor-pointer"
-                  title="Clique para alternar: Nenhuma / Proficiente / Especialista"
+                  className={`flex items-center gap-2.5 flex-1 ${isLocked ? 'cursor-default' : 'cursor-pointer'}`}
+                  title={isLocked ? "Perícias Travadas" : "Clique para alternar: Nenhuma / Proficiente / Especialista"}
                 >
                   <div
                     className={`w-4 h-4 rounded-full border flex items-center justify-center text-[9px] font-black transition-all ${
@@ -207,13 +319,21 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
                         ? 'bg-emerald-400 text-slate-950 border-emerald-300 font-mono'
                         : level === 'proficient'
                         ? 'bg-amber-400 text-slate-950 border-amber-300 font-mono'
-                        : 'border-slate-700 bg-slate-900'
+                        : `border-slate-700 bg-slate-900 ${isLocked ? 'opacity-40' : ''}`
                     }`}
                   >
                     {level === 'expertise' ? 'E' : level === 'proficient' ? 'P' : ''}
                   </div>
                   <div>
-                    <span className="text-xs font-bold text-slate-200 block leading-tight">{def.name}</span>
+                    <span className="text-xs font-bold text-slate-200 block leading-tight flex items-center gap-1.5">
+                      {def.name}
+                      {raceData?.fixedSkills?.includes(skillKey as DndSkillKey) && (
+                        <span className="text-[8px] bg-purple-500/20 text-purple-300 px-1 rounded uppercase tracking-wider border border-purple-500/30">Raça</span>
+                      )}
+                      {(!raceData?.fixedSkills?.includes(skillKey as DndSkillKey) && (classData?.skillOptions === 'all' || classData?.skillOptions?.includes(skillKey as DndSkillKey))) && (
+                        <span className="text-[8px] bg-amber-500/20 text-amber-300 px-1 rounded uppercase tracking-wider border border-amber-500/30">Classe</span>
+                      )}
+                    </span>
                     <span className="text-[9px] text-slate-500 uppercase font-semibold">
                       ({ATTR_NAMES[def.attr]})
                     </span>

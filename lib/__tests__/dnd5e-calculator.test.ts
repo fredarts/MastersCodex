@@ -8,6 +8,8 @@ import {
   applyLongRest,
   calculatePassivePerception,
   applyShortRest,
+  getClassResourcesForLevel,
+  applyLevelChange,
 } from '../dnd5e-calculator';
 import { CharacterSheet } from '../types';
 
@@ -159,6 +161,59 @@ describe('D&D 5e Rules Calculator Unit Tests', () => {
       expect(updatedSheet.hitDiceUsed).toBe('41d10'); // 2 já usados + 2 = 4
 
       randomSpy.mockRestore();
+    });
+  });
+
+  describe('getClassResourcesForLevel & Class Automation', () => {
+    it('deve retornar recursos de fúria corretos para Bárbaro de nível 5', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Bárbaro',
+        level: 5,
+        attributes: {
+          cha: { score: 10 }
+        } as any
+      };
+      const res = getClassResourcesForLevel(mockSheet as CharacterSheet, 5);
+      expect(res.furia).toBeDefined();
+      expect(res.furia.max).toBe(3);
+      expect(res.furia.current).toBe(3);
+    });
+
+    it('deve retornar cura pelas mãos e sentido divino para Paladino de nível 1', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Paladino',
+        level: 1,
+        attributes: {
+          cha: { score: 14 } // mod = +2
+        } as any
+      };
+      const res = getClassResourcesForLevel(mockSheet as CharacterSheet, 1);
+      expect(res.lay_on_hands).toBeDefined();
+      expect(res.lay_on_hands.max).toBe(5);
+      expect(res.sentido_divino).toBeDefined();
+      expect(res.sentido_divino.max).toBe(3); // 1 + 2
+    });
+
+    it('deve carregar características da classe no levelUp', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Bárbaro',
+        level: 1,
+        attributePointsAvailable: 0,
+        attributesLocked: true,
+        attributes: {
+          con: { score: 14 }
+        } as any,
+        spellSlots: {},
+        classResources: {},
+        classFeatures: []
+      };
+
+      const leveled = applyLevelChange(mockSheet as CharacterSheet, 2);
+      expect(leveled.level).toBe(2);
+      expect(leveled.classFeatures).toBeDefined();
+      // Level 2 Bárbaro deve ter 4 características (Fúria, Defesa Sem Armadura, Ataque Descuidado, Sentido de Perigo)
+      expect(leveled.classFeatures!.length).toBe(4);
+      expect(leveled.classFeatures!.some(f => f.name === 'Ataque Descuidado')).toBe(true);
     });
   });
 });

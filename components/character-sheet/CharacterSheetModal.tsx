@@ -6,6 +6,7 @@ import { SkillsSection } from './Sections/SkillsSection';
 import { EquipmentSection } from './Sections/EquipmentSection';
 import { SpellsSection } from './Sections/SpellsSection';
 import { RPSection } from './Sections/RPSection';
+import { ClassAbilitiesSection } from './Sections/ClassAbilitiesSection';
 import { QuickCombatBar } from './QuickCombatBar';
 import { CharacterBuilderWizardModal } from './Modals/CharacterBuilderWizardModal';
 import { exportCharacterToJson, importCharacterFromJson, exportCharacterToPrintablePdf } from '@/lib/character-exporter';
@@ -44,12 +45,13 @@ interface CharacterSheetModalProps {
   readOnly?: boolean;
 }
 
-type TabType = 'general' | 'combat' | 'skills' | 'equipment' | 'spells' | 'rp';
+type TabType = 'general' | 'combat' | 'skills' | 'abilities' | 'equipment' | 'spells' | 'rp';
 
 const NAV_TABS: { id: TabType; label: string; icon: React.FC<{ className?: string }> }[] = [
   { id: 'general', label: 'Geral & Identidade', icon: User },
   { id: 'combat', label: 'Atributos & Combate', icon: Shield },
   { id: 'skills', label: 'Perícias & Testes', icon: Target },
+  { id: 'abilities', label: 'Habilidades de Classe', icon: Wand2 },
   { id: 'equipment', label: 'Equipamentos & Tesouros', icon: Package },
   { id: 'spells', label: 'Conjuração & Magias', icon: Sparkles },
   { id: 'rp', label: 'História & RP (Bio)', icon: BookOpen },
@@ -336,6 +338,12 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
               onChange={readOnly ? () => {} : setSheet}
               advantageMode={advantageMode}
               onRoll={readOnly ? () => {} : handleRollExecuted}
+            />
+          )}
+          {activeTab === 'abilities' && (
+            <ClassAbilitiesSection
+              sheet={sheet}
+              onChange={readOnly ? () => {} : setSheet}
             />
           )}
           {activeTab === 'equipment' && <EquipmentSection sheet={sheet} onChange={readOnly ? () => {} : setSheet} />}

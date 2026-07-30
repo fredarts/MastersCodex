@@ -354,6 +354,40 @@ export interface CampaignAudioFavorite {
 // D&D 5E CHARACTER SHEET INTERFACES
 // ==========================================
 
+export interface ClassFeature {
+  id: string;
+  name: string;
+  level: number;
+  description: string;
+  activation: 'action' | 'bonus_action' | 'reaction' | 'none' | 'special';
+  resourceCost?: {
+    type: 'spell_slot' | 'class_resource' | 'hp';
+    name?: string;
+    amount: number;
+  };
+  requiresSubclass?: string;
+  choices?: string[];
+}
+
+export interface CharacterResource {
+  name: string;
+  label: string;
+  current: number;
+  max: number;
+}
+
+export interface ActiveClassBuff {
+  id: string;
+  name: string;
+  type: 'rage' | 'smite' | 'custom';
+  description: string;
+  damageBonus?: string; // e.g. "+2" or "2d8"
+  attackBonus?: number;
+  acBonus?: number;
+  spellSlotLevelUsed?: number; // Only for smite or similar slot-based buffs
+}
+
+
 export type AdvantageMode = 'normal' | 'advantage' | 'disadvantage';
 
 export interface DiceRollEvent {
@@ -472,6 +506,13 @@ export interface SpellSlotsPerLevel {
   used: number;
 }
 
+export interface CharacterClassProgress {
+  name: string;
+  level: number;
+  subclass?: string;
+  isPrimary: boolean;
+}
+
 export interface CharacterSheet {
   id: string;
   userId: string;
@@ -482,6 +523,7 @@ export interface CharacterSheet {
   characterName: string;
   className: string;
   level: number;
+  classes?: CharacterClassProgress[];
   subclass?: string;
   race: string;
   subrace?: string;
@@ -497,6 +539,7 @@ export interface CharacterSheet {
   attributes: CharacterAttributes;
   attributePointsAvailable?: number;
   attributesLocked?: boolean;
+  skillsLocked?: boolean;
   savingThrows: SavingThrows;
 
   // Combate
@@ -551,6 +594,10 @@ export interface CharacterSheet {
   spellAttackBonusOverride?: number;
   spellSlots: Record<number, SpellSlotsPerLevel>; // Níveis 1 a 9
   spells: CharacterSpell[];
+
+  classResources?: Record<string, CharacterResource>;
+  activeClassBuffs?: ActiveClassBuff[];
+  classFeatures?: ClassFeature[];
 
   updatedAt?: string;
 }
