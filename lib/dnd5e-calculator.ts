@@ -845,3 +845,88 @@ export function recalculateSheetDerivedStats(sheet: CharacterSheet): CharacterSh
     classResources: updatedResources,
   };
 }
+
+/**
+ * Calcula o limite máximo de truques e magias (conhecidas/preparadas) para o personagem
+ * com base na progressão de suas classes.
+ */
+export function calculateSpellLimits(sheet: CharacterSheet): { maxCantrips: number; maxSpells: number } {
+  let maxCantrips = 0;
+  let maxSpells = 0;
+  
+  const classes = getCharacterClasses(sheet);
+  
+  classes.forEach(c => {
+    const level = c.level;
+    
+    // TRUQUES (Cantrips)
+    if (c.name === 'Bardo' || c.name === 'Druida' || c.name === 'Bruxo') {
+      maxCantrips += level >= 10 ? 4 : (level >= 4 ? 3 : 2);
+    } else if (c.name === 'Clérigo' || c.name === 'Mago') {
+      maxCantrips += level >= 10 ? 5 : (level >= 4 ? 4 : 3);
+    } else if (c.name === 'Feiticeiro') {
+      maxCantrips += level >= 10 ? 6 : (level >= 4 ? 5 : 4);
+    } else if (c.name === 'Artífice') {
+      maxCantrips += level >= 14 ? 4 : (level >= 10 ? 3 : 2);
+    } else if ((c.name === 'Guerreiro' && c.subclass === 'Cavaleiro Arcano') || (c.name === 'Ladino' && c.subclass === 'Trapaceiro Arcano')) {
+      maxCantrips += level >= 10 ? 3 : 2; // Inicia com 2 no nível 3
+    }
+    
+    // MAGIAS (Preparadas ou Conhecidas)
+    const abilityMod = getAttributeModifier(sheet, DND_CLASSES[c.name]?.spellcastingAbility || 'int');
+    const safeAbilityMod = Math.max(1, abilityMod);
+    
+    if (c.name === 'Clérigo' || c.name === 'Druida' || c.name === 'Mago' || c.name === 'Artífice') {
+      // Magias Preparadas = Nível da Classe + Modificador (Artífice é metade)
+      const prepLevel = c.name === 'Artífice' ? Math.floor(level / 2) : level;
+      maxSpells += safeAbilityMod + Math.max(1, prepLevel);
+    } else if (c.name === 'Paladino') {
+      // Magias Preparadas = Modificador + Metade do Nível
+      maxSpells += safeAbilityMod + Math.floor(level / 2);
+    } else if (c.name === 'Patrulheiro') {
+      // Magias Conhecidas
+      const knownProgression = [0, 0, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11];
+      maxSpells += knownProgression[Math.min(20, level)];
+    } else if (c.name === 'Bardo') {
+      const knownProgression = [0, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 15, 16, 18, 19, 19, 20, 22, 22, 22];
+      maxSpells += knownProgression[Math.min(20, level)];
+    } else if (c.name === 'Feiticeiro') {
+      const knownProgression = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 15, 15];
+      maxSpells += knownProgression[Math.min(20, level)];
+    } else if (c.name === 'Bruxo') {
+      const knownProgression = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15];
+      maxSpells += knownProgression[Math.min(20, level)];
+    } else if ((c.name === 'Guerreiro' && c.subclass === 'Cavaleiro Arcano') || (c.name === 'Ladino' && c.subclass === 'Trapaceiro Arcano')) {
+      const knownProgression = [0,0,0, 3, 4, 4, 4, 5, 6, 6, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 13];
+      maxSpells += knownProgression[Math.min(20, Math.max(0, level))];
+    }
+  });
+  
+  return { maxCantrips, maxSpells };
+}
+
+/**
+ * Calcula o nível do personagem baseado na quantidade de Pontos de Experiência (XP).
+ */
+export function calculateLevelFromXP(xp: number): number {
+  if (xp >= 355000) return 20;
+  if (xp >= 305000) return 19;
+  if (xp >= 265000) return 18;
+  if (xp >= 225000) return 17;
+  if (xp >= 195000) return 16;
+  if (xp >= 165000) return 15;
+  if (xp >= 140000) return 14;
+  if (xp >= 120000) return 13;
+  if (xp >= 100000) return 12;
+  if (xp >= 85000) return 11;
+  if (xp >= 64000) return 10;
+  if (xp >= 48000) return 9;
+  if (xp >= 34000) return 8;
+  if (xp >= 23000) return 7;
+  if (xp >= 14000) return 6;
+  if (xp >= 6500) return 5;
+  if (xp >= 2700) return 4;
+  if (xp >= 900) return 3;
+  if (xp >= 300) return 2;
+  return 1;
+}

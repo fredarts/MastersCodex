@@ -8,6 +8,8 @@ interface SpellCompendiumModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAddSpell: (spell: CharacterSpell) => void;
+  isAtCantripLimit?: boolean;
+  isAtSpellLimit?: boolean;
 }
 
 export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
@@ -15,6 +17,8 @@ export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
   isOpen,
   onClose,
   onAddSpell,
+  isAtCantripLimit = false,
+  isAtSpellLimit = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLevelFilter, setSelectedLevelFilter] = useState<number | 'all'>('all');
@@ -43,6 +47,7 @@ export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
       castingTime: srdSpell.castingTime,
       range: srdSpell.range,
       description: `${srdSpell.description}\n\nComponentes: ${srdSpell.components} | Duração: ${srdSpell.duration}`,
+      isBonus: srdSpell.level === 0 ? isAtCantripLimit : isAtSpellLimit,
     };
 
     onAddSpell(newSpell);
@@ -148,6 +153,8 @@ export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
                         isAdded
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-default'
+                          : (spell.level === 0 ? isAtCantripLimit : isAtSpellLimit)
+                          ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 shadow-lg'
                           : 'bg-purple-600 hover:bg-purple-500 text-white shadow-lg active:scale-95'
                       }`}
                     >
@@ -159,7 +166,7 @@ export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
                       ) : (
                         <>
                           <Plus className="w-3.5 h-3.5" />
-                          Adicionar
+                          {(spell.level === 0 ? isAtCantripLimit : isAtSpellLimit) ? 'Add Bônus' : 'Adicionar'}
                         </>
                       )}
                     </button>

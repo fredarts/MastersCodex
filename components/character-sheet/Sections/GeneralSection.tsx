@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CharacterSheet } from '@/lib/types';
 import { DND_ALIGNMENTS, DND_BACKGROUNDS, DND_CLASSES, DND_RACES } from '@/lib/dnd5e-data';
-import { applyClassPreset, applyLevelChange, applyRacePreset } from '@/lib/dnd5e-calculator';
+import { applyClassPreset, applyLevelChange, applyRacePreset, calculateLevelFromXP } from '@/lib/dnd5e-calculator';
 import { User, Shield, Sparkles, Award, Image as ImageIcon, Box, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CHARACTER_MODELS_3D, getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { storageService } from '@/lib/services/storageService';
@@ -66,7 +66,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
         <div className="flex items-center gap-3">
           <div className="relative group w-20 h-20 rounded-2xl bg-[#0b0f19] border border-amber-500/30 overflow-hidden flex items-center justify-center shrink-0 shadow-inner">
             {sheet.avatarUrl ? (
-              <img src={sheet.avatarUrl} alt={sheet.characterName} className="w-full h-full object-cover" />
+              <img src={sheet.avatarUrl} alt={sheet.characterName} className="w-full h-full object-cover object-top" />
             ) : (
               <User className="w-10 h-10 text-amber-500/50" />
             )}
@@ -371,7 +371,18 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
             <input
               type="number"
               value={sheet.xp}
-              onChange={(e) => onChange({ ...sheet, xp: parseInt(e.target.value, 10) || 0 })}
+              onChange={(e) => {
+                const newXp = parseInt(e.target.value, 10) || 0;
+                const expectedLevel = calculateLevelFromXP(newXp);
+                
+                // Se a XP ganha qualifica para um nível maior que o atual,
+                // atualiza a XP e abre o modal de Level Up.
+                if (expectedLevel > sheet.level) {
+                  setLevelUpTarget(expectedLevel);
+                }
+                
+                onChange({ ...sheet, xp: newXp });
+              }}
               className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
             />
           </div>

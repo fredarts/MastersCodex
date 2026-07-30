@@ -499,6 +499,7 @@ export interface CharacterSpell {
   range?: string;
   components?: string;
   description?: string;
+  isBonus?: boolean;
 }
 
 export interface SpellSlotsPerLevel {

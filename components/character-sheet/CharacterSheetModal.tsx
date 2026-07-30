@@ -92,8 +92,7 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
     setIsSavedFeedback(true);
     setTimeout(() => {
       setIsSavedFeedback(false);
-      onClose();
-    }, 800);
+    }, 1200);
   };
 
   const handleClose = () => {
@@ -275,28 +274,7 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
         </div>
       </div>
 
-      {/* NAVEGAÇÃO DE ABAS RÁPIDAS (SCROLL HORIZONTAL PORTRAIT) */}
-      <div className="bg-[#141b2d] border-b border-slate-800 px-3 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none shrink-0">
-        {NAV_TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border shrink-0 ${
-                isActive
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
-                  : 'bg-[#0b0f19] text-slate-400 border-slate-800 hover:border-slate-700'
-              }`}
-            >
-              <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-amber-400' : 'text-slate-500'}`} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+
 
       {/* CONTEÚDO DA ABA SELECIONADA */}
       <main className="flex-1 overflow-y-auto p-4 max-w-4xl w-full mx-auto relative scrollbar-thin">
@@ -357,8 +335,8 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
 
       {/* DRAWER LATERAL DO MENU SANDUÍCHE (RETRÁTIL MOBILE) */}
       {isDrawerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-start animate-fade-in">
-          <div className="bg-[#0f172a] border-r border-amber-500/30 w-72 h-full p-5 space-y-6 flex flex-col justify-between shadow-2xl animate-slide-right overflow-y-auto">
+        <div className="fixed inset-0 z-50 pointer-events-none flex justify-start">
+          <div className="pointer-events-auto bg-[#0f172a] border-r border-amber-500/30 w-72 h-full p-5 space-y-6 flex flex-col justify-between shadow-2xl animate-slide-right overflow-y-auto">
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2">

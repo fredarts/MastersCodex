@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AttributeKey, CharacterSheet, CharacterSpell } from '@/lib/types';
-import { calculateSpellAttackBonus, calculateSpellDC, formatModifier } from '@/lib/dnd5e-calculator';
-import { Sparkles, BookOpen, Flame, Plus, Trash2, CheckCircle2, Wand2, Dices } from 'lucide-react';
+import { calculateSpellAttackBonus, calculateSpellDC, formatModifier, calculateSpellLimits } from '@/lib/dnd5e-calculator';
+import { Sparkles, BookOpen, Flame, Plus, Trash2, CheckCircle2, Wand2, Dices, Lock, Unlock } from 'lucide-react';
 import { SpellCompendiumModal } from '../Modals/SpellCompendiumModal';
 import { executeCheckRoll } from '@/lib/dnd5e-dice';
 
@@ -13,11 +13,21 @@ interface SpellsSectionProps {
 export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange }) => {
   const [selectedSpellLevel, setSelectedSpellLevel] = useState<number>(0); // 0 = Cantrip
   const [isCompendiumOpen, setIsCompendiumOpen] = useState(false);
+  const [isUnlockedByDM, setIsUnlockedByDM] = useState(false);
 
   const spellDC = calculateSpellDC(sheet);
   const spellAtkBonus = calculateSpellAttackBonus(sheet);
+  const { maxCantrips, maxSpells } = calculateSpellLimits(sheet);
 
-  const handleAddSpell = (level: number) => {
+  const currentCantrips = sheet.spells.filter((s) => s.level === 0 && !s.isBonus).length;
+  const currentSpells = sheet.spells.filter((s) => s.level > 0 && !s.isBonus).length;
+
+  const isAtCantripLimit = maxCantrips > 0 && currentCantrips >= maxCantrips;
+  const isAtSpellLimit = maxSpells > 0 && currentSpells >= maxSpells;
+  const isAtLimit = selectedSpellLevel === 0 ? isAtCantripLimit : isAtSpellLimit;
+  const isAddLocked = isAtLimit && !isUnlockedByDM;
+
+  const handleAddSpell = (level: number, isBonus: boolean = false) => {
     const newSpell: CharacterSpell = {
       id: Date.now().toString(),
       name: level === 0 ? 'Novo Truque' : `Nova Magia Nível ${level}`,
@@ -27,6 +37,7 @@ export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange })
       castingTime: '1 Ação',
       range: '18m',
       description: '',
+      isBonus,
     };
     onChange({ ...sheet, spells: [...sheet.spells, newSpell] });
   };
@@ -80,6 +91,8 @@ export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange })
         onAddSpell={(newSpell) => {
           onChange({ ...sheet, spells: [...sheet.spells, newSpell] });
         }}
+        isAtCantripLimit={isAtCantripLimit}
+        isAtSpellLimit={isAtSpellLimit}
       />
 
       {/* CABEÇALHO DE MAGIA (CLASSE CONJURADORA, CD DO TR E BÔNUS DE ATAQUE) */}
@@ -89,15 +102,6 @@ export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange })
             <Sparkles className="w-4 h-4 text-amber-400" />
             Conjuração & Poder Mágico
           </h3>
-
-          <button
-            type="button"
-            onClick={() => setIsCompendiumOpen(true)}
-            className="flex items-center gap-1.5 text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-3 py-1.5 rounded-xl border border-purple-400/40 shadow-lg shadow-purple-900/30 transition-all active:scale-95 cursor-pointer"
-          >
-            <Wand2 className="w-4 h-4 text-purple-200" />
-            Compêndio SRD
-          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -133,20 +137,57 @@ export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange })
 
       {/* SELETOR DE NÍVEIS DE MAGIA (TRUQUES ATÉ NIVEL 9) */}
       <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-amber-400" />
-            Grimório & Magias Preparadas
-          </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-amber-400" />
+              Grimório & Magias
+            </h3>
+            
+            {/* LIMITS DISPLAY */}
+            <div className="flex items-center gap-2 bg-[#0b0f19] px-2.5 py-1 rounded-md border border-slate-700/80 shadow-inner">
+              <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                Truques: <span className={isAtCantripLimit ? 'text-emerald-400' : 'text-slate-200'}>{currentCantrips}</span>/{maxCantrips || '-'}
+                {isAtCantripLimit && maxCantrips > 0 && <CheckCircle2 className="w-3 h-3 text-emerald-400 ml-0.5" />}
+              </span>
+              <span className="text-slate-600">|</span>
+              <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                Magias: <span className={isAtSpellLimit ? 'text-emerald-400' : 'text-slate-200'}>{currentSpells}</span>/{maxSpells || '-'}
+                {isAtSpellLimit && maxSpells > 0 && <CheckCircle2 className="w-3 h-3 text-emerald-400 ml-0.5" />}
+              </span>
+            </div>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => handleAddSpell(selectedSpellLevel)}
-            className="flex items-center gap-1 text-[11px] font-bold bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 px-3 py-1 rounded-xl border border-purple-500/30 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add {selectedSpellLevel === 0 ? 'Truque' : `Nível ${selectedSpellLevel}`}
-          </button>
+          <div className="flex items-center gap-2">
+            {isAtLimit && (
+              <button
+                type="button"
+                onClick={() => setIsUnlockedByDM(!isUnlockedByDM)}
+                className={`p-1.5 rounded-lg border transition-colors ${
+                  isUnlockedByDM
+                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                    : 'bg-[#0b0f19] text-slate-500 border-slate-700 hover:text-amber-400'
+                }`}
+                title="Desbloquear Exceção (Permissão do Mestre)"
+              >
+                {isUnlockedByDM ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsCompendiumOpen(true)}
+              disabled={isAddLocked}
+              className={`flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 rounded-xl border transition-all ${
+                isAddLocked
+                  ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed opacity-60'
+                  : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white border-purple-400/40 shadow-lg shadow-purple-900/30 active:scale-95 cursor-pointer'
+              }`}
+            >
+              <Wand2 className="w-3.5 h-3.5 text-purple-200" />
+              Adicionar Magias ao Grimório
+            </button>
+          </div>
         </div>
 
         {/* NAVEGAÇÃO DE ABAS DE NÍVEIS (0 A 9) */}
@@ -215,18 +256,15 @@ export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange })
                 <button
                   type="button"
                   onClick={() => setIsCompendiumOpen(true)}
-                  className="text-xs font-bold text-purple-400 hover:underline flex items-center gap-1"
+                  disabled={isAddLocked}
+                  className={`text-xs font-bold flex items-center gap-1 ${
+                    isAddLocked
+                      ? 'text-slate-500 cursor-not-allowed'
+                      : 'text-purple-400 hover:underline cursor-pointer'
+                  }`}
                 >
                   <Wand2 className="w-3.5 h-3.5" />
-                  Buscar no Compêndio SRD
-                </button>
-                <span className="text-slate-600">•</span>
-                <button
-                  type="button"
-                  onClick={() => handleAddSpell(selectedSpellLevel)}
-                  className="text-xs font-bold text-slate-400 hover:underline"
-                >
-                  + Adicionar Manualmente
+                  Adicionar Magias ao Grimório
                 </button>
               </div>
             </div>
@@ -260,9 +298,26 @@ export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange })
                     }
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs font-bold text-purple-200"
                   />
+                  {spell.isBonus && (
+                    <span className="text-[9px] font-bold text-amber-500 uppercase tracking-wider bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 shrink-0">
+                      Bônus
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onChange({
+                      ...sheet,
+                      spells: sheet.spells.map((s) => (s.id === spell.id ? { ...s, isBonus: !s.isBonus } : s)),
+                    })}
+                    className={`p-1.5 rounded-lg text-[10px] font-bold uppercase transition-colors shrink-0 ${spell.isBonus ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'text-slate-500 hover:text-amber-400'}`}
+                    title="Marcar/Desmarcar como Magia Bônus (não conta no limite)"
+                  >
+                    ★
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => handleCastSpell(spell)}

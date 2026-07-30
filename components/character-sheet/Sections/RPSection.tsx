@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CharacterSheet } from '@/lib/types';
-import { BookOpen, UserCheck, Heart, Flag, Users } from 'lucide-react';
+import { BookOpen, UserCheck, Heart, Flag, Users, Wand2, Loader2, Image as ImageIcon } from 'lucide-react';
+import { storageService } from '@/lib/services/storageService';
+import { isSupabaseConfigured } from '@/lib/supabase';
 
 interface RPSectionProps {
   sheet: CharacterSheet;
@@ -8,8 +10,95 @@ interface RPSectionProps {
 }
 
 export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const generateImage = async () => {
+    setIsGenerating(true);
+    try {
+      const appearance = sheet.appearanceDesc || 'Um aventureiro heroico de fantasia.';
+      const race = sheet.race || 'Humano';
+      const className = sheet.className || 'Aventureiro';
+      
+      const prompt = `A highly detailed, full body concept art of a Dungeons and Dragons character. Race: ${race}, Class: ${className}. Appearance: ${sheet.age ? sheet.age + ' years old, ' : ''}${sheet.hair ? sheet.hair + ' hair, ' : ''}${sheet.eyes ? sheet.eyes + ' eyes, ' : ''}${sheet.skin ? sheet.skin + ' skin, ' : ''}${appearance}. White background, studio lighting, character concept art style, masterpiece, best quality, standing pose.`;
+
+      const response = await fetch('/api/ai/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Falha ao gerar imagem.');
+
+      const base64Data = data.base64;
+      let finalUrl = `data:image/jpeg;base64,${base64Data}`;
+
+      if (isSupabaseConfigured()) {
+        try {
+          const res = await fetch(finalUrl);
+          const blob = await res.blob();
+          const file = new File([blob], `avatar-${Date.now()}.jpg`, { type: 'image/jpeg' });
+          const publicUrl = await storageService.uploadAsset(file, 'avatars');
+          finalUrl = publicUrl;
+        } catch (uploadErr) {
+          console.warn('Failed to upload image, falling back to base64', uploadErr);
+        }
+      }
+
+      onChange({ ...sheet, avatarUrl: finalUrl });
+
+    } catch (error: any) {
+      alert(error.message || 'Erro ao gerar imagem.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-20 animate-fade-in select-none">
+      {/* IMAGEM E GERAÇÃO IA */}
+      <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+            <ImageIcon className="w-4 h-4 text-amber-400" />
+            Visual do Personagem
+          </h3>
+          <button
+            type="button"
+            onClick={generateImage}
+            disabled={isGenerating}
+            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-3 py-1.5 rounded-lg font-bold text-xs transition-colors disabled:opacity-50"
+          >
+            {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+            {isGenerating ? 'Gerando IA...' : 'Gerar Imagem com IA'}
+          </button>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative w-full sm:w-48 h-64 bg-[#0b0f19] border border-slate-700/80 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+            {sheet.avatarUrl ? (
+              <img src={sheet.avatarUrl} alt="Visual" className="w-full h-full object-contain bg-white" />
+            ) : (
+              <span className="text-[10px] text-slate-500 text-center px-4">
+                A imagem de corpo inteiro aparecerá aqui.<br/><br/>
+                No painel geral, será focado no rosto.
+              </span>
+            )}
+          </div>
+          
+          <div className="flex-1 space-y-2">
+            <label className="text-[11px] text-slate-400">Descrição Visual para a IA (Opcional)</label>
+            <textarea
+              rows={4}
+              value={sheet.appearanceDesc || ''}
+              onChange={(e) => onChange({ ...sheet, appearanceDesc: e.target.value })}
+              placeholder="Descreva roupas, cicatrizes, estilo de arma, armadura... A IA usará isso para gerar a imagem!"
+              className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* CARACTERÍSTICAS FÍSICAS */}
       <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-3">
         <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
