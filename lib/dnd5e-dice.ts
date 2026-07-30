@@ -1,4 +1,5 @@
 import { AdvantageMode, CharacterSheet, DiceRollEvent } from './types';
+import { getClassLevel } from './dnd5e-calculator';
 
 /**
  * Rola um dado d20 considerando o modo de Vantagem / Desvantagem
@@ -42,10 +43,12 @@ export function broadcastDiceRoll(event: DiceRollEvent) {
       result: event.total,
       isCrit: event.isCrit,
       isFail: event.isFail,
-      details: event,
+      details: event
     });
     bc.close();
-  } catch (e) {}
+  } catch (e) {
+    // Ignore iframe errors
+  }
 }
 
 /**
@@ -66,7 +69,15 @@ export function executeCheckRoll({
 }): DiceRollEvent {
   const { d20Roll1, d20Roll2, selectedD20 } = rollD20(advantageMode);
   const total = selectedD20 + modifier;
-  const isCrit = selectedD20 === 20;
+  
+  let critThreshold = 20;
+  if (rollType === 'attack' && sheet.className === 'Guerreiro' && sheet.subclass === 'Campeão') {
+    const level = getClassLevel(sheet, 'Guerreiro');
+    if (level >= 15) critThreshold = 18;
+    else if (level >= 3) critThreshold = 19;
+  }
+  
+  const isCrit = selectedD20 >= critThreshold;
   const isFail = selectedD20 === 1;
 
   const rollEvent: DiceRollEvent = {

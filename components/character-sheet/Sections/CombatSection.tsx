@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AdvantageMode, AttributeKey, CharacterSheet, CharacterWeaponAttack, DiceRollEvent } from '@/lib/types';
-import { formatModifier, getAttributeModifier, recalculateSheetDerivedStats, ARMOR_TABLE, calculateArmorClass, hasClass } from '@/lib/dnd5e-calculator';
+import { formatModifier, getAttributeModifier, recalculateSheetDerivedStats, ARMOR_TABLE, calculateArmorClass, hasClass, getJackOfAllTradesBonus } from '@/lib/dnd5e-calculator';
 import { executeCheckRoll, executeWeaponAttackRoll, broadcastDiceRoll } from '@/lib/dnd5e-dice';
 import { Shield, Heart, Zap, Crosshair, Plus, Minus, Trash2, Skull, Dices, Lock, Unlock, RotateCcw, CheckCircle2, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { WeaponCompendiumModal } from '../Modals/WeaponCompendiumModal';
@@ -806,7 +806,7 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
               const res = executeCheckRoll({
                 sheet,
                 label: 'Rolagem de Iniciativa',
-                modifier: dexMod + sheet.initiativeBonus,
+                modifier: dexMod + sheet.initiativeBonus + getJackOfAllTradesBonus(sheet),
                 rollType: 'attribute',
                 advantageMode,
               });
@@ -815,9 +815,9 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
             className="text-xl font-black text-amber-300 mt-1 font-mono hover:text-amber-200 cursor-pointer flex items-center gap-1"
           >
             <Dices className="w-3.5 h-3.5" />
-            {formatModifier(dexMod + sheet.initiativeBonus)}
+            {formatModifier(dexMod + sheet.initiativeBonus + getJackOfAllTradesBonus(sheet))}
           </button>
-          <span className="text-[9px] text-slate-500">(DES {formatModifier(dexMod)})</span>
+          <span className="text-[9px] text-slate-500">(DES {formatModifier(dexMod)}{getJackOfAllTradesBonus(sheet) > 0 ? ` + ${getJackOfAllTradesBonus(sheet)} (Faz-Tudo)` : ''})</span>
         </div>
 
         {/* DESLOCAMENTO */}

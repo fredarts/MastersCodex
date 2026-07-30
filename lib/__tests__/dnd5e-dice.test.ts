@@ -105,6 +105,36 @@ describe('D&D 5e Dice Rules Unit Tests', () => {
       expect(event.isCrit).toBe(false);
       expect(event.isFail).toBe(true);
     });
+
+    it('deve marcar acerto crítico com 19 se for Campeão nv3+', () => {
+      const champSheet = { ...mockSheet, className: 'Guerreiro', subclass: 'Campeão', level: 5 };
+      mathRandomSpy.mockReturnValue(0.94); // 0.94 * 20 = 18.8 -> 19
+
+      const event = executeCheckRoll({
+        sheet: champSheet as any,
+        label: 'Ataque Espada',
+        modifier: 2,
+        rollType: 'attack',
+      });
+
+      expect(event.selectedD20).toBe(19);
+      expect(event.isCrit).toBe(true);
+    });
+
+    it('deve marcar acerto crítico com 18 se for Campeão nv15+', () => {
+      const champSheet = { ...mockSheet, className: 'Guerreiro', subclass: 'Campeão', level: 16 };
+      mathRandomSpy.mockReturnValue(0.89); // 0.89 * 20 = 17.8 -> 18
+
+      const event = executeCheckRoll({
+        sheet: champSheet as any,
+        label: 'Ataque Espada',
+        modifier: 2,
+        rollType: 'attack',
+      });
+
+      expect(event.selectedD20).toBe(18);
+      expect(event.isCrit).toBe(true);
+    });
   });
 
   describe('executeWeaponAttackRoll', () => {

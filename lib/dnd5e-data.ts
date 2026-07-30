@@ -195,13 +195,15 @@ export const DND_RACES: Record<string, RacePreset> = {
 export const MULTICLASS_REQUIREMENTS: Record<string, Partial<Record<AttributeKey, number>>> = {
   'Bárbaro': { str: 13 },
   'Paladino': { str: 13, cha: 13 },
-  'Mago': { int: 13 }
+  'Mago': { int: 13 },
+  'Bardo': { cha: 13 }
 };
 
-export const MULTICLASS_PROFICIENCIES: Record<string, { armor: string; weapons: string }> = {
+export const MULTICLASS_PROFICIENCIES: Record<string, { armor: string; weapons: string; tools?: string; skillChoices?: number }> = {
   'Bárbaro': { armor: 'Escudos', weapons: 'Armas simples, armas marciais' },
   'Paladino': { armor: 'Armaduras leves, armaduras médias, escudos', weapons: 'Armas simples, armas marciais' },
-  'Mago': { armor: 'Nenhuma', weapons: 'Adagas, dardos, fundas, cajados, bestas leves' }
+  'Mago': { armor: 'Nenhuma', weapons: 'Adagas, dardos, fundas, cajados, bestas leves' },
+  'Bardo': { armor: 'Armaduras leves', weapons: 'Nenhuma', skillChoices: 1, tools: 'Um instrumento musical' }
 };
 export const DND_CLASSES: Record<string, ClassPreset> = {
   Bárbaro: {
@@ -506,9 +508,10 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
       {
         name: 'Caminho Primitivo',
         level: 3,
-        description: 'Você escolhe um caminho que molda a natureza de sua fúria. Essa escolha lhe concede características no 3º nível e novamente no 6º, 10º e 14º níveis.',
+        description: 'Você escolhe um caminho que molda a natureza de sua fúria.',
         activation: 'none',
-        choices: ['Caminho do Berserker', 'Caminho do Guerreiro Totêmico']
+        choices: ['Caminho do Berserker', 'Caminho do Guerreiro Totêmico'],
+        isSubclassChoice: true
       },
       {
         name: 'Fúria Frenética',
@@ -1269,6 +1272,396 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
         name: 'Magia Assinatura',
         level: 20,
         description: 'Escolha duas magias de 3º nível. Você as tem sempre preparadas (não contam no limite) e pode conjurar cada uma delas uma vez por descanso curto/longo sem gastar espaços de magia.',
+        activation: 'none'
+      }
+    ]
+  },
+  Bardo: {
+    1: [
+      {
+        name: 'Inspiração Bárdica (d6)',
+        level: 1,
+        description: 'Com uma ação bônus, você escolhe uma criatura (além de você) a até 18 metros. Ela ganha um dado de Inspiração Bárdica (d6).',
+        activation: 'bonus_action',
+        resourceCost: { type: 'class_resource', name: 'inspiracao_bardica', amount: 1 }
+      }
+    ],
+    2: [
+      {
+        name: 'Faz-Tudo',
+        level: 2,
+        description: 'Adiciona metade do bônus de proficiência (arredondado para baixo) a testes de habilidade sem proficiência.',
+        activation: 'none'
+      },
+      {
+        name: 'Canção de Descanso (d6)',
+        level: 2,
+        description: 'Aliados que gastarem Dados de Vida num descanso curto recuperam 1d6 PV extras.',
+        activation: 'none'
+      }
+    ],
+    3: [
+      {
+        name: 'Colégio Bárdico',
+        level: 3,
+        description: 'Escolha um colégio bárdico (Ex: Colégio do Conhecimento).',
+        activation: 'none',
+        choices: ['Colégio do Conhecimento', 'Colégio da Bravura'],
+        isSubclassChoice: true
+      },
+      {
+        name: 'Especialização',
+        level: 3,
+        description: 'Escolha 2 perícias com proficiência; seu bônus de proficiência é dobrado para elas.',
+        activation: 'none'
+      },
+      {
+        name: 'Proficiências Adicionais',
+        level: 3,
+        description: 'Você ganha proficiência em 3 perícias à escolha.',
+        activation: 'none',
+        requiresSubclass: 'Colégio do Conhecimento'
+      },
+      {
+        name: 'Palavras Cortantes',
+        level: 3,
+        description: 'Gaste um uso de Inspiração como reação para subtrair o dado de uma rolagem de inimigo.',
+        activation: 'reaction',
+        resourceCost: { type: 'class_resource', name: 'inspiracao_bardica', amount: 1 },
+        requiresSubclass: 'Colégio do Conhecimento'
+      }
+    ],
+    4: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 4,
+        description: 'Você pode aumentar um valor de habilidade à sua escolha em 2, ou dois em 1.',
+        activation: 'none'
+      }
+    ],
+    5: [
+      {
+        name: 'Inspiração Bárdica (d8)',
+        level: 5,
+        description: 'O dado de Inspiração Bárdica aumenta para d8.',
+        activation: 'none'
+      },
+      {
+        name: 'Fonte de Inspiração',
+        level: 5,
+        description: 'Você recupera Inspiração Bárdica com descansos curtos ou longos.',
+        activation: 'none'
+      }
+    ],
+    6: [
+      {
+        name: 'Segredos Mágicos Adicionais',
+        level: 6,
+        description: 'Aprenda 2 magias de qualquer classe.',
+        activation: 'none',
+        requiresSubclass: 'Colégio do Conhecimento'
+      }
+    ],
+    8: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 8,
+        description: 'Aumente um atributo em 2, ou dois em 1.',
+        activation: 'none'
+      }
+    ],
+    9: [
+      {
+        name: 'Canção de Descanso (d8)',
+        level: 9,
+        description: 'A cura extra da Canção de Descanso aumenta para d8.',
+        activation: 'none'
+      }
+    ],
+    10: [
+      {
+        name: 'Inspiração Bárdica (d10)',
+        level: 10,
+        description: 'O dado de Inspiração Bárdica aumenta para d10.',
+        activation: 'none'
+      },
+      {
+        name: 'Especialização',
+        level: 10,
+        description: 'Escolha mais 2 proficiências em perícia para obter o dobro do bônus.',
+        activation: 'none'
+      },
+      {
+        name: 'Segredos Mágicos',
+        level: 10,
+        description: 'Aprenda 2 magias de qualquer classe.',
+        activation: 'none'
+      }
+    ],
+    12: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 12,
+        description: 'Aumente um atributo em 2, ou dois em 1.',
+        activation: 'none'
+      }
+    ],
+    13: [
+      {
+        name: 'Canção de Descanso (d10)',
+        level: 13,
+        description: 'A cura extra da Canção de Descanso aumenta para d10.',
+        activation: 'none'
+      }
+    ],
+    14: [
+      {
+        name: 'Segredos Mágicos',
+        level: 14,
+        description: 'Aprenda 2 magias adicionais de qualquer classe.',
+        activation: 'none'
+      },
+      {
+        name: 'Habilidade Inigualável',
+        level: 14,
+        description: 'Gaste um uso de Inspiração Bárdica para adicionar ao seu próprio teste de habilidade.',
+        activation: 'none',
+        requiresSubclass: 'Colégio do Conhecimento'
+      }
+    ],
+    15: [
+      {
+        name: 'Inspiração Bárdica (d12)',
+        level: 15,
+        description: 'O dado de Inspiração Bárdica aumenta para d12.',
+        activation: 'none'
+      }
+    ],
+    16: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 16,
+        description: 'Aumente um atributo em 2, ou dois em 1.',
+        activation: 'none'
+      }
+    ],
+    17: [
+      {
+        name: 'Canção de Descanso (d12)',
+        level: 17,
+        description: 'A cura extra da Canção de Descanso aumenta para d12.',
+        activation: 'none'
+      }
+    ],
+    18: [
+      {
+        name: 'Segredos Mágicos',
+        level: 18,
+        description: 'Aprenda 2 magias adicionais de qualquer classe.',
+        activation: 'none'
+      }
+    ],
+    19: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 19,
+        description: 'Aumente um atributo em 2, ou dois em 1.',
+        activation: 'none'
+      }
+    ],
+    20: [
+      {
+        name: 'Inspiração Superior',
+        level: 20,
+        description: 'Ao rolar iniciativa sem Inspiração Bárdica, recupera 1 uso.',
+        activation: 'none'
+      }
+    ]
+  },
+  Guerreiro: {
+    1: [
+      {
+        name: 'Estilo de Luta',
+        level: 1,
+        description: 'Você adota um estilo de combate particular que será sua especialidade.',
+        activation: 'none',
+        choices: ['Arquearia', 'Defesa', 'Duelo', 'Combate com Armas Grandes', 'Proteção', 'Combate com Duas Armas']
+      },
+      {
+        name: 'Retomar o Fôlego',
+        level: 1,
+        description: 'No seu turno, pode usar uma ação bônus para recuperar PV igual a 1d10 + seu nível de Guerreiro.',
+        activation: 'bonus_action'
+      }
+    ],
+    2: [
+      {
+        name: 'Surto de Ação',
+        level: 2,
+        description: 'Você pode realizar uma ação adicional no seu turno. 1 uso por descanso.',
+        activation: 'none'
+      }
+    ],
+    3: [
+      {
+        name: 'Arquétipo Marcial',
+        level: 3,
+        description: 'Escolha um arquétipo marcial que se esforçará para emular (Ex: Campeão).',
+        activation: 'none',
+        choices: ['Campeão'],
+        isSubclassChoice: true
+      },
+      {
+        name: 'Crítico Aprimorado',
+        level: 3,
+        description: 'Seus ataques com armas atingem um acerto crítico num valor de 19 ou 20.',
+        activation: 'none',
+        requiresSubclass: 'Campeão'
+      }
+    ],
+    4: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 4,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    5: [
+      {
+        name: 'Ataque Extra',
+        level: 5,
+        description: 'Você pode atacar duas vezes ao invés de uma, quando usar a ação de Ataque no seu turno.',
+        activation: 'none'
+      }
+    ],
+    6: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 6,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    7: [
+      {
+        name: 'Atleta Notável',
+        level: 7,
+        description: 'Adicione metade do seu bônus de proficiência a testes de Força, Destreza ou Constituição que não usem a proficiência.',
+        activation: 'none',
+        requiresSubclass: 'Campeão'
+      }
+    ],
+    8: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 8,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    9: [
+      {
+        name: 'Indomável (1 uso)',
+        level: 9,
+        description: 'Você pode rolar novamente um teste de resistência que falhou. 1 uso por descanso longo.',
+        activation: 'none'
+      }
+    ],
+    10: [
+      {
+        name: 'Estilo de Luta Adicional',
+        level: 10,
+        description: 'Você pode escolher um segundo estilo de luta.',
+        activation: 'none',
+        requiresSubclass: 'Campeão'
+      }
+    ],
+    11: [
+      {
+        name: 'Ataque Extra (2)',
+        level: 11,
+        description: 'Você pode atacar três vezes ao invés de duas.',
+        activation: 'none'
+      }
+    ],
+    12: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 12,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    13: [
+      {
+        name: 'Indomável (2 usos)',
+        level: 13,
+        description: 'Você ganha um uso adicional de Indomável (Total: 2).',
+        activation: 'none'
+      }
+    ],
+    14: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 14,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    15: [
+      {
+        name: 'Crítico Superior',
+        level: 15,
+        description: 'Seus ataques com armas atingem um acerto crítico num valor 18, 19 ou 20.',
+        activation: 'none',
+        requiresSubclass: 'Campeão'
+      }
+    ],
+    16: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 16,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    17: [
+      {
+        name: 'Surto de Ação (2 usos)',
+        level: 17,
+        description: 'Você ganha um uso adicional de Surto de Ação (Total: 2).',
+        activation: 'none'
+      },
+      {
+        name: 'Indomável (3 usos)',
+        level: 17,
+        description: 'Você ganha um uso adicional de Indomável (Total: 3).',
+        activation: 'none'
+      }
+    ],
+    18: [
+      {
+        name: 'Sobrevivente',
+        level: 18,
+        description: 'No início de cada um de seus turnos (se tiver até metade de seus PV), recupera 5 + Modificador de Constituição.',
+        activation: 'none',
+        requiresSubclass: 'Campeão'
+      }
+    ],
+    19: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 19,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    20: [
+      {
+        name: 'Ataque Extra (3)',
+        level: 20,
+        description: 'Você pode atacar quatro vezes ao invés de três.',
         activation: 'none'
       }
     ]

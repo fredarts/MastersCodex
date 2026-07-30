@@ -6,7 +6,7 @@ import { Combatant, ConditionType, CharacterSheet, CharacterSpell } from '@/lib/
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { CombatantHpManager } from '@/components/live-cockpit/CombatantHpManager';
-import { getAttributeModifier } from '@/lib/dnd5e-calculator';
+import { getAttributeModifier, getJackOfAllTradesBonus } from '@/lib/dnd5e-calculator';
 import { CONDITIONS } from '@/lib/srd-data';
 import { toast } from 'sonner';
 
@@ -77,7 +77,7 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
   const getMod = (stat?: number) => (stat ? Math.floor((stat - 10) / 2) : 0);
 
   const initMod = matchingSheet
-    ? matchingSheet.initiativeBonus ?? getAttributeModifier(matchingSheet, 'dex')
+    ? (matchingSheet.initiativeBonus ?? getAttributeModifier(matchingSheet, 'dex')) + getJackOfAllTradesBonus(matchingSheet)
     : c.dex !== undefined
     ? Math.floor((c.dex - 10) / 2)
     : 0;

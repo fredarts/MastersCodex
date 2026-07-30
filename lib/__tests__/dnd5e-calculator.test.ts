@@ -10,6 +10,9 @@ import {
   applyShortRest,
   getClassResourcesForLevel,
   applyLevelChange,
+  getJackOfAllTradesBonus,
+  calculateSkillTotal,
+  calculateArmorClass,
 } from '../dnd5e-calculator';
 import { CharacterSheet } from '../types';
 
@@ -214,6 +217,83 @@ describe('D&D 5e Rules Calculator Unit Tests', () => {
       // Level 2 Bárbaro deve ter 4 características (Fúria, Defesa Sem Armadura, Ataque Descuidado, Sentido de Perigo)
       expect(leveled.classFeatures!.length).toBe(4);
       expect(leveled.classFeatures!.some(f => f.name === 'Ataque Descuidado')).toBe(true);
+    });
+  });
+
+  describe('Mecânicas do Bardo', () => {
+    it('deve adicionar bônus de Jack of All Trades (Faz-Tudo) para perícias não proficientes', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Bardo', // classes is generated from className in calculateSkillTotal using getCharacterClasses
+        level: 2, // Prof = +2, Faz-Tudo = +1
+        attributes: {
+          dex: { score: 14 }, // Mod = +2
+          str: { score: 10 },
+          con: { score: 10 },
+          int: { score: 10 },
+          wis: { score: 10 },
+          cha: { score: 10 },
+        } as any,
+        skills: {
+          furtividade: 'none',
+          atletismo: 'proficient', // Prof = +2
+          atuacao: 'expertise', // Exp = +4
+        } as any,
+      };
+
+      // Jack of All Trades bonus
+      expect(getJackOfAllTradesBonus(mockSheet as CharacterSheet)).toBe(1);
+
+      // Furtividade (DEX): Mod (+2) + Faz-Tudo (+1) = +3
+      expect(calculateSkillTotal(mockSheet as CharacterSheet, 'furtividade')).toBe(3);
+
+      // Atletismo (STR): Mod (+0) + Prof (+2) = +2
+      expect(calculateSkillTotal(mockSheet as CharacterSheet, 'atletismo')).toBe(2);
+      
+      // Atuacao (CHA): Mod (+0) + Exp (+4) = +4
+      expect(calculateSkillTotal(mockSheet as CharacterSheet, 'atuacao')).toBe(4);
+    });
+
+    it('deve fornecer Inspiração Bárdica corretamente', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Bardo',
+        level: 1,
+        attributes: {
+          cha: { score: 16 } // mod = +3
+        } as any
+      };
+      
+      const res = getClassResourcesForLevel(mockSheet as CharacterSheet, 1);
+      expect(res.inspiracao_bardica).toBeDefined();
+      expect(res.inspiracao_bardica.max).toBe(3); // min 1, or Cha mod (3)
+    });
+  });
+
+  describe('Mecânicas do Guerreiro', () => {
+    it('deve aplicar +1 na CA se tiver Estilo de Luta: Defesa e usar armadura', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Guerreiro',
+        level: 1,
+        featuresAndTraits: 'Estilo de Luta: Defesa',
+        attributes: { dex: { score: 14 } } as any, // Mod +2
+      };
+
+      // Sem armadura (Nenhuma) -> AC = 10 + 2 (Dex) = 12 (Defesa não aplica)
+      expect(calculateArmorClass(mockSheet as CharacterSheet, 'Nenhuma')).toBe(12);
+
+      // Com armadura leve (Couro: Base 11) -> AC = 11 + 2 (Dex) + 1 (Defesa) = 14
+      expect(calculateArmorClass(mockSheet as CharacterSheet, 'Couro')).toBe(14);
+    });
+
+    it('deve calcular usos de recursos do Guerreiro', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Guerreiro',
+        level: 17,
+      };
+
+      const resources = getClassResourcesForLevel(mockSheet as CharacterSheet, 17);
+      expect(resources['retomar_folego']?.max).toBe(1);
+      expect(resources['surto_acao']?.max).toBe(2);
+      expect(resources['indomavel']?.max).toBe(3);
     });
   });
 });

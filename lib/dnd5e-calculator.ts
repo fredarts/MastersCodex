@@ -49,6 +49,15 @@ export function calculateSavingThrowTotal(sheet: CharacterSheet, attrKey: Attrib
   return attrMod + (isProficient ? profBonus : 0);
 }
 
+export function getJackOfAllTradesBonus(sheet: CharacterSheet): number {
+  const classes = getCharacterClasses(sheet);
+  const bardLevel = classes.find(c => c.name === 'Bardo')?.level || 0;
+  if (bardLevel >= 2) {
+    return Math.floor(calculateProficiencyBonus(sheet.level) / 2);
+  }
+  return 0;
+}
+
 /**
  * Calcula o valor total da Perícia
  */
@@ -65,7 +74,7 @@ export function calculateSkillTotal(sheet: CharacterSheet, skillKey: DndSkillKey
   } else if (profLevel === 'proficient') {
     return attrMod + profBonus;
   }
-  return attrMod;
+  return attrMod + getJackOfAllTradesBonus(sheet);
 }
 
 /**
@@ -167,6 +176,45 @@ export function getClassResourcesForLevel(
           label: 'Canalizar Divindade',
           current: 1,
           max: 1
+        };
+      }
+    } else if (c.name === 'Bardo') {
+      const chaMod = Math.floor(((sheet.attributes.cha?.score || 10) - 10) / 2);
+      const inspiracaoMax = Math.max(1, chaMod);
+      
+      resources['inspiracao_bardica'] = {
+        name: 'inspiracao_bardica',
+        label: 'Inspiração Bárdica',
+        current: inspiracaoMax,
+        max: inspiracaoMax
+      };
+    } else if (c.name === 'Guerreiro') {
+      resources['retomar_folego'] = {
+        name: 'retomar_folego',
+        label: 'Retomar o Fôlego',
+        current: 1,
+        max: 1
+      };
+
+      if (c.level >= 2) {
+        resources['surto_acao'] = {
+          name: 'surto_acao',
+          label: 'Surto de Ação',
+          current: c.level >= 17 ? 2 : 1,
+          max: c.level >= 17 ? 2 : 1
+        };
+      }
+
+      if (c.level >= 9) {
+        let indomavelMax = 1;
+        if (c.level >= 17) indomavelMax = 3;
+        else if (c.level >= 13) indomavelMax = 2;
+        
+        resources['indomavel'] = {
+          name: 'indomavel',
+          label: 'Indomável',
+          current: indomavelMax,
+          max: indomavelMax
         };
       }
     }
@@ -523,6 +571,14 @@ export function calculateArmorClass(
   }
 
   if (hasShield) ac += 2;
+
+  // Estilo de Luta: Defesa (Guerreiro / Paladino)
+  const hasDefenseStyle = (sheet.className === 'Guerreiro' || sheet.className === 'Paladino') && 
+    (sheet.otherFeatures?.toLowerCase().includes('defesa') || sheet.featuresAndTraits?.toLowerCase().includes('defesa'));
+    
+  if (hasDefenseStyle && armor.category !== 'none') {
+    ac += 1;
+  }
 
   return ac;
 }

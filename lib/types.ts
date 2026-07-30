@@ -367,6 +367,7 @@ export interface ClassFeature {
   };
   requiresSubclass?: string;
   choices?: string[];
+  isSubclassChoice?: boolean;
 }
 
 export interface CharacterResource {

@@ -34,7 +34,7 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
 
   const targetClassLevel = getClassLevel(sheet, selectedClass) + 1;
   const newFeatures = (CLASS_FEATURES_DB[selectedClass] || {})[targetClassLevel] || [];
-  const subclassFeature = newFeatures.find(f => f.choices && f.choices.length > 0);
+  const subclassFeature = newFeatures.find(f => f.isSubclassChoice);
   const isAsiLevel = [4, 8, 12, 16, 19].includes(targetClassLevel);
 
   useEffect(() => {
@@ -327,12 +327,18 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
                       if (feat.requiresSubclass && feat.requiresSubclass !== pendingSubclass && feat.requiresSubclass !== sheet.subclass) {
                         return null;
                       }
-                      if (feat.choices) return null; // Já renderizamos no painel especial acima
+                      if (feat.isSubclassChoice) return null; // Já renderizamos no painel especial acima
 
                       return (
                         <div key={feat.name} className="bg-slate-900/60 border border-slate-800 p-3 rounded-lg">
                           <span className="font-bold text-cyan-300 text-sm block mb-1">{feat.name}</span>
                           <p className="text-xs text-slate-400">{feat.description}</p>
+                          {feat.choices && (
+                            <div className="mt-2 text-xs text-slate-500">
+                              <span className="font-semibold text-slate-400">Opções: </span>
+                              {feat.choices.join(', ')}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
