@@ -3,6 +3,8 @@ import { CharacterSheet } from '@/lib/types';
 import { BookOpen, UserCheck, Heart, Flag, Users, Wand2, Loader2, Image as ImageIcon } from 'lucide-react';
 import { storageService } from '@/lib/services/storageService';
 import { isSupabaseConfigured } from '@/lib/supabase';
+import { useUserSettings } from '@/lib/hooks/useUserSettings';
+import { ZoomableImageModal } from '@/components/ui/ZoomableImageModal';
 
 interface RPSectionProps {
   sheet: CharacterSheet;
@@ -11,6 +13,8 @@ interface RPSectionProps {
 
 export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const { settings } = useUserSettings();
 
   const generateImage = async () => {
     setIsGenerating(true);
@@ -24,7 +28,10 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
       const response = await fetch('/api/ai/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ 
+          prompt,
+          userSettings: settings,
+        }),
       });
 
       const data = await response.json();
@@ -77,7 +84,12 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative w-full sm:w-48 h-64 bg-[#0b0f19] border border-slate-700/80 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
             {sheet.avatarUrl ? (
-              <img src={sheet.avatarUrl} alt="Visual" className="w-full h-full object-contain bg-white" />
+              <img 
+                src={sheet.avatarUrl} 
+                alt="Visual" 
+                className="w-full h-full object-contain bg-white cursor-pointer hover:opacity-90 transition-opacity" 
+                onClick={() => setIsImageModalOpen(true)}
+              />
             ) : (
               <span className="text-[10px] text-slate-500 text-center px-4">
                 A imagem de corpo inteiro aparecerá aqui.<br/><br/>
@@ -254,6 +266,13 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
           className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl p-3 text-xs text-slate-200 focus:outline-none focus:border-amber-500 leading-relaxed"
         />
       </div>
+
+      {/* MODAL DE IMAGEM */}
+      <ZoomableImageModal 
+        isOpen={isImageModalOpen} 
+        onClose={() => setIsImageModalOpen(false)} 
+        imageUrl={sheet.avatarUrl || ''} 
+      />
     </div>
   );
 };

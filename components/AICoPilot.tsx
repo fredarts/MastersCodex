@@ -18,6 +18,7 @@ import { BattleLog } from '@/components/BattleLog';
 import { useWorld } from '@/context/WorldContext';
 import { useSession } from '@/context/SessionContext';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
+import { useUserSettings } from '@/lib/hooks/useUserSettings';
 
 interface AICoPilotProps {
   generatedLootResult?: string | null;
@@ -30,6 +31,7 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({
   isCollapsed,
   onToggleCollapse,
 }) => {
+  const { settings } = useUserSettings();
   const [activeTab, setActiveTab] = useState<'refine' | 'generator' | 'loot' | 'log'>('refine');
   const [draftInput, setDraftInput] = useState('');
   const [aesthetic, setAesthetic] = useState('Sword and Sorcery, Sombrio e Cru');
@@ -67,6 +69,7 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({
           combatants: combatants,
           actionType: 'narrate',
           prompt: prompt,
+          userSettings: settings,
         }),
       });
 
@@ -103,6 +106,7 @@ export const AICoPilot: React.FC<AICoPilotProps> = ({
           combatants: combatants,
           actionType: 'loot',
           prompt: prompt,
+          userSettings: settings,
         }),
       });
 

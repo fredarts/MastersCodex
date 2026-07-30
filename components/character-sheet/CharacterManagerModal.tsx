@@ -25,6 +25,35 @@ interface CharacterManagerModalProps {
   onDeleteSheet: (sheetId: string) => void;
 }
 
+const CharacterCardAvatar = ({ sheet }: { sheet: CharacterSheet }) => {
+  const [aspect, setAspect] = React.useState(1);
+  return (
+    <div className="relative w-14 h-14 rounded-2xl bg-[#0b0f19] border border-amber-500/30 overflow-hidden flex items-center justify-center shrink-0 shadow-inner">
+      {sheet.avatarUrl ? (
+        <img 
+          src={sheet.avatarUrl} 
+          alt={sheet.characterName} 
+          onLoad={(e) => setAspect(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)}
+          className="absolute max-w-none transition-all duration-300" 
+          style={{
+            width: aspect >= 1 ? 'auto' : '100%',
+            height: aspect >= 1 ? '100%' : 'auto',
+            minWidth: aspect >= 1 ? '100%' : 'auto',
+            minHeight: aspect >= 1 ? 'auto' : '100%',
+            top: '50%',
+            left: '50%',
+            transform: sheet.avatarSettings 
+              ? `translate(calc(-50% + ${sheet.avatarSettings.offsetX * (56/256)}px), calc(-50% + ${sheet.avatarSettings.offsetY * (56/256)}px)) scale(${sheet.avatarSettings.zoom})`
+              : `translate(-50%, calc(-50% - 15%)) scale(1.7)`,
+          }}
+        />
+      ) : (
+        <User className="w-7 h-7 text-amber-400/60" />
+      )}
+    </div>
+  );
+};
+
 export const CharacterManagerModal: React.FC<CharacterManagerModalProps> = ({
   isOpen,
   onClose,
@@ -105,13 +134,7 @@ export const CharacterManagerModal: React.FC<CharacterManagerModalProps> = ({
                 >
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
-                      <div className="w-14 h-14 rounded-2xl bg-[#0b0f19] border border-amber-500/30 overflow-hidden flex items-center justify-center shrink-0 shadow-inner">
-                        {sheet.avatarUrl ? (
-                          <img src={sheet.avatarUrl} alt={sheet.characterName} className="w-full h-full object-cover" />
-                        ) : (
-                          <User className="w-7 h-7 text-amber-400/60" />
-                        )}
-                      </div>
+                      <CharacterCardAvatar sheet={sheet} />
 
                       <div className="flex-1 min-w-0">
                         <span className="text-[9px] font-mono font-bold text-amber-400 bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded uppercase">

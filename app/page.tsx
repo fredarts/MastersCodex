@@ -31,6 +31,7 @@ import { useCharacterSync } from '@/lib/hooks/useCharacterSync';
 import { CharacterSheetModal } from '@/components/character-sheet/CharacterSheetModal';
 import { MonsterStatBlockModal } from '@/components/live-cockpit/MonsterStatBlockModal';
 import { MinimizedSheetsDock } from '@/components/live-cockpit/MinimizedSheetsDock';
+import { UserSettingsModal } from '@/components/UserSettingsModal';
 
 function MainApp() {
   const { user, roleMode, loadDemoEverything } = useAuth();
@@ -58,6 +59,7 @@ function MainApp() {
   const [isCompendiumOpen, setIsCompendiumOpen] = useState(false);
   const [isPlayerViewOpen, setIsPlayerViewOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
   const [isCreateCampaignOpen, setIsCreateCampaignOpen] = useState(false);
   const [selectedWorldForCampaign, setSelectedWorldForCampaign] = useState<World | null>(null);
@@ -66,7 +68,7 @@ function MainApp() {
   // Retractable Panels State (Sidebar & AI Drawer)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isAIPanelCollapsed, setIsAIPanelCollapsed] = useState<boolean>(false);
-
+  
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedSidebar = localStorage.getItem('masters_codex_sidebar_collapsed');
@@ -212,6 +214,7 @@ function MainApp() {
         onOpenSearch={() => setIsCompendiumOpen(true)}
         onOpenPlayerView={() => setIsPlayerViewOpen(true)}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         isSidebarCollapsed={isSidebarCollapsed}
         onToggleSidebar={toggleSidebar}
         isAIPanelCollapsed={isAIPanelCollapsed}
@@ -367,6 +370,12 @@ function MainApp() {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+      />
+
+      {/* User Settings Modal */}
+      <UserSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
 
       {/* Create Campaign Modal */}

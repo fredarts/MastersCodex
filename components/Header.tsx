@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu } from 'lucide-react';
+import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -12,6 +12,7 @@ interface HeaderProps {
   onOpenSearch: () => void;
   onOpenPlayerView: () => void;
   onOpenAuthModal: () => void;
+  onOpenSettings?: () => void;
   isSidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
   isAIPanelCollapsed?: boolean;
@@ -22,17 +23,19 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSearch,
   onOpenPlayerView,
   onOpenAuthModal,
+  onOpenSettings,
   isSidebarCollapsed,
   onToggleSidebar,
   isAIPanelCollapsed,
   onToggleAIPanel,
 }) => {
-  const { user, roleMode, setRoleMode } = useAuth();
+  const { user, roleMode, setRoleMode, signOut } = useAuth();
   const { activeCampaign } = useCampaign();
   const { activeWorld } = useWorld();
   const { playDiceSound } = useAudio();
   const [diceResult, setDiceResult] = useState<number | null>(null);
   const [lastDiceType, setLastDiceType] = useState<string>('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const rollDice = (sides: number) => {
     const res = Math.floor(Math.random() * sides) + 1;
@@ -152,19 +155,53 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* User Account / Auth Button */}
         {user ? (
-          <button
-            onClick={onOpenAuthModal}
-            className="flex items-center gap-2 bg-[#161c28] hover:bg-[#1f2738] border border-amber-500/40 p-1.5 pr-3 rounded-xl transition-all"
-          >
-            <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-bold text-xs text-amber-400 font-mono overflow-hidden">
-              {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt={user.displayName} className="w-full h-full object-cover" />
-              ) : (
-                user.displayName.slice(0, 2).toUpperCase()
-              )}
-            </div>
-            <span className="text-xs font-bold text-slate-200 hidden sm:inline">{user.displayName}</span>
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className="flex items-center gap-2 bg-[#161c28] hover:bg-[#1f2738] border border-amber-500/40 p-1.5 pr-3 rounded-xl transition-all cursor-pointer"
+            >
+              <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-bold text-xs text-amber-400 font-mono overflow-hidden">
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt={user.displayName} className="w-full h-full object-cover" />
+                ) : (
+                  user.displayName.slice(0, 2).toUpperCase()
+                )}
+              </div>
+              <span className="text-xs font-bold text-slate-200 hidden sm:inline">{user.displayName}</span>
+            </button>
+
+            {isDropdownOpen && (
+              <>
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={() => setIsDropdownOpen(false)}
+                />
+                <div className="absolute right-0 mt-2 w-48 bg-[#161c28] border border-[#2a3449] rounded-xl shadow-2xl z-20 py-1.5 overflow-hidden animate-fade-in">
+                  <button
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      if (onOpenSettings) onOpenSettings();
+                    }}
+                    className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-300 hover:text-amber-400 hover:bg-[#1f2738] transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <Settings className="w-4 h-4 text-amber-500" />
+                    <span>Configurações</span>
+                  </button>
+                  <div className="border-t border-[#2a3449] my-1" />
+                  <button
+                    onClick={async () => {
+                      setIsDropdownOpen(false);
+                      await signOut();
+                    }}
+                    className="w-full px-4 py-2 text-left text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Sair</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         ) : (
           <button
             onClick={onOpenAuthModal}
@@ -194,3 +231,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+

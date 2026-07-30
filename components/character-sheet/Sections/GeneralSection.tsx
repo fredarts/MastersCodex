@@ -8,6 +8,9 @@ import { storageService } from '@/lib/services/storageService';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { Model3DViewer } from '../Model3DViewer';
 import { LevelUpModal } from '../Modals/LevelUpModal';
+import { ZoomableImageModal } from '@/components/ui/ZoomableImageModal';
+import { AvatarCropperModal, AvatarSettings } from '@/components/ui/AvatarCropperModal';
+import { Settings2 } from 'lucide-react';
 
 interface GeneralSectionProps {
   sheet: CharacterSheet;
@@ -15,6 +18,10 @@ interface GeneralSectionProps {
 }
 
 export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange }) => {
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [isCropperModalOpen, setIsCropperModalOpen] = useState(false);
+  const [avatarAspect, setAvatarAspect] = useState(1);
+
   const handleRaceChange = (newRace: string) => {
     const raceData = DND_RACES[newRace];
     const newSubrace = (raceData && raceData.subraces) ? Object.keys(raceData.subraces)[0] : '';
@@ -66,7 +73,43 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
         <div className="flex items-center gap-3">
           <div className="relative group w-20 h-20 rounded-2xl bg-[#0b0f19] border border-amber-500/30 overflow-hidden flex items-center justify-center shrink-0 shadow-inner">
             {sheet.avatarUrl ? (
-              <img src={sheet.avatarUrl} alt={sheet.characterName} className="w-full h-full object-cover object-top" />
+              <>
+                <img 
+                   src={sheet.avatarUrl} 
+                   alt={sheet.characterName} 
+                   onLoad={(e) => setAvatarAspect(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)}
+                   className="absolute max-w-none transition-all duration-300" 
+                   style={{
+                     width: avatarAspect >= 1 ? 'auto' : '100%',
+                     height: avatarAspect >= 1 ? '100%' : 'auto',
+                     minWidth: avatarAspect >= 1 ? '100%' : 'auto',
+                     minHeight: avatarAspect >= 1 ? 'auto' : '100%',
+                     top: '50%',
+                     left: '50%',
+                     transform: sheet.avatarSettings 
+                       ? `translate(calc(-50% + ${sheet.avatarSettings.offsetX * (80/256)}px), calc(-50% + ${sheet.avatarSettings.offsetY * (80/256)}px)) scale(${sheet.avatarSettings.zoom})`
+                       : `translate(-50%, calc(-50% - 15%)) scale(1.7)`,
+                   }}
+                />
+                
+                {/* Overlay de Ações (Aparece no Hover) */}
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setIsCropperModalOpen(true); }}
+                    className="p-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg transition-transform hover:scale-110 shadow-lg"
+                    title="Ajustar Enquadramento"
+                  >
+                    <Settings2 className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setIsImageModalOpen(true); }}
+                    className="p-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 rounded-lg transition-transform hover:scale-110 shadow-lg"
+                    title="Ver Imagem Completa"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              </>
             ) : (
               <User className="w-10 h-10 text-amber-500/50" />
             )}
@@ -422,6 +465,22 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
           </button>
         </div>
       </div>
+
+      <ZoomableImageModal 
+        isOpen={isImageModalOpen} 
+        onClose={() => setIsImageModalOpen(false)} 
+        imageUrl={sheet.avatarUrl || ''} 
+      />
+
+      <AvatarCropperModal
+        isOpen={isCropperModalOpen}
+        onClose={() => setIsCropperModalOpen(false)}
+        imageUrl={sheet.avatarUrl || ''}
+        initialSettings={sheet.avatarSettings}
+        onSaveSettings={(settings) => {
+          onChange({ ...sheet, avatarSettings: settings });
+        }}
+      />
     </div>
   );
 };

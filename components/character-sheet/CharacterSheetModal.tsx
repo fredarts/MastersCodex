@@ -75,14 +75,21 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
   const [advantageMode, setAdvantageMode] = useState<AdvantageMode>('normal');
   const [lastRoll, setLastRoll] = useState<DiceRollEvent | null>(null);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [headerAvatarAspect, setHeaderAvatarAspect] = useState(1);
 
-  // Sincroniza o estado interno da ficha sempre que o modal for aberto ou a ficha inicial mudar
+  // Sincroniza o estado interno da ficha sempre que a ficha inicial mudar (ex: ao salvar remotamente)
   useEffect(() => {
     if (isOpen) {
       setSheet(initialSheet);
-      setActiveTab('general');
     }
   }, [initialSheet, isOpen]);
+
+  // Reseta a aba para a inicial apenas quando o modal for recém-aberto
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab('general');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -165,9 +172,25 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
 
         {/* DETALHES RÁPIDOS DO PERSONAGEM */}
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 overflow-hidden flex items-center justify-center shrink-0">
+          <div className="relative w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 overflow-hidden flex items-center justify-center shrink-0">
             {sheet.avatarUrl ? (
-              <img src={sheet.avatarUrl} alt={sheet.characterName} className="w-full h-full object-cover" />
+              <img 
+                 src={sheet.avatarUrl} 
+                 alt={sheet.characterName} 
+                 onLoad={(e) => setHeaderAvatarAspect(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)}
+                 className="absolute max-w-none transition-all duration-300" 
+                 style={{
+                   width: headerAvatarAspect >= 1 ? 'auto' : '100%',
+                   height: headerAvatarAspect >= 1 ? '100%' : 'auto',
+                   minWidth: headerAvatarAspect >= 1 ? '100%' : 'auto',
+                   minHeight: headerAvatarAspect >= 1 ? 'auto' : '100%',
+                   top: '50%',
+                   left: '50%',
+                   transform: sheet.avatarSettings 
+                     ? `translate(calc(-50% + ${sheet.avatarSettings.offsetX * (36/256)}px), calc(-50% + ${sheet.avatarSettings.offsetY * (36/256)}px)) scale(${sheet.avatarSettings.zoom})`
+                     : `translate(-50%, calc(-50% - 15%)) scale(1.7)`,
+                 }}
+              />
             ) : (
               <User className="w-5 h-5 text-amber-400" />
             )}

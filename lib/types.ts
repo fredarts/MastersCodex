@@ -533,6 +533,7 @@ export interface CharacterSheet {
   playerName: string;
   xp: number;
   avatarUrl?: string;
+  avatarSettings?: { zoom: number; offsetX: number; offsetY: number };
   modelUrl?: string;
 
   // Atributos & Inspiração
