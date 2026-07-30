@@ -15,7 +15,14 @@ interface GeneralSectionProps {
 
 export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange }) => {
   const handleRaceChange = (newRace: string) => {
-    const updated = applyRacePreset(sheet, newRace);
+    const raceData = DND_RACES[newRace];
+    const newSubrace = (raceData && raceData.subraces) ? Object.keys(raceData.subraces)[0] : '';
+    const updated = applyRacePreset(sheet, newRace, newSubrace);
+    onChange(updated);
+  };
+
+  const handleSubraceChange = (newSubrace: string) => {
+    const updated = applyRacePreset(sheet, sheet.race, newSubrace);
     onChange(updated);
   };
 
@@ -264,14 +271,27 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
         {/* SUBCLASSE & SUBRAÇA */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="text-[11px] text-slate-400">Subraça (Opcional)</label>
-            <input
-              type="text"
-              value={sheet.subrace || ''}
-              onChange={(e) => onChange({ ...sheet, subrace: e.target.value })}
-              placeholder="Ex: Elfo da Floresta"
-              className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-            />
+            <label className="text-[11px] text-slate-400">Subraça {DND_RACES[sheet.race]?.subraces ? '' : '(Indisponível)'}</label>
+            {DND_RACES[sheet.race]?.subraces ? (
+              <select
+                value={sheet.subrace || ''}
+                onChange={(e) => handleSubraceChange(e.target.value)}
+                className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+              >
+                {Object.keys(DND_RACES[sheet.race].subraces!).map((subKey) => (
+                  <option key={subKey} value={subKey}>{subKey}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={sheet.subrace || ''}
+                onChange={(e) => handleSubraceChange(e.target.value)}
+                placeholder="Sem sub-raças"
+                disabled
+                className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-500 focus:outline-none focus:border-amber-500 opacity-50 cursor-not-allowed"
+              />
+            )}
           </div>
           <div className="space-y-1">
             <label className="text-[11px] text-slate-400">Subclasse (Opcional)</label>

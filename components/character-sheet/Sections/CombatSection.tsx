@@ -156,7 +156,7 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
       attributesLocked: false,
       attributes: {
         ...sheet.attributes,
-        [attrKey]: { ...sheet.attributes[attrKey], score: currentScore + 1 },
+        [attrKey]: { ...sheet.attributes[attrKey], score: currentScore + 1, baseScore: (sheet.attributes[attrKey].baseScore ?? currentScore) + 1 },
       },
     };
     onChange(recalculateSheetDerivedStats(updatedSheet));
@@ -175,7 +175,7 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
       attributesLocked: false,
       attributes: {
         ...sheet.attributes,
-        [attrKey]: { ...sheet.attributes[attrKey], score: currentScore - 1 },
+        [attrKey]: { ...sheet.attributes[attrKey], score: currentScore - 1, baseScore: (sheet.attributes[attrKey].baseScore ?? currentScore) - 1 },
       },
     };
     onChange(recalculateSheetDerivedStats(updatedSheet));
@@ -188,7 +188,7 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
       ...sheet,
       attributes: {
         ...sheet.attributes,
-        [attrKey]: { ...sheet.attributes[attrKey], score: safeScore },
+        [attrKey]: { ...sheet.attributes[attrKey], score: safeScore, baseScore: safeScore - (sheet.attributes[attrKey].score - (sheet.attributes[attrKey].baseScore ?? sheet.attributes[attrKey].score)) },
       },
     };
     onChange(recalculateSheetDerivedStats(updatedSheet));

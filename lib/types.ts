@@ -383,6 +383,7 @@ export type SkillProficiencyLevel = 'none' | 'proficient' | 'expertise';
 
 export interface AttributeScore {
   score: number;
+  baseScore?: number;
   overrideMod?: number;
 }
 

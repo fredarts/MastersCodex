@@ -22,6 +22,7 @@ export const CharacterBuilderWizardModal: React.FC<CharacterBuilderWizardModalPr
   const [step, setStep] = useState<number>(1);
   const [characterName, setCharacterName] = useState('Heroi Lendario');
   const [selectedRace, setSelectedRace] = useState('Humano');
+  const [selectedSubrace, setSelectedSubrace] = useState('');
   const [selectedClass, setSelectedClass] = useState('Guerreiro');
   const [selectedLevel, setSelectedLevel] = useState(1);
   const [selectedBackground, setSelectedBackground] = useState('Herói do Povo');
@@ -48,11 +49,11 @@ export const CharacterBuilderWizardModal: React.FC<CharacterBuilderWizardModalPr
     // Aplica os atributos definidos
     Object.keys(attributes).forEach((attrKey) => {
       const k = attrKey as AttributeKey;
-      newSheet.attributes[k] = { score: attributes[k] };
+      newSheet.attributes[k] = { score: attributes[k], baseScore: attributes[k] };
     });
 
     // Aplica Presets de Raça e Classe
-    newSheet = applyRacePreset(newSheet, selectedRace);
+    newSheet = applyRacePreset(newSheet, selectedRace, selectedSubrace);
     newSheet = applyClassPreset(newSheet, selectedClass);
     newSheet = applyLevelChange(newSheet, selectedLevel);
 
@@ -148,7 +149,17 @@ export const CharacterBuilderWizardModal: React.FC<CharacterBuilderWizardModalPr
                   <label className="text-xs font-bold text-slate-300">Raça</label>
                   <select
                     value={selectedRace}
-                    onChange={(e) => setSelectedRace(e.target.value)}
+                    onChange={(e) => {
+                      const newRace = e.target.value;
+                      setSelectedRace(newRace);
+                      // Auto-select first subrace if available
+                      const raceData = DND_RACES[newRace];
+                      if (raceData && raceData.subraces) {
+                        setSelectedSubrace(Object.keys(raceData.subraces)[0]);
+                      } else {
+                        setSelectedSubrace('');
+                      }
+                    }}
                     className="w-full bg-[#0b0f19] border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-amber-500 focus:outline-none font-bold"
                   >
                     {Object.keys(DND_RACES).map((raceKey) => (
@@ -156,6 +167,21 @@ export const CharacterBuilderWizardModal: React.FC<CharacterBuilderWizardModalPr
                     ))}
                   </select>
                 </div>
+                
+                {DND_RACES[selectedRace]?.subraces && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-300">Sub-raça</label>
+                    <select
+                      value={selectedSubrace}
+                      onChange={(e) => setSelectedSubrace(e.target.value)}
+                      className="w-full bg-[#0b0f19] border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-amber-500 focus:outline-none font-bold"
+                    >
+                      {Object.keys(DND_RACES[selectedRace].subraces!).map((subKey) => (
+                        <option key={subKey} value={subKey}>{subKey}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-300">Classe</label>
@@ -244,7 +270,15 @@ export const CharacterBuilderWizardModal: React.FC<CharacterBuilderWizardModalPr
                 {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map((attrKey) => {
                   const POINT_COSTS: Record<number, number> = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
                   const currentScore = attributes[attrKey];
-                  const mod = Math.floor((currentScore - 10) / 2);
+                  
+                  const raceData = DND_RACES[selectedRace];
+                  const subraceData = (selectedSubrace && raceData?.subraces) ? raceData.subraces[selectedSubrace] : null;
+                  const raceBonus = raceData?.attributes[attrKey] || 0;
+                  const subraceBonus = subraceData?.attributes[attrKey] || 0;
+                  const totalBonus = raceBonus + subraceBonus;
+                  const finalScore = currentScore + totalBonus;
+                  
+                  const mod = Math.floor((finalScore - 10) / 2);
                   const totalSpent = Object.values(attributes).reduce((sum, score) => sum + (POINT_COSTS[score] ?? 0), 0);
                   const remainingPoints = 27 - totalSpent;
 
@@ -276,7 +310,14 @@ export const CharacterBuilderWizardModal: React.FC<CharacterBuilderWizardModalPr
                         >
                           −
                         </button>
-                        <span className="text-base font-black text-white font-mono">{currentScore}</span>
+                        <div className="flex flex-col items-center justify-center">
+                          <span className="text-base font-black text-white font-mono leading-none">{finalScore}</span>
+                          {totalBonus > 0 && (
+                            <span className="text-[9px] text-emerald-400 font-bold">
+                              {currentScore} + {totalBonus}
+                            </span>
+                          )}
+                        </div>
                         <button
                           type="button"
                           onClick={() => handleAdjust(1)}
@@ -298,9 +339,9 @@ export const CharacterBuilderWizardModal: React.FC<CharacterBuilderWizardModalPr
               <h3 className="text-xs font-black uppercase text-amber-400">Passo 4: Resumo da Ficha Gerada</h3>
               <div className="space-y-2 text-xs text-slate-300">
                 <p><strong>Nome:</strong> {characterName}</p>
-                <p><strong>Raça:</strong> {selectedRace} | <strong>Classe:</strong> {selectedClass} Nível {selectedLevel}</p>
+                <p><strong>Raça:</strong> {selectedRace} {selectedSubrace ? `(${selectedSubrace})` : ''} | <strong>Classe:</strong> {selectedClass} Nível {selectedLevel}</p>
                 <p><strong>Antecedente:</strong> {selectedBackground} | <strong>Tendência:</strong> {selectedAlignment}</p>
-                <p><strong>Atributos:</strong> FOR {attributes.str}, DES {attributes.dex}, CON {attributes.con}, INT {attributes.int}, SAB {attributes.wis}, CAR {attributes.cha}</p>
+                <p><strong>Atributos Finais:</strong> FOR {attributes.str + (DND_RACES[selectedRace]?.attributes.str || 0) + (DND_RACES[selectedRace]?.subraces?.[selectedSubrace]?.attributes.str || 0)}, DES {attributes.dex + (DND_RACES[selectedRace]?.attributes.dex || 0) + (DND_RACES[selectedRace]?.subraces?.[selectedSubrace]?.attributes.dex || 0)}, CON {attributes.con + (DND_RACES[selectedRace]?.attributes.con || 0) + (DND_RACES[selectedRace]?.subraces?.[selectedSubrace]?.attributes.con || 0)}, INT {attributes.int + (DND_RACES[selectedRace]?.attributes.int || 0) + (DND_RACES[selectedRace]?.subraces?.[selectedSubrace]?.attributes.int || 0)}, SAB {attributes.wis + (DND_RACES[selectedRace]?.attributes.wis || 0) + (DND_RACES[selectedRace]?.subraces?.[selectedSubrace]?.attributes.wis || 0)}, CAR {attributes.cha + (DND_RACES[selectedRace]?.attributes.cha || 0) + (DND_RACES[selectedRace]?.subraces?.[selectedSubrace]?.attributes.cha || 0)}</p>
               </div>
             </div>
           )}

@@ -101,25 +101,39 @@ export function calculateSpellAttackBonus(sheet: CharacterSheet): number {
 /**
  * Aplica autocompletar ao selecionar uma Raça
  */
-export function applyRacePreset(sheet: CharacterSheet, raceName: string): CharacterSheet {
+export function applyRacePreset(sheet: CharacterSheet, raceName: string, subraceName?: string): CharacterSheet {
   const raceData = DND_RACES[raceName];
   if (!raceData) return sheet;
+
+  const subraceData = (subraceName && raceData.subraces) ? raceData.subraces[subraceName] : null;
 
   const newAttributes = { ...sheet.attributes };
   // Reinicia para base antes de aplicar bônus da raça se necessário
   Object.keys(newAttributes).forEach((key) => {
     const k = key as AttributeKey;
-    const bonus = raceData.attributes[k] || 0;
+    const baseScore = newAttributes[k].baseScore ?? newAttributes[k].score;
+    const raceBonus = raceData.attributes[k] || 0;
+    const subraceBonus = subraceData?.attributes[k] || 0;
     // Ajusta o score base + bônus
-    newAttributes[k] = { ...newAttributes[k], score: Math.max(8, newAttributes[k].score + bonus) };
+    newAttributes[k] = { ...newAttributes[k], baseScore, score: Math.max(1, baseScore + raceBonus + subraceBonus) };
   });
+
+  let combinedTraits = raceData.traits;
+  if (subraceData?.traits) combinedTraits += `\n${subraceData.traits}`;
+
+  let combinedLanguages = [...raceData.languages];
+  if (subraceData?.languages) combinedLanguages = [...new Set([...combinedLanguages, ...subraceData.languages])];
+
+  const finalSpeed = subraceData?.speed || raceData.speed;
 
   return {
     ...sheet,
     race: raceName,
-    speed: raceData.speed,
-    featuresAndTraits: `${raceData.traits}\n\n${sheet.featuresAndTraits || ''}`.trim(),
-    otherProficienciesAndLanguages: `Idiomas: ${raceData.languages.join(', ')}.\n${sheet.otherProficienciesAndLanguages || ''}`.trim(),
+    subrace: subraceName || '',
+    speed: finalSpeed,
+    attributes: newAttributes,
+    featuresAndTraits: combinedTraits,
+    otherProficienciesAndLanguages: `Idiomas: ${combinedLanguages.join(', ')}.`,
   };
 }
 

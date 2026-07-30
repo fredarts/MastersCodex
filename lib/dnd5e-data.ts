@@ -7,6 +7,7 @@ export interface RacePreset {
   attributes: Partial<Record<AttributeKey, number>>;
   traits: string;
   languages: string[];
+  subraces?: Record<string, RacePreset>;
 }
 
 export interface ClassPreset {
@@ -54,6 +55,29 @@ export const DND_RACES: Record<string, RacePreset> = {
     attributes: { dex: 2 },
     traits: 'Visão no Escuro (18m), Sentidos Aguçados (Proficiência em Percepção), Ancestralidade Feérica, Transe.',
     languages: ['Comum', 'Élfico'],
+    subraces: {
+      'Alto Elfo': {
+        name: 'Alto Elfo',
+        speed: '9m (30ft)',
+        attributes: { int: 1 },
+        traits: 'Treinamento Élfico com Armas, Truque de Mago.',
+        languages: ['Um idioma adicional à escolha']
+      },
+      'Elfo da Floresta': {
+        name: 'Elfo da Floresta',
+        speed: '10.5m (35ft)',
+        attributes: { wis: 1 },
+        traits: 'Treinamento Élfico com Armas, Frota de Pés (+1.5m deslocamento), Máscara da Natureza.',
+        languages: []
+      },
+      'Drow': {
+        name: 'Drow',
+        speed: '9m (30ft)',
+        attributes: { cha: 1 },
+        traits: 'Visão no Escuro Superior (36m), Sensibilidade à Luz Solar, Magia Drow, Treinamento Drow com Armas.',
+        languages: []
+      }
+    }
   },
   Anão: {
     name: 'Anão',
@@ -61,6 +85,22 @@ export const DND_RACES: Record<string, RacePreset> = {
     attributes: { con: 2 },
     traits: 'Visão no Escuro (18m), Resiliência Anã (Vantagem vs Veneno), Treinamento de Combate Anão, Conhecimento de Pedra.',
     languages: ['Comum', 'Anão'],
+    subraces: {
+      'Anão da Colina': {
+        name: 'Anão da Colina',
+        speed: '7.5m (25ft)',
+        attributes: { wis: 1 },
+        traits: 'Tenacidade Anã (+1 PV máximo por nível).',
+        languages: []
+      },
+      'Anão da Montanha': {
+        name: 'Anão da Montanha',
+        speed: '7.5m (25ft)',
+        attributes: { str: 2 },
+        traits: 'Treinamento com Armaduras Anãs (Proficiência em armaduras leves e médias).',
+        languages: []
+      }
+    }
   },
   Halfling: {
     name: 'Halfling',
@@ -68,6 +108,22 @@ export const DND_RACES: Record<string, RacePreset> = {
     attributes: { dex: 2 },
     traits: 'Sortudo (Rerrola 1 em d20), Corajoso (Vantagem vs Medo), Agilidade Halfling.',
     languages: ['Comum', 'Halfling'],
+    subraces: {
+      'Pés-Leves': {
+        name: 'Pés-Leves',
+        speed: '7.5m (25ft)',
+        attributes: { cha: 1 },
+        traits: 'Furtividade Natural (Pode se esconder atrás de criaturas maiores).',
+        languages: []
+      },
+      'Robusto': {
+        name: 'Robusto',
+        speed: '7.5m (25ft)',
+        attributes: { con: 1 },
+        traits: 'Resiliência Robusta (Vantagem e resistência contra veneno).',
+        languages: []
+      }
+    }
   },
   Draconato: {
     name: 'Draconato',
@@ -75,6 +131,13 @@ export const DND_RACES: Record<string, RacePreset> = {
     attributes: { str: 2, cha: 1 },
     traits: 'Ancestral Dragão (Arma de Sopro & Resistência Elemental).',
     languages: ['Comum', 'Dracônico'],
+    subraces: {
+      'Fogo': { name: 'Fogo', speed: '9m (30ft)', attributes: {}, traits: 'Arma de Sopro (Fogo), Resistência a Fogo.', languages: [] },
+      'Frio': { name: 'Frio', speed: '9m (30ft)', attributes: {}, traits: 'Arma de Sopro (Frio), Resistência a Frio.', languages: [] },
+      'Ácido': { name: 'Ácido', speed: '9m (30ft)', attributes: {}, traits: 'Arma de Sopro (Ácido), Resistência a Ácido.', languages: [] },
+      'Elétrico': { name: 'Elétrico', speed: '9m (30ft)', attributes: {}, traits: 'Arma de Sopro (Elétrico), Resistência a Eletricidade.', languages: [] },
+      'Veneno': { name: 'Veneno', speed: '9m (30ft)', attributes: {}, traits: 'Arma de Sopro (Veneno), Resistência a Veneno.', languages: [] }
+    }
   },
   Gnomo: {
     name: 'Gnomo',
@@ -82,12 +145,28 @@ export const DND_RACES: Record<string, RacePreset> = {
     attributes: { int: 2 },
     traits: 'Visão no Escuro (18m), Esperteza Gnomos (Vantagem em TR de INT/SAB/CAR contra Magia).',
     languages: ['Comum', 'Gnomo'],
+    subraces: {
+      'Gnomo da Floresta': {
+        name: 'Gnomo da Floresta',
+        speed: '7.5m (25ft)',
+        attributes: { dex: 1 },
+        traits: 'Ilusionista Nato (Truque Ilusão Menor), Falar com Bestas Pequenas.',
+        languages: []
+      },
+      'Gnomo das Rochas': {
+        name: 'Gnomo das Rochas',
+        speed: '7.5m (25ft)',
+        attributes: { con: 1 },
+        traits: 'Conhecimento de Artífice, Engenhoqueiro.',
+        languages: []
+      }
+    }
   },
   'Meio-Elfo': {
     name: 'Meio-Elfo',
     speed: '9m (30ft)',
     attributes: { cha: 2 },
-    traits: 'Visão no Escuro (18m), Ancestralidade Feérica, Versatilidade em Perícias (+2 Perícias à escolha).',
+    traits: 'Visão no Escuro (18m), Ancestralidade Feérica, Versatilidade em Perícias (+2 Perícias à escolha). (Lembre-se de adicionar +1 em dois outros atributos livres).',
     languages: ['Comum', 'Élfico', 'Um idioma adicional'],
   },
   'Meio-Orc': {
@@ -290,12 +369,12 @@ export function createEmptyCharacterSheet(userId: string, campaignId?: string): 
     attributePointsAvailable: 27,
     attributesLocked: false,
     attributes: {
-      str: { score: 8 },
-      dex: { score: 8 },
-      con: { score: 8 },
-      int: { score: 8 },
-      wis: { score: 8 },
-      cha: { score: 8 },
+      str: { score: 8, baseScore: 8 },
+      dex: { score: 8, baseScore: 8 },
+      con: { score: 8, baseScore: 8 },
+      int: { score: 8, baseScore: 8 },
+      wis: { score: 8, baseScore: 8 },
+      cha: { score: 8, baseScore: 8 },
     },
     savingThrows: {
       str: true,
