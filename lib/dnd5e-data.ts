@@ -196,14 +196,16 @@ export const MULTICLASS_REQUIREMENTS: Record<string, Partial<Record<AttributeKey
   'Bárbaro': { str: 13 },
   'Paladino': { str: 13, cha: 13 },
   'Mago': { int: 13 },
-  'Bardo': { cha: 13 }
+  'Bardo': { cha: 13 },
+  'Patrulheiro': { dex: 13, wis: 13 }
 };
 
 export const MULTICLASS_PROFICIENCIES: Record<string, { armor: string; weapons: string; tools?: string; skillChoices?: number }> = {
   'Bárbaro': { armor: 'Escudos', weapons: 'Armas simples, armas marciais' },
   'Paladino': { armor: 'Armaduras leves, armaduras médias, escudos', weapons: 'Armas simples, armas marciais' },
   'Mago': { armor: 'Nenhuma', weapons: 'Adagas, dardos, fundas, cajados, bestas leves' },
-  'Bardo': { armor: 'Armaduras leves', weapons: 'Nenhuma', skillChoices: 1, tools: 'Um instrumento musical' }
+  'Bardo': { armor: 'Armaduras leves', weapons: 'Nenhuma', skillChoices: 1, tools: 'Um instrumento musical' },
+  'Patrulheiro': { armor: 'Armaduras leves, armaduras médias, escudos', weapons: 'Armas simples, armas marciais', skillChoices: 1 }
 };
 export const DND_CLASSES: Record<string, ClassPreset> = {
   Bárbaro: {
@@ -258,6 +260,7 @@ export const DND_CLASSES: Record<string, ClassPreset> = {
     name: 'Monge',
     hitDie: '1d8',
     savingThrows: ['str', 'dex'],
+    spellcastingAbility: 'wis',
     armorProficiencies: 'Nenhuma',
     weaponProficiencies: 'Armas simples, espadas curtas',
     skillChoices: 2,
@@ -1663,6 +1666,932 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
         level: 20,
         description: 'Você pode atacar quatro vezes ao invés de três.',
         activation: 'none'
+      }
+    ]
+  },
+  Clérigo: {
+    1: [
+      {
+        name: 'Conjuração (Clérigo)',
+        level: 1,
+        description: 'Você pode conjurar magias de clérigo usando Sabedoria como sua habilidade de conjuração. Você prepara a lista de magias que estão disponíveis para você conjurar.',
+        activation: 'none'
+      },
+      {
+        name: 'Domínio Divino',
+        level: 1,
+        description: 'Escolha um domínio divino relacionado à sua divindade.',
+        activation: 'none',
+        choices: ['Domínio da Vida'],
+        isSubclassChoice: true
+      },
+      {
+        name: 'Proficiência Bônus (Domínio da Vida)',
+        level: 1,
+        description: 'Você ganha proficiência com armaduras pesadas.',
+        activation: 'none',
+        requiresSubclass: 'Domínio da Vida'
+      },
+      {
+        name: 'Discípulo da Vida',
+        level: 1,
+        description: 'Sempre que você usar uma magia de 1º nível ou superior para restaurar pontos de vida a uma criatura, a criatura recupera pontos de vida adicionais iguais a 2 + o nível da magia.',
+        activation: 'special',
+        requiresSubclass: 'Domínio da Vida'
+      }
+    ],
+    2: [
+      {
+        name: 'Canalizar Divindade',
+        level: 2,
+        description: 'Você ganha a habilidade de canalizar energia divina diretamente de sua divindade para alimentar efeitos mágicos. Começa com dois efeitos: Expulsar Mortos-Vivos e um do seu domínio.',
+        activation: 'none',
+        resourceCost: { type: 'class_resource', name: 'canalizar_divindade', amount: 1 }
+      },
+      {
+        name: 'Canalizar Divindade: Expulsar Mortos-Vivos',
+        level: 2,
+        description: 'Como uma ação, você apresenta seu símbolo sagrado. Cada morto-vivo até 9m deve fazer salvaguarda de Sabedoria ou será expulso por 1 minuto.',
+        activation: 'action'
+      },
+      {
+        name: 'Canalizar Divindade: Preservar a Vida',
+        level: 2,
+        description: 'Como uma ação, restaura PV igual a 5x nível de clérigo distribuído até 9m, sem curar além da metade dos PVs máximos.',
+        activation: 'action',
+        requiresSubclass: 'Domínio da Vida'
+      }
+    ],
+    3: [],
+    4: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 4,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    5: [
+      {
+        name: 'Destruir Mortos-Vivos (ND 1/2)',
+        level: 5,
+        description: 'Quando um morto-vivo falhar no seu Expulsar Mortos-Vivos, ele é destruído se seu ND for 1/2 ou menor.',
+        activation: 'special'
+      }
+    ],
+    6: [
+      {
+        name: 'Canalizar Divindade (2 usos)',
+        level: 6,
+        description: 'Você pode usar Canalizar Divindade duas vezes entre descansos.',
+        activation: 'none'
+      },
+      {
+        name: 'Curador Abençoado',
+        level: 6,
+        description: 'Quando conjura magia que restaura PV para outra criatura, você recupera 2 + nível da magia em PV.',
+        activation: 'special',
+        requiresSubclass: 'Domínio da Vida'
+      }
+    ],
+    7: [],
+    8: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 8,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      },
+      {
+        name: 'Destruir Mortos-Vivos (ND 1)',
+        level: 8,
+        description: 'Mortos-Vivos de ND 1 ou menor são destruídos no seu Expulsar Mortos-Vivos.',
+        activation: 'special'
+      },
+      {
+        name: 'Golpe Divino (1d8)',
+        level: 8,
+        description: 'Uma vez por turno ao acertar ataque com arma, causa 1d8 de dano radiante extra.',
+        activation: 'special',
+        requiresSubclass: 'Domínio da Vida'
+      }
+    ],
+    9: [],
+    10: [
+      {
+        name: 'Intervenção Divina',
+        level: 10,
+        description: 'Role 1d100. Se o resultado for menor ou igual ao seu nível, sua divindade intervém. Requer 7 dias para usar novamente caso tenha sucesso.',
+        activation: 'action'
+      }
+    ],
+    11: [
+      {
+        name: 'Destruir Mortos-Vivos (ND 2)',
+        level: 11,
+        description: 'Mortos-Vivos de ND 2 ou menor são destruídos no seu Expulsar Mortos-Vivos.',
+        activation: 'special'
+      }
+    ],
+    12: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 12,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    13: [],
+    14: [
+      {
+        name: 'Destruir Mortos-Vivos (ND 3)',
+        level: 14,
+        description: 'Mortos-Vivos de ND 3 ou menor são destruídos no seu Expulsar Mortos-Vivos.',
+        activation: 'special'
+      },
+      {
+        name: 'Golpe Divino (2d8)',
+        level: 14,
+        description: 'Dano extra de Golpe Divino aumenta para 2d8.',
+        activation: 'special',
+        requiresSubclass: 'Domínio da Vida'
+      }
+    ],
+    15: [],
+    16: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 16,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    17: [
+      {
+        name: 'Destruir Mortos-Vivos (ND 4)',
+        level: 17,
+        description: 'Mortos-Vivos de ND 4 ou menor são destruídos no seu Expulsar Mortos-Vivos.',
+        activation: 'special'
+      },
+      {
+        name: 'Cura Suprema',
+        level: 17,
+        description: 'Sempre que rolar dados para restaurar PV com magia, use o maior valor possível do dado.',
+        activation: 'special',
+        requiresSubclass: 'Domínio da Vida'
+      }
+    ],
+    18: [
+      {
+        name: 'Canalizar Divindade (3 usos)',
+        level: 18,
+        description: 'Você pode usar Canalizar Divindade três vezes entre descansos.',
+        activation: 'none'
+      }
+    ],
+    19: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 19,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    20: [
+      {
+        name: 'Intervenção Divina Aprimorada',
+        level: 20,
+        description: 'Seu chamado por Intervenção Divina tem sucesso automático, sem rolar dados.',
+        activation: 'action'
+      }
+    ]
+  },
+  Druida: {
+    1: [
+      {
+        name: 'Idioma Druídico',
+        level: 1,
+        description: 'Você conhece o idioma druídico, uma língua secreta dos druidas. Você pode falar essa língua e deixar mensagens ocultas nela.',
+        activation: 'none'
+      },
+      {
+        name: 'Conjuração (Druida)',
+        level: 1,
+        description: 'Você pode conjurar magias de druida usando Sabedoria como sua habilidade de conjuração. Você prepara a lista de magias que estão disponíveis para você conjurar.',
+        activation: 'none'
+      }
+    ],
+    2: [
+      {
+        name: 'Forma Selvagem',
+        level: 2,
+        description: 'Como uma ação, você pode usar sua Forma Selvagem para assumir a forma de uma besta que você já tenha visto.',
+        activation: 'action',
+        resourceCost: { type: 'class_resource', name: 'forma_selvagem', amount: 1 }
+      },
+      {
+        name: 'Círculo Druídico',
+        level: 2,
+        description: 'Escolha um círculo druídico que guiará sua conexão espiritual.',
+        activation: 'none',
+        choices: ['Círculo da Lua', 'Círculo da Terra'],
+        isSubclassChoice: true
+      },
+      {
+        name: 'Forma Selvagem de Combate',
+        level: 2,
+        description: 'Você ganha a habilidade de usar Forma Selvagem como uma ação bônus no seu turno, em vez de uma ação. Além disso, enquanto estiver transformado, você pode gastar um espaço de magia como ação bônus para recuperar 1d8 pontos de vida por nível do espaço de magia gasto.',
+        activation: 'bonus_action',
+        requiresSubclass: 'Círculo da Lua'
+      },
+      {
+        name: 'Formas do Círculo',
+        level: 2,
+        description: 'As restrições de ND da sua Forma Selvagem aumentam. Você pode se transformar em uma besta com ND de até 1 (ignorando restrições de voo ou nado temporariamente se aplicar). A partir do 6º nível, você pode se transformar em uma besta com ND igual a seu nível de druida dividido por 3 (arredondado para baixo).',
+        activation: 'none',
+        requiresSubclass: 'Círculo da Lua'
+      },
+      {
+        name: 'Truque Adicional (Círculo da Terra)',
+        level: 2,
+        description: 'Você aprende um truque de druida adicional à sua escolha.',
+        activation: 'none',
+        requiresSubclass: 'Círculo da Terra'
+      },
+      {
+        name: 'Recuperação Natural',
+        level: 2,
+        description: 'Durante um descanso curto, você pode escolher recuperar espaços de magia gastos. O nível total somado dos espaços não pode ser maior que metade do seu nível de druida (arredondado para cima) e nenhum espaço pode ser de 6º nível ou superior. Requer um descanso longo para usar novamente.',
+        activation: 'special',
+        requiresSubclass: 'Círculo da Terra',
+        resourceCost: { type: 'class_resource', name: 'recuperacao_natural', amount: 1 }
+      }
+    ],
+    3: [],
+    4: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 4,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      },
+      {
+        name: 'Forma Selvagem Melhorada (Nado)',
+        level: 4,
+        description: 'Você agora pode se transformar em criaturas com deslocamento de nado. O ND limite de criatura aumenta para 1/2.',
+        activation: 'none'
+      }
+    ],
+    5: [],
+    6: [
+      {
+        name: 'Ataque Primitivo',
+        level: 6,
+        description: 'Seus ataques na forma de besta contam como mágicos com o propósito de ultrapassar resistência e imunidade a ataques não-mágicos.',
+        activation: 'special',
+        requiresSubclass: 'Círculo da Lua'
+      },
+      {
+        name: 'Travessia da Terra',
+        level: 6,
+        description: 'Mover-se através de terreno difícil não-mágico não custa movimento extra. Você também passa por plantas não-mágicas sem sofrer dano ou ficar impedido, e tem vantagem em salvaguardas contra plantas criadas magicamente.',
+        activation: 'none',
+        requiresSubclass: 'Círculo da Terra'
+      }
+    ],
+    7: [],
+    8: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 8,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      },
+      {
+        name: 'Forma Selvagem Melhorada (Voo)',
+        level: 8,
+        description: 'Você agora pode se transformar em criaturas com deslocamento de voo. O ND limite de criatura aumenta para 1.',
+        activation: 'none'
+      }
+    ],
+    9: [],
+    10: [
+      {
+        name: 'Forma Elemental',
+        level: 10,
+        description: 'Você pode gastar dois usos de Forma Selvagem ao mesmo tempo para se transformar em um Elemental da Água, do Ar, do Fogo ou da Terra.',
+        activation: 'action',
+        requiresSubclass: 'Círculo da Lua'
+      },
+      {
+        name: 'Salvaguarda da Natureza',
+        level: 10,
+        description: 'Você não pode ser envenenado ou contrair doenças, e ganha imunidade a efeitos de medo e charme causados por fadas e elementais.',
+        activation: 'none',
+        requiresSubclass: 'Círculo da Terra'
+      }
+    ],
+    11: [],
+    12: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 12,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    13: [],
+    14: [
+      {
+        name: 'Mil Formas',
+        level: 14,
+        description: 'Você pode conjurar a magia Alterar-se à vontade sem gastar espaços de magia.',
+        activation: 'action',
+        requiresSubclass: 'Círculo da Lua'
+      },
+      {
+        name: 'Santuário da Natureza',
+        level: 14,
+        description: 'Criaturas do tipo besta ou planta devem realizar uma salvaguarda de Sabedoria contra a CD de suas magias se tentarem atacar você. Se falharem, devem escolher outro alvo ou perder o ataque.',
+        activation: 'special',
+        requiresSubclass: 'Círculo da Terra'
+      }
+    ],
+    15: [],
+    16: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 16,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    17: [],
+    18: [
+      {
+        name: 'Corpo Atemporal',
+        level: 18,
+        description: 'Para cada 10 anos que passarem, seu corpo envelhece apenas 1 ano fisicamente.',
+        activation: 'none'
+      },
+      {
+        name: 'Magia Bestial',
+        level: 18,
+        description: 'Você pode realizar os componentes somáticos e verbais de suas magias enquanto estiver em Forma Selvagem, mas ainda não pode prover componentes materiais.',
+        activation: 'special'
+      }
+    ],
+    19: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 19,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    20: [
+      {
+        name: 'Arquidruida',
+        level: 20,
+        description: 'Você pode usar sua Forma Selvagem um número ilimitado de vezes. Além disso, você ignora os componentes verbais e somáticos das suas magias, e os componentes materiais que não possuam custo em ouro e não sejam consumidos.',
+        activation: 'special'
+      }
+    ]
+  },
+  Monge: {
+    1: [
+      {
+        name: 'Defesa sem Armadura',
+        level: 1,
+        description: 'Enquanto não estiver usando nenhuma armadura e nem empunhando um escudo, sua Classe de Armadura será igual a 10 + modificador de Destreza + modificador de Sabedoria.',
+        activation: 'none'
+      },
+      {
+        name: 'Artes Marciais (d4)',
+        level: 1,
+        description: 'Você pode usar Destreza em vez de Força para ataques e dano de golpes desarmados e armas de monge. Seus golpes desarmados causam 1d4 de dano. Quando usa a ação de ataque com um golpe desarmado ou arma de monge, pode realizar um golpe desarmado como ação bônus.',
+        activation: 'none'
+      }
+    ],
+    2: [
+      {
+        name: 'Ki',
+        level: 2,
+        description: 'Seu treinamento permite que você controle a energia mística do ki. Você pode gastar pontos de ki para alimentar várias características (Rajada de Golpes, Defesa Paciente, Passo do Vento).',
+        activation: 'none'
+      },
+      {
+        name: 'Movimento sem Armadura (+3m)',
+        level: 2,
+        description: 'Seu deslocamento aumenta em 3 metros enquanto você não estiver usando armadura ou escudo.',
+        activation: 'none'
+      }
+    ],
+    3: [
+      {
+        name: 'Defletir Projéteis',
+        level: 3,
+        description: 'Você pode usar sua reação para defletir ou apanhar o projétil quando você é atingido por um ataque de arma à distância. O dano que você sofre do ataque é reduzido em 1d10 + seu modificador de Destreza + seu nível de monge. Se o dano for reduzido a 0, você pode apanhar o projétil e arremessá-lo gastando 1 ponto de Ki.',
+        activation: 'reaction'
+      },
+      {
+        name: 'Tradição Monástica',
+        level: 3,
+        description: 'Escolha uma tradição monástica que guiará seu treinamento.',
+        activation: 'none',
+        choices: ['Caminho da Mão Aberta', 'Caminho das Sombras', 'Caminho dos Quatro Elementos'],
+        isSubclassChoice: true
+      },
+      {
+        name: 'Técnica da Mão Aberta',
+        level: 3,
+        description: 'Ao atingir uma criatura com um dos ataques da sua Rajada de Golpes, você pode impose um dos seguintes efeitos no alvo: teste de salvaguarda de Destreza ou é derrubado; teste de salvaguarda de Força ou é empurrado até 4,5 metros de você; ou não pode realizar reações até o fim do seu próximo turno.',
+        activation: 'special',
+        requiresSubclass: 'Caminho da Mão Aberta'
+      },
+      {
+        name: 'Artes das Sombras',
+        level: 3,
+        description: 'Você pode gastar 2 pontos de ki para conjurar Escuridão, Visão no Escuro, Passo Sem Pegadas ou Silêncio sem componentes materiais. Você também ganha o truque Ilusão Menor.',
+        activation: 'action',
+        requiresSubclass: 'Caminho das Sombras'
+      },
+      {
+        name: 'Discípulo dos Elementos',
+        level: 3,
+        description: 'Você aprende disciplinas que canalizam seu ki. Você aprende a Sintonização Elemental e outra disciplina elemental de sua escolha. Pode gastar ki para simular magias como Mãos Queimadoras ou Onda Trovejante.',
+        activation: 'special',
+        requiresSubclass: 'Caminho dos Quatro Elementos'
+      }
+    ],
+    4: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 4,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      },
+      {
+        name: 'Queda Suave',
+        level: 4,
+        description: 'Você pode usar sua reação quando cair para reduzir o dano de queda sofrido por um valor igual a cinco vezes o seu nível de monge.',
+        activation: 'reaction'
+      }
+    ],
+    5: [
+      {
+        name: 'Ataque Extra',
+        level: 5,
+        description: 'Você pode atacar duas vezes, em vez de uma, sempre que realizar a ação de Ataque no seu turno.',
+        activation: 'none'
+      },
+      {
+        name: 'Ataque Atordoante',
+        level: 5,
+        description: 'Quando atingir outra criatura com um ataque de arma corpo-a-corpo, você pode gastar 1 ponto de ki para tentar um Ataque Atordoante. O alvo deve passar em uma salvaguarda de Constituição ou ficará atordoado até o fim do seu próximo turno.',
+        activation: 'special'
+      },
+      {
+        name: 'Artes Marciais (d6)',
+        level: 5,
+        description: 'O dado de dano das suas Artes Marciais aumenta para 1d6.',
+        activation: 'none'
+      }
+    ],
+    6: [
+      {
+        name: 'Golpes Empoderados por Ki',
+        level: 6,
+        description: 'Seus ataques desarmados contam como mágicos com o propósito de ultrapassar resistências e imunidades a ataques e danos não-mágicos.',
+        activation: 'none'
+      },
+      {
+        name: 'Integridade Corporal',
+        level: 6,
+        description: 'Como uma ação, você pode recuperar pontos de vida iguais a três vezes seu nível de monge. Você deve terminar um descanso longo antes de usar essa característica novamente.',
+        activation: 'action',
+        requiresSubclass: 'Caminho da Mão Aberta',
+        resourceCost: { type: 'class_resource', name: 'integridade_corporal', amount: 1 }
+      },
+      {
+        name: 'Passo das Sombras',
+        level: 6,
+        description: 'Quando estiver na penumbra ou escuridão, você pode se teleportar como ação bônus até 18m para outro ponto na penumbra/escuridão. Ganha vantagem no primeiro ataque corpo-a-corpo do turno.',
+        activation: 'bonus_action',
+        requiresSubclass: 'Caminho das Sombras'
+      },
+      {
+        name: 'Disciplinas Elementais (6º Nível)',
+        level: 6,
+        description: 'Você aprende uma nova disciplina elemental de sua escolha (ex: Gongar da Cúpula ou Chicotada de Água).',
+        activation: 'special',
+        requiresSubclass: 'Caminho dos Quatro Elementos'
+      },
+      {
+        name: 'Movimento sem Armadura (+4.5m)',
+        level: 6,
+        description: 'Seu bônus de deslocamento sem armadura aumenta para +4,5 metros.',
+        activation: 'none'
+      }
+    ],
+    7: [
+      {
+        name: 'Evasão',
+        level: 7,
+        description: 'Quando for alvo de um efeito que exija uma salvaguarda de Destreza para sofrer apenas metade do dano, você não sofre dano se passar, e apenas metade se falhar.',
+        activation: 'none'
+      },
+      {
+        name: 'Mente Serena',
+        level: 7,
+        description: 'Você pode usar sua ação para encerrar um efeito em si mesmo que esteja lhe causando enfeitiçado ou amedrontado.',
+        activation: 'action'
+      }
+    ],
+    8: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 8,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    9: [
+      {
+        name: 'Movimento sem Armadura Melhorado',
+        level: 9,
+        description: 'Você ganha a habilidade de mover-se ao longo de superfícies verticais e sobre líquidos no seu turno sem cair durante o movimento.',
+        activation: 'none'
+      }
+    ],
+    10: [
+      {
+        name: 'Pureza Corporal',
+        level: 10,
+        description: 'Sua maestria com o ki flutuante em seu corpo torna-o imune a doenças e venenos.',
+        activation: 'none'
+      },
+      {
+        name: 'Movimento sem Armadura (+6m)',
+        level: 10,
+        description: 'Seu bônus de deslocamento sem armadura aumenta para +6 metros.',
+        activation: 'none'
+      }
+    ],
+    11: [
+      {
+        name: 'Tranquilidade',
+        level: 11,
+        description: 'Ao terminar um descanso longo, você ganha o efeito da magia Santuário que dura até o início do seu próximo descanso longo (CD baseada em Sabedoria). O efeito se encerra se você atacar ou conjurar magia.',
+        activation: 'special',
+        requiresSubclass: 'Caminho da Mão Aberta'
+      },
+      {
+        name: 'Manto de Sombras',
+        level: 11,
+        description: 'Quando estiver em penumbra ou escuridão, pode usar sua ação para ficar invisível até atacar, conjurar magia ou entrar em luz plena.',
+        activation: 'action',
+        requiresSubclass: 'Caminho das Sombras'
+      },
+      {
+        name: 'Disciplinas Elementais (11º Nível)',
+        level: 11,
+        description: 'Você aprende uma nova disciplina elemental de sua escolha (ex: Chamas da Fênix ou Cavalgada do Vento).',
+        activation: 'special',
+        requiresSubclass: 'Caminho dos Quatro Elementos'
+      },
+      {
+        name: 'Artes Marciais (d8)',
+        level: 11,
+        description: 'O dado de dano das suas Artes Marciais aumenta para 1d8.',
+        activation: 'none'
+      }
+    ],
+    12: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 12,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    13: [
+      {
+        name: 'Língua do Sol e da Lua',
+        level: 13,
+        description: 'Você aprende a tocar o ki de outras mentes para que você compreenda todos os idiomas falados. Além disso, qualquer criatura que seja capaz de entender um idioma pode entender o que você fala.',
+        activation: 'none'
+      }
+    ],
+    14: [
+      {
+        name: 'Alma de Diamante',
+        level: 14,
+        description: 'Sua maestria com o ki concede a você proficiência em todas as salvaguardas. Adicionalmente, quando falhar em uma salvaguarda, você pode gastar 1 ponto de ki para rolar novamente e usar o novo resultado.',
+        activation: 'special'
+      },
+      {
+        name: 'Movimento sem Armadura (+7.5m)',
+        level: 14,
+        description: 'Seu bônus de deslocamento sem armadura aumenta para +7,5 metros.',
+        activation: 'none'
+      }
+    ],
+    15: [
+      {
+        name: 'Corpo Atemporal',
+        level: 15,
+        description: 'Seu ki sustenta você para que você não sofro os efeitos da velhice. Você não pode envelhecer magicamente. Além disso, você não precisa de comida ou água.',
+        activation: 'none'
+      }
+    ],
+    16: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 16,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    17: [
+      {
+        name: 'Palma Vibrante',
+        level: 17,
+        description: 'Quando atinge uma criatura com golpe desarmado, pode gastar 3 Ki para criar vibrações letais. Você pode forçar o teste como uma ação: salvaguarda de Constituição. Falha: reduz a 0 PV; Sucesso: sofre 10d10 de dano vibrante.',
+        activation: 'special',
+        requiresSubclass: 'Caminho da Mão Aberta'
+      },
+      {
+        name: 'Oportunista',
+        level: 17,
+        description: 'Quando uma criatura a até 1,5m for atingida por ataque de outra criatura, você pode usar reação para atacar corpo-a-corpo o alvo.',
+        activation: 'reaction',
+        requiresSubclass: 'Caminho das Sombras'
+      },
+      {
+        name: 'Disciplinas Elementais (17º Nível)',
+        level: 17,
+        description: 'Você aprende uma nova disciplina elemental de sua escolha (ex: Sopro de Inverno ou Rio de Famintos).',
+        activation: 'special',
+        requiresSubclass: 'Caminho dos Quatro Elementos'
+      },
+      {
+        name: 'Artes Marciais (d10)',
+        level: 17,
+        description: 'O dado de dano das suas Artes Marciais aumenta para 1d10.',
+        activation: 'none'
+      }
+    ],
+    18: [
+      {
+        name: 'Corpo Vazio',
+        level: 18,
+        description: 'Você pode usar sua ação e gastar 4 pontos de ki para ficar invisível por 1 minuto, ganhando resistência a todos os danos exceto de força. Você também pode projetar-se astralmente gastando 8 pontos de ki.',
+        activation: 'action'
+      },
+      {
+        name: 'Movimento sem Armadura (+9m)',
+        level: 18,
+        description: 'Seu bônus de deslocamento sem armadura aumenta para +9 metros.',
+        activation: 'none'
+      }
+    ],
+    19: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 19,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    20: [
+      {
+        name: 'Auto-Perfeição',
+        level: 20,
+        description: 'Quando rolar a iniciativa e não possuir nenhum ponto de ki restante, você recupera 4 pontos de ki.',
+        activation: 'special'
+      }
+    ]
+  },
+  Patrulheiro: {
+    1: [
+      {
+        name: 'Inimigo Favorito',
+        level: 1,
+        description: 'Você escolhe um tipo de inimigo favorito: aberrantes, bestas, celestiais, construtos, dragões, elementais, feéricos, gigantes, corruptores, monstros, lodos, plantas ou mortos-vivos. Você ganha vantagem em testes de Sobrevivência para rastreá-los, inteligência para recordar informações sobre eles, e aprende um idioma falado por eles.',
+        activation: 'none'
+      },
+      {
+        name: 'Explorador Natural',
+        level: 1,
+        description: 'Você escolhe um tipo de terreno favorito: floresta, pântano, planície, montanha, deserto, colina, ártico ou subterrâneo. Dobra seu bônus de proficiência em testes de Inteligência e Sabedoria relacionados a esse terreno. Também ganha benefícios de viagem como não se perder, mover-se furtivamente no ritmo normal e encontrar o dobro de comida.',
+        activation: 'none'
+      }
+    ],
+    2: [
+      {
+        name: 'Estilo de Luta',
+        level: 2,
+        description: 'Você adota um estilo de combate particular como sua especialidade.',
+        activation: 'none',
+        choices: ['Arquearia', 'Defesa', 'Duelismo', 'Combate com Duas Armas']
+      },
+      {
+        name: 'Conjuração (Patrulheiro)',
+        level: 2,
+        description: 'Você pode conjurar magias de patrulheiro usando Sabedoria como sua habilidade de conjuração. Você conhece um número limitado de magias da lista de patrulheiro.',
+        activation: 'none'
+      }
+    ],
+    3: [
+      {
+        name: 'Arquétipo de Patrulheiro',
+        level: 3,
+        description: 'Escolha um arquétipo de patrulheiro que definirá suas táticas de caça.',
+        activation: 'none',
+        choices: ['Caçador', 'Mestre das Feras'],
+        isSubclassChoice: true
+      },
+      {
+        name: 'Prontidão Primal',
+        level: 3,
+        description: 'Você pode usar sua ação e gastar um espaço de magia de patrulheiro para focar seus sentidos. Por 1 minuto por nível do espaço gasto, você detecta se há aberrações, celestiais, dragões, elementais, feéricos, corruptores ou mortos-vivos a até 1,5 km de você (ou 9 km no seu terreno favorito).',
+        activation: 'action',
+        resourceCost: { type: 'spell_slot', amount: 1 }
+      },
+      {
+        name: 'Presa do Caçador',
+        level: 3,
+        description: 'Você ganha uma das seguintes características à sua escolha: Matador de Colossos (causa +1d8 de dano uma vez por turno em criatura ferida), Matador de Gigantes (usa reação para atacar criatura Grande ou maior que te ataque e erre), ou Quebrador de Hordas (faz outro ataque com a mesma arma contra criatura diferente a até 1,5m do alvo inicial).',
+        activation: 'none',
+        requiresSubclass: 'Caçador'
+      },
+      {
+        name: 'Companheiro do Patrulheiro',
+        level: 3,
+        description: 'Você ganha um companheiro animal de tamanho Médio ou menor (ND 1/4 ou menor, como lobo, pantera, falcão). Ele obedece a seus comandos e age na sua iniciativa.',
+        activation: 'none',
+        requiresSubclass: 'Mestre das Feras'
+      }
+    ],
+    4: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 4,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    5: [
+      {
+        name: 'Ataque Extra',
+        level: 5,
+        description: 'Você pode atacar duas vezes, ao invés de uma, sempre que usar a ação de Ataque no seu turno.',
+        activation: 'none'
+      }
+    ],
+    6: [
+      {
+        name: 'Inimigo Favorito Melhorado',
+        level: 6,
+        description: 'Você escolhe um tipo de inimigo favorito adicional e aprende outro idioma correspondente.',
+        activation: 'none'
+      },
+      {
+        name: 'Explorador Natural Melhorado',
+        level: 6,
+        description: 'Você escolhe um segundo tipo de terreno favorito.',
+        activation: 'none'
+      }
+    ],
+    7: [
+      {
+        name: 'Táticas Defensivas',
+        level: 7,
+        description: 'Você ganha uma das seguintes características à sua escolha: Escapar da Horda (ataques de oportunidade contra você têm desvantagem), Defesa Contra Ataques Múltiplos (+4 na CA contra ataques subsequentes da mesma criatura), ou Vontade de Aço (vantagem em testes de resistência contra ficar amedrontado).',
+        activation: 'none',
+        requiresSubclass: 'Caçador'
+      },
+      {
+        name: 'Treinamento Excepcional',
+        level: 7,
+        description: 'No seu turno, se o seu companheiro animal não atacar, você pode usar uma ação bônus para ordenar que ele use Correr, Desengajar ou Ajudar. Os ataques da besta contam como mágicos.',
+        activation: 'bonus_action',
+        requiresSubclass: 'Mestre das Feras'
+      }
+    ],
+    8: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 8,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      },
+      {
+        name: 'Caminho da Terra',
+        level: 8,
+        description: 'Mover-se através de terreno difícil não-mágico não custa movimento extra. Você também passa por plantas não-mágicas sem sofrer dano ou ficar impedido, e tem vantagem em salvaguardas contra plantas criadas magicamente.',
+        activation: 'none'
+      }
+    ],
+    10: [
+      {
+        name: 'Mimetismo na Natureza',
+        level: 10,
+        description: 'Você pode passar 1 minuto criando camuflagem em si mesmo. Ganha +10 em testes de Furtividade enquanto permanecer imóvel contra uma parede ou árvore.',
+        activation: 'special'
+      },
+      {
+        name: 'Explorador Natural Adicional',
+        level: 10,
+        description: 'Você escolhe um terceiro tipo de terreno favorito.',
+        activation: 'none'
+      }
+    ],
+    11: [
+      {
+        name: 'Ataque Múltiplo',
+        level: 11,
+        description: 'Você ganha uma das seguintes características à sua escolha: Salva de Flechas (faz ataques à distância contra qualquer número de criaturas a até 3m de um ponto) ou Ataque em Turbilhão (faz ataques corpo-a-corpo contra qualquer número de criaturas a até 1,5m).',
+        activation: 'action',
+        requiresSubclass: 'Caçador'
+      },
+      {
+        name: 'Fúria Bestial',
+        level: 11,
+        description: 'Quando você ordena que seu companheiro animal use a ação de Ataque, ele pode fazer dois ataques.',
+        activation: 'none',
+        requiresSubclass: 'Mestre das Feras'
+      }
+    ],
+    12: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 12,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    14: [
+      {
+        name: 'Desaparecer',
+        level: 14,
+        description: 'Você pode usar la ação de Esconder-se como uma ação bônus no seu turno. Além disso, não pode ser rastreado por meios não-mágicos, a menos que decida deixar rastros.',
+        activation: 'bonus_action'
+      },
+      {
+        name: 'Inimigo Favorito Adicional',
+        level: 14,
+        description: 'Você escolhe um terceiro tipo de inimigo favorito e aprende outro idioma correspondente.',
+        activation: 'none'
+      }
+    ],
+    15: [
+      {
+        name: 'Defesa de Caçador Superior',
+        level: 15,
+        description: 'Você ganha uma das seguintes características à sua escolha: Evasão (não sofre dano ao passar em testes de Destreza), Esquiva Sobrenatural (usa reação para reduzir dano de um ataque pela metade), ou Ficar de Pé contra a Maré (quando ataque corpo-a-corpo te erra, usa reação para fazer o atacante atingir criatura adjacente à sua escolha).',
+        activation: 'none',
+        requiresSubclass: 'Caçador'
+      },
+      {
+        name: 'Conjurar Compartilhado',
+        level: 15,
+        description: 'Sempre que você conjurar uma magia com alvo em você mesmo, ela também afeta seu companheiro animal se ele estiver a até 9 metros de você.',
+        activation: 'special',
+        requiresSubclass: 'Mestre das Feras'
+      }
+    ],
+    16: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 16,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    18: [
+      {
+        name: 'Sentidos Ferais',
+        level: 18,
+        description: 'Quando ataca criatura que não pode ver, você não tem desvantagem na jogada. Você sabe a localização de qualquer criatura invisível a até 9 metros de você.',
+        activation: 'none'
+      }
+    ],
+    19: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 19,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    20: [
+      {
+        name: 'Matador de Inimigos',
+        level: 20,
+        description: 'Uma vez em cada um de seus turnos, você pode adicionar seu modificador de Sabedoria na jogada de ataque ou de dano contra um de seus inimigos favoritos.',
+        activation: 'special'
       }
     ]
   }

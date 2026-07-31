@@ -44,7 +44,11 @@ export function getAttributeModifier(sheet: CharacterSheet, attrKey: AttributeKe
  */
 export function calculateSavingThrowTotal(sheet: CharacterSheet, attrKey: AttributeKey): number {
   const attrMod = getAttributeModifier(sheet, attrKey);
-  const isProficient = sheet.savingThrows[attrKey];
+  
+  // Alma de Diamante (Monge Nível 14+) concede proficiência em todas as salvaguardas
+  const hasDiamondSoul = getCharacterClasses(sheet).some(c => c.name === 'Monge' && c.level >= 14);
+  const isProficient = sheet.savingThrows[attrKey] || hasDiamondSoul;
+  
   const profBonus = calculateProficiencyBonus(sheet.level);
   return attrMod + (isProficient ? profBonus : 0);
 }
@@ -171,9 +175,75 @@ export function getClassResourcesForLevel(
       };
       
       if (c.level >= 3) {
+        const existingCD = resources['canalizar_divindade']?.max || 0;
+        const newMax = Math.max(existingCD, 1);
         resources['canalizar_divindade'] = {
           name: 'canalizar_divindade',
           label: 'Canalizar Divindade',
+          current: newMax,
+          max: newMax
+        };
+      }
+    } else if (c.name === 'Clérigo') {
+      if (c.level >= 2) {
+        let canalizarMax = 1;
+        if (c.level >= 18) canalizarMax = 3;
+        else if (c.level >= 6) canalizarMax = 2;
+
+        const existingCD = resources['canalizar_divindade']?.max || 0;
+        const newMax = Math.max(existingCD, canalizarMax);
+
+        resources['canalizar_divindade'] = {
+          name: 'canalizar_divindade',
+          label: 'Canalizar Divindade',
+          current: newMax,
+          max: newMax
+        };
+      }
+
+      if (c.level >= 10) {
+        resources['intervencao_divina'] = {
+          name: 'intervencao_divina',
+          label: 'Intervenção Divina',
+          current: 1,
+          max: 1
+        };
+      }
+    } else if (c.name === 'Druida') {
+      if (c.level >= 2) {
+        const formaSelvagemMax = c.level >= 20 ? 9999 : 2;
+        const existingFS = resources['forma_selvagem']?.max || 0;
+        const newMax = Math.max(existingFS, formaSelvagemMax);
+        resources['forma_selvagem'] = {
+          name: 'forma_selvagem',
+          label: 'Forma Selvagem',
+          current: newMax,
+          max: newMax
+        };
+      }
+
+      if (c.level >= 2 && c.subclass === 'Círculo da Terra') {
+        resources['recuperacao_natural'] = {
+          name: 'recuperacao_natural',
+          label: 'Recuperação Natural',
+          current: 1,
+          max: 1
+        };
+      }
+    } else if (c.name === 'Monge') {
+      if (c.level >= 2) {
+        resources['pontos_ki'] = {
+          name: 'pontos_ki',
+          label: 'Pontos de Ki',
+          current: c.level,
+          max: c.level
+        };
+      }
+
+      if (c.level >= 6 && c.subclass === 'Caminho da Mão Aberta') {
+        resources['integridade_corporal'] = {
+          name: 'integridade_corporal',
+          label: 'Integridade Corporal',
           current: 1,
           max: 1
         };
@@ -558,8 +628,8 @@ export function calculateArmorClass(
         const conMod = getAttributeModifier(sheet, 'con');
         ac = 10 + dexMod + conMod;
       }
-      // Defesa sem Armadura — Monge: 10 + DES + SAB
-      else if (sheet.className === 'Monge') {
+      // Defesa sem Armadura — Monge: 10 + DES + SAB (apenas sem escudo)
+      else if (sheet.className === 'Monge' && !hasShield) {
         const wisMod = getAttributeModifier(sheet, 'wis');
         ac = 10 + dexMod + wisMod;
       }
@@ -797,6 +867,63 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
 }
 
 /**
+ * Calcula dinamicamente o deslocamento do personagem, aplicando bônus como Movimento Sem Armadura do Monge ou Bárbaro
+ */
+export function calculateDynamicSpeed(sheet: CharacterSheet): string {
+  const raceData = DND_RACES[sheet.race];
+  if (!raceData) return sheet.speed || '9m (30ft)';
+
+  const subraceData = (sheet.subrace && raceData.subraces) ? raceData.subraces[sheet.subrace] : null;
+  const baseSpeedStr = subraceData?.speed || raceData.speed || '9m (30ft)';
+
+  const match = baseSpeedStr.match(/^(\d+(\.\d+)?)m\s*\((\d+)\s*ft\)$/);
+  if (!match) return baseSpeedStr;
+
+  const baseMeters = parseFloat(match[1]);
+  const baseFeet = parseInt(match[3], 10);
+
+  let bonusMeters = 0;
+  let bonusFeet = 0;
+
+  const classes = getCharacterClasses(sheet);
+  const armor = ARMOR_TABLE[sheet.equippedArmor || 'Nenhuma'] || { category: 'none' };
+  const hasNoArmor = armor.category === 'none';
+  const hasNoHeavyArmor = armor.category !== 'heavy';
+
+  // 1. Monge: Movimento Sem Armadura (Apenas sem armadura nem escudo)
+  const isMonk = classes.find(c => c.name === 'Monge');
+  if (isMonk && hasNoArmor && !sheet.hasShield) {
+    if (isMonk.level >= 18) {
+      bonusMeters = 9;
+      bonusFeet = 30;
+    } else if (isMonk.level >= 14) {
+      bonusMeters = 7.5;
+      bonusFeet = 25;
+    } else if (isMonk.level >= 10) {
+      bonusMeters = 6;
+      bonusFeet = 20;
+    } else if (isMonk.level >= 6) {
+      bonusMeters = 4.5;
+      bonusFeet = 15;
+    } else if (isMonk.level >= 2) {
+      bonusMeters = 3;
+      bonusFeet = 10;
+    }
+  }
+
+  // 2. Bárbaro: Movimento Rápido (Apenas sem armadura pesada)
+  const isBarbarian = classes.find(c => c.name === 'Bárbaro');
+  if (isBarbarian && isBarbarian.level >= 5 && hasNoHeavyArmor) {
+    bonusMeters += 3;
+    bonusFeet += 10;
+  }
+
+  if (bonusMeters === 0) return baseSpeedStr;
+
+  return `${baseMeters + bonusMeters}m (${baseFeet + bonusFeet}ft)`;
+}
+
+/**
  * Recalcula AUTOMATICAMENTE todos os valores derivados da ficha D&D 5e:
  * 1. CA (Classe de Armadura) = Armadura equipada + Mod DES (respeitando limites) + Escudo + Defesa Sem Armadura
  * 2. HP Máximo = Dado de Vida + Mod CON * Nível
@@ -810,6 +937,9 @@ export function recalculateSheetDerivedStats(sheet: CharacterSheet): CharacterSh
 
   // 1. Recalcula Classe de Armadura (CA)
   const newAC = calculateArmorClass(sheet, sheet.equippedArmor || 'Nenhuma', sheet.hasShield || false);
+
+  // 1.5 Recalcula Deslocamento (Velocidade)
+  const newSpeed = calculateDynamicSpeed(sheet);
 
   // 2. Recalcula Pontos de Vida Máximos (Max HP)
   const classData = DND_CLASSES[sheet.className];
@@ -837,38 +967,60 @@ export function recalculateSheetDerivedStats(sheet: CharacterSheet): CharacterSh
     }
 
     // Se for uma arma personalizada, recalcula o bônus de acerto com base em Força ou Destreza + Proficiência
+    const isMonk = getCharacterClasses(sheet).some(c => c.name === 'Monge');
+    const isUnarmed = atk.name.toLowerCase().includes('desarmado') || atk.name.toLowerCase().includes('soco');
+
     const isRangedOrFinesse =
       atk.type?.toLowerCase().includes('distância') ||
       atk.type?.toLowerCase().includes('perfurante') ||
       atk.name.toLowerCase().includes('arco') ||
       atk.name.toLowerCase().includes('adaga') ||
-      atk.name.toLowerCase().includes('rapieira');
+      atk.name.toLowerCase().includes('rapieira') ||
+      (isMonk && isUnarmed);
 
     const modToUse = isRangedOrFinesse ? Math.max(strMod, dexMod) : strMod;
     const totalAtk = modToUse + profBonus;
 
+    let updatedDamage = atk.damage;
+    if (isMonk && isUnarmed) {
+      const monkLvl = getCharacterClasses(sheet).find(c => c.name === 'Monge')?.level || 1;
+      let damageDie = '1d4';
+      if (monkLvl >= 17) damageDie = '1d10';
+      else if (monkLvl >= 11) damageDie = '1d8';
+      else if (monkLvl >= 5) damageDie = '1d6';
+      
+      updatedDamage = `${damageDie}${modToUse >= 0 ? '+' : ''}${modToUse}`;
+    }
+
     return {
       ...atk,
       atkBonus: formatModifier(totalAtk),
+      damage: updatedDamage,
     };
   });
 
   // Recalcula habilidades da classe dinamicamente para garantir integridade
   const classFeaturesList: ClassFeature[] = [];
-  const db = CLASS_FEATURES_DB[sheet.className];
-  if (db) {
-    let idCounter = 1;
-    for (let lvl = 1; lvl <= sheet.level; lvl++) {
-      if (db[lvl]) {
-        db[lvl].forEach(feat => {
-          classFeaturesList.push({
-            ...feat,
-            id: `${sheet.className.toLowerCase()}-${lvl}-${idCounter++}`
+  const activeClasses = getCharacterClasses(sheet);
+
+  let idCounter = 1;
+  activeClasses.forEach(cls => {
+    const db = CLASS_FEATURES_DB[cls.name];
+    if (db) {
+      for (let lvl = 1; lvl <= cls.level; lvl++) {
+        if (db[lvl]) {
+          db[lvl].forEach(feat => {
+            if (!feat.requiresSubclass || feat.requiresSubclass === cls.subclass) {
+              classFeaturesList.push({
+                ...feat,
+                id: `${cls.name.toLowerCase()}-${lvl}-${idCounter++}`
+              });
+            }
           });
-        });
+        }
       }
     }
-  }
+  });
 
   // Recalcula recursos baseado no nível e nos atributos recalculados
   const baseResources = getClassResourcesForLevel(sheet, sheet.level);
@@ -894,6 +1046,7 @@ export function recalculateSheetDerivedStats(sheet: CharacterSheet): CharacterSh
   return {
     ...sheet,
     armorClass: newAC,
+    speed: newSpeed,
     maxHp: newMaxHp,
     currentHp: Math.max(1, newCurrentHp),
     attacks: updatedAttacks,
