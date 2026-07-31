@@ -56,6 +56,7 @@ export class SupabaseWorldRepository implements IWorldRepository {
         short_desc: entityData.shortDesc,
         full_content: entityData.fullContent,
         attributes: entityData.attributes,
+        connections: entityData.connections || [],
         images: entityData.images || [],
       })
       .select()
@@ -78,6 +79,7 @@ export class SupabaseWorldRepository implements IWorldRepository {
         short_desc: entity.shortDesc,
         full_content: entity.fullContent,
         attributes: entity.attributes,
+        connections: entity.connections || [],
         images: entity.images || [],
       })
       .eq('id', entity.id);

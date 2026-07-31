@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Sparkles, Layers, BookOpen, FileText, Image as ImageIcon, Trash2, Upload, AlertCircle, Wand2 } from 'lucide-react';
+import { X, Plus, Sparkles, Layers, BookOpen, FileText, Image as ImageIcon, Trash2, Upload, AlertCircle, Wand2, Network } from 'lucide-react';
 import { useWorld } from '@/lib/hooks/useWorld';
-import { WorldEntityCategory, WorldEntity } from '@/lib/types';
+import { WorldEntityCategory, WorldEntity, EntityConnection, ConnectionType } from '@/lib/types';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
 import { storageService } from '@/lib/services/storageService';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -34,6 +34,10 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   const [extraAttr2, setExtraAttr2] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [imageUrlInput, setImageUrlInput] = useState('');
+  const [connections, setConnections] = useState<EntityConnection[]>([]);
+  
+  // Lista de todas as outras entidades no mundo atual
+  const { worldEntities } = useWorld();
   
   // Lightbox State
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -56,6 +60,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       setShortDesc(editingEntity.shortDesc || '');
       setFullContent(editingEntity.fullContent || '');
       setImages(editingEntity.images || []);
+      setConnections(editingEntity.connections || []);
       
       const attrs = editingEntity.attributes || {};
       const keys = Object.keys(attrs);
@@ -70,6 +75,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       setExtraAttr1('');
       setExtraAttr2('');
       setImages([]);
+      setConnections([]);
     }
   }, [editingEntity, defaultCategory, isOpen]);
 
@@ -174,6 +180,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         shortDesc: shortDesc.trim(),
         fullContent: fullContent.trim() || undefined,
         images: images.length > 0 ? images : undefined,
+        connections: connections,
         attributes,
       });
     } else {
@@ -186,6 +193,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         shortDesc: shortDesc.trim(),
         fullContent: fullContent.trim() || undefined,
         images: images.length > 0 ? images : undefined,
+        connections: connections,
         attributes,
       });
     }
@@ -198,6 +206,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
     setExtraAttr1('');
     setExtraAttr2('');
     setImages([]);
+    setConnections([]);
     setExtraPrompt('');
     setAiWarningMessage(null);
     onClose();
@@ -602,7 +611,70 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
             ></textarea>
           </div>
 
-          {/* Row 5: Media Gallery & AI Generator Section (Nano Banana) */}
+          {/* Row 5: Connections & Relationships */}
+          <div className="bg-[#0a0d14] border-2 border-[#2a3449] p-5 rounded-2xl space-y-4">
+            <div className="flex items-center gap-2 border-b border-[#2a3449] pb-3">
+              <Network className="w-5 h-5 text-amber-400" />
+              <div>
+                <h4 className="text-sm font-bold text-slate-100">Conexões na Lore</h4>
+                <p className="text-[11px] text-slate-400">Associe esta entidade a outras do mundo e defina a natureza da relação.</p>
+              </div>
+            </div>
+            
+            <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+              {worldEntities.filter(e => e.id !== editingEntity?.id).length === 0 ? (
+                <p className="text-xs text-slate-500 italic">Nenhuma outra entidade encontrada neste mundo.</p>
+              ) : (
+                worldEntities.filter(e => e.id !== editingEntity?.id).map(entity => {
+                  const existingConn = connections.find(c => c.targetId === entity.id);
+                  const isConnected = !!existingConn;
+                  
+                  return (
+                    <div key={entity.id} className={`flex items-center justify-between p-3 rounded-xl border ${isConnected ? 'bg-amber-500/10 border-amber-500/30' : 'bg-[#121824] border-[#2a3449]'}`}>
+                      <label className="flex items-center gap-3 cursor-pointer flex-1">
+                        <input 
+                          type="checkbox"
+                          checked={isConnected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setConnections([...connections, { targetId: entity.id, type: 'neutral' }]);
+                            } else {
+                              setConnections(connections.filter(c => c.targetId !== entity.id));
+                            }
+                          }}
+                          className="w-4 h-4 rounded bg-[#0a0d14] border-[#2a3449] text-amber-500 focus:ring-amber-500/50 cursor-pointer"
+                        />
+                        <div className="flex flex-col">
+                          <span className={`text-sm font-bold ${isConnected ? 'text-amber-400' : 'text-slate-300'}`}>{entity.name}</span>
+                          <span className="text-[10px] text-slate-500 uppercase">{entity.category}</span>
+                        </div>
+                      </label>
+                      
+                      {isConnected && (
+                        <select
+                          value={existingConn.type}
+                          onChange={(e) => {
+                            const newType = e.target.value as ConnectionType;
+                            setConnections(connections.map(c => c.targetId === entity.id ? { ...c, type: newType } : c));
+                          }}
+                          className="bg-[#0a0d14] border border-amber-500/30 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer"
+                        >
+                          <option value="neutral">Neutro / Relacionado</option>
+                          <option value="allied">Aliado / Amigo</option>
+                          <option value="hostile">Inimigo / Hostil</option>
+                          <option value="family">Família / Sangue</option>
+                          <option value="member">Membro / Pertence a</option>
+                          <option value="location">Localizado em</option>
+                        </select>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Row 6: Media Gallery & AI Generator Section (Nano Banana) */}
           <div className="bg-[#0a0d14] border-2 border-amber-500/30 p-5 rounded-2xl space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2a3449] pb-3">
               <div className="flex items-center gap-2">

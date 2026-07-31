@@ -14,6 +14,13 @@ export type ConditionType =
   | 'Inconsciente' 
   | 'Concentração';
 
+export type ConnectionType = 'neutral' | 'allied' | 'hostile' | 'family' | 'member' | 'location';
+
+export interface EntityConnection {
+  targetId: string;
+  type: ConnectionType;
+}
+
 export type UserRoleMode = 'dm' | 'player';
 
 export type WorldEntityCategory = 
@@ -98,7 +105,7 @@ export interface WorldEntity {
   fullContent?: string;
   images?: string[]; // Galeria de imagens (upload ou IA Nano Banana)
   attributes?: Record<string, any>;
-  connections?: string[]; // IDs de outras entidades conectadas
+  connections?: EntityConnection[]; // IDs de outras entidades conectadas e tipo da relação
   createdAt?: string;
 }
 
@@ -311,7 +318,7 @@ export interface LoreNode {
   type: 'npc' | 'location' | 'faction' | 'event';
   status: 'alive' | 'dead' | 'active' | 'destroyed' | 'allied' | 'hostile';
   description: string;
-  connectedTo: string[]; // Node IDs
+  connectedTo: EntityConnection[]; // Array of connection objects
 }
 
 export interface BGMTrack {

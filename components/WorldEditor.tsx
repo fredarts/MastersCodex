@@ -97,6 +97,23 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
   const [isEditingWorldTitle, setIsEditingWorldTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
 
+  // Event Listener para abrir o modal a partir do LoreGraph
+  React.useEffect(() => {
+    const handleOpenModal = (e: CustomEvent<{ entityId: string }>) => {
+      const entity = worldEntities.find((ent) => ent.id === e.detail.entityId);
+      if (entity) {
+        setEditingEntity(entity);
+        setModalCategory(entity.category);
+        setShowAddModal(true);
+      }
+    };
+
+    window.addEventListener('openWorldEntityModal', handleOpenModal as EventListener);
+    return () => {
+      window.removeEventListener('openWorldEntityModal', handleOpenModal as EventListener);
+    };
+  }, [worldEntities]);
+
   if (!activeWorld) {
     return (
       <div className="flex-1 bg-[#0a0d14] flex flex-col items-center justify-center p-8 text-center">

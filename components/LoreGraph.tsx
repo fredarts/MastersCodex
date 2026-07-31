@@ -14,8 +14,7 @@ import {
   RotateCcw,
   Hand 
 } from 'lucide-react';
-import { LoreNode, WorldEntity } from '@/lib/types';
-import { INITIAL_LORE_NODES } from '@/lib/srd-data';
+import { LoreNode, WorldEntity, ConnectionType } from '@/lib/types';
 import { useWorld } from '@/context/WorldContext';
 
 interface NodePosition {
@@ -24,9 +23,9 @@ interface NodePosition {
 }
 
 export const LoreGraph: React.FC = () => {
-  const { activeWorld, worldEntities } = useWorld();
-  const [nodes, setNodes] = useState<LoreNode[]>(INITIAL_LORE_NODES);
-  const [selectedNode, setSelectedNode] = useState<LoreNode | null>(INITIAL_LORE_NODES[0]);
+  const { activeWorld, worldEntities, updateWorldEntity } = useWorld();
+  const [nodes, setNodes] = useState<LoreNode[]>([]);
+  const [selectedNode, setSelectedNode] = useState<LoreNode | null>(null);
   const [simulatedConsequence, setSimulatedConsequence] = useState<string | null>(null);
 
   // Canvas Pan & Zoom States
@@ -43,12 +42,7 @@ export const LoreGraph: React.FC = () => {
       const saved = typeof window !== 'undefined' ? localStorage.getItem('codex_lore_positions') : null;
       if (saved) return JSON.parse(saved);
     } catch (e) {}
-    return {
-      'rei-aris': { x: 50, y: 40 },
-      'kraag-npc': { x: 300, y: 40 },
-      'valiria-city': { x: 175, y: 180 },
-      'guilda-sombras': { x: 175, y: 320 },
-    };
+    return {};
   });
 
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
@@ -67,22 +61,25 @@ export const LoreGraph: React.FC = () => {
 
   // Merge dynamic world entities from WorldContext into graph nodes
   useEffect(() => {
-    if (worldEntities.length > 0) {
-      const mappedEntities: LoreNode[] = worldEntities.map((e, idx) => ({
-        id: e.id,
-        name: e.name,
-        type: e.category === 'npc' ? 'npc' : e.category === 'location' ? 'location' : 'faction',
-        status: e.status === 'active' || e.status === 'allied' ? 'alive' : 'dead',
-        description: e.shortDesc,
-        connectedTo: e.connections || [],
-      }));
+    const mappedEntities: LoreNode[] = worldEntities.map((e) => ({
+      id: e.id,
+      name: e.name,
+      type: e.category === 'npc' ? 'npc' : e.category === 'location' ? 'location' : 'faction',
+      status: e.status === 'active' || e.status === 'allied' ? 'alive' : 'dead',
+      description: e.shortDesc,
+      connectedTo: e.connections || [],
+    }));
 
-      setNodes((prev) => {
-        const existingIds = new Set(prev.map((n) => n.id));
-        const newOnly = mappedEntities.filter((m) => !existingIds.has(m.id));
-        return [...prev, ...newOnly];
-      });
+    setNodes(mappedEntities);
+    
+    setSelectedNode((prevSelected) => {
+      if (prevSelected && mappedEntities.find((n) => n.id === prevSelected.id)) {
+        return mappedEntities.find((n) => n.id === prevSelected.id) || prevSelected;
+      }
+      return mappedEntities.length > 0 ? mappedEntities[0] : null;
+    });
 
+    if (mappedEntities.length > 0) {
       setNodePositions((prevPos) => {
         const newPos = { ...prevPos };
         worldEntities.forEach((e, idx) => {
@@ -110,6 +107,18 @@ export const LoreGraph: React.FC = () => {
         return 'border-amber-500 bg-amber-950/40 text-amber-300';
       case 'allied':
         return 'border-cyan-500 bg-cyan-950/40 text-cyan-300';
+    }
+  };
+
+  const getConnectionColor = (type: ConnectionType | string) => {
+    switch (type) {
+      case 'allied': return '#10b981'; // emerald-500
+      case 'hostile': return '#f43f5e'; // rose-500
+      case 'family':
+      case 'member': return '#a855f7'; // purple-500
+      case 'location': return '#f59e0b'; // amber-500
+      case 'neutral':
+      default: return '#64748b'; // slate-500
     }
   };
 
@@ -301,17 +310,17 @@ export const LoreGraph: React.FC = () => {
               {nodes.map((node) => {
                 const startPos = nodePositions[node.id];
                 if (!startPos) return null;
-                return node.connectedTo.map((targetId) => {
-                  const targetPos = nodePositions[targetId];
+                return node.connectedTo.map((conn) => {
+                  const targetPos = nodePositions[conn.targetId];
                   if (!targetPos) return null;
                   return (
                     <line
-                      key={`${node.id}-${targetId}`}
+                      key={`${node.id}-${conn.targetId}`}
                       x1={startPos.x + 90}
                       y1={startPos.y + 45}
                       x2={targetPos.x + 90}
                       y2={targetPos.y + 45}
-                      stroke="#334155"
+                      stroke={getConnectionColor(conn.type)}
                       strokeWidth="2"
                       strokeDasharray="4"
                     />
@@ -387,20 +396,44 @@ export const LoreGraph: React.FC = () => {
               <div>
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Conexões na Lore:</h4>
                 <div className="space-y-1.5">
-                  {selectedNode.connectedTo.map((targetId) => {
-                    const conn = nodes.find((n) => n.id === targetId);
-                    if (!conn) return null;
+                  {selectedNode.connectedTo.map((conn) => {
+                    const targetNode = nodes.find((n) => n.id === conn.targetId);
+                    if (!targetNode) return null;
                     return (
                       <div
-                        key={targetId}
-                        onClick={() => setSelectedNode(conn)}
-                        className="p-2 bg-[#0a0d14] hover:bg-[#161c28] border border-[#2a3449] rounded-lg flex items-center justify-between cursor-pointer transition-all"
+                        key={conn.targetId}
+                        onClick={() => setSelectedNode(targetNode)}
+                        className="p-2 bg-[#0a0d14] hover:bg-[#161c28] border border-[#2a3449] rounded-lg flex items-center justify-between cursor-pointer transition-all border-l-4"
+                        style={{ borderLeftColor: getConnectionColor(conn.type) }}
                       >
-                        <span className="text-xs text-slate-200 font-semibold">{conn.name}</span>
-                        <span className="text-[10px] text-slate-500 font-mono">{conn.type}</span>
+                        <div className="flex flex-col">
+                          <span className="text-xs text-slate-200 font-semibold">{targetNode.name}</span>
+                          <span className="text-[9px] text-slate-500 uppercase">{conn.type}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 font-mono">{targetNode.type}</span>
                       </div>
                     );
                   })}
+                  
+                  {selectedNode.connectedTo.length === 0 && (
+                    <p className="text-xs text-slate-500 italic">Nenhuma conexão estabelecida.</p>
+                  )}
+                  
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        const event = new CustomEvent('openWorldEntityModal', { detail: { entityId: selectedNode.id } });
+                        window.dispatchEvent(event);
+                      }}
+                      className="w-full py-2 bg-[#161c28] hover:bg-[#1f2738] border border-amber-500/30 text-amber-400 font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Gerenciar Conexões
+                    </button>
+                    <p className="text-[9px] text-slate-500 mt-1 text-center">
+                      (Para adicionar ou remover, edite a entidade)
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

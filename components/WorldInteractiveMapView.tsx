@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Map, MapPin, Plus, Navigation, Compass, Shield, Flame, Castle, Eye, Trash2, Sparkles, X } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Map, MapPin, Plus, Navigation, Compass, Shield, Flame, Castle, Eye, Trash2, Sparkles, X, Upload } from 'lucide-react';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { WorldEntity, WorldMapPin } from '@/lib/types';
+import { storageService } from '@/lib/services/storageService';
+import { toast } from 'sonner';
 
 export const WorldInteractiveMapView: React.FC = () => {
   const { activeWorld, worldEntities } = useWorld();
@@ -38,9 +40,41 @@ export const WorldInteractiveMapView: React.FC = () => {
   const [newPinDesc, setNewPinDesc] = useState('');
   const [selectedEntityId, setSelectedEntityId] = useState<string>('');
 
+  // Map upload state
+  const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
+  const [mapAspectRatio, setMapAspectRatio] = useState<string>('auto');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
   if (!activeWorld) return null;
 
   const locationEntities = worldEntities.filter((e) => e.category === 'location' || e.category === 'faction');
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        setIsUploadingImage(true);
+        const publicUrl = await storageService.uploadAsset(file, 'worlds');
+        
+        const img = new window.Image();
+        img.src = publicUrl;
+        img.onload = () => {
+          if (img.width && img.height) {
+            setMapAspectRatio(`${img.width} / ${img.height}`);
+          }
+          setBgImageUrl(publicUrl);
+          toast.success('Mapa do mundo atualizado!');
+        };
+      } catch (err: any) {
+        console.error('Failed to upload map image:', err);
+        toast.error(`Falha ao enviar a imagem do mapa: ${err.message}`);
+      } finally {
+        setIsUploadingImage(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isAddingPinMode) return;
@@ -92,6 +126,14 @@ export const WorldInteractiveMapView: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#0a0d14] overflow-hidden select-none p-6">
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleImageUpload}
+        accept="image/*"
+        className="hidden"
+      />
+      
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#2a3449]">
         <div>
@@ -110,6 +152,17 @@ export const WorldInteractiveMapView: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploadingImage}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-500/40 ${
+              isUploadingImage ? 'opacity-50 cursor-not-allowed animate-pulse' : ''
+            }`}
+          >
+            <Upload className="w-4 h-4" />
+            <span>{isUploadingImage ? 'Enviando...' : 'Carregar Imagem do Mapa'}</span>
+          </button>
+          
+          <button
             onClick={() => setIsAddingPinMode(!isAddingPinMode)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 ${
               isAddingPinMode
@@ -124,53 +177,103 @@ export const WorldInteractiveMapView: React.FC = () => {
       </div>
 
       {/* Map Canvas Workspace */}
-      <div className="flex-1 mt-4 relative rounded-2xl overflow-hidden border border-[#2a3449] bg-[#0c1017] flex items-center justify-center">
-        {/* Background Grid / Cartography Aesthetic */}
-        <div
-          onClick={handleMapClick}
-          className={`relative w-full h-full min-h-[400px] cursor-crosshair bg-cover bg-center transition-all ${
-            isAddingPinMode ? 'ring-2 ring-cyan-400/80 ring-inset' : ''
-          }`}
-          style={{
-            backgroundImage: `radial-gradient(circle, rgba(42, 52, 73, 0.4) 1px, transparent 1px)`,
-            backgroundSize: '24px 24px',
-          }}
-        >
-          {/* Subtle Compass Rose Overlay */}
-          <div className="absolute top-4 right-4 pointer-events-none opacity-20 text-cyan-400">
-            <Compass className="w-24 h-24 stroke-[1]" />
+      <div className="flex-1 mt-4 relative rounded-2xl overflow-hidden border border-[#2a3449] bg-[#0c1017] flex items-center justify-center p-2">
+        
+        {!bgImageUrl ? (
+          /* Default Empty/Cartography Background */
+          <div
+            onClick={handleMapClick}
+            className={`relative w-full h-full min-h-[400px] cursor-crosshair transition-all ${
+              isAddingPinMode ? 'ring-2 ring-cyan-400/80 ring-inset' : ''
+            }`}
+            style={{
+              backgroundImage: `radial-gradient(circle, rgba(42, 52, 73, 0.4) 1px, transparent 1px)`,
+              backgroundSize: '24px 24px',
+            }}
+          >
+            {/* Subtle Compass Rose Overlay */}
+            <div className="absolute top-4 right-4 pointer-events-none opacity-20 text-cyan-400">
+              <Compass className="w-24 h-24 stroke-[1]" />
+            </div>
+
+            {/* Prompt instruction banner */}
+            {isAddingPinMode && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-cyan-950/90 border border-cyan-500/60 text-cyan-200 text-xs px-4 py-1.5 rounded-full font-semibold shadow-xl backdrop-blur-md animate-bounce flex items-center gap-2 z-20">
+                <Navigation className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Clique em qualquer ponto da cartografia para fincar um novo pino</span>
+              </div>
+            )}
+
+            {/* Render Pins */}
+            {pins.map((pin) => (
+              <div
+                key={pin.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedPin(pin);
+                }}
+                style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
+                className="absolute -translate-x-1/2 -translate-y-1/2 group cursor-pointer z-10"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#0a0d14]/90 border-2 border-cyan-400 flex items-center justify-center shadow-xl group-hover:scale-125 group-hover:border-amber-400 transition-all">
+                  {getPinIcon(pin.category)}
+                </div>
+
+                {/* Tooltip Label */}
+                <div className="absolute left-1/2 -translate-x-1/2 top-9 bg-[#121824]/95 border border-[#2a3449] group-hover:border-cyan-400 text-slate-100 text-[10px] font-bold px-2 py-0.5 rounded shadow-xl whitespace-nowrap opacity-80 group-hover:opacity-100 transition-opacity">
+                  {pin.title}
+                </div>
+              </div>
+            ))}
           </div>
+        ) : (
+          /* Uploaded Custom Map Image */
+          <div
+            onClick={handleMapClick}
+            className={`relative cursor-crosshair transition-all max-w-full max-h-full flex ${
+              isAddingPinMode ? 'ring-2 ring-cyan-400/80' : ''
+            }`}
+          >
+            <img 
+              src={bgImageUrl} 
+              alt="World Map" 
+              className="max-w-full max-h-full block select-none rounded-xl"
+              style={{ objectFit: 'contain' }}
+              draggable={false}
+            />
+            <div className="absolute inset-0 rounded-xl overflow-hidden">
+              {/* Prompt instruction banner */}
+              {isAddingPinMode && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-cyan-950/90 border border-cyan-500/60 text-cyan-200 text-xs px-4 py-1.5 rounded-full font-semibold shadow-xl backdrop-blur-md animate-bounce flex items-center gap-2 z-20">
+                  <Navigation className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Clique em qualquer ponto da cartografia para fincar um novo pino</span>
+                </div>
+              )}
 
-          {/* Prompt instruction banner */}
-          {isAddingPinMode && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-cyan-950/90 border border-cyan-500/60 text-cyan-200 text-xs px-4 py-1.5 rounded-full font-semibold shadow-xl backdrop-blur-md animate-bounce flex items-center gap-2">
-              <Navigation className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Clique em qualquer ponto da cartografia para fincar um novo pino</span>
+              {/* Render Pins */}
+              {pins.map((pin) => (
+                <div
+                  key={pin.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedPin(pin);
+                  }}
+                  style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 group cursor-pointer z-10"
+                >
+                  <div className="w-8 h-8 rounded-full bg-[#0a0d14]/90 border-2 border-cyan-400 flex items-center justify-center shadow-xl group-hover:scale-125 group-hover:border-amber-400 transition-all">
+                    {getPinIcon(pin.category)}
+                  </div>
+
+                  {/* Tooltip Label */}
+                  <div className="absolute left-1/2 -translate-x-1/2 top-9 bg-[#121824]/95 border border-[#2a3449] group-hover:border-cyan-400 text-slate-100 text-[10px] font-bold px-2 py-0.5 rounded shadow-xl whitespace-nowrap opacity-80 group-hover:opacity-100 transition-opacity">
+                    {pin.title}
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
-
-          {/* Render Pins */}
-          {pins.map((pin) => (
-            <div
-              key={pin.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedPin(pin);
-              }}
-              style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
-              className="absolute -translate-x-1/2 -translate-y-1/2 group cursor-pointer z-10"
-            >
-              <div className="w-8 h-8 rounded-full bg-[#0a0d14]/90 border-2 border-cyan-400 flex items-center justify-center shadow-xl group-hover:scale-125 group-hover:border-amber-400 transition-all">
-                {getPinIcon(pin.category)}
-              </div>
-
-              {/* Tooltip Label */}
-              <div className="absolute left-1/2 -translate-x-1/2 top-9 bg-[#121824]/95 border border-[#2a3449] group-hover:border-cyan-400 text-slate-100 text-[10px] font-bold px-2 py-0.5 rounded shadow-xl whitespace-nowrap opacity-80 group-hover:opacity-100 transition-opacity">
-                {pin.title}
-              </div>
-            </div>
-          ))}
-        </div>
+          </div>
+        )}
 
         {/* Selected Pin Drawer / Popover */}
         {selectedPin && (

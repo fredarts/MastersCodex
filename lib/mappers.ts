@@ -39,7 +39,12 @@ export function mapWorldEntityRowToDomain(row: WorldEntityRow): WorldEntity {
     shortDesc: row.short_desc || '',
     fullContent: row.full_content || undefined,
     attributes: row.attributes || {},
-    connections: row.connections || [],
+    connections: (row.connections || []).map((conn: any) => {
+      if (typeof conn === 'string') {
+        return { targetId: conn, type: 'neutral' };
+      }
+      return conn;
+    }),
     images: row.images || [],
     createdAt: row.created_at,
   };

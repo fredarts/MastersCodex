@@ -46,6 +46,7 @@ export class LocalStorageWorldRepository implements IWorldRepository {
 
   async createWorldEntity(entityData: Omit<WorldEntity, 'id'>): Promise<WorldEntity> {
     const newEntity: WorldEntity = {
+      connections: [],
       ...entityData,
       id: `ent-${Date.now()}`,
     };

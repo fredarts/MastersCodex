@@ -32,17 +32,15 @@ interface Cell {
   tokenColor?: string;
 }
 
-const GRID_SIZE = 12;
-
 export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
   const { activeScene, fetchSceneMap, saveSceneMap } = useSession();
 
-  const createInitialGrid = (): Cell[][] => {
+  const createInitialGrid = (cols = 12, rows = 12): Cell[][] => {
     const grid: Cell[][] = [];
-    for (let r = 0; r < GRID_SIZE; r++) {
+    for (let r = 0; r < rows; r++) {
       const row: Cell[] = [];
-      for (let c = 0; c < GRID_SIZE; c++) {
-        const isBoundary = r === 0 || r === GRID_SIZE - 1 || c === 0 || c === GRID_SIZE - 1;
+      for (let c = 0; c < cols; c++) {
+        const isBoundary = r === 0 || r === rows - 1 || c === 0 || c === cols - 1;
         row.push({
           x: c,
           y: r,
@@ -52,11 +50,11 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
       }
       grid.push(row);
     }
-    grid[0][Math.floor(GRID_SIZE / 2)].type = 'door';
+    grid[0][Math.floor(cols / 2)].type = 'door';
     return grid;
   };
 
-  const [grid, setGrid] = useState<Cell[][]>(createInitialGrid);
+  const [grid, setGrid] = useState<Cell[][]>(() => createInitialGrid());
   const [selectedTool, setSelectedTool] = useState<'paint' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure'>('fog-reveal');
   const [selectedTileType, setSelectedTileType] = useState<TileType>('floor');
   const [selectedTokenCombatant, setSelectedTokenCombatant] = useState<Combatant | null>(null);
@@ -111,9 +109,32 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
       try {
         setIsUploadingImage(true);
         const publicUrl = await storageService.uploadAsset(file, 'scenes');
-        setBgImageUrl(publicUrl);
+        
+        // Load image to determine aspect ratio and calculate grid size
+        const img = new window.Image();
+        img.src = publicUrl;
+        img.onload = () => {
+          const MAX_SQUARES = 24;
+          let cols = 12;
+          let rows = 12;
+
+          if (img.width && img.height) {
+            if (img.width >= img.height) {
+              cols = MAX_SQUARES;
+              rows = Math.max(5, Math.round(MAX_SQUARES * (img.height / img.width)));
+            } else {
+              rows = MAX_SQUARES;
+              cols = Math.max(5, Math.round(MAX_SQUARES * (img.width / img.height)));
+            }
+          }
+          
+          setGrid(createInitialGrid(cols, rows));
+          setBgImageUrl(publicUrl);
+          toast.info(`Grid ajustado para as dimensões do mapa (${cols}x${rows})`);
+        };
       } catch (err) {
         console.error('Failed to upload map image:', err);
+        toast.error('Falha ao enviar a imagem do mapa.');
       } finally {
         setIsUploadingImage(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -376,9 +397,9 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
         <div
           className="grid gap-1 p-4 bg-[#0f141d] border-2 border-[#2a3449] rounded-2xl shadow-2xl relative"
           style={{
-            gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))`,
+            gridTemplateColumns: `repeat(${grid[0]?.length || 12}, minmax(0, 1fr))`,
             backgroundImage: bgImageUrl ? `url(${bgImageUrl})` : undefined,
-            backgroundSize: 'cover',
+            backgroundSize: '100% 100%',
             backgroundPosition: 'center',
           }}
         >
