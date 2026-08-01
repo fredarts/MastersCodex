@@ -15,13 +15,14 @@ export const CreateSceneModal: React.FC<CreateSceneModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { activeSession, createScene, scenes } = useSession();
+  const { activeSession, createScene, scenes, campaignMaps } = useSession();
   const { worldEntities } = useWorld();
   const [sceneType, setSceneType] = useState<SceneType>('social');
   const [title, setTitle] = useState('');
   const [npcName, setNpcName] = useState('');
   const [sensoryText, setSensoryText] = useState('');
   const [bgmCategory, setBgmCategory] = useState<'taverna' | 'combate' | 'masmorra' | 'tensao' | 'exploracao'>('taverna');
+  const [associatedMapId, setAssociatedMapId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen || !activeSession) return null;
@@ -37,7 +38,9 @@ export const CreateSceneModal: React.FC<CreateSceneModalProps> = ({
     let defaultCombatants: Combatant[] = [];
     if (sceneType === 'combat') {
       defaultCombatants = [
+        // eslint-disable-next-line react-hooks/purity
         { id: `m-${Date.now()}-1`, name: 'Líder Hobgoblin', type: 'monster', hp: 11, maxHp: 11, ac: 18, initiative: 14, conditions: [], cr: '1/2' },
+        // eslint-disable-next-line react-hooks/purity
         { id: `m-${Date.now()}-2`, name: 'Goblin Arqueiro', type: 'monster', hp: 7, maxHp: 7, ac: 15, initiative: 10, conditions: [], cr: '1/4' },
       ];
     }
@@ -52,12 +55,15 @@ export const CreateSceneModal: React.FC<CreateSceneModalProps> = ({
       bgmCategory,
       bgmTracks: [`bgm-${bgmCategory}`],
       combatants: defaultCombatants,
+      associatedMapId: associatedMapId || undefined,
+      associatedMapIds: associatedMapId ? [associatedMapId] : [],
     });
 
     setIsSubmitting(false);
     setTitle('');
     setNpcName('');
     setSensoryText('');
+    setAssociatedMapId('');
     onClose();
   };
 
@@ -184,10 +190,26 @@ export const CreateSceneModal: React.FC<CreateSceneModalProps> = ({
           )}
 
           <div>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">Vincular Dungeon Map:</label>
+            <select
+              value={associatedMapId}
+              onChange={(e) => setAssociatedMapId(e.target.value)}
+              className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+            >
+              <option value="">Nenhum mapa vinculado...</option>
+              {campaignMaps.map((map) => (
+                <option key={map.id} value={map.id}>
+                  {map.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <label className="block text-xs font-semibold text-slate-400 mb-1">Trilha Sonora BGM Pré-Carregada:</label>
             <select
               value={bgmCategory}
-              onChange={(e) => setBgmCategory(e.target.value as any)}
+              onChange={(e) => setBgmCategory(e.target.value as 'taverna' | 'combate' | 'masmorra' | 'tensao' | 'exploracao')}
               className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
             >
               <option value="taverna">🍺 Taverna Acolhedora</option>

@@ -76,7 +76,18 @@ export interface SceneRow {
   scene_images?: any[] | null;
   active_image_index?: number | null;
   environment_settings?: Record<string, any> | null;
+  associated_map_id?: string | null;
+  associated_map_ids?: string[] | null;
   created_at?: string;
+}
+
+export interface CampaignMapRow {
+  id: string;
+  campaign_id: string;
+  title: string;
+  grid_data: any;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface CampaignFeedEventRow {

@@ -59,7 +59,7 @@ export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
               : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
           }`}
         >
-          <MapIcon className="w-3.5 h-3.5" /> Mapa Tático
+          <MapIcon className="w-3.5 h-3.5" /> Dungeon Map
         </button>
 
         <button

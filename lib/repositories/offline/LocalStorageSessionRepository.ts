@@ -1,4 +1,4 @@
-import { GameSession, GameScene } from '@/lib/types';
+import { GameSession, GameScene, CampaignMap } from '@/lib/types';
 import { ISessionRepository } from '../contracts/ISessionRepository';
 
 export class LocalStorageSessionRepository implements ISessionRepository {
@@ -105,6 +105,60 @@ export class LocalStorageSessionRepository implements ISessionRepository {
       const maps = saved ? JSON.parse(saved) : {};
       maps[sceneId] = gridData;
       localStorage.setItem('codex_scene_maps', JSON.stringify(maps));
+    } catch (_e) {}
+  }
+
+  async fetchCampaignMaps(campaignId: string): Promise<CampaignMap[]> {
+    try {
+      const saved = localStorage.getItem('codex_campaign_maps');
+      const all: CampaignMap[] = saved ? JSON.parse(saved) : [];
+      return all.filter(m => m.campaignId === campaignId);
+    } catch (_e) {
+      return [];
+    }
+  }
+
+  async createCampaignMap(campaignId: string, title: string, gridData: any): Promise<CampaignMap> {
+    const newMap: CampaignMap = {
+      id: `map-${Date.now()}`,
+      campaignId,
+      title,
+      gridData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      const saved = localStorage.getItem('codex_campaign_maps');
+      const all: CampaignMap[] = saved ? JSON.parse(saved) : [];
+      all.push(newMap);
+      localStorage.setItem('codex_campaign_maps', JSON.stringify(all));
+    } catch (_e) {}
+    return newMap;
+  }
+
+  async updateCampaignMap(mapId: string, title: string, gridData: any): Promise<void> {
+    try {
+      const saved = localStorage.getItem('codex_campaign_maps');
+      const all: CampaignMap[] = saved ? JSON.parse(saved) : [];
+      const idx = all.findIndex(m => m.id === mapId);
+      if (idx !== -1) {
+        all[idx] = {
+          ...all[idx],
+          title,
+          gridData,
+          updatedAt: new Date().toISOString()
+        };
+        localStorage.setItem('codex_campaign_maps', JSON.stringify(all));
+      }
+    } catch (_e) {}
+  }
+
+  async deleteCampaignMap(mapId: string): Promise<void> {
+    try {
+      const saved = localStorage.getItem('codex_campaign_maps');
+      const all: CampaignMap[] = saved ? JSON.parse(saved) : [];
+      const filtered = all.filter(m => m.id !== mapId);
+      localStorage.setItem('codex_campaign_maps', JSON.stringify(filtered));
     } catch (_e) {}
   }
 }

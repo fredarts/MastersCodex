@@ -12,6 +12,7 @@ import {
   BookOpen, 
   Lock, 
   Trash2, 
+  Map, 
   Calendar, 
   Sparkles, 
   Skull, 
@@ -58,12 +59,13 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
     activeScene, 
     setActiveScene,
     updateScene,
-    deleteScene 
+    deleteScene,
+    campaignMaps
   } = useSession();
   const { worldEntities } = useWorld();
 
   const [selectedScene, setSelectedScene] = useState<GameScene | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<'image' | 'audio' | 'combat' | 'voice' | 'notes' | 'worldbuilding'>('image');
+  const [activeSubTab, setActiveSubTab] = useState<'image' | 'audio' | 'combat' | 'voice' | 'notes' | 'worldbuilding' | 'dungeon-maps'>('image');
   const [isScenesSidebarCollapsed, setIsScenesSidebarCollapsed] = useState(false);
   const [isSubTabsCollapsed, setIsSubTabsCollapsed] = useState(false);
   const [worldSearch, setWorldSearch] = useState('');
@@ -255,6 +257,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       floorTextureUrl,
       sceneImages,
       environmentSettings,
+      associatedMapIds: selectedScene.associatedMapIds || (selectedScene.associatedMapId ? [selectedScene.associatedMapId] : []),
     };
 
     await updateScene(updated);
@@ -285,6 +288,22 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       cr: m.cr,
     };
     setSceneCombatants((prev) => [...prev, newC]);
+  };
+
+  const handleToggleMapAssociation = (mapId: string) => {
+    if (!selectedScene) return;
+    const currentIds = selectedScene.associatedMapIds || (selectedScene.associatedMapId ? [selectedScene.associatedMapId] : []);
+    let newIds: string[] = [];
+    if (currentIds.includes(mapId)) {
+      newIds = currentIds.filter(id => id !== mapId);
+    } else {
+      newIds = [...currentIds, mapId];
+    }
+    
+    setSelectedScene({
+      ...selectedScene,
+      associatedMapIds: newIds
+    });
   };
 
   const handleAddNpcToScene = (npc: WorldEntity) => {
@@ -617,6 +636,19 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                             {sceneCombatants.length}
                           </span>
                         )}
+                      </button>
+
+                      <button
+                        onClick={() => setActiveSubTab('dungeon-maps')}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                          activeSubTab === 'dungeon-maps'
+                            ? 'bg-purple-600 text-slate-950 shadow-md font-black'
+                            : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                        }`}
+                        title="Mapas de Masmorras da Cena"
+                      >
+                        <Map className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                        {!isSubTabsCollapsed && <span className="truncate">Mapa de Dungeon</span>}
                       </button>
 
                       <button
@@ -1532,6 +1564,62 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                             </button>
                           </div>
                         ))}
+                    </div>
+                  </div>
+                )}
+
+                {activeSubTab === 'dungeon-maps' && selectedScene && (
+                  <div className="max-w-2xl mx-auto space-y-6">
+                    <div className="bg-[#121824] p-5 rounded-2xl border border-[#2a3449] space-y-4 shadow-xl">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                          <Map className="w-4.5 h-4.5 text-emerald-400" /> Associar Mapas de Masmorra à Cena
+                        </h4>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          Selecione um ou mais mapas de masmorras da campanha para disponibilizar nesta cena. No cockpit do mestre, você poderá alternar entre eles em tempo real.
+                        </p>
+                      </div>
+
+                      {campaignMaps.length === 0 ? (
+                        <div className="p-6 bg-[#0a0d14]/50 border border-dashed border-[#2a3449] rounded-xl text-center">
+                          <p className="text-xs text-slate-500">Nenhum mapa criado nesta campanha.</p>
+                          <p className="text-[10px] text-slate-600 mt-1">Vá até o menu Mapas no topo para criar sua primeira masmorra.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
+                          {campaignMaps.map((map) => {
+                            const isAssociated = (selectedScene.associatedMapIds || (selectedScene.associatedMapId ? [selectedScene.associatedMapId] : [])).includes(map.id);
+                            return (
+                              <div
+                                key={map.id}
+                                onClick={() => handleToggleMapAssociation(map.id)}
+                                className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
+                                  isAssociated
+                                    ? 'bg-[#1b2537] border-emerald-500/50 shadow-md shadow-emerald-950/20'
+                                    : 'bg-[#0a0d14]/70 border-[#2a3449] hover:bg-[#121824]'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-4 h-4 rounded flex items-center justify-center transition-all ${
+                                    isAssociated ? 'bg-emerald-500 text-slate-950' : 'border border-[#2a3449]'
+                                  }`}>
+                                    {isAssociated && <span className="text-[10px] font-black">✓</span>}
+                                  </div>
+                                  <div>
+                                    <h5 className="text-xs font-bold text-slate-200">{map.title || 'Sem título'}</h5>
+                                    <p className="text-[9px] text-slate-500 font-mono mt-0.5">ID: {map.id.slice(0, 8)}...</p>
+                                  </div>
+                                </div>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  isAssociated ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800/40 text-slate-400 border border-slate-700/30'
+                                }`}>
+                                  {isAssociated ? 'Associado' : 'Disponível'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

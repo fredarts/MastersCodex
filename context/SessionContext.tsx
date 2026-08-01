@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { GameSession, GameScene } from '@/lib/types';
+import { GameSession, GameScene, CampaignMap } from '@/lib/types';
 import { sessionService } from '@/lib/services/sessionService';
 import { useCampaign } from '@/context/CampaignContext';
 import { toast } from 'sonner';
@@ -22,6 +22,11 @@ interface SessionContextType {
   deleteScene: (id: string) => Promise<void>;
   fetchSceneMap: (sceneId: string) => Promise<any | null>;
   saveSceneMap: (sceneId: string, gridData: any) => Promise<void>;
+  campaignMaps: CampaignMap[];
+  fetchCampaignMaps: () => Promise<CampaignMap[]>;
+  createCampaignMap: (title: string, gridData: any) => Promise<CampaignMap | null>;
+  updateCampaignMap: (mapId: string, title: string, gridData: any) => Promise<void>;
+  deleteCampaignMap: (mapId: string) => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
@@ -31,6 +36,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeSession, setActiveSessionState] = useState<GameSession | null>(null);
   const [scenes, setScenes] = useState<GameScene[]>([]);
   const [activeScene, setActiveSceneState] = useState<GameScene | null>(null);
+  const [campaignMaps, setCampaignMaps] = useState<CampaignMap[]>([]);
   const activeSceneIdRef = useRef<string | null>(null);
 
   // Keep ref in sync for stable callback closures
@@ -74,6 +80,16 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setScenes([]);
           setActiveSceneState(null);
         }
+      } else {
+        toast.error(res.error.message);
+      }
+    });
+  }, [campaignId]);
+
+  useEffect(() => {
+    sessionService.fetchCampaignMaps(campaignId).then((res) => {
+      if (res.ok) {
+        setCampaignMaps(res.value);
       } else {
         toast.error(res.error.message);
       }
@@ -229,6 +245,49 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  const fetchCampaignMaps = useCallback(async (): Promise<CampaignMap[]> => {
+    const res = await sessionService.fetchCampaignMaps(campaignId);
+    if (res.ok) {
+      setCampaignMaps(res.value);
+      return res.value;
+    } else {
+      toast.error(res.error.message);
+      return [];
+    }
+  }, [campaignId]);
+
+  const createCampaignMap = async (title: string, gridData: any): Promise<CampaignMap | null> => {
+    const res = await sessionService.createCampaignMap(campaignId, title, gridData);
+    if (res.ok) {
+      const newMap = res.value;
+      setCampaignMaps(prev => [...prev, newMap]);
+      toast.success('Mapa criado com sucesso!');
+      return newMap;
+    } else {
+      toast.error(res.error.message);
+      return null;
+    }
+  };
+
+  const updateCampaignMap = async (mapId: string, title: string, gridData: any): Promise<void> => {
+    const res = await sessionService.updateCampaignMap(mapId, title, gridData, campaignId);
+    if (res.ok) {
+      setCampaignMaps(prev => prev.map(m => m.id === mapId ? { ...m, title, gridData } : m));
+    } else {
+      toast.error(res.error.message);
+    }
+  };
+
+  const deleteCampaignMap = async (mapId: string): Promise<void> => {
+    const res = await sessionService.deleteCampaignMap(mapId, campaignId);
+    if (res.ok) {
+      setCampaignMaps(prev => prev.filter(m => m.id !== mapId));
+      toast.success('Mapa removido.');
+    } else {
+      toast.error(res.error.message);
+    }
+  };
+
   return (
     <SessionContext.Provider
       value={{
@@ -247,6 +306,11 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteScene,
         fetchSceneMap,
         saveSceneMap,
+        campaignMaps,
+        fetchCampaignMaps,
+        createCampaignMap,
+        updateCampaignMap,
+        deleteCampaignMap,
       }}
     >
       {children}

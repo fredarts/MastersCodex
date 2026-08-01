@@ -1,5 +1,5 @@
 import { RepositoryFactory } from '@/lib/repositories/RepositoryFactory';
-import { GameSession, GameScene, Result } from '@/lib/types';
+import { GameSession, GameScene, CampaignMap, Result } from '@/lib/types';
 
 export const sessionService = {
   async fetchSessions(campaignId: string): Promise<Result<GameSession[]>> {
@@ -115,6 +115,58 @@ export const sessionService = {
       return {
         ok: false,
         error: e instanceof Error ? e : new Error(e?.message || 'Erro ao salvar mapa da cena.'),
+      };
+    }
+  },
+
+  async fetchCampaignMaps(campaignId: string): Promise<Result<CampaignMap[]>> {
+    try {
+      const repo = RepositoryFactory.getSessionRepository(campaignId);
+      const data = await repo.fetchCampaignMaps(campaignId);
+      return { ok: true, value: data };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao buscar mapas da campanha.'),
+      };
+    }
+  },
+
+  async createCampaignMap(campaignId: string, title: string, gridData: any): Promise<Result<CampaignMap>> {
+    try {
+      const repo = RepositoryFactory.getSessionRepository(campaignId);
+      const data = await repo.createCampaignMap(campaignId, title, gridData);
+      return { ok: true, value: data };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao criar mapa da campanha.'),
+      };
+    }
+  },
+
+  async updateCampaignMap(mapId: string, title: string, gridData: any, campaignId: string): Promise<Result<void>> {
+    try {
+      const repo = RepositoryFactory.getSessionRepository(campaignId);
+      await repo.updateCampaignMap(mapId, title, gridData);
+      return { ok: true, value: undefined };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao atualizar mapa da campanha.'),
+      };
+    }
+  },
+
+  async deleteCampaignMap(mapId: string, campaignId: string): Promise<Result<void>> {
+    try {
+      const repo = RepositoryFactory.getSessionRepository(campaignId);
+      await repo.deleteCampaignMap(mapId);
+      return { ok: true, value: undefined };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao deletar mapa da campanha.'),
       };
     }
   },

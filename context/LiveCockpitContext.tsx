@@ -32,6 +32,8 @@ interface LiveCockpitContextType {
   broadcastDiceRoll: (roll: { rollerName: string; rollType: string; diceFormula: string; result: number; isCrit?: boolean; isFail?: boolean }) => void;
   projectedScene: any;
   setProjectedScene: React.Dispatch<React.SetStateAction<any>>;
+  mapData: unknown;
+  setMapData: React.Dispatch<React.SetStateAction<unknown>>;
   /** Inicializa tokenPositions3D e tokenRotations3D a partir dos campos x/z/rotation dos combatants salvos no banco */
   initializeFromCombatants: (combatants: Combatant[]) => void;
   activeSpellTargeting: any;
@@ -67,6 +69,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
   const [roundCount, setRoundCount] = useState(1);
   const [projectedScene, setProjectedScene] = useState<any>(null);
+  const [mapData, setMapData] = useState<unknown>(null);
   const [activeSpellTargeting, setActiveSpellTargetingState] = useState<any>(null);
   const [casterTokenKey, setCasterTokenKeyState] = useState<string | null>(null);
   const [spellTargetPosition, setSpellTargetPositionState] = useState<{ x: number; z: number } | null>(null);
@@ -147,6 +150,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       if (payload.activeSpellTargeting !== undefined) setActiveSpellTargetingState(payload.activeSpellTargeting);
       if (payload.casterTokenKey !== undefined) setCasterTokenKeyState(payload.casterTokenKey);
       if (payload.spellTargetPosition !== undefined) setSpellTargetPositionState(payload.spellTargetPosition);
+      if (payload.mapData !== undefined) setMapData(payload.mapData);
       if (payload.sceneId !== undefined || payload.imageUrl !== undefined || payload.title !== undefined || payload.timeOfDayHour !== undefined || payload.timeOfDay !== undefined || payload.hasFog !== undefined || payload.hasRain !== undefined || payload.floorTextureUrl !== undefined) {
         setProjectedScene((prev: any) => {
           if (payload.sceneId === null) return null;
@@ -234,6 +238,9 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [broadcastLiveProjection]);
 
   const broadcastToPlayerView = useCallback((payload: any) => {
+    // Apply locally for same-tab PlayerViewModal (broadcasts don't reach same tab)
+    if (payload.mapData !== undefined) setMapData(payload.mapData);
+    if (payload.mode) setLiveDisplayModeState(payload.mode);
     broadcastLiveProjection(payload);
   }, [broadcastLiveProjection]);
 
@@ -347,6 +354,8 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         broadcastDiceRoll,
         projectedScene,
         setProjectedScene,
+        mapData,
+        setMapData,
         initializeFromCombatants,
         activeSpellTargeting,
         setActiveSpellTargeting,

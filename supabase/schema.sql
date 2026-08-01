@@ -133,6 +133,7 @@ ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS scene_images JSONB DEFAULT '[
 ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS active_image_index INT DEFAULT 0;
 ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS bgm_tracks JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS floor_texture_url TEXT;
+ALTER TABLE public.scenes ADD COLUMN IF NOT EXISTS associated_map_id UUID REFERENCES public.campaign_maps(id) ON DELETE SET NULL;
 
 -- 1.8 Tabela Campaign Feed Events
 CREATE TABLE IF NOT EXISTS public.campaign_feed_events (
@@ -393,6 +394,22 @@ CREATE POLICY "SceneMaps_Modify" ON public.scene_maps FOR ALL USING (
     JOIN public.campaigns c ON sess.campaign_id = c.id 
     WHERE s.id = scene_maps.scene_id AND c.dm_id::text = auth.uid()::text
   )
+);
+
+-- CAMPAIGN MAPS (SAVED MAPS TEMPLATES)
+CREATE TABLE IF NOT EXISTS public.campaign_maps (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id UUID NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  grid_data JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE public.campaign_maps ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "CampaignMaps_Select" ON public.campaign_maps FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "CampaignMaps_Modify" ON public.campaign_maps FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
 );
 
 -- SRD ITEMS

@@ -1,7 +1,7 @@
 import { supabase, isValidUuid } from '@/lib/supabase';
-import { GameSession, GameScene } from '@/lib/types';
-import { SessionRow, SceneRow } from '@/lib/database.types';
-import { mapSessionRowToDomain, mapSceneRowToDomain } from '@/lib/mappers';
+import { GameSession, GameScene, CampaignMap } from '@/lib/types';
+import { SessionRow, SceneRow, CampaignMapRow } from '@/lib/database.types';
+import { mapSessionRowToDomain, mapSceneRowToDomain, mapCampaignMapRowToDomain } from '@/lib/mappers';
 import { ISessionRepository } from '../contracts/ISessionRepository';
 
 export class SupabaseSessionRepository implements ISessionRepository {
@@ -94,6 +94,8 @@ export class SupabaseSessionRepository implements ISessionRepository {
         scene_images: sceneData.sceneImages || [],
         active_image_index: sceneData.activeImageIndex || 0,
         environment_settings: sceneData.environmentSettings || {},
+        associated_map_id: sceneData.associatedMapId,
+        associated_map_ids: sceneData.associatedMapIds || [],
       })
       .select()
       .single();
@@ -127,6 +129,8 @@ export class SupabaseSessionRepository implements ISessionRepository {
         scene_images: scene.sceneImages || [],
         active_image_index: scene.activeImageIndex || 0,
         environment_settings: scene.environmentSettings || {},
+        associated_map_id: scene.associatedMapId,
+        associated_map_ids: scene.associatedMapIds || [],
       })
       .eq('id', scene.id);
 
@@ -167,6 +171,65 @@ export class SupabaseSessionRepository implements ISessionRepository {
         grid_data: gridData,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'scene_id' });
+
+    if (error) throw error;
+  }
+
+  async fetchCampaignMaps(campaignId: string): Promise<CampaignMap[]> {
+    if (!isValidUuid(campaignId)) return [];
+
+    const { data, error } = await supabase
+      .from('campaign_maps')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return (data as CampaignMapRow[]).map(mapCampaignMapRowToDomain);
+  }
+
+  async createCampaignMap(campaignId: string, title: string, gridData: any): Promise<CampaignMap> {
+    if (!isValidUuid(campaignId)) {
+      throw new Error('Campaign ID inválido para criar mapa no Supabase.');
+    }
+
+    const { data, error } = await supabase
+      .from('campaign_maps')
+      .insert({
+        campaign_id: campaignId,
+        title,
+        grid_data: gridData,
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return mapCampaignMapRowToDomain(data as CampaignMapRow);
+  }
+
+  async updateCampaignMap(mapId: string, title: string, gridData: any): Promise<void> {
+    if (!isValidUuid(mapId)) return;
+
+    const { error } = await supabase
+      .from('campaign_maps')
+      .update({
+        title,
+        grid_data: gridData,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', mapId);
+
+    if (error) throw error;
+  }
+
+  async deleteCampaignMap(mapId: string): Promise<void> {
+    if (!isValidUuid(mapId)) return;
+
+    const { error } = await supabase
+      .from('campaign_maps')
+      .delete()
+      .eq('id', mapId);
 
     if (error) throw error;
   }

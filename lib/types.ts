@@ -144,6 +144,17 @@ export interface GameScene {
   environmentSettings?: Record<string, any>;
   isBattleStarted?: boolean;
   battleStartSnapshot?: Combatant[];
+  associatedMapId?: string; // ID do mapa da campanha vinculado a esta cena
+  associatedMapIds?: string[]; // IDs de múltiplos mapas de masmorras vinculados a esta cena
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CampaignMap {
+  id: string;
+  campaignId: string;
+  title: string;
+  gridData: any; // Armazena a grade e metadados de calibração do mapa
   createdAt?: string;
   updatedAt?: string;
 }

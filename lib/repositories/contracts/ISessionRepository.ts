@@ -1,4 +1,4 @@
-import { GameSession, GameScene } from '@/lib/types';
+import { GameSession, GameScene, CampaignMap } from '@/lib/types';
 
 export interface ISessionRepository {
   fetchSessions(campaignId: string): Promise<GameSession[]>;
@@ -10,4 +10,8 @@ export interface ISessionRepository {
   deleteScene(id: string): Promise<void>;
   fetchSceneMap(sceneId: string): Promise<any | null>;
   saveSceneMap(sceneId: string, gridData: any): Promise<void>;
+  fetchCampaignMaps(campaignId: string): Promise<CampaignMap[]>;
+  createCampaignMap(campaignId: string, title: string, gridData: any): Promise<CampaignMap>;
+  updateCampaignMap(mapId: string, title: string, gridData: any): Promise<void>;
+  deleteCampaignMap(mapId: string): Promise<void>;
 }

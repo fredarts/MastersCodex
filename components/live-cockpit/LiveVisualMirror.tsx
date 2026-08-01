@@ -11,6 +11,7 @@ import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
 import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
 import { LiveCockpitAudioController } from '@/components/live-cockpit/LiveCockpitAudioController';
+import { CockpitDungeonMap } from '@/components/live-cockpit/CockpitDungeonMap';
 import { GameScene, Combatant } from '@/lib/types';
 import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from '@/lib/imageUtils';
 
@@ -231,6 +232,8 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                   userRole="dm"
                 />
               </ThreeErrorBoundary>
+            ) : liveDisplayMode === 'map' ? (
+              <CockpitDungeonMap />
             ) : displayImageUrl ? (
               <div className="w-full h-full relative">
                 {(() => {
@@ -278,7 +281,7 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                     const txt = activeSlideImage?.overlayText || activeScene?.sensoryText;
                     return txt ? (
                       <p className="text-xs text-slate-200 mt-1 italic font-serif leading-relaxed line-clamp-2">
-                        "{txt}"
+                        &ldquo;{txt}&rdquo;
                       </p>
                     ) : null;
                   })()}

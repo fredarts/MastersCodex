@@ -26,6 +26,7 @@ export interface RealtimeSyncPayloads {
     activeSpellTargeting?: { name: string; range: number; shape: 'circle' | 'cone' | 'line' | 'fan' | 'target' | 'multi-target'; size: number } | null;
     casterTokenKey?: string | null;
     spellTargetPosition?: { x: number; z: number } | null;
+    mapData?: any;
   };
   DICE_ROLL: { rollerName: string; rollType: string; diceFormula: string; result: number; isCrit?: boolean; isFail?: boolean };
   COMBAT_UPDATE: { combatants: any[]; currentTurnIndex: number; roundCount: number };

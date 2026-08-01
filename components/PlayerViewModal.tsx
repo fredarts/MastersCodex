@@ -14,6 +14,8 @@ import { PlayerTurnBanner } from '@/components/player-view/PlayerTurnBanner';
 import { PlayerBattleLogPanel } from '@/components/player-view/PlayerBattleLogPanel';
 import { CharacterSheetModal } from '@/components/character-sheet/CharacterSheetModal';
 import { createEmptyCharacterSheet } from '@/lib/dnd5e-data';
+import { DysonCanvas } from '@/components/map/DysonCanvas';
+import { Cell } from '@/components/MapMaker';
 
 interface PlayerViewModalProps {
   isOpen: boolean;
@@ -30,12 +32,13 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
   currentTurnIndex,
   roundCount,
 }) => {
-  const { activeScene } = useSession();
+  const { activeScene, fetchSceneMap } = useSession();
   const { activeCampaign } = useCampaign();
-  const { liveDisplayMode, projectedScene, combatLogs, broadcastPlayerRoll } = useLiveCockpit();
+  const { liveDisplayMode, projectedScene, combatLogs, broadcastPlayerRoll, mapData, setMapData } = useLiveCockpit();
 
   const [rightPanelTab, setRightPanelTab] = useState<'init' | 'log'>('init');
   const [isSheetModalOpen, setIsSheetModalOpen] = useState<boolean>(false);
+  const [loadedSceneId, setLoadedSceneId] = useState<string | null>(null);
 
   const playerCharName = (() => {
     if (activeCampaign?.characterName) return activeCampaign.characterName;
@@ -106,6 +109,41 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
       } catch (err) {}
     }
   };
+  
+  // Fetch scene map from DB on load if mapData is null or scene changed (handles late joins / refreshes / scene changes)
+  useEffect(() => {
+    const sceneToLoad = projectedScene || activeScene;
+    if (isOpen && liveDisplayMode === 'map' && sceneToLoad?.id && loadedSceneId !== sceneToLoad.id) {
+      fetchSceneMap(sceneToLoad.id).then((savedData) => {
+        if (!savedData) return;
+        
+        let activeId = savedData.activeMapId;
+        let gridData = null;
+        if (savedData.maps) {
+          const associatedIds = sceneToLoad.associatedMapIds || (sceneToLoad.associatedMapId ? [sceneToLoad.associatedMapId] : []);
+          if (!activeId || !associatedIds.includes(activeId)) {
+            activeId = associatedIds[0] || null;
+          }
+          gridData = activeId ? savedData.maps[activeId] : null;
+        } else if (savedData.grid) {
+          gridData = savedData;
+          activeId = sceneToLoad.associatedMapId || 'legacy';
+        }
+
+        if (gridData) {
+          setMapData({
+            grid: gridData.grid,
+            bgImageUrl: gridData.bgImageUrl,
+            gridScale: gridData.gridScale,
+            gridOffsetX: gridData.gridOffsetX,
+            gridOffsetY: gridData.gridOffsetY,
+            activeMapId: activeId
+          });
+          setLoadedSceneId(sceneToLoad.id);
+        }
+      });
+    }
+  }, [isOpen, liveDisplayMode, projectedScene, activeScene, loadedSceneId, fetchSceneMap, setMapData]);
 
   if (!isOpen) return null;
 
@@ -120,6 +158,15 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
         (currentTurnCombatant.name.toLowerCase().includes(playerCharName.toLowerCase()) ||
           playerCharName.toLowerCase().includes(currentTurnCombatant.name.toLowerCase()))
     );
+
+  const typedMapData = mapData as {
+    grid?: Cell[][];
+    bgImageUrl?: string | null;
+    gridScale?: number;
+    gridOffsetX?: number;
+    gridOffsetY?: number;
+    activeMapId?: string;
+  } | null;
 
   return (
     <div className="fixed inset-0 bg-black/95 backdrop-blur-lg z-50 flex flex-col overflow-hidden select-none animate-fade-in">
@@ -186,6 +233,21 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 userRole="player"
               />
             </ThreeErrorBoundary>
+          ) : liveDisplayMode === 'map' && typedMapData ? (
+            <DysonCanvas
+              key={`${currentScene?.id}_${typedMapData.activeMapId || 'default'}`}
+              grid={typedMapData.grid || []}
+              bgImageUrl={typedMapData.bgImageUrl || null}
+              gridScale={typedMapData.gridScale || 40}
+              gridOffsetX={typedMapData.gridOffsetX || 0}
+              gridOffsetY={typedMapData.gridOffsetY || 0}
+              combatants={combatants}
+              selectedTool="pan" // Jogador só move a visualização do canvas
+              selectedTileType="floor"
+              selectedTokenCombatant={null}
+              onGridChange={() => {}} // Sem alteração de grid para jogador
+              isPlayerView={true}
+            />
           ) : (currentScene?.sceneImages && currentScene.sceneImages.length > 0) || currentScene?.imageUrl ? (
             <div className="w-full h-full relative flex items-center justify-center">
               {currentScene.sceneImages && currentScene.sceneImages.length > 0 ? (

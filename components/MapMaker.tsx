@@ -10,96 +10,185 @@ import {
   Ruler,
   Download,
   Trash2,
-  Sparkles
+  Grid,
+  Hand,
+  Menu,
+  Plus,
+  X
 } from 'lucide-react';
-import { Combatant } from '@/lib/types';
+import { Combatant, CampaignMap } from '@/lib/types';
 import { useSession } from '@/context/SessionContext';
 import { toast } from 'sonner';
 import { storageService } from '@/lib/services/storageService';
+import { DysonCanvas } from './map/DysonCanvas';
 
 interface MapMakerProps {
   combatants: Combatant[];
 }
 
-type TileType = 'floor' | 'wall' | 'grass' | 'water' | 'door' | 'trap';
+export type TileType = 'floor' | 'wall' | 'grass' | 'water' | 'door' | 'trap';
 
-interface Cell {
+export interface DoorConfig {
+  status: 'open' | 'closed';
+  doorType: 'wooden' | 'iron' | 'stone' | 'secret';
+  breakDC: number;
+  lockpickDC: number;
+  secretRevealed?: boolean;
+}
+
+export interface TrapConfig {
+  trapType: string;
+  detectDC: number;
+  disarmDC: number;
+  revealedToPlayers: boolean;
+  description?: string;
+}
+
+export interface Cell {
   x: number;
   y: number;
   type: TileType;
   fog: boolean;
   tokenName?: string;
   tokenColor?: string;
+  doorConfig?: DoorConfig;
+  trapConfig?: TrapConfig;
 }
 
 export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
-  const { activeScene, fetchSceneMap, saveSceneMap } = useSession();
 
-  const createInitialGrid = (cols = 12, rows = 12): Cell[][] => {
+  const createInitialGrid = (cols = 80, rows = 80): Cell[][] => {
     const grid: Cell[][] = [];
     for (let r = 0; r < rows; r++) {
       const row: Cell[] = [];
       for (let c = 0; c < cols; c++) {
-        const isBoundary = r === 0 || r === rows - 1 || c === 0 || c === cols - 1;
         row.push({
           x: c,
           y: r,
-          type: isBoundary ? 'wall' : 'floor',
+          type: 'wall',
           fog: true,
         });
       }
       grid.push(row);
     }
-    grid[0][Math.floor(cols / 2)].type = 'door';
     return grid;
   };
 
+  const { 
+    campaignMaps, 
+    createCampaignMap, 
+    updateCampaignMap, 
+    deleteCampaignMap 
+  } = useSession();
+
   const [grid, setGrid] = useState<Cell[][]>(() => createInitialGrid());
-  const [selectedTool, setSelectedTool] = useState<'paint' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure'>('fog-reveal');
+  const [selectedTool, setSelectedTool] = useState<'paint' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan'>('fog-reveal');
   const [selectedTileType, setSelectedTileType] = useState<TileType>('floor');
   const [selectedTokenCombatant, setSelectedTokenCombatant] = useState<Combatant | null>(null);
   
-  // Custom Map Image Upload state
+  // Custom Map Image Upload & Calibration state
   const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
+  const [gridScale, setGridScale] = useState<number>(40); // Cell Size in px
+  const [gridOffsetX, setGridOffsetX] = useState<number>(0);
+  const [gridOffsetY, setGridOffsetY] = useState<number>(0);
+  const [calibrationLine, setCalibrationLine] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Measure Ruler State
   const [measureStart, setMeasureStart] = useState<{ r: number; c: number } | null>(null);
   const [measuredDistance, setMeasuredDistance] = useState<{ feet: number; meters: number } | null>(null);
 
-  // Loading map data when activeScene changes
+  // Multi-map list and UI state
+  const [activeMap, setActiveMap] = useState<CampaignMap | null>(null);
+  const [mapTitle, setMapTitle] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // Sync first active map when campaignMaps loads
   useEffect(() => {
-    if (activeScene) {
-      fetchSceneMap(activeScene.id).then((mapData) => {
-        if (mapData) {
-          if (mapData.grid) setGrid(mapData.grid);
-          if (mapData.bgImageUrl !== undefined) setBgImageUrl(mapData.bgImageUrl);
-        } else {
-          setGrid(createInitialGrid());
-          setBgImageUrl(null);
+    if (campaignMaps.length > 0) {
+      if (!activeMap) {
+        const firstMap = campaignMaps[0];
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setActiveMap(firstMap);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setMapTitle(firstMap.title);
+        if (firstMap.gridData) {
+          setGrid(firstMap.gridData.grid || createInitialGrid(80, 80));
+          setBgImageUrl(firstMap.gridData.bgImageUrl || null);
+          setGridScale(firstMap.gridData.gridScale || 40);
+          setGridOffsetX(firstMap.gridData.gridOffsetX || 0);
+          setGridOffsetY(firstMap.gridData.gridOffsetY || 0);
+        }
+      } else {
+        const updated = campaignMaps.find(m => m.id === activeMap.id);
+        if (!updated) {
+          const firstMap = campaignMaps[0];
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setActiveMap(firstMap);
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setMapTitle(firstMap.title);
+          if (firstMap.gridData) {
+            setGrid(firstMap.gridData.grid || createInitialGrid(80, 80));
+            setBgImageUrl(firstMap.gridData.bgImageUrl || null);
+            setGridScale(firstMap.gridData.gridScale || 40);
+            setGridOffsetX(firstMap.gridData.gridOffsetX || 0);
+            setGridOffsetY(firstMap.gridData.gridOffsetY || 0);
+          }
+        }
+      }
+    }
+  }, [campaignMaps, activeMap]);
+
+  // Auto-create a default map if campaignMaps is completely empty
+  const hasAutoCreated = useRef(false);
+  useEffect(() => {
+    if (campaignMaps.length === 0 && !hasAutoCreated.current) {
+      hasAutoCreated.current = true;
+      createCampaignMap('Masmorra Inicial', {
+        grid: createInitialGrid(80, 80),
+        gridScale: 40,
+        gridOffsetX: 0,
+        gridOffsetY: 0
+      }).then((newMap) => {
+        if (newMap) {
+          setActiveMap(newMap);
+          setMapTitle(newMap.title);
         }
       });
-    } else {
-      setGrid(createInitialGrid());
-      setBgImageUrl(null);
     }
-  }, [activeScene]);
+  }, [campaignMaps, createCampaignMap]);
 
-  // Debounced auto-save of the map grid
+  // Helper to switch active map
+  const selectMap = (map: CampaignMap) => {
+    setActiveMap(map);
+    setMapTitle(map.title);
+    if (map.gridData) {
+      setGrid(map.gridData.grid || createInitialGrid(80, 80));
+      setBgImageUrl(map.gridData.bgImageUrl || null);
+      setGridScale(map.gridData.gridScale || 40);
+      setGridOffsetX(map.gridData.gridOffsetX || 0);
+      setGridOffsetY(map.gridData.gridOffsetY || 0);
+    }
+  };
+
+  // Debounced auto-save to database (campaign_maps table)
   useEffect(() => {
-    if (!activeScene) return;
+    if (!activeMap) return;
 
     const delayDebounce = setTimeout(() => {
-      saveSceneMap(activeScene.id, {
+      updateCampaignMap(activeMap.id, mapTitle || activeMap.title, {
         grid,
         bgImageUrl,
+        gridScale,
+        gridOffsetX,
+        gridOffsetY,
       }).catch((e) => {
-        console.error('Auto-save MapMaker failed:', e);
+        console.error('Auto-save CampaignMap failed:', e);
       });
-    }, 1000); // 1s delay
+    }, 1200);
 
     return () => clearTimeout(delayDebounce);
-  }, [grid, bgImageUrl, activeScene]);
+  }, [grid, bgImageUrl, gridScale, gridOffsetX, gridOffsetY, activeMap, mapTitle, updateCampaignMap]);
 
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
@@ -142,42 +231,6 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     }
   };
 
-  const handleCellClick = (r: number, c: number) => {
-    if (selectedTool === 'measure') {
-      if (!measureStart) {
-        setMeasureStart({ r, c });
-        setMeasuredDistance(null);
-      } else {
-        const deltaR = Math.abs(r - measureStart.r);
-        const deltaC = Math.abs(c - measureStart.c);
-        // Diagonal / Chebyshev grid distance (D&D 5e rule: max delta or 5ft per grid)
-        const gridSteps = Math.max(deltaR, deltaC);
-        const feet = gridSteps * 5;
-        const meters = parseFloat((feet * 0.3).toFixed(1));
-        setMeasuredDistance({ feet, meters });
-        setMeasureStart(null);
-      }
-      return;
-    }
-
-    setGrid((prev) => {
-      const copy = prev.map((row) => row.map((cell) => ({ ...cell })));
-      const cell = copy[r][c];
-
-      if (selectedTool === 'fog-reveal') {
-        cell.fog = false;
-      } else if (selectedTool === 'fog-cover') {
-        cell.fog = true;
-      } else if (selectedTool === 'paint') {
-        cell.type = selectedTileType;
-      } else if (selectedTool === 'token' && selectedTokenCombatant) {
-        cell.tokenName = selectedTokenCombatant.name.slice(0, 3).toUpperCase();
-        cell.tokenColor = selectedTokenCombatant.type === 'player' ? 'bg-cyan-500' : 'bg-rose-600';
-      }
-      return copy;
-    });
-  };
-
   const revealAllFog = () => {
     setGrid((prev) => prev.map((row) => row.map((cell) => ({ ...cell, fog: false }))));
   };
@@ -186,43 +239,48 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     setGrid((prev) => prev.map((row) => row.map((cell) => ({ ...cell, fog: true }))));
   };
 
+  const clearGridContent = () => {
+    if (window.confirm("Deseja limpar todo o mapa e resetar para um grid gigante de 80x80 células de rocha sólida?")) {
+      setGrid(createInitialGrid(80, 80));
+      toast.success("Grid resetado para 80x80 de rocha!");
+    } else if (window.confirm("Deseja apenas limpar os terrenos desenhados no grid atual? (Mantendo o tamanho do grid atual)")) {
+      setGrid((prev) => prev.map((row) => row.map((cell) => ({
+        ...cell,
+        type: 'wall',
+        fog: true,
+        tokenName: undefined,
+        tokenColor: undefined,
+      }))));
+      toast.info("Terreno do grid atual limpo.");
+    }
+  };
+
+
   const clearMapBg = () => {
     setBgImageUrl(null);
   };
 
   const handleManualSave = async () => {
-    if (!activeScene) {
-      toast.error('Nenhuma cena ativa para salvar o mapa.');
+    if (!activeMap) {
+      toast.error('Nenhum mapa selecionado para salvar.');
       return;
     }
     try {
-      await saveSceneMap(activeScene.id, { grid, bgImageUrl });
-      toast.success('Mapa tático salvo com sucesso!');
-    } catch (e: any) {
-      toast.error(`Falha ao salvar o mapa: ${e.message}`);
-    }
-  };
-
-  const getTileBg = (type: TileType) => {
-    if (bgImageUrl) return 'bg-transparent border-[#ffffff15]';
-    switch (type) {
-      case 'wall':
-        return 'bg-slate-900 border-slate-950';
-      case 'grass':
-        return 'bg-emerald-950/80 border-emerald-900/50';
-      case 'water':
-        return 'bg-cyan-950/80 border-cyan-900/50';
-      case 'door':
-        return 'bg-amber-950/90 border-amber-800';
-      case 'trap':
-        return 'bg-rose-950/80 border-rose-900';
-      default:
-        return 'bg-[#182030] border-[#253248]';
+      await updateCampaignMap(activeMap.id, mapTitle || activeMap.title, { 
+        grid, 
+        bgImageUrl, 
+        gridScale, 
+        gridOffsetX, 
+        gridOffsetY 
+      });
+      toast.success('Mapa salvo com sucesso!');
+    } catch (e) {
+      toast.error(`Falha ao salvar o mapa: ${(e as Error).message}`);
     }
   };
 
   return (
-    <div className="flex-1 bg-[#0a0d14] flex flex-col overflow-hidden select-none">
+    <div className="flex-1 bg-[#0a0d14] flex flex-row overflow-hidden select-none relative w-full h-full">
       {/* Hidden File Input */}
       <input
         type="file"
@@ -232,214 +290,389 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
         className="hidden"
       />
 
-      {/* Map Maker Toolbar */}
-      <div className="p-3.5 bg-[#0f141d] border-b border-[#2a3449] flex flex-wrap items-center justify-between gap-3 shadow-md">
-        {/* Tool Selectors */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-slate-400 font-semibold mr-1">Ferramentas:</span>
-          <button
-            onClick={() => setSelectedTool('fog-reveal')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              selectedTool === 'fog-reveal'
-                ? 'bg-amber-500 text-slate-950 font-bold shadow'
-                : 'bg-[#161c28] text-slate-300 hover:bg-[#1f2738] border border-[#2a3449]'
-            }`}
+      {/* Sidebar Drawer */}
+      <div 
+        className={`bg-[#0f141d] border-r border-[#2a3449] flex flex-col h-full transition-all duration-300 z-20 shadow-2xl relative shrink-0 ${
+          isSidebarOpen ? 'w-[280px]' : 'w-0 overflow-hidden border-r-0'
+        }`}
+      >
+        <div className="p-4 border-b border-[#2a3449] flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+            <Grid className="w-4 h-4 text-cyan-400" />
+            Dungeon Forge
+          </h2>
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="p-1 text-slate-400 hover:text-slate-200 rounded"
           >
-            <Eye className="w-3.5 h-3.5" />
-            Revelar Névoa
-          </button>
-          <button
-            onClick={() => setSelectedTool('fog-cover')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              selectedTool === 'fog-cover'
-                ? 'bg-amber-500 text-slate-950 font-bold shadow'
-                : 'bg-[#161c28] text-slate-300 hover:bg-[#1f2738] border border-[#2a3449]'
-            }`}
-          >
-            <EyeOff className="w-3.5 h-3.5" />
-            Cobrir Névoa
-          </button>
-          <button
-            onClick={() => setSelectedTool('paint')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              selectedTool === 'paint'
-                ? 'bg-amber-500 text-slate-950 font-bold shadow'
-                : 'bg-[#161c28] text-slate-300 hover:bg-[#1f2738] border border-[#2a3449]'
-            }`}
-          >
-            <Paintbrush className="w-3.5 h-3.5" />
-            Pintar Terreno
-          </button>
-          <button
-            onClick={() => setSelectedTool('token')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              selectedTool === 'token'
-                ? 'bg-amber-500 text-slate-950 font-bold shadow'
-                : 'bg-[#161c28] text-slate-300 hover:bg-[#1f2738] border border-[#2a3449]'
-            }`}
-          >
-            <MapPin className="w-3.5 h-3.5" />
-            Token
-          </button>
-          <button
-            onClick={() => {
-              setSelectedTool('measure');
-              setMeasureStart(null);
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              selectedTool === 'measure'
-                ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                : 'bg-[#161c28] text-slate-300 hover:bg-[#1f2738] border border-[#2a3449]'
-            }`}
-          >
-            <Ruler className="w-3.5 h-3.5" />
-            Medir Régua
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Global Action Buttons */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploadingImage}
-            className={`flex items-center gap-1.5 text-xs bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-500/40 px-3 py-1.5 rounded-lg font-bold transition-all ${isUploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
-            title="Upload de Imagem Customizada de Mapa"
-          >
-            <Upload className={`w-3.5 h-3.5 ${isUploadingImage ? 'animate-bounce' : ''}`} />
-            {isUploadingImage ? 'Enviando...' : 'Carregar Mapa (JPG/PNG)'}
-          </button>
-          {bgImageUrl && (
-            <button
-              onClick={clearMapBg}
-              className="p-1.5 text-rose-400 hover:bg-rose-950/50 rounded-lg border border-rose-900/40"
-              title="Remover Imagem de Fundo"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
-          <button
-            onClick={handleManualSave}
-            className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1 transition-all"
-          >
-            <Download className="w-3.5 h-3.5" /> Salvar Mapa
-          </button>
-          <button
-            onClick={revealAllFog}
-            className="text-xs bg-[#161c28] hover:bg-[#1f2738] text-slate-300 border border-[#2a3449] px-2.5 py-1.5 rounded-lg font-medium"
-          >
-            Revelar Névoa
-          </button>
-          <button
-            onClick={coverAllFog}
-            className="text-xs bg-[#161c28] hover:bg-[#1f2738] text-slate-300 border border-[#2a3449] px-2.5 py-1.5 rounded-lg font-medium"
-          >
-            Cobrir Névoa
-          </button>
+        {/* Scrollable controls */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-5 select-none scrollbar-thin scrollbar-thumb-slate-800">
+           {/* Section 1: Map Files list */}
+           <div className="space-y-2">
+             <div className="flex items-center justify-between">
+               <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Meus Mapas</span>
+               <button
+                 onClick={() => {
+                   const title = prompt('Nome do Novo Mapa:', `Masmorra ${campaignMaps.length + 1}`);
+                   if (title && title.trim()) {
+                     createCampaignMap(title.trim(), {
+                       grid: createInitialGrid(80, 80),
+                       gridScale: 40,
+                       gridOffsetX: 0,
+                       gridOffsetY: 0
+                     }).then((newMap) => {
+                       if (newMap) selectMap(newMap);
+                     });
+                   }
+                 }}
+                 className="p-1 bg-[#1a2234] hover:bg-cyan-500/20 text-cyan-400 text-[10px] rounded border border-cyan-500/20 flex items-center gap-1 transition-all"
+               >
+                 <Plus className="w-3 h-3" /> Novo
+               </button>
+             </div>
+
+             <div className="space-y-1 max-h-[140px] overflow-y-auto border border-[#2a3449]/50 rounded-lg p-1.5 bg-[#0a0d14]/50">
+               {campaignMaps.length === 0 ? (
+                 <div className="text-[11px] text-slate-500 text-center py-4">Nenhum mapa salvo.</div>
+               ) : (
+                 campaignMaps.map((m) => (
+                   <div 
+                     key={m.id}
+                     onClick={() => selectMap(m)}
+                     className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-all group text-xs ${
+                       activeMap?.id === m.id 
+                         ? 'bg-cyan-500/10 text-cyan-300 font-bold border border-cyan-500/30' 
+                         : 'text-slate-400 hover:bg-[#1a2234] hover:text-slate-200'
+                     }`}
+                   >
+                     <span className="truncate pr-2">{m.title}</span>
+                     {campaignMaps.length > 1 && (
+                       <button
+                         onClick={(e) => {
+                           e.stopPropagation();
+                           if (window.confirm(`Deseja deletar o mapa "${m.title}"?`)) {
+                             deleteCampaignMap(m.id);
+                           }
+                         }}
+                         className="opacity-0 group-hover:opacity-100 p-0.5 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded transition-all"
+                       >
+                         <Trash2 className="w-3.5 h-3.5" />
+                       </button>
+                     )}
+                   </div>
+                 ))
+               )}
+             </div>
+           </div>
+
+           {activeMap && (
+             <>
+               {/* Section 2: Active map title */}
+               <div className="space-y-1.5">
+                 <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Título do Mapa Ativo</label>
+                 <input 
+                   type="text"
+                   value={mapTitle}
+                   onChange={(e) => setMapTitle(e.target.value)}
+                   placeholder="Ex: Masmorra do Dragão"
+                   className="w-full bg-[#0a0d14] border border-[#2a3449] rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-semibold"
+                 />
+               </div>
+
+               {/* Section 3: Tools Selectors */}
+               <div className="space-y-2">
+                 <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Ferramentas de Edição</span>
+                 <div className="grid grid-cols-2 gap-1.5">
+                   <button
+                     onClick={() => setSelectedTool('paint')}
+                     className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                       selectedTool === 'paint'
+                         ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
+                         : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                     }`}
+                   >
+                     <Paintbrush className="w-3.5 h-3.5" />
+                     Pintar
+                   </button>
+                   <button
+                     onClick={() => setSelectedTool('fog-reveal')}
+                     className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                       selectedTool === 'fog-reveal'
+                         ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
+                         : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                     }`}
+                   >
+                     <Eye className="w-3.5 h-3.5" />
+                     Revelar Fog
+                   </button>
+                   <button
+                     onClick={() => setSelectedTool('fog-cover')}
+                     className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                       selectedTool === 'fog-cover'
+                         ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
+                         : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                     }`}
+                   >
+                     <EyeOff className="w-3.5 h-3.5" />
+                     Ocultar Fog
+                   </button>
+                   <button
+                     onClick={() => setSelectedTool('token')}
+                     className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                       selectedTool === 'token'
+                         ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
+                         : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                     }`}
+                   >
+                     <MapPin className="w-3.5 h-3.5" />
+                     Token
+                   </button>
+                   <button
+                     onClick={() => {
+                       setSelectedTool('measure');
+                       setMeasureStart(null);
+                     }}
+                     className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                       selectedTool === 'measure'
+                         ? 'bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow'
+                         : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                     }`}
+                   >
+                     <Ruler className="w-3.5 h-3.5" />
+                     Régua
+                   </button>
+                   <button
+                     onClick={() => setSelectedTool('pan')}
+                     className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                       selectedTool === 'pan'
+                         ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
+                         : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                     }`}
+                   >
+                     <Hand className="w-3.5 h-3.5" />
+                     Mover
+                   </button>
+                   {bgImageUrl && (
+                     <button
+                       onClick={() => setSelectedTool('calibrate')}
+                       className={`col-span-2 flex items-center justify-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                         selectedTool === 'calibrate'
+                           ? 'bg-rose-500 text-slate-950 font-bold border-rose-400 shadow'
+                           : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                       }`}
+                     >
+                       <Grid className="w-3.5 h-3.5" />
+                       Calibrar Grid Fundo
+                     </button>
+                   )}
+                 </div>
+               </div>
+
+               {/* Section 4: Global Actions */}
+               <div className="space-y-2 border-t border-[#2a3449]/40 pt-4">
+                 <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Ações Globais</span>
+                 <div className="flex flex-col gap-2">
+                   <button
+                     onClick={() => fileInputRef.current?.click()}
+                     disabled={isUploadingImage}
+                     className="w-full flex items-center justify-center gap-1.5 text-xs bg-[#1a2234] hover:bg-[#25314a] text-purple-300 border border-purple-500/20 px-3 py-2 rounded-lg font-semibold transition-all"
+                   >
+                     <Upload className="w-3.5 h-3.5" />
+                     {isUploadingImage ? 'Enviando...' : 'Carregar Imagem (Fundo)'}
+                   </button>
+                   
+                   {bgImageUrl && (
+                     <button
+                       onClick={clearMapBg}
+                       className="w-full flex items-center justify-center gap-1.5 text-xs bg-rose-950/20 hover:bg-rose-950/40 text-rose-300 border border-rose-500/20 px-3 py-2 rounded-lg font-semibold transition-all"
+                     >
+                       <Trash2 className="w-3.5 h-3.5" />
+                       Remover Fundo
+                     </button>
+                   )}
+
+                   <button
+                     onClick={handleManualSave}
+                     className="w-full flex items-center justify-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-lg transition-all"
+                   >
+                     <Download className="w-3.5 h-3.5" /> Salvar Alterações
+                   </button>
+
+                   <div className="grid grid-cols-2 gap-1.5">
+                     <button
+                       onClick={revealAllFog}
+                       className="text-[10px] bg-[#0a0d14] hover:bg-[#161c28] text-slate-300 border border-[#2a3449] py-1.5 rounded-md transition-all font-semibold"
+                     >
+                       Revelar Tudo
+                     </button>
+                     <button
+                       onClick={coverAllFog}
+                       className="text-[10px] bg-[#0a0d14] hover:bg-[#161c28] text-slate-300 border border-[#2a3449] py-1.5 rounded-md transition-all font-semibold"
+                     >
+                       Ocultar Tudo
+                     </button>
+                   </div>
+
+                   <button
+                     onClick={clearGridContent}
+                     className="w-full text-xs bg-rose-950/20 hover:bg-rose-950/40 text-rose-400 border border-rose-900/30 py-2 rounded-lg transition-all font-semibold"
+                   >
+                     Limpar/Resetar Grid
+                   </button>
+                 </div>
+               </div>
+             </>
+           )}
         </div>
       </div>
 
-      {/* Sub-bar options */}
-      {selectedTool === 'paint' && (
-        <div className="px-4 py-2 bg-[#121824] border-b border-[#2a3449] flex items-center gap-2">
-          <span className="text-xs text-slate-400">Tipo de Terreno:</span>
-          {(['floor', 'wall', 'grass', 'water', 'door', 'trap'] as TileType[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setSelectedTileType(t)}
-              className={`px-2.5 py-1 rounded text-xs capitalize font-semibold transition-all ${
-                selectedTileType === t
-                  ? 'bg-amber-500 text-slate-950 font-bold'
-                  : 'bg-[#161c28] text-slate-300 border border-[#2a3449]'
-              }`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Main Area */}
+      <div className="flex-1 flex flex-col min-w-0 relative h-full w-full">
+        {/* Floating Toggle Icon if Sidebar is Closed */}
+        {!isSidebarOpen && (
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="absolute top-4 left-4 z-30 p-2.5 bg-slate-900/90 text-slate-200 hover:text-white rounded-xl border border-slate-800 shadow-xl backdrop-blur-md transition-all active:scale-95 flex items-center justify-center"
+            title="Abrir Menu Lateral"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
 
-      {selectedTool === 'token' && (
-        <div className="px-4 py-2 bg-[#121824] border-b border-[#2a3449] flex items-center gap-2 overflow-x-auto">
-          <span className="text-xs text-slate-400 flex-shrink-0">Selecione o Token:</span>
-          {combatants.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedTokenCombatant(c)}
-              className={`px-2.5 py-1 rounded text-xs font-semibold flex-shrink-0 transition-all ${
-                selectedTokenCombatant?.id === c.id
-                  ? 'bg-cyan-500 text-slate-950 font-bold'
-                  : 'bg-[#161c28] text-slate-300 border border-[#2a3449]'
-              }`}
-            >
-              {c.name}
-            </button>
-          ))}
-        </div>
-      )}
+        {/* Sub-bar options */}
+        {selectedTool === 'paint' && activeMap && (
+          <div className="absolute top-4 left-16 z-30 px-3 py-2 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl flex items-center gap-1.5 shadow-2xl">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Terrenos:</span>
+            {(['floor', 'wall', 'grass', 'water', 'door', 'trap'] as TileType[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => setSelectedTileType(t)}
+                className={`px-2.5 py-1 rounded text-xs capitalize font-semibold transition-all ${
+                  selectedTileType === t
+                    ? 'bg-amber-500 text-slate-950 font-bold'
+                    : 'bg-[#161c28] text-slate-300 border border-[#2a3449]'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
 
-      {selectedTool === 'measure' && (
-        <div className="px-4 py-2 bg-cyan-950/80 border-b border-cyan-500/40 flex items-center justify-between text-xs text-cyan-200 font-mono">
-          <span>
-            {measureStart
-              ? `🎯 Ponto Inicial Selecionado (${measureStart.r}, ${measureStart.c}). Clique no segundo quadrado para medir.`
-              : '📏 Clique em dois quadrados para medir a distância em pés/metros.'}
-          </span>
-          {measuredDistance && (
-            <span className="font-bold bg-cyan-500 text-slate-950 px-2 py-0.5 rounded shadow">
-              Distância: {measuredDistance.feet}ft ({measuredDistance.meters}m)
+        {selectedTool === 'token' && activeMap && (
+          <div className="absolute top-4 left-16 z-30 px-3 py-2 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl flex items-center gap-1.5 shadow-2xl max-w-[60vw] overflow-x-auto scrollbar-none">
+            <span className="text-[10px] uppercase font-bold text-slate-400 flex-shrink-0">Tokens:</span>
+            {combatants.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedTokenCombatant(c)}
+                className={`px-2.5 py-1 rounded text-xs font-semibold flex-shrink-0 transition-all ${
+                  selectedTokenCombatant?.id === c.id
+                    ? 'bg-cyan-500 text-slate-950 font-bold'
+                    : 'bg-[#161c28] text-slate-300 border border-[#2a3449]'
+                }`}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {selectedTool === 'measure' && activeMap && (
+          <div className="absolute top-4 left-16 z-30 px-4 py-2 bg-cyan-950/95 backdrop-blur-md border border-cyan-500/30 rounded-xl flex items-center justify-between text-xs text-cyan-200 font-mono shadow-2xl min-w-[300px]">
+            <span>
+              {measureStart
+                ? `🎯 Origem (${measureStart.r}, ${measureStart.c}). Clique no destino.`
+                : '📏 Selecione dois quadrados.'}
             </span>
-          )}
-        </div>
-      )}
+            {measuredDistance && (
+              <span className="font-bold bg-cyan-500 text-slate-950 px-2 py-0.5 rounded shadow ml-2">
+                {measuredDistance.feet}ft ({measuredDistance.meters}m)
+              </span>
+            )}
+          </div>
+        )}
 
-      {/* Main Canvas Grid Render */}
-      <div className="flex-1 overflow-auto p-6 flex items-center justify-center bg-tactical-grid relative">
-        <div
-          className="grid gap-1 p-4 bg-[#0f141d] border-2 border-[#2a3449] rounded-2xl shadow-2xl relative"
-          style={{
-            gridTemplateColumns: `repeat(${grid[0]?.length || 12}, minmax(0, 1fr))`,
-            backgroundImage: bgImageUrl ? `url(${bgImageUrl})` : undefined,
-            backgroundSize: '100% 100%',
-            backgroundPosition: 'center',
+        {selectedTool === 'calibrate' && bgImageUrl && activeMap && (
+          <div className="absolute top-4 left-16 z-30 px-4 py-2.5 bg-rose-950/95 backdrop-blur-md border border-rose-500/30 rounded-xl flex flex-wrap items-center gap-3 text-xs text-rose-200 font-mono shadow-2xl max-w-[70vw]">
+            <div className="flex items-center gap-1">
+              <span className="font-bold text-rose-300">📏 Calibração:</span>
+              <span>Arraste uma linha de 1 quadrado.</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span>Célula: {gridScale}px</span>
+                <input 
+                  id="gridScaleSlider"
+                  type="range" 
+                  min="15" 
+                  max="100" 
+                  value={gridScale} 
+                  onChange={(e) => setGridScale(parseInt(e.target.value))} 
+                  className="w-20 accent-rose-500 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span>X: {gridOffsetX}px</span>
+                <input 
+                  id="gridOffsetXSlider"
+                  type="range" 
+                  min="-100" 
+                  max="100" 
+                  value={gridOffsetX} 
+                  onChange={(e) => setGridOffsetX(parseInt(e.target.value))} 
+                  className="w-20 accent-rose-500 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span>Y: {gridOffsetY}px</span>
+                <input 
+                  id="gridOffsetYSlider"
+                  type="range" 
+                  min="-100" 
+                  max="100" 
+                  value={gridOffsetY} 
+                  onChange={(e) => setGridOffsetY(parseInt(e.target.value))} 
+                  className="w-20 accent-rose-500 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+              <button 
+                onClick={() => { setGridOffsetX(0); setGridOffsetY(0); setGridScale(40); }}
+                className="px-2 py-0.5 bg-rose-900 hover:bg-rose-800 border border-rose-700 text-rose-200 rounded text-[10px] font-bold"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Main Canvas Grid Render */}
+        <DysonCanvas
+          key={activeMap?.id || 'empty'}
+          grid={grid}
+          bgImageUrl={bgImageUrl}
+          gridScale={gridScale}
+          gridOffsetX={gridOffsetX}
+          gridOffsetY={gridOffsetY}
+          combatants={combatants}
+          selectedTool={selectedTool}
+          selectedTileType={selectedTileType}
+          selectedTokenCombatant={selectedTokenCombatant}
+          measureStart={measureStart}
+          setMeasureStart={setMeasureStart}
+          setMeasuredDistance={setMeasuredDistance}
+          onGridChange={setGrid}
+          calibrationLine={calibrationLine}
+          setCalibrationLine={setCalibrationLine}
+          onCalibrateGridSize={(size) => {
+            setGridScale(size);
+            toast.success(`Grid recalibrado para ${size}px por célula!`);
           }}
-        >
-          {grid.map((row, rIdx) =>
-            row.map((cell, cIdx) => {
-              const isStartMeasure = measureStart?.r === rIdx && measureStart?.c === cIdx;
-              return (
-                <div
-                  key={`${rIdx}-${cIdx}`}
-                  onClick={() => handleCellClick(rIdx, cIdx)}
-                  className={`w-12 h-12 md:w-14 md:h-14 rounded-lg border relative cursor-pointer flex items-center justify-center transition-all hover:scale-105 ${getTileBg(
-                    cell.type
-                  )} ${isStartMeasure ? 'ring-2 ring-cyan-400 animate-pulse' : ''}`}
-                >
-                  {/* Tile indicator icons */}
-                  {!bgImageUrl && cell.type === 'door' && <span className="text-xs font-bold text-amber-400">🚪</span>}
-                  {!bgImageUrl && cell.type === 'trap' && <span className="text-xs font-bold text-rose-400">⚠️</span>}
-
-                  {/* Token Badge */}
-                  {cell.tokenName && (
-                    <div
-                      className={`w-8 h-8 rounded-full ${
-                        cell.tokenColor || 'bg-amber-500'
-                      } text-slate-950 font-extrabold text-[10px] font-mono flex items-center justify-center shadow-lg border-2 border-slate-950 animate-pulse`}
-                    >
-                      {cell.tokenName}
-                    </div>
-                  )}
-
-                  {/* Fog of War Mask */}
-                  {cell.fog && (
-                    <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-[2px] rounded-lg flex items-center justify-center border border-slate-900">
-                      <EyeOff className="w-4 h-4 text-slate-700 opacity-60" />
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
+        />
       </div>
     </div>
   );

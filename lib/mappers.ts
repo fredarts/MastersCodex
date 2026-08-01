@@ -14,8 +14,10 @@ import {
   CampaignMember, 
   GameSession, 
   GameScene, 
-  CampaignFeedEvent 
+  CampaignFeedEvent,
+  CampaignMap
 } from './types';
+import { CampaignMapRow } from './database.types';
 
 export function mapWorldRowToDomain(row: WorldRow): World {
   return {
@@ -112,7 +114,20 @@ export function mapSceneRowToDomain(row: SceneRow): GameScene {
     sceneImages: row.scene_images || [],
     activeImageIndex: row.active_image_index || 0,
     environmentSettings: row.environment_settings || undefined,
+    associatedMapId: row.associated_map_id || undefined,
+    associatedMapIds: row.associated_map_ids || [],
     createdAt: row.created_at,
+  };
+}
+
+export function mapCampaignMapRowToDomain(row: CampaignMapRow): CampaignMap {
+  return {
+    id: row.id,
+    campaignId: row.campaign_id,
+    title: row.title,
+    gridData: row.grid_data,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
