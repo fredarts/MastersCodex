@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { UserCampaign, CampaignMember, CampaignFeedEvent } from '@/lib/types';
 import { campaignService } from '@/lib/services/campaignService';
 import { toast } from 'sonner';
@@ -83,14 +83,14 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
     } catch (e) {}
   };
 
-  const fetchCampaignMembers = async (campaignId: string) => {
+  const fetchCampaignMembers = useCallback(async (campaignId: string) => {
     const res = await campaignService.fetchCampaignMembers(campaignId, currentUserId);
     if (res.ok) {
       setCampaignMembers(res.value);
     } else {
       toast.error(res.error.message);
     }
-  };
+  }, [currentUserId]);
 
   const addCampaignMember = async (campaignId: string, characterName: string, role: 'dm' | 'player' = 'player') => {
     const res = await campaignService.addCampaignMember(campaignId, characterName, role, currentUserId);

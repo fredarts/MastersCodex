@@ -32,13 +32,12 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
   currentTurnIndex,
   roundCount,
 }) => {
-  const { activeScene, fetchSceneMap } = useSession();
+  const { activeScene } = useSession();
   const { activeCampaign } = useCampaign();
-  const { liveDisplayMode, projectedScene, combatLogs, broadcastPlayerRoll, mapData, setMapData } = useLiveCockpit();
+  const { liveDisplayMode, projectedScene, combatLogs, broadcastPlayerRoll, mapData } = useLiveCockpit();
 
   const [rightPanelTab, setRightPanelTab] = useState<'init' | 'log'>('init');
   const [isSheetModalOpen, setIsSheetModalOpen] = useState<boolean>(false);
-  const [loadedSceneId, setLoadedSceneId] = useState<string | null>(null);
 
   const playerCharName = (() => {
     if (activeCampaign?.characterName) return activeCampaign.characterName;
@@ -109,41 +108,6 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
       } catch (err) {}
     }
   };
-  
-  // Fetch scene map from DB on load if mapData is null or scene changed (handles late joins / refreshes / scene changes)
-  useEffect(() => {
-    const sceneToLoad = projectedScene || activeScene;
-    if (isOpen && liveDisplayMode === 'map' && sceneToLoad?.id && loadedSceneId !== sceneToLoad.id) {
-      fetchSceneMap(sceneToLoad.id).then((savedData) => {
-        if (!savedData) return;
-        
-        let activeId = savedData.activeMapId;
-        let gridData = null;
-        if (savedData.maps) {
-          const associatedIds = sceneToLoad.associatedMapIds || (sceneToLoad.associatedMapId ? [sceneToLoad.associatedMapId] : []);
-          if (!activeId || !associatedIds.includes(activeId)) {
-            activeId = associatedIds[0] || null;
-          }
-          gridData = activeId ? savedData.maps[activeId] : null;
-        } else if (savedData.grid) {
-          gridData = savedData;
-          activeId = sceneToLoad.associatedMapId || 'legacy';
-        }
-
-        if (gridData) {
-          setMapData({
-            grid: gridData.grid,
-            bgImageUrl: gridData.bgImageUrl,
-            gridScale: gridData.gridScale,
-            gridOffsetX: gridData.gridOffsetX,
-            gridOffsetY: gridData.gridOffsetY,
-            activeMapId: activeId
-          });
-          setLoadedSceneId(sceneToLoad.id);
-        }
-      });
-    }
-  }, [isOpen, liveDisplayMode, projectedScene, activeScene, loadedSceneId, fetchSceneMap, setMapData]);
 
   if (!isOpen) return null;
 

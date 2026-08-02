@@ -228,15 +228,14 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const fetchSceneMap = async (sceneId: string): Promise<any | null> => {
+  const fetchSceneMap = useCallback(async (sceneId: string): Promise<any | null> => {
     const res = await sessionService.fetchSceneMap(sceneId, campaignId);
-    if (res.ok) {
-      return res.value;
-    } else {
+    if (!res.ok) {
       toast.error(res.error.message);
       return null;
     }
-  };
+    return res.value;
+  }, [campaignId]);
 
   const saveSceneMap = async (sceneId: string, gridData: any): Promise<void> => {
     const res = await sessionService.saveSceneMap(sceneId, gridData, campaignId);

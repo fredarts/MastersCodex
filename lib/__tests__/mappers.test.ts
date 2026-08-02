@@ -73,7 +73,7 @@ describe('Mappers Unit Tests', () => {
       expect(domain.subType).toBe('Mago');
       expect(domain.fullContent).toBe('Detalhamento longo de Elminster.');
       expect(domain.attributes).toEqual({ level: 20 });
-      expect(domain.connections).toEqual(['we-2']);
+      expect(domain.connections).toEqual([{ targetId: 'we-2', type: 'neutral' }]);
     });
 
     it('deve tolerar valores nulos usando padrões corretos', () => {

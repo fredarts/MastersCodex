@@ -947,7 +947,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   return (
     <div 
       ref={containerRef}
-      className={`w-full h-full flex-1 overflow-hidden relative ${getCursorClass()} bg-slate-950`}
+      className={`flex-1 overflow-hidden relative ${getCursorClass()} bg-slate-950`}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
