@@ -661,20 +661,6 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
           </div>
         )}
 
-        {selectedTool === 'measure' && activeMap && (
-          <div className="absolute top-4 left-16 z-30 px-4 py-2 bg-cyan-950/95 backdrop-blur-md border border-cyan-500/30 rounded-xl flex items-center justify-between text-xs text-cyan-200 font-mono shadow-2xl min-w-[300px]">
-            <span>
-              {measureStart
-                ? `🎯 Origem (${measureStart.r}, ${measureStart.c}). Clique no destino.`
-                : '📏 Selecione dois quadrados.'}
-            </span>
-            {measuredDistance && (
-              <span className="font-bold bg-cyan-500 text-slate-950 px-2 py-0.5 rounded shadow ml-2">
-                {measuredDistance.feet}ft ({measuredDistance.meters}m)
-              </span>
-            )}
-          </div>
-        )}
 
         {selectedTool === 'calibrate' && bgImageUrl && activeMap && (
           <div className="absolute top-4 left-16 z-30 px-4 py-2.5 bg-rose-950/95 backdrop-blur-md border border-rose-500/30 rounded-xl flex flex-wrap items-center gap-3 text-xs text-rose-200 font-mono shadow-2xl max-w-[70vw]">
@@ -739,6 +725,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
           gridOffsetY={gridOffsetY}
           combatants={combatants}
           selectedTool={selectedTool}
+          setSelectedTool={setSelectedTool}
           boxMode={boxMode}
           selectedTileType={selectedTileType}
           selectedTokenCombatant={selectedTokenCombatant}

@@ -465,21 +465,6 @@ export const CockpitDungeonMap: React.FC = () => {
         </button>
       </div>
 
-      {/* Renders measure details if selected */}
-      {selectedTool === 'measure' && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 px-3 py-1 bg-cyan-950/90 backdrop-blur-md border border-cyan-500/30 rounded-xl text-[11px] text-cyan-200 font-mono shadow-md flex items-center gap-2">
-          <span>
-            {measureStart
-              ? `Origem (${measureStart.r}, ${measureStart.c}). Clique no destino.`
-              : 'Selecione dois quadrados.'}
-          </span>
-          {measuredDistance && (
-            <span className="font-bold bg-cyan-500 text-slate-950 px-1.5 py-0.5 rounded">
-              {measuredDistance.feet}ft ({measuredDistance.meters}m)
-            </span>
-          )}
-        </div>
-      )}
 
       {/* Main DysonCanvas inside Aspect Box */}
       <DysonCanvas
@@ -491,6 +476,7 @@ export const CockpitDungeonMap: React.FC = () => {
         gridOffsetY={gridOffsetY}
         combatants={combatants}
         selectedTool={selectedTool}
+        setSelectedTool={(t) => setSelectedTool(t as any)}
         selectedTileType="floor" // Not painting terrains in cockpit
         selectedTokenCombatant={null}
         measureStart={measureStart}

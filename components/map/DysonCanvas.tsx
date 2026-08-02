@@ -1,7 +1,17 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { toast } from 'sonner';
+import { 
+  Ruler, 
+  Check, 
+  CheckCircle2, 
+  X, 
+  Undo2, 
+  ArrowRight, 
+  Footprints, 
+  Maximize2 
+} from 'lucide-react';
 import { 
   drawDysonCrosshatch, 
   drawWobblyLine, 
@@ -19,6 +29,19 @@ import {
 import { Combatant } from '@/lib/types';
 import { Cell, TileType } from '../MapMaker';
 
+export interface RulerPoint {
+  r: number;
+  c: number;
+}
+
+export interface RulerSegment {
+  from: RulerPoint;
+  to: RulerPoint;
+  steps: number;
+  feet: number;
+  meters: number;
+}
+
 interface DysonCanvasProps {
   grid: Cell[][];
   bgImageUrl: string | null;
@@ -27,6 +50,7 @@ interface DysonCanvasProps {
   gridOffsetY: number;
   combatants: Combatant[];
   selectedTool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan';
+  setSelectedTool?: (tool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan') => void;
   boxMode?: 'fill' | 'room' | 'hollow' | 'fog-reveal' | 'fog-cover';
   selectedTileType: string;
   selectedTokenCombatant: Combatant | null;
@@ -47,6 +71,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   gridOffsetX,
   gridOffsetY,
   selectedTool,
+  setSelectedTool,
   boxMode = 'fill',
   selectedTileType,
   selectedTokenCombatant,
@@ -76,8 +101,19 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number; cell: Cell } | null>(null);
   const [draggingToken, setDraggingToken] = useState<{ name: string, color: string, startR: number, startC: number, currentR: number, currentC: number } | null>(null);
 
+  // Advanced Multi-Point Ruler State
+  const [rulerPoints, setRulerPoints] = useState<RulerPoint[]>([]);
+  const [rulerCursor, setRulerCursor] = useState<RulerPoint | null>(null);
+  const [rulerStatus, setRulerStatus] = useState<'idle' | 'measuring' | 'completed'>('idle');
+  const [isRulerDragging, setIsRulerDragging] = useState(false);
+  const rulerDragStartCell = useRef<RulerPoint | null>(null);
+
   const gridDims = useRef({ rows: grid.length, cols: grid[0]?.length || 0 });
   const panOffsetRef = useRef(panOffset);
+  const selectedToolRef = useRef(selectedTool);
+  const rulerPointsRef = useRef(rulerPoints);
+  const rulerCursorRef = useRef(rulerCursor);
+  const rulerStatusRef = useRef(rulerStatus);
 
   useEffect(() => {
     gridDims.current = { rows: grid.length, cols: grid[0]?.length || 0 };
@@ -86,6 +122,149 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   useEffect(() => {
     panOffsetRef.current = panOffset;
   }, [panOffset]);
+
+  useEffect(() => {
+    selectedToolRef.current = selectedTool;
+  }, [selectedTool]);
+
+  useEffect(() => {
+    rulerPointsRef.current = rulerPoints;
+  }, [rulerPoints]);
+
+  useEffect(() => {
+    rulerCursorRef.current = rulerCursor;
+  }, [rulerCursor]);
+
+  useEffect(() => {
+    rulerStatusRef.current = rulerStatus;
+  }, [rulerStatus]);
+
+  // Orthogonal Path & Distance helpers (Strict non-diagonal movement for D&D 5e)
+  const calculateSegmentDistance = (from: RulerPoint, to: RulerPoint) => {
+    const deltaR = Math.abs(to.r - from.r);
+    const deltaC = Math.abs(to.c - from.c);
+    // Strict Manhattan/Orthogonal distance (horizontal + vertical steps only, no diagonal cuts)
+    const steps = deltaR + deltaC;
+    const feet = steps * 5;
+    const meters = parseFloat((feet * 0.3).toFixed(1));
+    return { steps, feet, meters, deltaR, deltaC };
+  };
+
+  const getOrthogonalPath = (from: RulerPoint, to: RulerPoint): RulerPoint[] => {
+    if (from.r === to.r || from.c === to.c) {
+      return [to];
+    }
+    // Decompose diagonal movement into an orthogonal L-shaped corner
+    const deltaR = Math.abs(to.r - from.r);
+    const deltaC = Math.abs(to.c - from.c);
+    // If horizontal delta is larger or equal, move horizontal first, then vertical
+    const corner: RulerPoint = deltaC >= deltaR
+      ? { r: from.r, c: to.c }
+      : { r: to.r, c: from.c };
+    return [corner, to];
+  };
+
+  const getRulerSummary = (points: RulerPoint[], liveCursor: RulerPoint | null, isMeasuring: boolean) => {
+    let activePoints = [...points];
+    if (isMeasuring && liveCursor && activePoints.length > 0) {
+      const lastPt = activePoints[activePoints.length - 1];
+      if (liveCursor.r !== lastPt.r || liveCursor.c !== lastPt.c) {
+        const added = getOrthogonalPath(lastPt, liveCursor);
+        activePoints = [...activePoints, ...added];
+      }
+    }
+
+    const segments: RulerSegment[] = [];
+    let totalSteps = 0;
+    let totalFeet = 0;
+    let totalMeters = 0;
+
+    for (let i = 0; i < activePoints.length - 1; i++) {
+      const seg = calculateSegmentDistance(activePoints[i], activePoints[i + 1]);
+      segments.push({
+        from: activePoints[i],
+        to: activePoints[i + 1],
+        steps: seg.steps,
+        feet: seg.feet,
+        meters: seg.meters,
+      });
+      totalSteps += seg.steps;
+      totalFeet += seg.feet;
+      totalMeters += seg.meters;
+    }
+
+    return {
+      activePoints,
+      segments,
+      totalSteps,
+      totalFeet,
+      totalMeters: parseFloat(totalMeters.toFixed(1)),
+    };
+  };
+
+  const handleFinishRuler = () => {
+    const currentPoints = rulerPointsRef.current;
+    
+    if (currentPoints.length === 0) return;
+
+    let finalPoints = [...currentPoints];
+    
+    // Only if there is only 1 point defined and user hasn't clicked/dragged a 2nd point yet
+    if (finalPoints.length === 1) {
+      const currentCursor = rulerCursorRef.current;
+      if (
+        currentCursor &&
+        (currentCursor.r !== finalPoints[0].r || currentCursor.c !== finalPoints[0].c)
+      ) {
+        const added = getOrthogonalPath(finalPoints[0], currentCursor);
+        finalPoints = [...finalPoints, ...added];
+      }
+    }
+
+    if (finalPoints.length < 2) {
+      toast.info('Selecione ao menos 2 pontos para medir a rota.');
+      return;
+    }
+
+    setRulerPoints(finalPoints);
+    setRulerStatus('completed');
+    setIsRulerDragging(false);
+
+    const summary = getRulerSummary(finalPoints, null, false);
+    setMeasuredDistance?.({ feet: summary.totalFeet, meters: summary.totalMeters });
+    toast.success(`Medição finalizada: ${summary.totalFeet}ft (${summary.totalMeters}m) • ${summary.totalSteps} casas`);
+  };
+
+  const handleUndoRulerPoint = () => {
+    if (rulerPointsRef.current.length > 1) {
+      const updated = rulerPointsRef.current.slice(0, -1);
+      setRulerPoints(updated);
+      if (rulerStatusRef.current === 'completed') {
+        setRulerStatus('measuring');
+      }
+      const summary = getRulerSummary(updated, null, false);
+      setMeasuredDistance?.({ feet: summary.totalFeet, meters: summary.totalMeters });
+    } else {
+      handleResetRuler();
+    }
+  };
+
+  const handleResetRuler = () => {
+    setRulerPoints([]);
+    setRulerCursor(null);
+    setRulerStatus('idle');
+    setIsRulerDragging(false);
+    rulerDragStartCell.current = null;
+    setMeasureStart?.(null);
+    setMeasuredDistance?.(null);
+  };
+
+  const handleExitRuler = () => {
+    handleResetRuler();
+    if (setSelectedTool) {
+      setSelectedTool('token');
+    }
+  };
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -102,10 +281,35 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     resizeObserver.observe(container);
     
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+
       if (e.code === 'Space' && !e.repeat) {
-        if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
-        e.preventDefault();
-        setIsSpacePressed(true);
+        if (selectedToolRef.current !== 'measure') {
+          e.preventDefault();
+          setIsSpacePressed(true);
+        }
+      }
+
+      if (selectedToolRef.current === 'measure') {
+        if (rulerStatusRef.current === 'measuring') {
+          if (e.key === 'Escape' || e.key === 'Enter' || e.code === 'Space') {
+            e.preventDefault();
+            handleFinishRuler();
+          } else if (e.key === 'Backspace' || e.key === 'Delete') {
+            e.preventDefault();
+            handleUndoRulerPoint();
+          }
+        } else if (rulerStatusRef.current === 'completed') {
+          if (e.key === 'Escape' || e.key === 'Enter' || e.code === 'Space') {
+            e.preventDefault();
+            handleExitRuler();
+          }
+        } else if (rulerStatusRef.current === 'idle') {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            handleExitRuler();
+          }
+        }
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -579,14 +783,240 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     }
 
     // 5. Draw Ruler Measurement
-    if (selectedTool === 'measure' && measureStart) {
-      const sx = bgImage ? gridOffsetX + measureStart.c * CELL_SIZE + CELL_SIZE / 2 : measureStart.c * CELL_SIZE + CELL_SIZE / 2;
-      const sy = bgImage ? gridOffsetY + measureStart.r * CELL_SIZE + CELL_SIZE / 2 : measureStart.r * CELL_SIZE + CELL_SIZE / 2;
+    if (selectedTool === 'measure' && rulerPoints.length > 0) {
+      const isMeasuring = rulerStatus === 'measuring';
+      const hasLiveCursor = isMeasuring && rulerCursor && (
+        rulerCursor.r !== rulerPoints[rulerPoints.length - 1].r || 
+        rulerCursor.c !== rulerPoints[rulerPoints.length - 1].c
+      );
 
-      ctx.beginPath();
-      ctx.arc(sx, sy, 5, 0, Math.PI * 2);
-      ctx.fillStyle = '#06b6d4';
-      ctx.fill();
+      const getPointCoords = (pt: { r: number; c: number }) => {
+        const x = (bgImage ? gridOffsetX + pt.c * CELL_SIZE : pt.c * CELL_SIZE) + CELL_SIZE / 2;
+        const y = (bgImage ? gridOffsetY + pt.r * CELL_SIZE : pt.r * CELL_SIZE) + CELL_SIZE / 2;
+        return { x, y };
+      };
+
+      // 5.A. Draw all confirmed segments
+      for (let i = 0; i < rulerPoints.length - 1; i++) {
+        const p1 = getPointCoords(rulerPoints[i]);
+        const p2 = getPointCoords(rulerPoints[i + 1]);
+        const segDist = calculateSegmentDistance(rulerPoints[i], rulerPoints[i + 1]);
+
+        // Outer glow
+        ctx.save();
+        ctx.shadowColor = '#06b6d4';
+        ctx.shadowBlur = 12 / zoom;
+        ctx.strokeStyle = 'rgba(6, 182, 212, 0.45)';
+        ctx.lineWidth = Math.max(5, 7 / zoom);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+        ctx.restore();
+
+        // Core solid neon line
+        ctx.save();
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = Math.max(2.5, 3.5 / zoom);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+        ctx.restore();
+
+        // Segment distance badge at midpoint
+        if (segDist.steps > 0) {
+          const midX = (p1.x + p2.x) / 2;
+          const midY = (p1.y + p2.y) / 2;
+          const badgeText = `${segDist.feet}ft`;
+          ctx.save();
+          ctx.font = `bold ${Math.max(10, 11 / zoom)}px Inter, sans-serif`;
+          const textWidth = ctx.measureText(badgeText).width;
+          const padX = 5 / zoom;
+          const padY = 2.5 / zoom;
+          const boxW = textWidth + padX * 2;
+          const boxH = (14 / zoom) + padY;
+
+          ctx.fillStyle = 'rgba(10, 15, 29, 0.92)';
+          ctx.strokeStyle = '#0891b2';
+          ctx.lineWidth = 1 / zoom;
+          ctx.beginPath();
+          ctx.roundRect(midX - boxW / 2, midY - boxH / 2, boxW, boxH, 3 / zoom);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#67e8f9';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(badgeText, midX, midY);
+          ctx.restore();
+        }
+      }
+
+      // 5.B. Draw live preview segment to cursor (Orthogonal / L-shaped)
+      if (hasLiveCursor && rulerCursor) {
+        const lastPt = rulerPoints[rulerPoints.length - 1];
+        const previewNodes = getOrthogonalPath(lastPt, rulerCursor);
+        const previewPoints = [lastPt, ...previewNodes];
+        const liveDist = calculateSegmentDistance(lastPt, rulerCursor);
+
+        // Dashed preview lines following orthogonal grid lines
+        ctx.save();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = Math.max(2, 3 / zoom);
+        ctx.setLineDash([8 / zoom, 5 / zoom]);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        const startCoord = getPointCoords(previewPoints[0]);
+        ctx.moveTo(startCoord.x, startCoord.y);
+        for (let i = 1; i < previewPoints.length; i++) {
+          const ptCoord = getPointCoords(previewPoints[i]);
+          ctx.lineTo(ptCoord.x, ptCoord.y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        // If orthogonal preview creates an intermediate corner, draw corner hint
+        if (previewPoints.length > 2) {
+          const cornerCoord = getPointCoords(previewPoints[1]);
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(cornerCoord.x, cornerCoord.y, Math.max(3, 4.5 / zoom), 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.6)';
+          ctx.fill();
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1 / zoom;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Live segment badge
+        if (liveDist.steps > 0) {
+          const curP = getPointCoords(rulerCursor);
+          const midX = (startCoord.x + curP.x) / 2;
+          const midY = (startCoord.y + curP.y) / 2;
+          const badgeText = `+${liveDist.feet}ft`;
+          ctx.save();
+          ctx.font = `bold ${Math.max(10, 11 / zoom)}px Inter, sans-serif`;
+          const textWidth = ctx.measureText(badgeText).width;
+          const padX = 5 / zoom;
+          const padY = 2.5 / zoom;
+          const boxW = textWidth + padX * 2;
+          const boxH = (14 / zoom) + padY;
+
+          ctx.fillStyle = 'rgba(12, 74, 96, 0.92)';
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1 / zoom;
+          ctx.beginPath();
+          ctx.roundRect(midX - boxW / 2, midY - boxH / 2, boxW, boxH, 3 / zoom);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#bae6fd';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(badgeText, midX, midY);
+          ctx.restore();
+        }
+      }
+
+      // 5.C. Draw Waypoint Nodes
+      rulerPoints.forEach((pt, idx) => {
+        const coord = getPointCoords(pt);
+        const isStart = idx === 0;
+        const isEnd = idx === rulerPoints.length - 1 && !hasLiveCursor;
+
+        ctx.save();
+        if (isStart) {
+          // Start node: emerald ring
+          ctx.beginPath();
+          ctx.arc(coord.x, coord.y, Math.max(6, 8 / zoom), 0, Math.PI * 2);
+          ctx.fillStyle = '#10b981';
+          ctx.fill();
+          ctx.strokeStyle = '#022c22';
+          ctx.lineWidth = 2 / zoom;
+          ctx.stroke();
+
+          // Inner dot
+          ctx.beginPath();
+          ctx.arc(coord.x, coord.y, Math.max(2.5, 3.5 / zoom), 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+
+          // Label
+          ctx.font = `bold ${Math.max(9, 10 / zoom)}px Inter, sans-serif`;
+          ctx.fillStyle = '#a7f3d0';
+          ctx.textAlign = 'center';
+          ctx.fillText('Início', coord.x, coord.y - (12 / zoom));
+        } else if (isEnd) {
+          // Final node
+          ctx.beginPath();
+          ctx.arc(coord.x, coord.y, Math.max(7, 9 / zoom), 0, Math.PI * 2);
+          ctx.fillStyle = '#06b6d4';
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2 / zoom;
+          ctx.stroke();
+
+          // Target bullseye
+          ctx.beginPath();
+          ctx.arc(coord.x, coord.y, Math.max(3, 4 / zoom), 0, Math.PI * 2);
+          ctx.fillStyle = '#083344';
+          ctx.fill();
+
+          ctx.font = `bold ${Math.max(9, 10 / zoom)}px Inter, sans-serif`;
+          ctx.fillStyle = '#67e8f9';
+          ctx.textAlign = 'center';
+          ctx.fillText('Fim', coord.x, coord.y - (12 / zoom));
+        } else {
+          // Intermediate curve node
+          ctx.beginPath();
+          ctx.arc(coord.x, coord.y, Math.max(4, 5.5 / zoom), 0, Math.PI * 2);
+          ctx.fillStyle = '#0891b2';
+          ctx.fill();
+          ctx.strokeStyle = '#67e8f9';
+          ctx.lineWidth = 1.5 / zoom;
+          ctx.stroke();
+
+          // Mini index
+          ctx.font = `bold ${Math.max(8, 9 / zoom)}px Inter, sans-serif`;
+          ctx.fillStyle = '#e0f2fe';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${idx}`, coord.x, coord.y - (9 / zoom));
+        }
+        ctx.restore();
+      });
+
+      // 5.D. Draw live cursor node
+      if (hasLiveCursor && rulerCursor) {
+        const curP = getPointCoords(rulerCursor);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(curP.x, curP.y, Math.max(6, 8 / zoom), 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(6, 182, 212, 0.6)';
+        ctx.fill();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 2 / zoom;
+        ctx.stroke();
+
+        // Reticle crosshair
+        const crossSize = 10 / zoom;
+        ctx.beginPath();
+        ctx.moveTo(curP.x - crossSize, curP.y);
+        ctx.lineTo(curP.x + crossSize, curP.y);
+        ctx.moveTo(curP.x, curP.y - crossSize);
+        ctx.lineTo(curP.x, curP.y + crossSize);
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
+        ctx.lineWidth = 1.5 / zoom;
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     // 6. Draw Grid Calibration Line (Red Line)
@@ -666,7 +1096,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     }
 
     ctx.restore();
-  }, [grid, bgImage, CELL_SIZE, COLS, ROWS, gridOffsetX, gridOffsetY, selectedTool, selectionBox, measureStart, calibrationLine, zoom, panOffset, canvasSize, isPlayerView]);
+  }, [grid, bgImage, CELL_SIZE, COLS, ROWS, gridOffsetX, gridOffsetY, selectedTool, selectionBox, measureStart, calibrationLine, rulerPoints, rulerCursor, rulerStatus, zoom, panOffset, canvasSize, isPlayerView]);
 
   // Utility to convert client mouse events to Canvas coordinates
   const getCanvasCoords = (e: React.MouseEvent) => {
@@ -837,8 +1267,54 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     const clickedCell = grid[pos.r]?.[pos.c];
 
+    if (selectedTool === 'measure') {
+      if (e.button === 0) {
+        if (rulerStatus === 'completed') {
+          // Fresh measurement starting from this click
+          setRulerPoints([pos]);
+          setRulerStatus('measuring');
+          setIsRulerDragging(true);
+          rulerDragStartCell.current = pos;
+          setMeasureStart?.(pos);
+          setMeasuredDistance?.(null);
+          return;
+        }
+
+        if (rulerStatus === 'idle' || rulerPoints.length === 0) {
+          setRulerPoints([pos]);
+          setRulerStatus('measuring');
+          setIsRulerDragging(true);
+          rulerDragStartCell.current = pos;
+          setMeasureStart?.(pos);
+          setMeasuredDistance?.(null);
+          return;
+        }
+
+        if (rulerStatus === 'measuring') {
+          const lastPoint = rulerPoints[rulerPoints.length - 1];
+          if (pos.r === lastPoint.r && pos.c === lastPoint.c) {
+            // Clicked directly on the end point to finalize
+            if (rulerPoints.length >= 2) {
+              handleFinishRuler();
+            }
+          } else {
+            // Add orthogonal waypoint(s) (L-shaped if diagonal)
+            const added = getOrthogonalPath(lastPoint, pos);
+            const newPoints = [...rulerPoints, ...added];
+            setRulerPoints(newPoints);
+            setIsRulerDragging(true);
+            rulerDragStartCell.current = pos;
+            const summary = getRulerSummary(newPoints, null, false);
+            setMeasuredDistance?.({ feet: summary.totalFeet, meters: summary.totalMeters });
+          }
+          return;
+        }
+      }
+      return;
+    }
+
     // Token drag takes priority over door/trap editing
-    if (clickedCell && clickedCell.tokenName && e.button === 0 && !isSpacePressed && selectedTool !== 'measure') {
+    if (clickedCell && clickedCell.tokenName && e.button === 0 && !isSpacePressed) {
       setDraggingToken({
          name: clickedCell.tokenName,
          color: clickedCell.tokenColor || '',
@@ -850,7 +1326,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return;
     }
 
-    if (clickedCell && !isPlayerView && (clickedCell.type === 'door' || clickedCell.type === 'trap') && e.button === 0 && !isSpacePressed && selectedTool !== 'measure') {
+    if (clickedCell && !isPlayerView && (clickedCell.type === 'door' || clickedCell.type === 'trap') && e.button === 0 && !isSpacePressed) {
       const isOverwriting = selectedTool === 'paint' && selectedTileType !== clickedCell.type;
       if (!isOverwriting) {
         setEditingCell({
@@ -884,6 +1360,14 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     }
 
     const pos = getGridPos(x, y);
+
+    if (selectedTool === 'measure') {
+      setRulerCursor(pos);
+      if (rulerStatus === 'measuring' && rulerPoints.length > 0) {
+        const liveSummary = getRulerSummary(rulerPoints, pos, true);
+        setMeasuredDistance?.({ feet: liveSummary.totalFeet, meters: liveSummary.totalMeters });
+      }
+    }
 
     if (selectedTool === 'box' && isDrawing && selectionBox) {
       setSelectionBox(prev => prev ? { ...prev, currentR: pos.r, currentC: pos.c } : null);
@@ -926,7 +1410,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     handleCellAction(pos.r, pos.c, drawButton, false);
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e: React.MouseEvent) => {
     if (isPanning) {
       setIsPanning(false);
       return;
@@ -935,6 +1419,39 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     if (draggingToken) {
       setDraggingToken(null);
       setHoveredCell(null);
+      return;
+    }
+
+    const { x, y } = getCanvasCoords(e);
+    const pos = getGridPos(x, y);
+
+    if (selectedTool === 'measure') {
+      if (isRulerDragging) {
+        setIsRulerDragging(false);
+        if (rulerDragStartCell.current) {
+          const dragStart = rulerDragStartCell.current;
+          const wasDraggedToNewCell = (pos.r !== dragStart.r || pos.c !== dragStart.c);
+          if (wasDraggedToNewCell) {
+            if (rulerPoints.length === 1 && rulerPoints[0].r === dragStart.r && rulerPoints[0].c === dragStart.c) {
+              const added = getOrthogonalPath(dragStart, pos);
+              const newPoints = [dragStart, ...added];
+              setRulerPoints(newPoints);
+              const summary = getRulerSummary(newPoints, null, false);
+              setMeasuredDistance?.({ feet: summary.totalFeet, meters: summary.totalMeters });
+            } else if (rulerPoints.length > 1) {
+              const lastPt = rulerPoints[rulerPoints.length - 1];
+              if (pos.r !== lastPt.r || pos.c !== lastPt.c) {
+                const added = getOrthogonalPath(lastPt, pos);
+                const newPoints = [...rulerPoints, ...added];
+                setRulerPoints(newPoints);
+                const summary = getRulerSummary(newPoints, null, false);
+                setMeasuredDistance?.({ feet: summary.totalFeet, meters: summary.totalMeters });
+              }
+            }
+          }
+          rulerDragStartCell.current = null;
+        }
+      }
       return;
     }
 
@@ -960,20 +1477,6 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
   const handleCellAction = (targetR: number, targetC: number, button: number, isInitialClick: boolean) => {
     if (selectedTool === 'measure') {
-      if (isInitialClick) {
-        if (!measureStart) {
-          setMeasureStart?.({ r: targetR, c: targetC });
-          setMeasuredDistance?.(null);
-        } else {
-          const deltaR = Math.abs(targetR - measureStart.r);
-          const deltaC = Math.abs(targetC - measureStart.c);
-          const gridSteps = Math.max(deltaR, deltaC);
-          const feet = gridSteps * 5;
-          const meters = parseFloat((feet * 0.3).toFixed(1));
-          setMeasuredDistance?.({ feet, meters });
-          setMeasureStart?.(null);
-        }
-      }
       return;
     }
 
@@ -1232,11 +1735,19 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     setZoom(nextZoom);
   };
 
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (selectedTool === 'measure') {
+      e.preventDefault();
+      handleFinishRuler();
+    }
+  };
+
   const getCursorClass = () => {
     if (selectedTool === 'pan' || isSpacePressed) {
       return isPanning ? 'cursor-grabbing' : 'cursor-grab';
     }
     if (draggingToken) return 'cursor-grabbing';
+    if (selectedTool === 'measure') return 'cursor-crosshair';
     if (selectedTool === 'paint' || selectedTool === 'box') return 'cursor-crosshair';
     return 'cursor-default';
   };
@@ -1249,6 +1760,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
+      onDoubleClick={handleDoubleClick}
       onMouseLeave={() => setHoveredCell(null)}
       onContextMenu={(e) => e.preventDefault()}
       style={{ userSelect: 'none' }}
@@ -1664,6 +2176,191 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Advanced Ruler Floating HUD & Completion Card */}
+      {selectedTool === 'measure' && (
+        <div 
+          onMouseDown={(e) => e.stopPropagation()} 
+          onMouseMove={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          className="select-none pointer-events-auto"
+        >
+          {rulerStatus === 'idle' && (
+            <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-slate-950/90 backdrop-blur-md border border-cyan-500/30 rounded-2xl flex items-center gap-3 text-xs text-cyan-200 shadow-2xl animate-fade-in pointer-events-auto max-w-[90vw]">
+              <div className="w-7 h-7 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0 shadow-inner">
+                <Ruler className="w-4 h-4 animate-pulse" />
+              </div>
+              <div className="flex flex-col pr-1">
+                <span className="font-semibold text-slate-100">Régua Tática Ortogonal (D&D 5e)</span>
+                <span className="text-[11px] text-cyan-300/80">
+                  Medição estritamente ortogonal (sem diagonal). Arraste ou clique para traçar o caminho.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleExitRuler}
+                className="p-1 text-slate-400 hover:text-slate-100 rounded-lg hover:bg-slate-800 transition-colors ml-1"
+                title="Fechar Régua e voltar às ferramentas (ESC)"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {rulerStatus === 'measuring' && (() => {
+            const summary = getRulerSummary(rulerPoints, rulerCursor, true);
+            return (
+              <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 px-4 py-2.5 bg-slate-950/95 backdrop-blur-md border border-cyan-500/50 rounded-2xl flex flex-wrap items-center gap-4 text-xs text-cyan-200 shadow-2xl animate-fade-in pointer-events-auto max-w-[92vw]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-xl bg-cyan-500 text-slate-950 flex items-center justify-center font-bold shrink-0 shadow-md shadow-cyan-500/30">
+                    <Ruler className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-base font-bold text-white font-mono">
+                        {summary.totalFeet}ft
+                      </span>
+                      <span className="text-[11px] text-cyan-300 font-mono">
+                        ({summary.totalMeters}m)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                      <span>{summary.totalSteps} casas</span>
+                      <span>•</span>
+                      <span>{summary.activePoints.length} pontos {summary.segments.length > 1 ? `(${summary.segments.length} curvas)` : ''}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="h-6 w-[1px] bg-slate-800 hidden sm:block" />
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleFinishRuler}
+                    className="px-3.5 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-md shadow-cyan-500/20 cursor-pointer active:scale-95"
+                    title="Confirmar fim da medição (ESC / Enter / Espaço / Duplo-clique)"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Concluir (ESC)</span>
+                  </button>
+                  
+                  {rulerPoints.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={handleUndoRulerPoint}
+                      className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs transition-all flex items-center gap-1 cursor-pointer"
+                      title="Desfazer último ponto (Backspace)"
+                    >
+                      <Undo2 className="w-3.5 h-3.5" />
+                      <span className="hidden md:inline">Desfazer</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleResetRuler}
+                    className="px-2.5 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 rounded-xl text-xs transition-all flex items-center gap-1 cursor-pointer"
+                    title="Limpar medição"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Limpar</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {rulerStatus === 'completed' && (() => {
+            const summary = getRulerSummary(rulerPoints, null, false);
+            return (
+              <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 w-[360px] max-w-[92vw] bg-slate-950/95 backdrop-blur-md border border-cyan-500/40 rounded-2xl p-3.5 text-xs text-slate-200 shadow-2xl animate-fade-in pointer-events-auto">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-2.5 border-b border-slate-800/80">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="font-bold text-slate-100 text-xs">Medição da Rota Concluída</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleExitRuler}
+                    className="p-1 text-slate-400 hover:text-slate-100 rounded-lg hover:bg-slate-800 transition-colors"
+                    title="Fechar Régua e voltar (ESC)"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Main Stats */}
+                <div className="grid grid-cols-2 gap-2 my-2.5">
+                  <div className="bg-[#0e1422] border border-cyan-500/20 rounded-xl p-2.5 flex flex-col">
+                    <span className="text-[10px] uppercase font-bold text-slate-400">Distância Total</span>
+                    <div className="flex items-baseline gap-1 mt-0.5">
+                      <span className="text-base font-black text-cyan-400 font-mono">{summary.totalFeet}ft</span>
+                      <span className="text-[11px] text-cyan-300/70 font-mono">({summary.totalMeters}m)</span>
+                    </div>
+                  </div>
+                  <div className="bg-[#0e1422] border border-cyan-500/20 rounded-xl p-2.5 flex flex-col">
+                    <span className="text-[10px] uppercase font-bold text-slate-400">Quadrados / Passos</span>
+                    <div className="flex items-baseline gap-1 mt-0.5">
+                      <span className="text-base font-black text-amber-400 font-mono">{summary.totalSteps}</span>
+                      <span className="text-[11px] text-slate-400 font-mono">casas</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Segments Breakdown */}
+                {summary.segments.length > 1 && (
+                  <div className="mb-2.5 max-h-28 overflow-y-auto pr-1 space-y-1.5 custom-scrollbar">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                      Detalhamento dos Segmentos:
+                    </span>
+                    {summary.segments.map((seg, sIdx) => (
+                      <div key={sIdx} className="flex items-center justify-between text-[11px] bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-800/60 font-mono">
+                        <span className="text-slate-300 flex items-center gap-1.5">
+                          <span className="w-4 h-4 rounded-full bg-cyan-950 text-cyan-400 text-[9px] flex items-center justify-center font-bold">
+                            {sIdx + 1}
+                          </span>
+                          Segmento {sIdx + 1}
+                        </span>
+                        <span className="font-bold text-cyan-300">
+                          +{seg.feet}ft ({seg.steps} casas)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Action Footer */}
+                <div className="flex items-center gap-2 pt-1 border-t border-slate-800/80">
+                  <button
+                    type="button"
+                    onClick={handleExitRuler}
+                    className="flex-1 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-cyan-500/20 active:scale-95"
+                    title="Fechar medição e voltar às ferramentas (ESC / Enter / OK)"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>OK / Fechar (ESC)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetRuler}
+                    className="py-2 px-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 font-semibold rounded-xl text-xs transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Iniciar nova medição"
+                  >
+                    <Ruler className="w-3.5 h-3.5" />
+                    <span>Nova Medição</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
