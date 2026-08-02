@@ -116,6 +116,91 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return true;
   }, []);
 
+  const handleLiveProjectionChange = useCallback((payload: any) => {
+    if (payload.mode) setLiveDisplayModeState(payload.mode);
+    if (payload.activeSpellTargeting !== undefined) setActiveSpellTargetingState(payload.activeSpellTargeting);
+    if (payload.casterTokenKey !== undefined) setCasterTokenKeyState(payload.casterTokenKey);
+    if (payload.spellTargetPosition !== undefined) setSpellTargetPositionState(payload.spellTargetPosition);
+    if (payload.mapData !== undefined) {
+      const data = payload.mapData;
+      if (data && data.fogMatrix) {
+        setMapData((prev: any) => {
+          if (!prev || prev.activeMapId !== data.activeMapId || !prev.grid) return prev;
+          const gridCopy = prev.grid.map((row: any[]) => row.map(cell => ({ ...cell })));
+          
+          // 1. Clear old tokens from gridCopy
+          for (let r = 0; r < gridCopy.length; r++) {
+            for (let c = 0; c < gridCopy[r].length; c++) {
+              gridCopy[r][c].tokenName = undefined;
+              gridCopy[r][c].tokenColor = undefined;
+            }
+          }
+          
+          // 2. Put tokens in their new cells
+          if (data.tokens) {
+            for (const tk of data.tokens) {
+              if (gridCopy[tk.r]?.[tk.c]) {
+                gridCopy[tk.r][tk.c].tokenName = tk.name;
+                gridCopy[tk.r][tk.c].tokenColor = tk.color;
+              }
+            }
+          }
+
+          // 3. Unpack fogMatrix string back into the grid cells
+          let idx = 0;
+          for (let r = 0; r < gridCopy.length; r++) {
+            for (let c = 0; c < gridCopy[r].length; c++) {
+              const char = data.fogMatrix[idx++];
+              if (char === '0') gridCopy[r][c].fog = false;
+              else if (char === '1') gridCopy[r][c].fog = true;
+            }
+          }
+          return {
+            ...prev,
+            grid: gridCopy
+          };
+        });
+      } else {
+        setMapData(data);
+      }
+    }
+
+    const sceneData = payload.payload || payload;
+    const sceneId = sceneData.sceneId !== undefined ? sceneData.sceneId : sceneData.id;
+
+    if (
+      sceneId !== undefined ||
+      sceneData.imageUrl !== undefined ||
+      sceneData.title !== undefined ||
+      sceneData.timeOfDayHour !== undefined ||
+      sceneData.timeOfDay !== undefined ||
+      sceneData.hasFog !== undefined ||
+      sceneData.hasRain !== undefined ||
+      sceneData.floorTextureUrl !== undefined
+    ) {
+      setProjectedScene((prev: any) => {
+        if (sceneId === null) return null;
+        const base = (prev && prev.id === sceneId) ? prev : {};
+        return {
+          ...base,
+          id: sceneId !== undefined ? sceneId : base.id,
+          title: sceneData.title !== undefined ? sceneData.title : base.title,
+          imageUrl: sceneData.imageUrl !== undefined ? sceneData.imageUrl : base.imageUrl,
+          sensoryText: sceneData.sensoryText !== undefined ? sceneData.sensoryText : base.sensoryText,
+          sceneImages: sceneData.sceneImages !== undefined ? sceneData.sceneImages : base.sceneImages || [],
+          activeImageIndex: sceneData.activeImageIndex !== undefined ? sceneData.activeImageIndex : base.activeImageIndex ?? 0,
+          timeOfDay: sceneData.timeOfDay !== undefined ? sceneData.timeOfDay : base.timeOfDay,
+          timeOfDayHour: sceneData.timeOfDayHour !== undefined ? sceneData.timeOfDayHour : base.timeOfDayHour,
+          hasFog: sceneData.hasFog !== undefined ? sceneData.hasFog : base.hasFog,
+          hasRain: sceneData.hasRain !== undefined ? sceneData.hasRain : base.hasRain,
+          floorTextureUrl: sceneData.floorTextureUrl !== undefined ? sceneData.floorTextureUrl : base.floorTextureUrl,
+          associatedMapId: sceneData.associatedMapId !== undefined ? sceneData.associatedMapId : base.associatedMapId,
+          associatedMapIds: sceneData.associatedMapIds !== undefined ? sceneData.associatedMapIds : base.associatedMapIds,
+        };
+      });
+    }
+  }, []);
+
   // Realtime Sync Hook
   const {
     broadcastTokenMove,
@@ -145,33 +230,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         }));
       }
     },
-    onLiveProjectionChange: (payload) => {
-      if (payload.mode) setLiveDisplayModeState(payload.mode);
-      if (payload.activeSpellTargeting !== undefined) setActiveSpellTargetingState(payload.activeSpellTargeting);
-      if (payload.casterTokenKey !== undefined) setCasterTokenKeyState(payload.casterTokenKey);
-      if (payload.spellTargetPosition !== undefined) setSpellTargetPositionState(payload.spellTargetPosition);
-      if (payload.mapData !== undefined) setMapData(payload.mapData);
-      if (payload.sceneId !== undefined || payload.imageUrl !== undefined || payload.title !== undefined || payload.timeOfDayHour !== undefined || payload.timeOfDay !== undefined || payload.hasFog !== undefined || payload.hasRain !== undefined || payload.floorTextureUrl !== undefined) {
-        setProjectedScene((prev: any) => {
-          if (payload.sceneId === null) return null;
-          const base = (prev && prev.id === payload.sceneId) ? prev : {};
-          return {
-            ...base,
-            id: payload.sceneId !== undefined ? payload.sceneId : base.id,
-            title: payload.title !== undefined ? payload.title : base.title,
-            imageUrl: payload.imageUrl !== undefined ? payload.imageUrl : base.imageUrl,
-            sensoryText: payload.sensoryText !== undefined ? payload.sensoryText : base.sensoryText,
-            sceneImages: payload.sceneImages !== undefined ? payload.sceneImages : base.sceneImages || [],
-            activeImageIndex: payload.activeImageIndex !== undefined ? payload.activeImageIndex : base.activeImageIndex ?? 0,
-            timeOfDay: payload.timeOfDay !== undefined ? payload.timeOfDay : base.timeOfDay,
-            timeOfDayHour: payload.timeOfDayHour !== undefined ? payload.timeOfDayHour : base.timeOfDayHour,
-            hasFog: payload.hasFog !== undefined ? payload.hasFog : base.hasFog,
-            hasRain: payload.hasRain !== undefined ? payload.hasRain : base.hasRain,
-            floorTextureUrl: payload.floorTextureUrl !== undefined ? payload.floorTextureUrl : base.floorTextureUrl,
-          };
-        });
-      }
-    },
+    onLiveProjectionChange: handleLiveProjectionChange,
     onCombatUpdate: (payload) => {
       const newState = {
         combatants: payload.combatants,
@@ -239,10 +298,9 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const broadcastToPlayerView = useCallback((payload: any) => {
     // Apply locally for same-tab PlayerViewModal (broadcasts don't reach same tab)
-    if (payload.mapData !== undefined) setMapData(payload.mapData);
-    if (payload.mode) setLiveDisplayModeState(payload.mode);
+    handleLiveProjectionChange(payload);
     broadcastLiveProjection(payload);
-  }, [broadcastLiveProjection]);
+  }, [broadcastLiveProjection, handleLiveProjectionChange]);
 
   const setActiveSpellTargeting = useCallback((targeting: any) => {
     setActiveSpellTargetingState(targeting);

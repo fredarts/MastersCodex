@@ -77,16 +77,18 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   }, [panOffset]);
 
   useEffect(() => {
-    const updateSize = () => {
-      if (containerRef.current) {
-        setCanvasSize({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight
-        });
+    if (!containerRef.current) return;
+    const container = containerRef.current;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          setCanvasSize({ width, height });
+        }
       }
-    };
-    updateSize();
-    window.addEventListener('resize', updateSize);
+    });
+    resizeObserver.observe(container);
     
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !e.repeat) {
@@ -102,7 +104,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     window.addEventListener('keyup', handleKeyUp);
     
     return () => {
-      window.removeEventListener('resize', updateSize);
+      resizeObserver.disconnect();
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
@@ -427,8 +429,8 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       maskCtx.translate(panOffset.x, panOffset.y);
       maskCtx.scale(zoom, zoom);
 
-      // 1. Fill entire viewport with dark fog
-      maskCtx.fillStyle = 'rgba(8, 8, 12, 0.98)';
+      // 1. Fill entire viewport with dark fog (Opaque for players, semi-transparent for DM)
+      maskCtx.fillStyle = isPlayerView ? 'rgba(8, 8, 12, 0.98)' : 'rgba(8, 8, 12, 0.45)';
       const fogMargin = CELL_SIZE * 2;
       maskCtx.fillRect(
         localLeft - fogMargin, 
@@ -927,12 +929,31 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     });
   };
 
-  // Zoom handling using wheel event
+  // Zoom handling using wheel event (centered on mouse cursor)
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     e.preventDefault();
+    if (!containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
     const zoomIntensity = 0.08;
     const delta = e.deltaY < 0 ? 1 : -1;
-    setZoom((prev) => Math.max(0.3, Math.min(prev + delta * zoomIntensity, 3.0)));
+
+    const prevZoom = zoom;
+    const nextZoom = Math.max(0.3, Math.min(prevZoom + delta * zoomIntensity, 3.0));
+
+    // Calculate mouse position relative to the unzoomed canvas space before the zoom change
+    const localMouseX = (mouseX - panOffset.x) / prevZoom;
+    const localMouseY = (mouseY - panOffset.y) / prevZoom;
+
+    // Adjust panOffset so that the point under the mouse pointer stays in place
+    const nextPanOffsetX = mouseX - localMouseX * nextZoom;
+    const nextPanOffsetY = mouseY - localMouseY * nextZoom;
+
+    setPanOffset({ x: nextPanOffsetX, y: nextPanOffsetY });
+    setZoom(nextZoom);
   };
 
   const getCursorClass = () => {
@@ -947,7 +968,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   return (
     <div 
       ref={containerRef}
-      className={`flex-1 overflow-hidden relative ${getCursorClass()} bg-slate-950`}
+      className={`w-full h-full overflow-hidden relative ${getCursorClass()} bg-slate-950`}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}

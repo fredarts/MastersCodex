@@ -483,7 +483,10 @@ export const INITIAL_LORE_NODES: LoreNode[] = [
     type: 'location',
     status: 'active',
     description: 'Capital majestosa cercada por muralhas brancas de mármore e torres de conjuração.',
-    connectedTo: ['rei-aris', 'guilda-sombras']
+    connectedTo: [
+      { targetId: 'rei-aris', type: 'neutral' },
+      { targetId: 'guilda-sombras', type: 'neutral' }
+    ]
   },
   {
     id: 'rei-aris',
@@ -491,7 +494,9 @@ export const INITIAL_LORE_NODES: LoreNode[] = [
     type: 'npc',
     status: 'alive',
     description: 'Monarca idoso e precavido que tenta manter a paz na região a qualquer custo.',
-    connectedTo: ['valiria']
+    connectedTo: [
+      { targetId: 'valiria', type: 'neutral' }
+    ]
   },
   {
     id: 'guilda-sombras',
@@ -499,7 +504,10 @@ export const INITIAL_LORE_NODES: LoreNode[] = [
     type: 'faction',
     status: 'hostile',
     description: 'Sindicato de ladrões e assassinos operando nos subterrâneos da cidade.',
-    connectedTo: ['valiria', 'kraag-npc']
+    connectedTo: [
+      { targetId: 'valiria', type: 'neutral' },
+      { targetId: 'kraag-npc', type: 'neutral' }
+    ]
   },
   {
     id: 'kraag-npc',
@@ -507,7 +515,9 @@ export const INITIAL_LORE_NODES: LoreNode[] = [
     type: 'npc',
     status: 'alive',
     description: 'Chefe hobgoblin mercenário contratado secretamente pela Guilda das Sombras.',
-    connectedTo: ['guilda-sombras']
+    connectedTo: [
+      { targetId: 'guilda-sombras', type: 'neutral' }
+    ]
   }
 ];
 

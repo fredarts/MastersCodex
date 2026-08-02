@@ -6,7 +6,7 @@ export const storageService = {
    * Uploads a file to the campaign-assets bucket in Supabase storage.
    * Throws an error if Supabase is not configured or if the upload fails.
    */
-  async uploadAsset(file: File, folder: 'avatars' | 'scenes' | 'audio' = 'scenes'): Promise<string> {
+  async uploadAsset(file: File, folder: 'avatars' | 'scenes' | 'audio' | 'worlds' = 'scenes'): Promise<string> {
     if (!isSupabaseConfigured()) {
       const errMsg = 'Supabase não está configurado. O upload de arquivo requer uma conexão ativa.';
       toast.error(errMsg);

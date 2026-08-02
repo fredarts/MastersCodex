@@ -32,12 +32,14 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
   currentTurnIndex,
   roundCount,
 }) => {
-  const { activeScene } = useSession();
+  const { activeScene, fetchSceneMap, campaignMaps } = useSession();
   const { activeCampaign } = useCampaign();
-  const { liveDisplayMode, projectedScene, combatLogs, broadcastPlayerRoll, mapData } = useLiveCockpit();
+  const { liveDisplayMode, projectedScene, combatLogs, broadcastPlayerRoll, mapData, setMapData } = useLiveCockpit();
 
   const [rightPanelTab, setRightPanelTab] = useState<'init' | 'log'>('init');
   const [isSheetModalOpen, setIsSheetModalOpen] = useState<boolean>(false);
+  const [isMapLoading, setIsMapLoading] = useState<boolean>(false);
+  const [lastLoadedSceneMapKey, setLastLoadedSceneMapKey] = useState<string | null>(null);
 
   const playerCharName = (() => {
     if (activeCampaign?.characterName) return activeCampaign.characterName;
@@ -108,6 +110,108 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
       } catch (err) {}
     }
   };
+
+  // Auto-fetch scene map from Supabase when in 'map' mode if mapData is missing or scene/map changed
+  useEffect(() => {
+    const currentScene = projectedScene || activeScene;
+    if (!isOpen || liveDisplayMode !== 'map' || !currentScene?.id) return;
+
+    const typedMap = mapData as { activeMapId?: string; sceneId?: string; grid?: any[] } | null;
+    const currentMapId = typedMap?.activeMapId || null;
+    const sceneAssociatedIds = currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []);
+
+    const needsFetch = !typedMap || 
+                       !typedMap.grid ||
+                       typedMap.grid.length === 0 ||
+                       typedMap.sceneId !== currentScene.id || 
+                       (currentMapId && !sceneAssociatedIds.includes(currentMapId));
+
+    if (needsFetch && lastLoadedSceneMapKey !== currentScene.id) {
+      setIsMapLoading(true);
+      fetchSceneMap(currentScene.id).then((savedData) => {
+        let activeId = savedData?.activeMapId;
+        let gridData = null;
+        
+        if (savedData) {
+          if (savedData.maps) {
+            const associatedIds = currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []);
+            if (!activeId || !associatedIds.includes(activeId)) {
+              activeId = associatedIds[0] || null;
+            }
+            gridData = activeId ? savedData.maps[activeId] : null;
+          } else if (savedData.grid) {
+            gridData = savedData;
+            activeId = currentScene.associatedMapId || 'legacy';
+          }
+        }
+
+        // FALLBACK: If no active map instance is saved in scene_maps, load from the Campaign Maps template directly!
+        if (!gridData) {
+          const associatedIds = currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []);
+          activeId = activeId || associatedIds[0] || null;
+          const templateMap = campaignMaps.find(m => m.id === activeId);
+          if (templateMap && templateMap.gridData) {
+            const tempGrid = templateMap.gridData.grid || [];
+            
+            // Clone and cover in fog
+            const coveredGrid = tempGrid.map((row: any[]) => 
+              row.map((cell: any) => ({
+                ...cell,
+                fog: true
+              }))
+            );
+
+            // Local helper to reveal vision
+            const revealVisionAround = (gridCopy: any[][], row: number, col: number, radius = 3.0) => {
+              for (let r = 0; r < gridCopy.length; r++) {
+                for (let c = 0; c < (gridCopy[0]?.length || 0); c++) {
+                  const dist = Math.sqrt(Math.pow(r - row, 2) + Math.pow(c - col, 2));
+                  if (dist <= radius) {
+                    if (gridCopy[r]?.[c]) {
+                      gridCopy[r][c].fog = false;
+                    }
+                  }
+                }
+              }
+            };
+
+            // Reveal where tokens are
+            for (let r = 0; r < coveredGrid.length; r++) {
+              for (let c = 0; c < coveredGrid[r].length; c++) {
+                if (tempGrid[r]?.[c]?.tokenName) {
+                  coveredGrid[r][c].tokenName = tempGrid[r][c].tokenName;
+                  coveredGrid[r][c].tokenColor = tempGrid[r][c].tokenColor;
+                  revealVisionAround(coveredGrid, r, c, 3.0);
+                }
+              }
+            }
+
+            gridData = {
+              ...templateMap.gridData,
+              grid: coveredGrid
+            };
+          }
+        }
+
+        if (gridData) {
+          setMapData({
+            grid: gridData.grid || [],
+            bgImageUrl: gridData.bgImageUrl || null,
+            gridScale: gridData.gridScale || 40,
+            gridOffsetX: gridData.gridOffsetX || 0,
+            gridOffsetY: gridData.gridOffsetY || 0,
+            activeMapId: activeId,
+            sceneId: currentScene.id
+          });
+          setLastLoadedSceneMapKey(currentScene.id);
+        }
+        setIsMapLoading(false);
+      }).catch((err) => {
+        console.error('Erro ao sincronizar mapa da cena no PlayerView:', err);
+        setIsMapLoading(false);
+      });
+    }
+  }, [isOpen, liveDisplayMode, projectedScene, activeScene, mapData, lastLoadedSceneMapKey, fetchSceneMap, setMapData, campaignMaps]);
 
   if (!isOpen) return null;
 
@@ -197,21 +301,33 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 userRole="player"
               />
             </ThreeErrorBoundary>
-          ) : liveDisplayMode === 'map' && typedMapData ? (
-            <DysonCanvas
-              key={`${currentScene?.id}_${typedMapData.activeMapId || 'default'}`}
-              grid={typedMapData.grid || []}
-              bgImageUrl={typedMapData.bgImageUrl || null}
-              gridScale={typedMapData.gridScale || 40}
-              gridOffsetX={typedMapData.gridOffsetX || 0}
-              gridOffsetY={typedMapData.gridOffsetY || 0}
-              combatants={combatants}
-              selectedTool="pan" // Jogador só move a visualização do canvas
-              selectedTileType="floor"
-              selectedTokenCombatant={null}
-              onGridChange={() => {}} // Sem alteração de grid para jogador
-              isPlayerView={true}
-            />
+          ) : liveDisplayMode === 'map' ? (
+            typedMapData && typedMapData.grid && typedMapData.grid.length > 0 ? (
+              <DysonCanvas
+                key={`${currentScene?.id}_${typedMapData.activeMapId || 'default'}`}
+                grid={typedMapData.grid || []}
+                bgImageUrl={typedMapData.bgImageUrl || null}
+                gridScale={typedMapData.gridScale || 40}
+                gridOffsetX={typedMapData.gridOffsetX || 0}
+                gridOffsetY={typedMapData.gridOffsetY || 0}
+                combatants={combatants}
+                selectedTool="pan" // Jogador só move a visualização do canvas
+                selectedTileType="floor"
+                selectedTokenCombatant={null}
+                onGridChange={() => {}} // Sem alteração de grid para jogador
+                isPlayerView={true}
+              />
+            ) : isMapLoading ? (
+              <div className="flex flex-col items-center justify-center gap-3 text-slate-400 font-mono animate-pulse">
+                <Map className="w-10 h-10 text-amber-500/60 animate-bounce" />
+                <p className="text-xs uppercase tracking-widest text-amber-400">Sincronizando Mapa da Dungeon...</p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-3 text-slate-500 font-mono">
+                <Map className="w-10 h-10 text-slate-600" />
+                <p className="text-xs">Nenhum mapa tático associado a esta cena no momento.</p>
+              </div>
+            )
           ) : (currentScene?.sceneImages && currentScene.sceneImages.length > 0) || currentScene?.imageUrl ? (
             <div className="w-full h-full relative flex items-center justify-center">
               {currentScene.sceneImages && currentScene.sceneImages.length > 0 ? (

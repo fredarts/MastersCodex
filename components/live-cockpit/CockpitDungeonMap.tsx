@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Eye, EyeOff, MapPin, Ruler, Hand, Map } from 'lucide-react';
+import { Eye, EyeOff, MapPin, Ruler, Hand, Map, Cloud } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { DysonCanvas } from '@/components/map/DysonCanvas';
 import { Cell } from '../MapMaker';
+import { toast } from 'sonner';
 
 interface MultiMapState {
   maps: Record<string, {
@@ -72,14 +73,48 @@ export const CockpitDungeonMap: React.FC = () => {
       const associatedMap = campaignMaps.find(m => m.id === mapId);
       if (associatedMap && associatedMap.gridData) {
         const tGrid = associatedMap.gridData.grid || createInitialGrid();
-        setGrid(tGrid);
+        
+        // Clone and cover everything in fog initially
+        const coveredGrid = tGrid.map((row: Cell[]) =>
+          row.map((cell: Cell) => ({
+            ...cell,
+            fog: true
+          }))
+        );
+
+        // Helper to reveal fog around tokens
+        const revealVisionAround = (gridCopy: Cell[][], row: number, col: number, radius = 3.0) => {
+          for (let r = 0; r < gridCopy.length; r++) {
+            for (let c = 0; c < (gridCopy[0]?.length || 0); c++) {
+              const dist = Math.sqrt(Math.pow(r - row, 2) + Math.pow(c - col, 2));
+              if (dist <= radius) {
+                if (gridCopy[r]?.[c]) {
+                  gridCopy[r][c].fog = false;
+                }
+              }
+            }
+          }
+        };
+
+        // Reveal vision circles where tokens exist in the template
+        for (let r = 0; r < coveredGrid.length; r++) {
+          for (let c = 0; c < coveredGrid[r].length; c++) {
+            if (tGrid[r]?.[c]?.tokenName) {
+              coveredGrid[r][c].tokenName = tGrid[r][c].tokenName;
+              coveredGrid[r][c].tokenColor = tGrid[r][c].tokenColor;
+              revealVisionAround(coveredGrid, r, c, 3.0);
+            }
+          }
+        }
+
+        setGrid(coveredGrid);
         setBgImageUrl(associatedMap.gridData.bgImageUrl || null);
         setGridScale(associatedMap.gridData.gridScale || 40);
         setGridOffsetX(associatedMap.gridData.gridOffsetX || 0);
         setGridOffsetY(associatedMap.gridData.gridOffsetY || 0);
 
         multiState.maps[mapId] = {
-          grid: tGrid,
+          grid: coveredGrid,
           bgImageUrl: associatedMap.gridData.bgImageUrl || null,
           gridScale: associatedMap.gridData.gridScale || 40,
           gridOffsetX: associatedMap.gridData.gridOffsetX || 0,
@@ -160,6 +195,7 @@ export const CockpitDungeonMap: React.FC = () => {
           gridOffsetX: m.gridOffsetX,
           gridOffsetY: m.gridOffsetY,
           activeMapId: activeId,
+          sceneId: activeScene.id,
         };
         lastBroadcast.current = JSON.stringify(payload);
         broadcastToPlayerView({ mapData: payload });
@@ -185,13 +221,32 @@ export const CockpitDungeonMap: React.FC = () => {
         multiMapStateRef.current.activeMapId = currentMapId;
       }
 
+      let fogMatrix = '';
+      const tokens: { name: string; color: string; r: number; c: number }[] = [];
+      
+      for (let r = 0; r < grid.length; r++) {
+        for (let c = 0; c < grid[r].length; c++) {
+          fogMatrix += grid[r][c].fog ? '1' : '0';
+          if (grid[r][c].tokenName) {
+            tokens.push({
+              name: grid[r][c].tokenName!,
+              color: grid[r][c].tokenColor || 'bg-cyan-500',
+              r,
+              c
+            });
+          }
+        }
+      }
+
       const mapPayload = {
-        grid,
         bgImageUrl,
         gridScale,
         gridOffsetX,
         gridOffsetY,
         activeMapId: currentMapId,
+        sceneId: activeScene.id,
+        fogMatrix,
+        tokens,
       };
 
       saveSceneMap(activeScene.id, multiMapStateRef.current).catch((e) => {
@@ -211,7 +266,7 @@ export const CockpitDungeonMap: React.FC = () => {
   }, [grid, bgImageUrl, gridScale, gridOffsetX, gridOffsetY, activeScene, isLoading, currentMapId, saveSceneMap, broadcastToPlayerView]);
 
   const handleSwitchMap = (newMapId: string) => {
-    if (!currentMapId || !multiMapStateRef.current) return;
+    if (!currentMapId || !multiMapStateRef.current || !activeScene) return;
 
     // 1. Save current memory state to currentMapId index
     multiMapStateRef.current.maps[currentMapId] = {
@@ -239,10 +294,51 @@ export const CockpitDungeonMap: React.FC = () => {
         gridOffsetX: switchedMap.gridOffsetX,
         gridOffsetY: switchedMap.gridOffsetY,
         activeMapId: newMapId,
+        sceneId: activeScene.id,
       };
       lastBroadcast.current = JSON.stringify(payload);
       broadcastToPlayerView({ mapData: payload });
     }
+  };
+
+  const handleCoverAllFog = () => {
+    // Helper to reveal fog around tokens
+    const revealVisionAround = (gridCopy: Cell[][], row: number, col: number, radius = 3.0) => {
+      for (let r = 0; r < gridCopy.length; r++) {
+        for (let c = 0; c < (gridCopy[0]?.length || 0); c++) {
+          const dist = Math.sqrt(Math.pow(r - row, 2) + Math.pow(c - col, 2));
+          if (dist <= radius) {
+            if (gridCopy[r]?.[c]) {
+              gridCopy[r][c].fog = false;
+            }
+          }
+        }
+      }
+    };
+
+    setGrid((prev) => {
+      // 1. Cover all cells in fog
+      const coveredGrid = prev.map((row) =>
+        row.map((cell) => ({
+          ...cell,
+          fog: true,
+        }))
+      );
+
+      // 2. Scan and reveal vision around cells that have tokens
+      for (let r = 0; r < coveredGrid.length; r++) {
+        for (let c = 0; c < coveredGrid[r].length; c++) {
+          if (prev[r]?.[c]?.tokenName) {
+            coveredGrid[r][c].tokenName = prev[r][c].tokenName;
+            coveredGrid[r][c].tokenColor = prev[r][c].tokenColor;
+            revealVisionAround(coveredGrid, r, c, 3.0);
+          }
+        }
+      }
+
+      toast.success('Todo o mapa foi coberto por névoa (visão dos pinos preservada).');
+      return coveredGrid;
+    });
   };
 
   const associatedMapIds = activeScene?.associatedMapIds || (activeScene?.associatedMapId ? [activeScene.associatedMapId] : []);
@@ -309,6 +405,14 @@ export const CockpitDungeonMap: React.FC = () => {
         >
           <EyeOff className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Cobrir</span>
+        </button>
+        <button
+          onClick={handleCoverAllFog}
+          className="p-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 text-rose-400 hover:bg-rose-950/30 border border-rose-500/20 ml-1"
+          title="Cobrir Todo o Mapa (Preserva os pinos dos jogadores)"
+        >
+          <Cloud className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Cobrir Tudo</span>
         </button>
         <button
           onClick={() => {

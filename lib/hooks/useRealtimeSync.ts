@@ -10,6 +10,8 @@ export interface RealtimeSyncPayloads {
   TOKEN_MOVE_3D: { combatantId: string; characterName?: string; newX: number; newZ: number };
   TOKEN_ROTATE_3D: { combatantId: string; characterName?: string; angle: number };
   LIVE_PROJECTION_UPDATE: { 
+    type?: string;
+    payload?: any;
     mode?: 'artwork' | 'map' | 'combat'; 
     sceneId?: string;
     title?: string;
@@ -23,6 +25,8 @@ export interface RealtimeSyncPayloads {
     hasFog?: boolean;
     hasRain?: boolean;
     floorTextureUrl?: string;
+    associatedMapId?: string;
+    associatedMapIds?: string[];
     activeSpellTargeting?: { name: string; range: number; shape: 'circle' | 'cone' | 'line' | 'fan' | 'target' | 'multi-target'; size: number } | null;
     casterTokenKey?: string | null;
     spellTargetPosition?: { x: number; z: number } | null;
