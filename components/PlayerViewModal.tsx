@@ -15,6 +15,7 @@ import { PlayerBattleLogPanel } from '@/components/player-view/PlayerBattleLogPa
 import { CharacterSheetModal } from '@/components/character-sheet/CharacterSheetModal';
 import { createEmptyCharacterSheet } from '@/lib/dnd5e-data';
 import { DysonCanvas } from '@/components/map/DysonCanvas';
+import { revealVisionWithLOS, getTokenVisionRadius } from '@/components/map/visionCore';
 import { Cell } from '@/components/MapMaker';
 
 interface PlayerViewModalProps {
@@ -161,27 +162,14 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               }))
             );
 
-            // Local helper to reveal vision
-            const revealVisionAround = (gridCopy: any[][], row: number, col: number, radius = 3.0) => {
-              for (let r = 0; r < gridCopy.length; r++) {
-                for (let c = 0; c < (gridCopy[0]?.length || 0); c++) {
-                  const dist = Math.sqrt(Math.pow(r - row, 2) + Math.pow(c - col, 2));
-                  if (dist <= radius) {
-                    if (gridCopy[r]?.[c]) {
-                      gridCopy[r][c].fog = false;
-                    }
-                  }
-                }
-              }
-            };
-
-            // Reveal where tokens are
+            // Reveal where tokens are respecting Line of Sight
             for (let r = 0; r < coveredGrid.length; r++) {
               for (let c = 0; c < coveredGrid[r].length; c++) {
                 if (tempGrid[r]?.[c]?.tokenName) {
                   coveredGrid[r][c].tokenName = tempGrid[r][c].tokenName;
                   coveredGrid[r][c].tokenColor = tempGrid[r][c].tokenColor;
-                  revealVisionAround(coveredGrid, r, c, 3.0);
+                  const radius = getTokenVisionRadius(tempGrid[r][c].tokenName, combatants);
+                  revealVisionWithLOS(coveredGrid, r, c, radius);
                 }
               }
             }

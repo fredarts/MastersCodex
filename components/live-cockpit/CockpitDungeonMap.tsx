@@ -5,6 +5,7 @@ import { Eye, EyeOff, MapPin, Ruler, Hand, Map, Cloud } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { DysonCanvas } from '@/components/map/DysonCanvas';
+import { revealVisionWithLOS, getTokenVisionRadius } from '@/components/map/visionCore';
 import { Cell } from '../MapMaker';
 import { toast } from 'sonner';
 
@@ -36,6 +37,8 @@ export const CockpitDungeonMap: React.FC = () => {
 
   const [currentMapId, setCurrentMapId] = useState<string | null>(null);
   const multiMapStateRef = useRef<MultiMapState>({ maps: {}, activeMapId: null });
+
+
 
   // Helper to create empty grid if no template
   const createInitialGrid = (cols = 80, rows = 80): Cell[][] => {
@@ -82,27 +85,14 @@ export const CockpitDungeonMap: React.FC = () => {
           }))
         );
 
-        // Helper to reveal fog around tokens
-        const revealVisionAround = (gridCopy: Cell[][], row: number, col: number, radius = 3.0) => {
-          for (let r = 0; r < gridCopy.length; r++) {
-            for (let c = 0; c < (gridCopy[0]?.length || 0); c++) {
-              const dist = Math.sqrt(Math.pow(r - row, 2) + Math.pow(c - col, 2));
-              if (dist <= radius) {
-                if (gridCopy[r]?.[c]) {
-                  gridCopy[r][c].fog = false;
-                }
-              }
-            }
-          }
-        };
-
-        // Reveal vision circles where tokens exist in the template
+        // Reveal vision where tokens exist in the template respecting walls / LOS
         for (let r = 0; r < coveredGrid.length; r++) {
           for (let c = 0; c < coveredGrid[r].length; c++) {
             if (tGrid[r]?.[c]?.tokenName) {
               coveredGrid[r][c].tokenName = tGrid[r][c].tokenName;
               coveredGrid[r][c].tokenColor = tGrid[r][c].tokenColor;
-              revealVisionAround(coveredGrid, r, c, 3.0);
+              const radius = getTokenVisionRadius(tGrid[r][c].tokenName, combatants);
+              revealVisionWithLOS(coveredGrid, r, c, radius);
             }
           }
         }
@@ -302,20 +292,6 @@ export const CockpitDungeonMap: React.FC = () => {
   };
 
   const handleCoverAllFog = () => {
-    // Helper to reveal fog around tokens
-    const revealVisionAround = (gridCopy: Cell[][], row: number, col: number, radius = 3.0) => {
-      for (let r = 0; r < gridCopy.length; r++) {
-        for (let c = 0; c < (gridCopy[0]?.length || 0); c++) {
-          const dist = Math.sqrt(Math.pow(r - row, 2) + Math.pow(c - col, 2));
-          if (dist <= radius) {
-            if (gridCopy[r]?.[c]) {
-              gridCopy[r][c].fog = false;
-            }
-          }
-        }
-      }
-    };
-
     setGrid((prev) => {
       // 1. Cover all cells in fog
       const coveredGrid = prev.map((row) =>
@@ -325,18 +301,19 @@ export const CockpitDungeonMap: React.FC = () => {
         }))
       );
 
-      // 2. Scan and reveal vision around cells that have tokens
+      // 2. Scan and reveal vision around cells that have tokens respecting LOS
       for (let r = 0; r < coveredGrid.length; r++) {
         for (let c = 0; c < coveredGrid[r].length; c++) {
           if (prev[r]?.[c]?.tokenName) {
             coveredGrid[r][c].tokenName = prev[r][c].tokenName;
             coveredGrid[r][c].tokenColor = prev[r][c].tokenColor;
-            revealVisionAround(coveredGrid, r, c, 3.0);
+            const radius = getTokenVisionRadius(prev[r][c].tokenName, combatants);
+            revealVisionWithLOS(coveredGrid, r, c, radius);
           }
         }
       }
 
-      toast.success('Todo o mapa foi coberto por névoa (visão dos pinos preservada).');
+      toast.success('Todo o mapa foi coberto por névoa (visão dos pinos preservada com Line of Sight).');
       return coveredGrid;
     });
   };

@@ -236,6 +236,7 @@ export interface Combatant {
   turnStartX?: number;
   turnStartZ?: number;
   hasDashed?: boolean;
+  visionRange?: number; // em pés (default: 30)
 }
 
 export interface CombatLogEntry {

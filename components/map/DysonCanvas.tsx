@@ -9,6 +9,12 @@ import {
   drawGrassHachure, 
   drawTrapHachure 
 } from './dysonCore';
+import { 
+  hasLineOfSight, 
+  revealVisionWithLOS, 
+  computeVisibilityPolygon, 
+  getTokenVisionRadius 
+} from './visionCore';
 import { Combatant } from '@/lib/types';
 import { Cell, TileType } from '../MapMaker';
 
@@ -49,6 +55,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   setCalibrationLine,
   onCalibrateGridSize,
   isPlayerView = false,
+  combatants,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -439,55 +446,79 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         (localBottom - localTop) + fogMargin * 2
       );
 
+      // Use destination-out to carve visibility out of the dark fog
       maskCtx.globalCompositeOperation = 'destination-out';
 
-      // Pre-create soft brush for performance
-      const brushCanvas = document.createElement('canvas');
-      const brushSize = CELL_SIZE * 2.8; // diameter for explored cells
-      brushCanvas.width = brushSize;
-      brushCanvas.height = brushSize;
-      const bCtx = brushCanvas.getContext('2d');
-      if (bCtx) {
-        const grad = bCtx.createRadialGradient(brushSize/2, brushSize/2, 0, brushSize/2, brushSize/2, brushSize/2);
-        grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
-        grad.addColorStop(0.5, 'rgba(0, 0, 0, 0.8)');
-        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        bCtx.fillStyle = grad;
-        bCtx.fillRect(0, 0, brushSize, brushSize);
-      }
+      // Soft smoky blur filter for organic misty fog edges
+      maskCtx.filter = 'blur(6px)';
 
-      // 2. Cut out explored areas using soft brush
+      // 2. Cut out explored areas (soft rounded blending so it feels smoky, not grid-locked)
+      maskCtx.fillStyle = 'rgba(0, 0, 0, 1)';
       for (let r = startRow; r <= endRow; r++) {
         for (let c = startCol; c <= endCol; c++) {
           if (grid[r]?.[c] && !grid[r][c].fog) {
             const cx = bgImage ? gridOffsetX + c * CELL_SIZE + CELL_SIZE / 2 : c * CELL_SIZE + CELL_SIZE / 2;
             const cy = bgImage ? gridOffsetY + r * CELL_SIZE + CELL_SIZE / 2 : r * CELL_SIZE + CELL_SIZE / 2;
-            maskCtx.drawImage(brushCanvas, cx - brushSize/2, cy - brushSize/2);
-          }
-        }
-      }
-
-      // 3. Current token vision (larger dynamic spotlight)
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          if (grid[r]?.[c]?.tokenName) {
-            const tx = bgImage ? gridOffsetX + c * CELL_SIZE + CELL_SIZE / 2 : c * CELL_SIZE + CELL_SIZE / 2;
-            const ty = bgImage ? gridOffsetY + r * CELL_SIZE + CELL_SIZE / 2 : r * CELL_SIZE + CELL_SIZE / 2;
-            
-            // Draw radial vision gradient (e.g. 4.5-cell radius for spotlight)
-            const visionRadius = CELL_SIZE * 4.5;
-            const grad = maskCtx.createRadialGradient(tx, ty, CELL_SIZE * 1.5, tx, ty, visionRadius);
-            grad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)'); // full reveal
-            grad.addColorStop(0.7, 'rgba(0, 0, 0, 0.6)'); // soft falloff
-            grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)'); // transition to fog
-
-            maskCtx.fillStyle = grad;
             maskCtx.beginPath();
-            maskCtx.arc(tx, ty, visionRadius, 0, Math.PI * 2);
+            maskCtx.arc(cx, cy, CELL_SIZE * 0.72, 0, Math.PI * 2);
             maskCtx.fill();
           }
         }
       }
+
+      // 3. Current token active vision (Godot-like Light2D spotlight with soft smoky falloff and wall LOS)
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (grid[r]?.[c]?.tokenName) {
+            const isPlayerToken = grid[r][c].tokenColor?.includes('cyan') || 
+                                  combatants?.find((comb: Combatant) => comb.name.slice(0, 3).toUpperCase() === grid[r][c].tokenName?.toUpperCase())?.type === 'player';
+            
+            // In player view, only player tokens project active line-of-sight vision.
+            if (isPlayerView && !isPlayerToken) {
+              continue;
+            }
+
+            const tx = bgImage ? gridOffsetX + c * CELL_SIZE + CELL_SIZE / 2 : c * CELL_SIZE + CELL_SIZE / 2;
+            const ty = bgImage ? gridOffsetY + r * CELL_SIZE + CELL_SIZE / 2 : r * CELL_SIZE + CELL_SIZE / 2;
+            
+            const visionRadius = getTokenVisionRadius(grid[r][c].tokenName, combatants) * CELL_SIZE;
+
+            const polyPoints = computeVisibilityPolygon(
+              tx, 
+              ty, 
+              visionRadius, 
+              grid, 
+              CELL_SIZE, 
+              gridOffsetX, 
+              gridOffsetY, 
+              Boolean(bgImage)
+            );
+
+            if (polyPoints.length > 0) {
+              maskCtx.save();
+              maskCtx.beginPath();
+              maskCtx.moveTo(polyPoints[0].x, polyPoints[0].y);
+              for (let p = 1; p < polyPoints.length; p++) {
+                maskCtx.lineTo(polyPoints[p].x, polyPoints[p].y);
+              }
+              maskCtx.closePath();
+
+              // Smooth radial light gradient with soft outer falloff
+              const grad = maskCtx.createRadialGradient(tx, ty, CELL_SIZE * 0.5, tx, ty, visionRadius);
+              grad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)'); // full reveal near token
+              grad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)'); // soft falloff
+              grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)'); // smoky outer transition
+
+              maskCtx.fillStyle = grad;
+              maskCtx.fill();
+              maskCtx.restore();
+            }
+          }
+        }
+      }
+
+      // Reset filter
+      maskCtx.filter = 'none';
 
       // Draw the computed fog mask back onto the main canvas
       ctx.drawImage(maskCanvas, 0, 0);
@@ -502,6 +533,18 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       for (let c = 0; c < COLS; c++) {
         const cell = grid[r]?.[c];
         if (cell && cell.tokenName) {
+          const isPlayerToken = cell.tokenColor?.includes('cyan') || 
+                                combatants?.find((comb: Combatant) => comb.name.slice(0, 3).toUpperCase() === cell.tokenName?.toUpperCase())?.type === 'player';
+
+          // Hide tokens from players if not within active line of sight / explored areas
+          if (isPlayerView) {
+            if (isPlayerToken) {
+              if (cell.fog) continue;
+            } else {
+              if (!isCellVisibleToPlayers(c, r)) continue;
+            }
+          }
+
           const tx = bgImage ? gridOffsetX + c * CELL_SIZE + CELL_SIZE / 2 : c * CELL_SIZE + CELL_SIZE / 2;
           const ty = bgImage ? gridOffsetY + r * CELL_SIZE + CELL_SIZE / 2 : r * CELL_SIZE + CELL_SIZE / 2;
 
@@ -583,19 +626,39 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     };
   };
 
-  // Dynamic vision reveal function (Euclidean distance for circular shape)
-  const revealVisionAround = (gridCopy: Cell[][], row: number, col: number, radius = 2.5) => {
-    for (let r = 0; r < gridCopy.length; r++) {
-      for (let c = 0; c < (gridCopy[0]?.length || 0); c++) {
-        // Euclidean distance for smooth circular exploration state
-        const dist = Math.sqrt(Math.pow(r - row, 2) + Math.pow(c - col, 2));
-        if (dist <= radius) {
-          if (gridCopy[r]?.[c]) {
-            gridCopy[r][c].fog = false;
+  const isCellVisibleToPlayers = (col: number, row: number): boolean => {
+    if (!isPlayerView) return true;
+    
+    const playerTokens: { r: number; c: number; visionRadius: number }[] = [];
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const cell = grid[r]?.[c];
+        if (cell && cell.tokenName) {
+          const isPlayer = cell.tokenColor?.includes('cyan') || 
+                           combatants?.find((comb: Combatant) => comb.name.slice(0, 3).toUpperCase() === cell.tokenName?.toUpperCase())?.type === 'player';
+          if (isPlayer) {
+            playerTokens.push({
+              r,
+              c,
+              visionRadius: getTokenVisionRadius(cell.tokenName, combatants)
+            });
           }
         }
       }
     }
+    
+    if (playerTokens.length === 0) {
+      return grid[row]?.[col] ? !grid[row][col].fog : false;
+    }
+    
+    for (const pt of playerTokens) {
+      const dist = Math.sqrt(Math.pow(row - pt.r, 2) + Math.pow(col - pt.c, 2));
+      if (dist > pt.visionRadius) continue;
+      if (hasLineOfSight(pt.c, pt.r, col, row, grid)) {
+        return true;
+      }
+    }
+    return false;
   };
 
   const moveToken = (tokenName: string, tokenColor: string, targetR: number, targetC: number) => {
@@ -675,7 +738,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       if (r >= 0 && r < copy.length && c >= 0 && c < copy[0].length) {
          copy[r][c].tokenName = tokenName;
          copy[r][c].tokenColor = tokenColor;
-         revealVisionAround(copy, r, c, 3);
+         revealVisionWithLOS(copy, r, c, getTokenVisionRadius(tokenName, combatants));
       }
       return copy;
     });
@@ -698,18 +761,8 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     }
 
     const clickedCell = grid[pos.r]?.[pos.c];
-    if (clickedCell && !isPlayerView && (clickedCell.type === 'door' || clickedCell.type === 'trap') && e.button === 0 && !isSpacePressed && selectedTool !== 'measure') {
-      const isOverwriting = selectedTool === 'paint' && selectedTileType !== clickedCell.type;
-      if (!isOverwriting) {
-        setEditingCell({
-          r: pos.r,
-          c: pos.c,
-          cell: clickedCell
-        });
-        return;
-      }
-    }
 
+    // Token drag takes priority over door/trap editing
     if (clickedCell && clickedCell.tokenName && e.button === 0 && !isSpacePressed && selectedTool !== 'measure') {
       setDraggingToken({
          name: clickedCell.tokenName,
@@ -720,6 +773,18 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
          currentC: pos.c
       });
       return;
+    }
+
+    if (clickedCell && !isPlayerView && (clickedCell.type === 'door' || clickedCell.type === 'trap') && e.button === 0 && !isSpacePressed && selectedTool !== 'measure') {
+      const isOverwriting = selectedTool === 'paint' && selectedTileType !== clickedCell.type;
+      if (!isOverwriting) {
+        setEditingCell({
+          r: pos.r,
+          c: pos.c,
+          cell: clickedCell
+        });
+        return;
+      }
     }
 
     setIsDrawing(true);
@@ -890,7 +955,6 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
          else if (selectedTool === 'fog-cover') cell.fog = true;
          else if (selectedTool === 'paint') {
            cell.type = paintValue;
-           if (paintValue !== 'wall') cell.fog = false;
            
            if (paintValue === 'door' && !cell.doorConfig) {
              cell.doorConfig = {
@@ -922,7 +986,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
            }
            cell.tokenName = nameToClear;
            cell.tokenColor = selectedTokenCombatant.type === 'player' ? 'bg-cyan-500' : 'bg-rose-600';
-           revealVisionAround(copy, r, c, 3);
+           revealVisionWithLOS(copy, r, c, getTokenVisionRadius(selectedTokenCombatant.name, combatants));
          }
       }
       return copy;
