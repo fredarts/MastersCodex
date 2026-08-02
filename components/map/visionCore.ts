@@ -7,6 +7,10 @@ import { Combatant } from '@/lib/types';
 export function isCellBlockingVision(cell: Cell | undefined): boolean {
   if (!cell) return true;
   if (cell.type === 'wall') return true;
+  if (cell.type === 'illusion_wall') {
+    const config = cell.illusionWallConfig;
+    if (config?.blocksLight && !config?.revealedToPlayers) return true;
+  }
   if (cell.type === 'door' && cell.doorConfig?.status === 'closed') return true;
   return false;
 }

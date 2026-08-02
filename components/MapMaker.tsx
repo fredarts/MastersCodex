@@ -28,7 +28,18 @@ interface MapMakerProps {
   combatants: Combatant[];
 }
 
-export type TileType = 'floor' | 'wall' | 'grass' | 'water' | 'door' | 'trap' | 'chest' | 'stash';
+export type TileType = 
+  | 'floor' 
+  | 'wall' 
+  | 'grass' 
+  | 'water' 
+  | 'door' 
+  | 'trap' 
+  | 'chest' 
+  | 'stash'
+  | 'trigger'
+  | 'portcullis'
+  | 'illusion_wall';
 
 export type ContainerType = 'wooden_chest' | 'iron_chest' | 'ornate_chest' | 'hidden_stash' | 'mimic';
 export type ContainerStatus = 'locked' | 'unlocked' | 'open' | 'looted';
@@ -57,6 +68,7 @@ export interface ChestConfig {
 }
 
 export interface DoorConfig {
+  id?: string;
   status: 'open' | 'closed';
   doorType: 'wooden' | 'iron' | 'stone' | 'secret';
   breakDC: number;
@@ -72,6 +84,37 @@ export interface TrapConfig {
   description?: string;
 }
 
+export type TriggerType = 'lever' | 'pressure_plate' | 'chain' | 'button';
+export type TriggerState = 'inactive' | 'active';
+
+export interface TriggerConfig {
+  id: string;                    // ID do gatilho (ex: "alavanca-sala-1")
+  targetId: string;              // ID do elemento acionado (ex: "grade-sala-2")
+  triggerType: TriggerType;
+  state: TriggerState;
+  name: string;
+  isSecret?: boolean;
+  detectDC?: number;
+  revealedToPlayers?: boolean;
+  description?: string;
+}
+
+export interface PortcullisConfig {
+  id: string;                    // ID para conexão com gatilhos
+  status: 'closed' | 'open';     // 'closed' = baixada (permite ver, bloqueia andar)
+  liftDC?: number;               // CD Força / Atletismo para erguer manualmente
+  material?: 'iron' | 'reinforced' | 'wood_bars';
+  name?: string;
+}
+
+export interface IllusionWallConfig {
+  id?: string;
+  detectDC: number;              // CD Investigação para perceber a ilusão
+  revealedToPlayers: boolean;    // Revelada aos jogadores
+  blocksLight: boolean;          // Se a ilusão bloqueia luz até ser revelada
+  description?: string;
+}
+
 export interface Cell {
   x: number;
   y: number;
@@ -82,6 +125,9 @@ export interface Cell {
   doorConfig?: DoorConfig;
   trapConfig?: TrapConfig;
   chestConfig?: ChestConfig;
+  triggerConfig?: TriggerConfig;
+  portcullisConfig?: PortcullisConfig;
+  illusionWallConfig?: IllusionWallConfig;
 }
 
 export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
@@ -616,6 +662,9 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
               { id: 'trap', label: '⚠️ Armadilha' },
               { id: 'chest', label: '🧰 Baú' },
               { id: 'stash', label: '💎 Stash Oculto' },
+              { id: 'trigger', label: '🕹️ Mecanismo' },
+              { id: 'portcullis', label: '⛓️ Grade' },
+              { id: 'illusion_wall', label: '🌫️ Parede Falsa' },
             ] as { id: TileType; label: string }[]).map((t) => (
               <button
                 key={t.id}

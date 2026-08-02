@@ -317,37 +317,204 @@ export function drawStashHachure(
   const y = r * cellSize;
   const seed = c * 444 + r * 666;
 
-  // Fundo azul/violeta místico pastel
-  ctx.fillStyle = '#f0f9ff';
+  // Fundo limpo de piso
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(x, y, cellSize, cellSize);
 
-  // Linhas de chão de pedra com fenda central
+  // Linhas orgânicas da malha de piso Dyson Logos
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
   drawWobblyLine(ctx, x, y, x + cellSize, y, 0.8, seed + 1);
   drawWobblyLine(ctx, x, y, x, y + cellSize, 0.8, seed + 2);
+}
 
-  // Fenda de lajota secreta / compartimento falso
+export function drawPortcullisHachure(
+  ctx: CanvasRenderingContext2D,
+  c: number,
+  r: number,
+  cellSize: number,
+  status: 'closed' | 'open'
+) {
+  const x = c * cellSize;
+  const y = r * cellSize;
+  const seed = c * 333 + r * 777;
+
+  // Fundo do piso
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x, y, cellSize, cellSize);
+
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 1.8;
+  ctx.lineCap = 'round';
+
+  if (status === 'closed') {
+    // Grade baixada: Barras verticais com pontas + barra horizontal estrutural
+    const bars = 4;
+    const spacing = cellSize / (bars + 1);
+    
+    // Barras verticais
+    for (let i = 1; i <= bars; i++) {
+      const bx = x + spacing * i;
+      drawWobblyLine(ctx, bx, y + 2, bx, y + cellSize - 4, 2.0, seed + i);
+      // Ponta de ferro embaixo
+      ctx.beginPath();
+      ctx.moveTo(bx - 1.5, y + cellSize - 4);
+      ctx.lineTo(bx, y + cellSize);
+      ctx.lineTo(bx + 1.5, y + cellSize - 4);
+      ctx.fill();
+    }
+    
+    // Barras horizontais
+    drawWobblyLine(ctx, x + 2, y + cellSize * 0.3, x + cellSize - 2, y + cellSize * 0.3, 2.5, seed + 10);
+    drawWobblyLine(ctx, x + 2, y + cellSize * 0.7, x + cellSize - 2, y + cellSize * 0.7, 2.5, seed + 11);
+  } else {
+    // Grade erguida: Apenas as pontas aparecendo no teto superior
+    const bars = 4;
+    const spacing = cellSize / (bars + 1);
+    
+    ctx.lineWidth = 1.2;
+    for (let i = 1; i <= bars; i++) {
+      const bx = x + spacing * i;
+      // Barras recolhidas
+      drawWobblyLine(ctx, bx, y, bx, y + 6, 1.5, seed + i);
+      // Pontas
+      ctx.beginPath();
+      ctx.moveTo(bx - 1.5, y + 6);
+      ctx.lineTo(bx, y + 9);
+      ctx.lineTo(bx + 1.5, y + 6);
+      ctx.fill();
+    }
+    // Ranhuras no chão (onde a grade encaixa)
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+    ctx.beginPath();
+    ctx.moveTo(x + 2, y + cellSize - 3);
+    ctx.lineTo(x + cellSize - 2, y + cellSize - 3);
+    ctx.stroke();
+  }
+}
+
+export function drawTriggerHachure(
+  ctx: CanvasRenderingContext2D,
+  c: number,
+  r: number,
+  cellSize: number,
+  triggerType: 'lever' | 'pressure_plate' | 'chain' | 'button',
+  state: 'inactive' | 'active'
+) {
+  const x = c * cellSize;
+  const y = r * cellSize;
+  const seed = c * 555 + r * 222;
   const cx = x + cellSize / 2;
   const cy = y + cellSize / 2;
 
-  ctx.strokeStyle = '#0284c7';
-  ctx.lineWidth = 1.3;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x, y, cellSize, cellSize);
+
+  ctx.strokeStyle = '#000000';
   ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
 
-  // Ranhura retangular no piso (fundo falso)
-  const pad = cellSize * 0.25;
-  drawWobblyLine(ctx, x + pad, y + pad, x + cellSize - pad, y + pad, 1.2, seed + 10);
-  drawWobblyLine(ctx, x + cellSize - pad, y + pad, x + cellSize - pad, y + cellSize - pad, 1.2, seed + 11);
-  drawWobblyLine(ctx, x + cellSize - pad, y + cellSize - pad, x + pad, y + cellSize - pad, 1.2, seed + 12);
-  drawWobblyLine(ctx, x + pad, y + cellSize - pad, x + pad, y + pad, 1.2, seed + 13);
+  if (triggerType === 'lever') {
+    // Base de pedra
+    ctx.lineWidth = 1.5;
+    ctx.fillStyle = '#f3f4f6';
+    const bw = 14;
+    const bh = 8;
+    ctx.fillRect(cx - bw / 2, cy - bh / 2, bw, bh);
+    ctx.strokeRect(cx - bw / 2, cy - bh / 2, bw, bh);
+    
+    // Haste
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    if (state === 'inactive') {
+      ctx.lineTo(cx - 8, cy - 8); // Inclinada p/ esquerda
+    } else {
+      ctx.lineTo(cx + 8, cy - 8); // Inclinada p/ direita
+    }
+    ctx.stroke();
 
-  // Ícone central sutil de diamante / gema oculta
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - 4.5);
-  ctx.lineTo(cx + 4.5, cy);
-  ctx.lineTo(cx, cy + 4.5);
-  ctx.lineTo(cx - 4.5, cy);
-  ctx.closePath();
-  ctx.stroke();
+    // Bola na ponta
+    ctx.beginPath();
+    if (state === 'inactive') {
+      ctx.arc(cx - 8, cy - 8, 3, 0, Math.PI * 2);
+    } else {
+      ctx.arc(cx + 8, cy - 8, 3, 0, Math.PI * 2);
+    }
+    ctx.fillStyle = state === 'active' ? '#ef4444' : '#1e1e1e';
+    ctx.fill();
+    ctx.stroke();
+  } else if (triggerType === 'pressure_plate') {
+    const pad = 6;
+    ctx.lineWidth = 1.2;
+    // Fenda externa
+    drawWobblyLine(ctx, x + pad, y + pad, x + cellSize - pad, y + pad, 1.2, seed + 1);
+    drawWobblyLine(ctx, x + cellSize - pad, y + pad, x + cellSize - pad, y + cellSize - pad, 1.2, seed + 2);
+    drawWobblyLine(ctx, x + cellSize - pad, y + cellSize - pad, x + pad, y + cellSize - pad, 1.2, seed + 3);
+    drawWobblyLine(ctx, x + pad, y + cellSize - pad, x + pad, y + pad, 1.2, seed + 4);
+    
+    if (state === 'active') {
+      // Placa afundada (sombra extra)
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+      ctx.fillRect(x + pad, y + pad, cellSize - pad * 2, cellSize - pad * 2);
+    } else {
+      // Ranhuras centrais estilo placa
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+      drawWobblyLine(ctx, cx - 4, cy - 4, cx + 4, cy + 4, 1.0, seed + 5);
+      drawWobblyLine(ctx, cx + 4, cy - 4, cx - 4, cy + 4, 1.0, seed + 6);
+    }
+  } else if (triggerType === 'button') {
+    ctx.beginPath();
+    ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+    ctx.fillStyle = state === 'active' ? '#d1d5db' : '#f3f4f6';
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // Inner dot
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = state === 'active' ? '#dc2626' : '#1e1e1e';
+    ctx.fill();
+  } else if (triggerType === 'chain') {
+    ctx.lineWidth = 1.5;
+    let chainY = y + 4;
+    while (chainY < cy + 6) {
+      ctx.beginPath();
+      ctx.ellipse(cx, chainY, 2.5, 4, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      chainY += 6;
+    }
+    // Handle
+    ctx.beginPath();
+    ctx.arc(cx, chainY + 2, 4, 0, Math.PI * 2);
+    ctx.fillStyle = state === 'active' ? '#f59e0b' : '#6b7280';
+    ctx.fill();
+    ctx.stroke();
+  }
 }
 
+export function drawIllusionWallHachure(
+  ctx: CanvasRenderingContext2D,
+  c: number,
+  r: number,
+  cellSize: number,
+  isPlayerView: boolean,
+  revealed: boolean
+) {
+  const x = c * cellSize;
+  const y = r * cellSize;
+  
+  if (isPlayerView && !revealed) {
+    return;
+  }
+
+  // Fundo transparente com leve tom arcano para diferenciar no mapa do mestre
+  ctx.fillStyle = isPlayerView ? 'rgba(255, 255, 255, 0.9)' : 'rgba(167, 139, 250, 0.08)';
+  ctx.fillRect(x, y, cellSize, cellSize);
+
+  // Mestre ou Jogador que descobriu a ilusão enxergam uma demarcação etérea
+  ctx.strokeStyle = '#8b5cf6';
+  ctx.setLineDash([4, 4]);
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+  ctx.setLineDash([]);
+}

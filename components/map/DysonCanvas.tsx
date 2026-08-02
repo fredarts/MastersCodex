@@ -29,7 +29,10 @@ import {
   drawGrassHachure, 
   drawTrapHachure,
   drawChestHachure,
-  drawStashHachure
+  drawStashHachure,
+  drawPortcullisHachure,
+  drawTriggerHachure,
+  drawIllusionWallHachure
 } from './dysonCore';
 import { 
   hasLineOfSight, 
@@ -495,6 +498,14 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           if (type === 'stash' && isPlayerView && !cell.chestConfig?.revealedToPlayers) {
             type = 'floor';
           }
+          // Camuflagem de gatilhos secretos para jogadores
+          if (type === 'trigger' && isPlayerView && cell.triggerConfig?.isSecret && !cell.triggerConfig?.revealedToPlayers) {
+            type = 'floor';
+          }
+          // Camuflagem de parede ilusória para jogadores (falsa parede)
+          if (type === 'illusion_wall' && isPlayerView && !cell.illusionWallConfig?.revealedToPlayers) {
+            type = 'wall';
+          }
 
           if (type && type !== 'wall') {
             const x = c * CELL_SIZE;
@@ -518,6 +529,16 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
               drawChestHachure(ctx, c, r, CELL_SIZE, containerType, status);
             } else if (type === 'stash') {
               drawStashHachure(ctx, c, r, CELL_SIZE);
+            } else if (type === 'portcullis') {
+              const status = cell.portcullisConfig?.status || 'closed';
+              drawPortcullisHachure(ctx, c, r, CELL_SIZE, status);
+            } else if (type === 'trigger') {
+              const triggerType = cell.triggerConfig?.triggerType || 'lever';
+              const state = cell.triggerConfig?.state || 'inactive';
+              drawTriggerHachure(ctx, c, r, CELL_SIZE, triggerType, state);
+            } else if (type === 'illusion_wall') {
+              const revealed = cell.illusionWallConfig?.revealedToPlayers || false;
+              drawIllusionWallHachure(ctx, c, r, CELL_SIZE, isPlayerView, revealed);
             } else {
               // Terreno normal: grid lines
               ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
@@ -673,22 +694,11 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
             const x = c * CELL_SIZE + CELL_SIZE / 2;
             const y = r * CELL_SIZE + CELL_SIZE / 2;
 
-            ctx.font = `bold ${Math.floor(CELL_SIZE * 0.58)}px "Courier New", monospace`;
+            ctx.font = `${Math.floor(CELL_SIZE * 0.65)}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            let label = '💎';
-            if (!isPlayerView && isHidden) {
-              label = '💎(S)';
-            } else if (config?.status === 'looted') {
-              label = '✨';
-            }
-
-            ctx.lineWidth = 4;
-            ctx.strokeStyle = isHidden ? '#38bdf8' : '#ffffff';
-            ctx.strokeText(label, x, y);
-            
-            ctx.fillStyle = isHidden ? '#0284c7' : '#1a1a1a';
+            const label = config?.status === 'looted' ? '✨' : '💎';
             ctx.fillText(label, x, y);
           }
         }
@@ -1324,6 +1334,9 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     });
   };
 
+  const isPOIType = (t: string | undefined) => 
+    t === 'door' || t === 'trap' || t === 'chest' || t === 'stash' || t === 'trigger' || t === 'portcullis' || t === 'illusion_wall';
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button === 1 || e.shiftKey || selectedTool === 'pan' || isSpacePressed) {
       setIsPanning(true);
@@ -1412,17 +1425,24 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       });
       return;
     }
+    // Interacting with or clicking on existing POI (door, trap, chest, stash) in DM view
+    if (clickedCell && !isPlayerView && isPOIType(clickedCell.type) && e.button === 0 && !isSpacePressed) {
+      setIsDrawing(false);
+      setDrawButton(-1);
+      setEditingCell({
+        r: pos.r,
+        c: pos.c,
+        cell: clickedCell
+      });
+      return;
+    }
 
-    if (clickedCell && !isPlayerView && (clickedCell.type === 'door' || clickedCell.type === 'trap' || clickedCell.type === 'chest' || clickedCell.type === 'stash') && e.button === 0 && !isSpacePressed) {
-      const isOverwriting = selectedTool === 'paint' && selectedTileType !== clickedCell.type;
-      if (!isOverwriting) {
-        setEditingCell({
-          r: pos.r,
-          c: pos.c,
-          cell: clickedCell
-        });
-        return;
-      }
+    // Placing a new POI (door, trap, chest, stash) - single placement only
+    if (selectedTool === 'paint' && isPOIType(selectedTileType) && e.button === 0 && !isSpacePressed) {
+      setIsDrawing(false);
+      setDrawButton(-1);
+      handleCellAction(pos.r, pos.c, e.button, true);
+      return;
     }
 
     setIsDrawing(true);
@@ -1463,7 +1483,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     if (!isPlayerView && !isPanning && !draggingToken) {
       const cell = grid[pos.r]?.[pos.c];
-      if (cell && (cell.type === 'door' || cell.type === 'trap' || cell.type === 'chest' || cell.type === 'stash')) {
+      if (cell && isPOIType(cell.type)) {
         setHoveredCell({
           x: e.clientX,
           y: e.clientY,
@@ -1480,7 +1500,8 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       if (pos.r !== draggingToken.currentR || pos.c !== draggingToken.currentC) {
         // Block movement into walls or closed doors
         const targetCell = grid[pos.r]?.[pos.c];
-        if (isCellBlockingVision(targetCell)) {
+        const isPortcullisClosed = targetCell?.type === 'portcullis' && targetCell.portcullisConfig?.status === 'closed';
+        if (isCellBlockingVision(targetCell) || isPortcullisClosed) {
           return;
         }
         // Block movement through walls diagonally (no jumping over corners)
@@ -1494,6 +1515,10 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     }
 
     if (!isDrawing) return;
+    // Single POIs (door, trap, chest, stash, mechanisms) are never drag-painted
+    if (selectedTool === 'paint' && isPOIType(selectedTileType)) {
+      return;
+    }
     handleCellAction(pos.r, pos.c, drawButton, false);
   };
 
@@ -1686,6 +1711,32 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
                  gp: 60,
                  items: ['Gema de Quartzo (50 PO)', 'Pergaminho de Mísseis Mágicos'],
                }
+             };
+           }
+           if (paintValue === 'trigger' && !cell.triggerConfig) {
+             cell.triggerConfig = {
+               id: `trigger-${Math.random().toString(36).substring(2, 8)}`,
+               targetId: '',
+               triggerType: 'lever',
+               state: 'inactive',
+               name: 'Alavanca Antiga',
+               isSecret: false,
+               revealedToPlayers: true
+             };
+           }
+           if (paintValue === 'portcullis' && !cell.portcullisConfig) {
+             cell.portcullisConfig = {
+               id: `grade-${Math.random().toString(36).substring(2, 8)}`,
+               status: 'closed',
+               material: 'iron',
+               name: 'Grade de Ferro'
+             };
+           }
+           if (paintValue === 'illusion_wall' && !cell.illusionWallConfig) {
+             cell.illusionWallConfig = {
+               detectDC: 15,
+               revealedToPlayers: false,
+               blocksLight: true
              };
            }
          } else if (selectedTool === 'token' && selectedTokenCombatant) {
@@ -1896,17 +1947,38 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       </div>
 
       {editingCell && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-[#121824] border border-[#2a3449] w-full max-w-[420px] rounded-2xl shadow-2xl p-5 select-none animate-fade-in font-sans max-h-[90vh] overflow-y-auto">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto"
+          onMouseDown={(e) => { e.stopPropagation(); setIsDrawing(false); }}
+          onMouseMove={(e) => e.stopPropagation()}
+          onMouseUp={(e) => { e.stopPropagation(); setIsDrawing(false); }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div 
+            className="bg-[#121824] border border-[#2a3449] w-full max-w-[420px] rounded-2xl shadow-2xl p-5 select-none animate-fade-in font-sans max-h-[90vh] overflow-y-auto"
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseMove={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-[#2a3449]/60 pb-3 mb-4">
               <h3 className="text-sm font-bold text-slate-100 flex items-center gap-1.5 uppercase tracking-wide">
                 {editingCell.cell.type === 'door' && '🚪 Configurar Porta'}
                 {editingCell.cell.type === 'trap' && '⚠️ Configurar Armadilha'}
                 {editingCell.cell.type === 'chest' && '🧰 Configurar Baú & Tesouro'}
                 {editingCell.cell.type === 'stash' && '💎 Configurar Esconderijo Oculto'}
+                {editingCell.cell.type === 'trigger' && '🕹️ Configurar Mecanismo'}
+                {editingCell.cell.type === 'portcullis' && '⛓️ Configurar Grade de Ferro'}
+                {editingCell.cell.type === 'illusion_wall' && '🌫️ Configurar Parede Falsa'}
               </h3>
               <button 
-                onClick={() => setEditingCell(null)}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDrawing(false);
+                  setDrawButton(-1);
+                  setEditingCell(null);
+                }}
                 className="text-slate-400 hover:text-slate-200 text-base p-1"
               >
                 ✕
@@ -2631,10 +2703,181 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
               </div>
             )}
 
+            {editingCell.cell.type === 'trigger' && (
+              <div className="space-y-3.5">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Tipo de Gatilho</label>
+                  <select
+                    value={editingCell.cell.triggerConfig?.triggerType || 'lever'}
+                    onChange={(e) => {
+                      setEditingCell(prev => prev ? {
+                        ...prev,
+                        cell: { ...prev.cell, triggerConfig: { ...(prev.cell.triggerConfig || { id: `trigger-${Math.random().toString(36).substring(2, 8)}`, targetId: '', state: 'inactive', name: '', isSecret: false, revealedToPlayers: true, triggerType: 'lever' }), triggerType: e.target.value as any } }
+                      } : null);
+                    }}
+                    className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="lever">Alavanca</option>
+                    <option value="pressure_plate">Placa de Pressão</option>
+                    <option value="button">Botão / Runas</option>
+                    <option value="chain">Corrente de Puxar</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Estado</label>
+                  <select
+                    value={editingCell.cell.triggerConfig?.state || 'inactive'}
+                    onChange={(e) => {
+                      setEditingCell(prev => prev ? {
+                        ...prev,
+                        cell: { ...prev.cell, triggerConfig: { ...(prev.cell.triggerConfig || { id: `trigger-${Math.random().toString(36).substring(2, 8)}`, targetId: '', state: 'inactive', name: '', isSecret: false, revealedToPlayers: true, triggerType: 'lever' }), state: e.target.value as 'inactive' | 'active' } }
+                      } : null);
+                    }}
+                    className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="inactive">Inativo (Desligado)</option>
+                    <option value="active">Ativo (Ligado)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">ID do Alvo (Target ID)</label>
+                  <input
+                    type="text"
+                    value={editingCell.cell.triggerConfig?.targetId || ''}
+                    onChange={(e) => {
+                      setEditingCell(prev => prev ? {
+                        ...prev,
+                        cell: { ...prev.cell, triggerConfig: { ...(prev.cell.triggerConfig || { id: `trigger-${Math.random().toString(36).substring(2, 8)}`, targetId: '', state: 'inactive', name: '', isSecret: false, revealedToPlayers: true, triggerType: 'lever' }), targetId: e.target.value } }
+                      } : null);
+                    }}
+                    placeholder="Ex: grade-123456"
+                    className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                  />
+                  <span className="text-[9px] text-slate-500 mt-1 block">Quando ativado, envia sinal para alterar o estado do alvo.</span>
+                </div>
+                <div className="flex items-center gap-2 pt-0.5">
+                  <input
+                    type="checkbox"
+                    id="triggerSecretCheck"
+                    checked={editingCell.cell.triggerConfig?.isSecret ?? false}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setEditingCell(prev => prev ? {
+                        ...prev,
+                        cell: { ...prev.cell, triggerConfig: { ...(prev.cell.triggerConfig || { id: `trigger-${Math.random().toString(36).substring(2, 8)}`, targetId: '', state: 'inactive', name: '', isSecret: false, revealedToPlayers: true, triggerType: 'lever' }), isSecret: checked } }
+                      } : null);
+                    }}
+                    className="rounded accent-amber-500 bg-[#0a0d14] border-[#2a3449]"
+                  />
+                  <label htmlFor="triggerSecretCheck" className="text-xs text-slate-300 cursor-pointer">
+                    É um gatilho secreto/escondido?
+                  </label>
+                </div>
+                {(editingCell.cell.triggerConfig?.isSecret) && (
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <input
+                      type="checkbox"
+                      id="triggerRevealedCheck"
+                      checked={editingCell.cell.triggerConfig?.revealedToPlayers ?? false}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setEditingCell(prev => prev ? {
+                          ...prev,
+                          cell: { ...prev.cell, triggerConfig: { ...prev.cell.triggerConfig!, revealedToPlayers: checked } }
+                        } : null);
+                      }}
+                      className="rounded accent-amber-500 bg-[#0a0d14] border-[#2a3449]"
+                    />
+                    <label htmlFor="triggerRevealedCheck" className="text-xs text-slate-300 cursor-pointer">
+                      Revelado aos jogadores
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {editingCell.cell.type === 'portcullis' && (
+              <div className="space-y-3.5">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Status da Grade</label>
+                  <select
+                    value={editingCell.cell.portcullisConfig?.status || 'closed'}
+                    onChange={(e) => {
+                      setEditingCell(prev => prev ? {
+                        ...prev,
+                        cell: { ...prev.cell, portcullisConfig: { ...(prev.cell.portcullisConfig || { id: `grade-${Math.random().toString(36).substring(2, 8)}`, status: 'closed', material: 'iron', name: '' }), status: e.target.value as 'open' | 'closed' } }
+                      } : null);
+                    }}
+                    className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="closed">Abaixada (Bloqueia Passagem)</option>
+                    <option value="open">Erguida (Livre Passagem)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">ID da Grade</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={editingCell.cell.portcullisConfig?.id || ''}
+                    className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-400 focus:outline-none cursor-copy"
+                    onClick={(e) => {
+                      navigator.clipboard.writeText((e.target as HTMLInputElement).value);
+                      toast.success('ID copiado!');
+                    }}
+                  />
+                  <span className="text-[9px] text-slate-500 mt-1 block">Clique para copiar. Use no ID do Alvo de Gatilhos.</span>
+                </div>
+              </div>
+            )}
+
+            {editingCell.cell.type === 'illusion_wall' && (
+              <div className="space-y-3.5">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Bloqueia Visão?</label>
+                  <select
+                    value={editingCell.cell.illusionWallConfig?.blocksLight ? 'true' : 'false'}
+                    onChange={(e) => {
+                      const blocksLight = e.target.value === 'true';
+                      setEditingCell(prev => prev ? {
+                        ...prev,
+                        cell: { ...prev.cell, illusionWallConfig: { ...(prev.cell.illusionWallConfig || { detectDC: 15, revealedToPlayers: false, blocksLight: true }), blocksLight } }
+                      } : null);
+                    }}
+                    className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="true">Sim (Parece parede real até descoberta)</option>
+                    <option value="false">Não (Luz/visão passam direto)</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2 pt-0.5">
+                  <input
+                    type="checkbox"
+                    id="illusionRevealedCheck"
+                    checked={editingCell.cell.illusionWallConfig?.revealedToPlayers ?? false}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setEditingCell(prev => prev ? {
+                        ...prev,
+                        cell: { ...prev.cell, illusionWallConfig: { ...(prev.cell.illusionWallConfig || { detectDC: 15, revealedToPlayers: false, blocksLight: true }), revealedToPlayers: checked } }
+                      } : null);
+                    }}
+                    className="rounded accent-amber-500 bg-[#0a0d14] border-[#2a3449]"
+                  />
+                  <label htmlFor="illusionRevealedCheck" className="text-xs text-slate-300 cursor-pointer">
+                    Descoberta pelos Jogadores
+                  </label>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-2 mt-5 border-t border-[#2a3449]/40 pt-3.5">
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDrawing(false);
+                  setDrawButton(-1);
                   onGridChange((prev) => {
                     const copy = prev.map(row => row.map(cell => ({ ...cell })));
                     const cell = copy[editingCell.r][editingCell.c];
@@ -2652,6 +2895,50 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
                         revealedToPlayers: editingCell.cell.type === 'chest',
                         loot: { gp: 25, items: [] }
                       };
+                    } else if (editingCell.cell.type === 'trigger') {
+                      const newConfig = editingCell.cell.triggerConfig || {
+                        id: `trigger-${Math.random().toString(36).substring(2, 8)}`,
+                        targetId: '',
+                        triggerType: 'lever',
+                        state: 'inactive',
+                        name: '',
+                        isSecret: false,
+                        revealedToPlayers: true
+                      };
+                      const oldState = cell.triggerConfig?.state;
+                      cell.triggerConfig = newConfig;
+
+                      if (oldState && oldState !== newConfig.state && newConfig.targetId) {
+                        let targetFound = false;
+                        for (let i = 0; i < copy.length; i++) {
+                          for (let j = 0; j < copy[0].length; j++) {
+                            const tc = copy[i][j];
+                            if (tc.type === 'portcullis' && tc.portcullisConfig?.id === newConfig.targetId) {
+                              tc.portcullisConfig = {
+                                ...tc.portcullisConfig,
+                                status: newConfig.state === 'active' ? 'open' : 'closed'
+                              };
+                              targetFound = true;
+                            }
+                          }
+                        }
+                        if (targetFound) {
+                          setTimeout(() => toast.success('A engrenagem girou! A grade conectada foi acionada.'), 300);
+                        }
+                      }
+                    } else if (editingCell.cell.type === 'portcullis') {
+                      cell.portcullisConfig = editingCell.cell.portcullisConfig || {
+                        id: `grade-${Math.random().toString(36).substring(2, 8)}`,
+                        status: 'closed',
+                        material: 'iron',
+                        name: ''
+                      };
+                    } else if (editingCell.cell.type === 'illusion_wall') {
+                      cell.illusionWallConfig = editingCell.cell.illusionWallConfig || {
+                        detectDC: 15,
+                        revealedToPlayers: false,
+                        blocksLight: true
+                      };
                     }
                     return copy;
                   });
@@ -2664,13 +2951,19 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDrawing(false);
+                  setDrawButton(-1);
                   onGridChange((prev) => {
                     const copy = prev.map(row => row.map(cell => ({ ...cell })));
                     copy[editingCell.r][editingCell.c].type = 'floor';
                     copy[editingCell.r][editingCell.c].doorConfig = undefined;
                     copy[editingCell.r][editingCell.c].trapConfig = undefined;
                     copy[editingCell.r][editingCell.c].chestConfig = undefined;
+                    copy[editingCell.r][editingCell.c].triggerConfig = undefined;
+                    copy[editingCell.r][editingCell.c].portcullisConfig = undefined;
+                    copy[editingCell.r][editingCell.c].illusionWallConfig = undefined;
                     return copy;
                   });
                   setEditingCell(null);
@@ -2682,7 +2975,12 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setEditingCell(null)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDrawing(false);
+                  setDrawButton(-1);
+                  setEditingCell(null);
+                }}
                 className="py-2 px-3 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] text-slate-300 font-semibold rounded-lg text-xs transition-all text-center cursor-pointer"
               >
                 Cancelar
