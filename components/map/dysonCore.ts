@@ -223,3 +223,131 @@ export function drawTrapHachure(
     drawWobblyLine(ctx, rx1, ry1, rx2, ry2, 1.0, seed + i);
   }
 }
+
+export function drawChestHachure(
+  ctx: CanvasRenderingContext2D,
+  c: number,
+  r: number,
+  cellSize: number,
+  containerType: string = 'wooden_chest',
+  status: string = 'locked'
+) {
+  const x = c * cellSize;
+  const y = r * cellSize;
+  const seed = c * 711 + r * 919;
+
+  // Fundo pastel quente
+  ctx.fillStyle = containerType === 'ornate_chest' ? '#fdf2e9' : containerType === 'iron_chest' ? '#f1f3f5' : '#fffbeb';
+  ctx.fillRect(x, y, cellSize, cellSize);
+
+  // Grid sutil no fundo
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)';
+  drawWobblyLine(ctx, x, y, x + cellSize, y, 0.8, seed + 1);
+  drawWobblyLine(ctx, x, y, x, y + cellSize, 0.8, seed + 2);
+
+  // Dimensões da caixa do baú (centralizado na célula)
+  const padding = cellSize * 0.2;
+  const bx = x + padding;
+  const by = y + padding + (status === 'open' || status === 'looted' ? cellSize * 0.08 : 0);
+  const bw = cellSize - padding * 2;
+  const bh = cellSize * 0.45;
+
+  ctx.strokeStyle = '#1e1e1e';
+  ctx.lineWidth = 1.4;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // 1. Corpo do Baú
+  drawWobblyLine(ctx, bx, by, bx + bw, by, 1.4, seed + 10);
+  drawWobblyLine(ctx, bx + bw, by, bx + bw, by + bh, 1.4, seed + 11);
+  drawWobblyLine(ctx, bx + bw, by + bh, bx, by + bh, 1.4, seed + 12);
+  drawWobblyLine(ctx, bx, by + bh, bx, by, 1.4, seed + 13);
+
+  // Tiras verticais de reforço de ferro
+  const band1X = bx + bw * 0.25;
+  const band2X = bx + bw * 0.75;
+  drawWobblyLine(ctx, band1X, by, band1X, by + bh, 1.1, seed + 14);
+  drawWobblyLine(ctx, band2X, by, band2X, by + bh, 1.1, seed + 15);
+
+  if (status === 'open' || status === 'looted') {
+    // Tampa aberta inclinada para trás
+    const lidHeight = cellSize * 0.22;
+    drawWobblyLine(ctx, bx, by, bx + bw * 0.1, by - lidHeight, 1.4, seed + 20);
+    drawWobblyLine(ctx, bx + bw, by, bx + bw * 0.9, by - lidHeight, 1.4, seed + 21);
+    drawWobblyLine(ctx, bx + bw * 0.1, by - lidHeight, bx + bw * 0.9, by - lidHeight, 1.4, seed + 22);
+
+    // Interior do baú aberto
+    if (status === 'open') {
+      // Brilho de moedas/tesouro
+      ctx.fillStyle = '#f59e0b';
+      for (let i = 0; i < 4; i++) {
+        const coinX = bx + bw * 0.35 + (i % 2) * (bw * 0.18);
+        const coinY = by + bh * 0.35 + Math.floor(i / 2) * (bh * 0.25);
+        ctx.beginPath();
+        ctx.arc(coinX, coinY, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  } else {
+    // Tampa arredondada clássica fechada
+    const lidArch = cellSize * 0.12;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.quadraticCurveTo(bx + bw / 2, by - lidArch, bx + bw, by);
+    ctx.stroke();
+
+    // Fechadura / buraco da fechadura no centro
+    const lockX = bx + bw / 2;
+    const lockY = by + bh * 0.42;
+    ctx.fillStyle = '#1e1e1e';
+    ctx.beginPath();
+    ctx.arc(lockX, lockY, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    drawWobblyLine(ctx, lockX, lockY, lockX, lockY + 3.5, 1.2, seed + 25);
+  }
+}
+
+export function drawStashHachure(
+  ctx: CanvasRenderingContext2D,
+  c: number,
+  r: number,
+  cellSize: number
+) {
+  const x = c * cellSize;
+  const y = r * cellSize;
+  const seed = c * 444 + r * 666;
+
+  // Fundo azul/violeta místico pastel
+  ctx.fillStyle = '#f0f9ff';
+  ctx.fillRect(x, y, cellSize, cellSize);
+
+  // Linhas de chão de pedra com fenda central
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
+  drawWobblyLine(ctx, x, y, x + cellSize, y, 0.8, seed + 1);
+  drawWobblyLine(ctx, x, y, x, y + cellSize, 0.8, seed + 2);
+
+  // Fenda de lajota secreta / compartimento falso
+  const cx = x + cellSize / 2;
+  const cy = y + cellSize / 2;
+
+  ctx.strokeStyle = '#0284c7';
+  ctx.lineWidth = 1.3;
+  ctx.lineCap = 'round';
+
+  // Ranhura retangular no piso (fundo falso)
+  const pad = cellSize * 0.25;
+  drawWobblyLine(ctx, x + pad, y + pad, x + cellSize - pad, y + pad, 1.2, seed + 10);
+  drawWobblyLine(ctx, x + cellSize - pad, y + pad, x + cellSize - pad, y + cellSize - pad, 1.2, seed + 11);
+  drawWobblyLine(ctx, x + cellSize - pad, y + cellSize - pad, x + pad, y + cellSize - pad, 1.2, seed + 12);
+  drawWobblyLine(ctx, x + pad, y + cellSize - pad, x + pad, y + pad, 1.2, seed + 13);
+
+  // Ícone central sutil de diamante / gema oculta
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 4.5);
+  ctx.lineTo(cx + 4.5, cy);
+  ctx.lineTo(cx, cy + 4.5);
+  ctx.lineTo(cx - 4.5, cy);
+  ctx.closePath();
+  ctx.stroke();
+}
+

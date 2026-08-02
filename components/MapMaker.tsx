@@ -28,7 +28,33 @@ interface MapMakerProps {
   combatants: Combatant[];
 }
 
-export type TileType = 'floor' | 'wall' | 'grass' | 'water' | 'door' | 'trap';
+export type TileType = 'floor' | 'wall' | 'grass' | 'water' | 'door' | 'trap' | 'chest' | 'stash';
+
+export type ContainerType = 'wooden_chest' | 'iron_chest' | 'ornate_chest' | 'hidden_stash' | 'mimic';
+export type ContainerStatus = 'locked' | 'unlocked' | 'open' | 'looted';
+
+export interface ChestLoot {
+  gp?: number; // Peças de Ouro
+  sp?: number; // Peças de Prata
+  cp?: number; // Peças de Cobre
+  pp?: number; // Peças de Platina
+  items?: string[]; // Itens e poções
+  notes?: string; // Cartas, pistas ou segredos
+}
+
+export interface ChestConfig {
+  name: string;
+  containerType: ContainerType;
+  status: ContainerStatus;
+  lockpickDC: number;
+  breakDC: number;
+  detectDC?: number; // CD Percepção/Investigação para esconderijos ou mímicos
+  isTrapped?: boolean;
+  trapDisarmDC?: number;
+  trapDescription?: string;
+  revealedToPlayers: boolean;
+  loot?: ChestLoot;
+}
 
 export interface DoorConfig {
   status: 'open' | 'closed';
@@ -55,6 +81,7 @@ export interface Cell {
   tokenColor?: string;
   doorConfig?: DoorConfig;
   trapConfig?: TrapConfig;
+  chestConfig?: ChestConfig;
 }
 
 export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
@@ -578,19 +605,28 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
 
         {/* Sub-bar options */}
         {selectedTool === 'paint' && activeMap && (
-          <div className="absolute top-4 left-16 z-30 px-3 py-2 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl flex items-center gap-1.5 shadow-2xl">
-            <span className="text-[10px] uppercase font-bold text-slate-400">Terrenos:</span>
-            {(['floor', 'wall', 'grass', 'water', 'door', 'trap'] as TileType[]).map((t) => (
+          <div className="absolute top-4 left-16 z-30 px-3 py-2 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl flex items-center gap-1.5 shadow-2xl overflow-x-auto max-w-[calc(100vw-100px)]">
+            <span className="text-[10px] uppercase font-bold text-slate-400 shrink-0">Terrenos:</span>
+            {([
+              { id: 'floor', label: 'Piso' },
+              { id: 'wall', label: 'Parede' },
+              { id: 'grass', label: 'Grama' },
+              { id: 'water', label: 'Água' },
+              { id: 'door', label: '🚪 Porta' },
+              { id: 'trap', label: '⚠️ Armadilha' },
+              { id: 'chest', label: '🧰 Baú' },
+              { id: 'stash', label: '💎 Stash Oculto' },
+            ] as { id: TileType; label: string }[]).map((t) => (
               <button
-                key={t}
-                onClick={() => setSelectedTileType(t)}
-                className={`px-2.5 py-1 rounded text-xs capitalize font-semibold transition-all ${
-                  selectedTileType === t
-                    ? 'bg-amber-500 text-slate-950 font-bold'
-                    : 'bg-[#161c28] text-slate-300 border border-[#2a3449]'
+                key={t.id}
+                onClick={() => setSelectedTileType(t.id)}
+                className={`px-2.5 py-1 rounded text-xs font-semibold transition-all shrink-0 ${
+                  selectedTileType === t.id
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                    : 'bg-[#161c28] text-slate-300 border border-[#2a3449] hover:bg-[#20293d]'
                 }`}
               >
-                {t}
+                {t.label}
               </button>
             ))}
           </div>

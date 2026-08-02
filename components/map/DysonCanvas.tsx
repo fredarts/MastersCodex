@@ -10,14 +10,26 @@ import {
   Undo2, 
   ArrowRight, 
   Footprints, 
-  Maximize2 
+  Maximize2,
+  Package,
+  Coins,
+  Sparkles,
+  Lock,
+  Unlock,
+  Dice5,
+  Eye,
+  Gem,
+  ShieldAlert,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   drawDysonCrosshatch, 
   drawWobblyLine, 
   drawWaterHachure, 
   drawGrassHachure, 
-  drawTrapHachure 
+  drawTrapHachure,
+  drawChestHachure,
+  drawStashHachure
 } from './dysonCore';
 import { 
   hasLineOfSight, 
@@ -27,7 +39,7 @@ import {
   getTokenVisionRadius 
 } from './visionCore';
 import { Combatant } from '@/lib/types';
-import { Cell, TileType } from '../MapMaker';
+import { Cell, TileType, ChestConfig, ContainerType, ContainerStatus, ChestLoot } from '../MapMaker';
 
 export interface RulerPoint {
   r: number;
@@ -479,6 +491,10 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           if (type === 'trap' && isPlayerView && !cell.trapConfig?.revealedToPlayers) {
             type = 'floor';
           }
+          // Camuflagem de esconderijos secretos (stash) para jogadores
+          if (type === 'stash' && isPlayerView && !cell.chestConfig?.revealedToPlayers) {
+            type = 'floor';
+          }
 
           if (type && type !== 'wall') {
             const x = c * CELL_SIZE;
@@ -494,6 +510,14 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
               drawGrassHachure(ctx, c, r, CELL_SIZE);
             } else if (type === 'trap') {
               drawTrapHachure(ctx, c, r, CELL_SIZE);
+            } else if (type === 'chest') {
+              const containerType = (isPlayerView && cell.chestConfig?.containerType === 'mimic' && !cell.chestConfig?.revealedToPlayers)
+                ? 'wooden_chest'
+                : (cell.chestConfig?.containerType || 'wooden_chest');
+              const status = cell.chestConfig?.status || 'locked';
+              drawChestHachure(ctx, c, r, CELL_SIZE, containerType, status);
+            } else if (type === 'stash') {
+              drawStashHachure(ctx, c, r, CELL_SIZE);
             } else {
               // Terreno normal: grid lines
               ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
@@ -520,6 +544,9 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           if (type === 'trap' && isPlayerView && !cell.trapConfig?.revealedToPlayers) {
             type = 'floor';
           }
+          if (type === 'stash' && isPlayerView && !cell.chestConfig?.revealedToPlayers) {
+            type = 'floor';
+          }
 
           if (type && type !== 'wall') {
             const x = c * CELL_SIZE;
@@ -542,7 +569,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         }
       }
 
-      // Draw doors and traps (Culled)
+      // Draw doors, traps, chests and stashes (Culled)
       for (let r = startRow; r <= endRow; r++) {
         for (let c = startCol; c <= endCol; c++) {
           const cell = grid[r]?.[c];
@@ -602,6 +629,66 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
             ctx.strokeText(label, x, y);
             
             ctx.fillStyle = isHidden ? '#c62828' : '#1a1a1a';
+            ctx.fillText(label, x, y);
+          } else if (cell.type === 'chest') {
+            const config = cell.chestConfig;
+            const isMimic = config?.containerType === 'mimic';
+            const status = config?.status || 'locked';
+
+            const x = c * CELL_SIZE + CELL_SIZE / 2;
+            const y = r * CELL_SIZE + CELL_SIZE / 2;
+
+            ctx.font = `bold ${Math.floor(CELL_SIZE * 0.58)}px "Courier New", monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            let label = '🧰';
+            if (isPlayerView) {
+              if (status === 'open') label = '📦';
+              else if (status === 'looted') label = '✨';
+              else if (status === 'unlocked') label = '🔓';
+              else label = '🔒';
+            } else {
+              if (isMimic) label = '🦷';
+              else if (status === 'open') label = '📦';
+              else if (status === 'looted') label = '✨';
+              else if (status === 'unlocked') label = '🔓';
+              else label = '🔒';
+            }
+
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = (!isPlayerView && isMimic) ? '#ef4444' : (status === 'looted' ? '#10b981' : '#ffffff');
+            ctx.strokeText(label, x, y);
+            
+            ctx.fillStyle = (!isPlayerView && isMimic) ? '#b91c1c' : '#1a1a1a';
+            ctx.fillText(label, x, y);
+          } else if (cell.type === 'stash') {
+            const config = cell.chestConfig;
+            const isHidden = !config?.revealedToPlayers;
+
+            if (isPlayerView && isHidden) {
+              continue;
+            }
+
+            const x = c * CELL_SIZE + CELL_SIZE / 2;
+            const y = r * CELL_SIZE + CELL_SIZE / 2;
+
+            ctx.font = `bold ${Math.floor(CELL_SIZE * 0.58)}px "Courier New", monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            let label = '💎';
+            if (!isPlayerView && isHidden) {
+              label = '💎(S)';
+            } else if (config?.status === 'looted') {
+              label = '✨';
+            }
+
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = isHidden ? '#38bdf8' : '#ffffff';
+            ctx.strokeText(label, x, y);
+            
+            ctx.fillStyle = isHidden ? '#0284c7' : '#1a1a1a';
             ctx.fillText(label, x, y);
           }
         }
@@ -1326,7 +1413,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return;
     }
 
-    if (clickedCell && !isPlayerView && (clickedCell.type === 'door' || clickedCell.type === 'trap') && e.button === 0 && !isSpacePressed) {
+    if (clickedCell && !isPlayerView && (clickedCell.type === 'door' || clickedCell.type === 'trap' || clickedCell.type === 'chest' || clickedCell.type === 'stash') && e.button === 0 && !isSpacePressed) {
       const isOverwriting = selectedTool === 'paint' && selectedTileType !== clickedCell.type;
       if (!isOverwriting) {
         setEditingCell({
@@ -1376,7 +1463,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     if (!isPlayerView && !isPanning && !draggingToken) {
       const cell = grid[pos.r]?.[pos.c];
-      if (cell && (cell.type === 'door' || cell.type === 'trap')) {
+      if (cell && (cell.type === 'door' || cell.type === 'trap' || cell.type === 'chest' || cell.type === 'stash')) {
         setHoveredCell({
           x: e.clientX,
           y: e.clientY,
@@ -1569,6 +1656,36 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
                disarmDC: 15,
                revealedToPlayers: false,
                description: 'Causa 1d10 de dano físico e envenenamento se falhar num teste de resistência.'
+             };
+           }
+           if (paintValue === 'chest' && !cell.chestConfig) {
+             cell.chestConfig = {
+               name: 'Baú de Madeira',
+               containerType: 'wooden_chest',
+               status: 'locked',
+               lockpickDC: 15,
+               breakDC: 16,
+               revealedToPlayers: true,
+               loot: {
+                 gp: 25,
+                 sp: 50,
+                 items: ['Poção de Cura (2d4+2)'],
+               }
+             };
+           }
+           if (paintValue === 'stash' && !cell.chestConfig) {
+             cell.chestConfig = {
+               name: 'Esconderijo Oculto',
+               containerType: 'hidden_stash',
+               status: 'unlocked',
+               lockpickDC: 12,
+               breakDC: 14,
+               detectDC: 15,
+               revealedToPlayers: false,
+               loot: {
+                 gp: 60,
+                 items: ['Gema de Quartzo (50 PO)', 'Pergaminho de Mísseis Mágicos'],
+               }
              };
            }
          } else if (selectedTool === 'token' && selectedTokenCombatant) {
@@ -1779,15 +1896,18 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       </div>
 
       {editingCell && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#121824] border border-[#2a3449] w-[340px] rounded-2xl shadow-2xl p-5 select-none animate-fade-in font-sans">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-[#121824] border border-[#2a3449] w-full max-w-[420px] rounded-2xl shadow-2xl p-5 select-none animate-fade-in font-sans max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-[#2a3449]/60 pb-3 mb-4">
               <h3 className="text-sm font-bold text-slate-100 flex items-center gap-1.5 uppercase tracking-wide">
-                {editingCell.cell.type === 'door' ? '🚪 Configurar Porta' : '⚠️ Configurar Armadilha'}
+                {editingCell.cell.type === 'door' && '🚪 Configurar Porta'}
+                {editingCell.cell.type === 'trap' && '⚠️ Configurar Armadilha'}
+                {editingCell.cell.type === 'chest' && '🧰 Configurar Baú & Tesouro'}
+                {editingCell.cell.type === 'stash' && '💎 Configurar Esconderijo Oculto'}
               </h3>
               <button 
                 onClick={() => setEditingCell(null)}
-                className="text-slate-400 hover:text-slate-200"
+                className="text-slate-400 hover:text-slate-200 text-base p-1"
               >
                 ✕
               </button>
@@ -2055,6 +2175,462 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
               </div>
             )}
 
+            {(editingCell.cell.type === 'chest' || editingCell.cell.type === 'stash') && (
+              <div className="space-y-3.5">
+                {/* 1. Nome e Tipo */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Nome</label>
+                    <input
+                      type="text"
+                      value={editingCell.cell.chestConfig?.name || (editingCell.cell.type === 'chest' ? 'Baú de Madeira' : 'Esconderijo Secreto')}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingCell(prev => prev ? {
+                          ...prev,
+                          cell: {
+                            ...prev.cell,
+                            chestConfig: {
+                              ...(prev.cell.chestConfig || { name: val, containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                              name: val
+                            }
+                          }
+                        } : null);
+                      }}
+                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-semibold"
+                    />
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Tipo de Recipiente</label>
+                    <select
+                      value={editingCell.cell.chestConfig?.containerType || (editingCell.cell.type === 'stash' ? 'hidden_stash' : 'wooden_chest')}
+                      onChange={(e) => {
+                        const ct = e.target.value as ContainerType;
+                        setEditingCell(prev => prev ? {
+                          ...prev,
+                          cell: {
+                            ...prev.cell,
+                            chestConfig: {
+                              ...(prev.cell.chestConfig || { name: 'Baú', containerType: ct, status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                              containerType: ct
+                            }
+                          }
+                        } : null);
+                      }}
+                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="wooden_chest">📦 Baú de Madeira</option>
+                      <option value="iron_chest">🛡️ Baú de Ferro</option>
+                      <option value="ornate_chest">✨ Baú Nobre / Rúnico</option>
+                      <option value="hidden_stash">💎 Esconderijo (Fundo Falso)</option>
+                      <option value="mimic">🦷 Mímico Camuflado!</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* 2. Status do Recipiente */}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Estado</label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { id: 'locked', label: '🔒 Trancado', activeClass: 'bg-amber-600 border-amber-500 text-white' },
+                      { id: 'unlocked', label: '🔓 Destrancado', activeClass: 'bg-sky-600 border-sky-500 text-white' },
+                      { id: 'open', label: '📦 Aberto', activeClass: 'bg-indigo-600 border-indigo-500 text-white' },
+                      { id: 'looted', label: '✨ Saqueado', activeClass: 'bg-emerald-600 border-emerald-500 text-white' },
+                    ].map((s) => {
+                      const isCurrent = (editingCell.cell.chestConfig?.status || 'locked') === s.id;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            setEditingCell(prev => prev ? {
+                              ...prev,
+                              cell: {
+                                ...prev.cell,
+                                chestConfig: {
+                                  ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: s.id as ContainerStatus, lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                                  status: s.id as ContainerStatus
+                                }
+                              }
+                            } : null);
+                          }}
+                          className={`py-1.5 rounded-lg text-[11px] font-semibold transition-all border text-center ${
+                            isCurrent
+                              ? `${s.activeClass} shadow`
+                              : 'bg-[#0a0d14] border-[#2a3449] text-slate-400 hover:bg-[#161c28]'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. CDs D&D */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">🔑 Lockpick</label>
+                    <input
+                      type="number"
+                      value={editingCell.cell.chestConfig?.lockpickDC ?? 15}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setEditingCell(prev => prev ? {
+                          ...prev,
+                          cell: {
+                            ...prev.cell,
+                            chestConfig: {
+                              ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                              lockpickDC: val
+                            }
+                          }
+                        } : null);
+                      }}
+                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">🔨 Arrombar</label>
+                    <input
+                      type="number"
+                      value={editingCell.cell.chestConfig?.breakDC ?? 16}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setEditingCell(prev => prev ? {
+                          ...prev,
+                          cell: {
+                            ...prev.cell,
+                            chestConfig: {
+                              ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                              breakDC: val
+                            }
+                          }
+                        } : null);
+                      }}
+                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">👁️ Investigar</label>
+                    <input
+                      type="number"
+                      value={editingCell.cell.chestConfig?.detectDC ?? 15}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setEditingCell(prev => prev ? {
+                          ...prev,
+                          cell: {
+                            ...prev.cell,
+                            chestConfig: {
+                              ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                              detectDC: val
+                            }
+                          }
+                        } : null);
+                      }}
+                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* 4. Armadilha no Fecho */}
+                <div className="bg-[#0a0d14] border border-[#2a3449] rounded-xl p-2.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-rose-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editingCell.cell.chestConfig?.isTrapped || false}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setEditingCell(prev => prev ? {
+                            ...prev,
+                            cell: {
+                              ...prev.cell,
+                              chestConfig: {
+                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                                isTrapped: checked,
+                                trapDisarmDC: prev.cell.chestConfig?.trapDisarmDC ?? 15,
+                                trapDescription: prev.cell.chestConfig?.trapDescription || 'Agulha envenenada: 2d6 de dano de veneno (CD 13 CON)'
+                              }
+                            }
+                          } : null);
+                        }}
+                        className="rounded accent-rose-500 bg-[#121824] border-[#2a3449]"
+                      />
+                      <span>⚠️ Armadilha no Fecho</span>
+                    </label>
+                    {editingCell.cell.chestConfig?.isTrapped && (
+                      <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono">
+                        <span>CD Desarmar:</span>
+                        <input
+                          type="number"
+                          value={editingCell.cell.chestConfig?.trapDisarmDC ?? 15}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 0;
+                            setEditingCell(prev => prev ? {
+                              ...prev,
+                              cell: {
+                                ...prev.cell,
+                                chestConfig: {
+                                  ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                                  trapDisarmDC: val
+                                }
+                              }
+                            } : null);
+                          }}
+                          className="w-12 bg-[#121824] border border-[#2a3449] rounded px-1.5 py-0.5 text-center text-rose-300 focus:outline-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {editingCell.cell.chestConfig?.isTrapped && (
+                    <input
+                      type="text"
+                      placeholder="Descrição / Efeito da armadilha..."
+                      value={editingCell.cell.chestConfig?.trapDescription || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditingCell(prev => prev ? {
+                          ...prev,
+                          cell: {
+                            ...prev.cell,
+                            chestConfig: {
+                              ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                              trapDescription: val
+                            }
+                          }
+                        } : null);
+                      }}
+                      className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-rose-500"
+                    />
+                  )}
+                </div>
+
+                {/* 5. Gerenciador de Tesouro & Gerador de Loot */}
+                <div className="bg-[#0a0d14] border border-[#2a3449] rounded-xl p-3 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase text-amber-400 flex items-center gap-1.5">
+                      <Coins className="w-3.5 h-3.5" /> Tesouro & Itens
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        title="Gerar tesouro Tier 1 (Nv 1-4)"
+                        onClick={() => {
+                          const gp = 15 + Math.floor(Math.random() * 45);
+                          const sp = 20 + Math.floor(Math.random() * 80);
+                          const items = ['Poção de Cura (2d4+2)'];
+                          if (Math.random() > 0.4) items.push('Pergaminho de Mísseis Mágicos');
+                          setEditingCell(prev => prev ? {
+                            ...prev,
+                            cell: {
+                              ...prev.cell,
+                              chestConfig: {
+                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                                loot: { gp, sp, cp: 50, pp: 0, items }
+                              }
+                            }
+                          } : null);
+                          toast.success('Loot Tier 1 gerado!');
+                        }}
+                        className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded text-[10px] font-bold transition-all"
+                      >
+                        🎲 Nv 1-4
+                      </button>
+                      <button
+                        type="button"
+                        title="Gerar tesouro Tier 2 (Nv 5-10)"
+                        onClick={() => {
+                          const gp = 180 + Math.floor(Math.random() * 320);
+                          const sp = 150 + Math.floor(Math.random() * 250);
+                          const pp = 8 + Math.floor(Math.random() * 15);
+                          const items = ['Poção de Cura Maior (4d4+4)', 'Gema de Rubi (100 PO)', 'Pergaminho de Bola de Fogo'];
+                          setEditingCell(prev => prev ? {
+                            ...prev,
+                            cell: {
+                              ...prev.cell,
+                              chestConfig: {
+                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                                loot: { gp, sp, pp, cp: 0, items }
+                              }
+                            }
+                          } : null);
+                          toast.success('Loot Tier 2 gerado!');
+                        }}
+                        className="px-2 py-0.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 rounded text-[10px] font-bold transition-all"
+                      >
+                        🎲 Nv 5-10
+                      </button>
+                      <button
+                        type="button"
+                        title="Gerar tesouro Tier 3+ (Nv 11+)"
+                        onClick={() => {
+                          const gp = 1500 + Math.floor(Math.random() * 2500);
+                          const pp = 120 + Math.floor(Math.random() * 200);
+                          const items = ['Poção de Cura Suprema (10d4+20)', 'Diamante Puro (500 PO)', 'Anel de Proteção Mágica (+1)'];
+                          setEditingCell(prev => prev ? {
+                            ...prev,
+                            cell: {
+                              ...prev.cell,
+                              chestConfig: {
+                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                                loot: { gp, pp, sp: 0, cp: 0, items }
+                              }
+                            }
+                          } : null);
+                          toast.success('Loot Tier 3+ gerado!');
+                        }}
+                        className="px-2 py-0.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded text-[10px] font-bold transition-all"
+                      >
+                        🎲 Nv 11+
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Moedas */}
+                  <div className="grid grid-cols-4 gap-1.5">
+                    <div>
+                      <span className="block text-[9px] uppercase font-bold text-amber-400">PO (Ouro)</span>
+                      <input
+                        type="number"
+                        value={editingCell.cell.chestConfig?.loot?.gp ?? 0}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setEditingCell(prev => prev ? {
+                            ...prev,
+                            cell: {
+                              ...prev.cell,
+                              chestConfig: {
+                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                                loot: { ...(prev.cell.chestConfig?.loot || {}), gp: val }
+                              }
+                            }
+                          } : null);
+                        }}
+                        className="w-full bg-[#121824] border border-[#2a3449] rounded px-1.5 py-1 text-xs text-amber-200 focus:outline-none font-mono"
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-[9px] uppercase font-bold text-slate-300">PP (Prata)</span>
+                      <input
+                        type="number"
+                        value={editingCell.cell.chestConfig?.loot?.sp ?? 0}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setEditingCell(prev => prev ? {
+                            ...prev,
+                            cell: {
+                              ...prev.cell,
+                              chestConfig: {
+                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                                loot: { ...(prev.cell.chestConfig?.loot || {}), sp: val }
+                              }
+                            }
+                          } : null);
+                        }}
+                        className="w-full bg-[#121824] border border-[#2a3449] rounded px-1.5 py-1 text-xs text-slate-300 focus:outline-none font-mono"
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-[9px] uppercase font-bold text-orange-400">PC (Cobre)</span>
+                      <input
+                        type="number"
+                        value={editingCell.cell.chestConfig?.loot?.cp ?? 0}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setEditingCell(prev => prev ? {
+                            ...prev,
+                            cell: {
+                              ...prev.cell,
+                              chestConfig: {
+                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                                loot: { ...(prev.cell.chestConfig?.loot || {}), cp: val }
+                              }
+                            }
+                          } : null);
+                        }}
+                        className="w-full bg-[#121824] border border-[#2a3449] rounded px-1.5 py-1 text-xs text-orange-200 focus:outline-none font-mono"
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-[9px] uppercase font-bold text-cyan-300">PL (Platina)</span>
+                      <input
+                        type="number"
+                        value={editingCell.cell.chestConfig?.loot?.pp ?? 0}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setEditingCell(prev => prev ? {
+                            ...prev,
+                            cell: {
+                              ...prev.cell,
+                              chestConfig: {
+                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                                loot: { ...(prev.cell.chestConfig?.loot || {}), pp: val }
+                              }
+                            }
+                          } : null);
+                        }}
+                        className="w-full bg-[#121824] border border-[#2a3449] rounded px-1.5 py-1 text-xs text-cyan-200 focus:outline-none font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Itens */}
+                  <div>
+                    <span className="block text-[9px] uppercase font-bold text-slate-400 mb-0.5">Itens / Poções (1 por linha)</span>
+                    <textarea
+                      rows={2}
+                      placeholder="Ex: Poção de Cura&#10;Pergaminho de Invisibilidade"
+                      value={(editingCell.cell.chestConfig?.loot?.items || []).join('\n')}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        const items = raw.split('\n').filter(line => line.trim().length > 0);
+                        setEditingCell(prev => prev ? {
+                          ...prev,
+                          cell: {
+                            ...prev.cell,
+                            chestConfig: {
+                              ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                              loot: { ...(prev.cell.chestConfig?.loot || {}), items }
+                            }
+                          }
+                        } : null);
+                      }}
+                      className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 resize-none font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* 6. Visibilidade para Jogadores */}
+                <div className="flex items-center gap-2 pt-0.5">
+                  <input
+                    type="checkbox"
+                    id="chestRevealedCheck"
+                    checked={editingCell.cell.chestConfig?.revealedToPlayers ?? true}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setEditingCell(prev => prev ? {
+                        ...prev,
+                        cell: {
+                          ...prev.cell,
+                          chestConfig: {
+                            ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                            revealedToPlayers: checked
+                          }
+                        }
+                      } : null);
+                    }}
+                    className="rounded accent-amber-500 bg-[#0a0d14] border-[#2a3449]"
+                  />
+                  <label htmlFor="chestRevealedCheck" className="text-xs text-slate-300 cursor-pointer">
+                    Visível aos Jogadores no Mapa
+                  </label>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-2 mt-5 border-t border-[#2a3449]/40 pt-3.5">
               <button
                 type="button"
@@ -2066,6 +2642,16 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
                       cell.doorConfig = editingCell.cell.doorConfig || { status: 'closed', doorType: 'wooden', breakDC: 15, lockpickDC: 15 };
                     } else if (editingCell.cell.type === 'trap') {
                       cell.trapConfig = editingCell.cell.trapConfig || { trapType: 'Armadilha', detectDC: 15, disarmDC: 15, revealedToPlayers: false };
+                    } else if (editingCell.cell.type === 'chest' || editingCell.cell.type === 'stash') {
+                      cell.chestConfig = editingCell.cell.chestConfig || {
+                        name: editingCell.cell.type === 'chest' ? 'Baú' : 'Esconderijo',
+                        containerType: editingCell.cell.type === 'stash' ? 'hidden_stash' : 'wooden_chest',
+                        status: 'locked',
+                        lockpickDC: 15,
+                        breakDC: 16,
+                        revealedToPlayers: editingCell.cell.type === 'chest',
+                        loot: { gp: 25, items: [] }
+                      };
                     }
                     return copy;
                   });
@@ -2084,10 +2670,11 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
                     copy[editingCell.r][editingCell.c].type = 'floor';
                     copy[editingCell.r][editingCell.c].doorConfig = undefined;
                     copy[editingCell.r][editingCell.c].trapConfig = undefined;
+                    copy[editingCell.r][editingCell.c].chestConfig = undefined;
                     return copy;
                   });
                   setEditingCell(null);
-                  toast.success('Terreno removido.');
+                  toast.success('Elemento removido.');
                 }}
                 className="py-2 px-3 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/20 text-rose-300 font-semibold rounded-lg text-xs transition-all text-center cursor-pointer font-sans"
               >
@@ -2106,7 +2693,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       )}
       {hoveredCell && !editingCell && (
         <div 
-          className="fixed pointer-events-none z-40 bg-[#0d1117]/95 border border-[#30363d] rounded-xl shadow-2xl p-3 w-[240px] text-xs font-sans text-slate-200 backdrop-blur-md animate-fade-in"
+          className="fixed pointer-events-none z-40 bg-[#0d1117]/95 border border-[#30363d] rounded-xl shadow-2xl p-3 w-[260px] text-xs font-sans text-slate-200 backdrop-blur-md animate-fade-in"
           style={{ 
             left: `${hoveredCell.x + 15}px`, 
             top: `${hoveredCell.y + 15}px` 
@@ -2172,6 +2759,77 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
                   <p className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-800/50 mt-1 leading-relaxed">
                     {hoveredCell.cell.trapConfig.description}
                   </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {(hoveredCell.cell.type === 'chest' || hoveredCell.cell.type === 'stash') && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-1.5 pb-1 border-b border-slate-800">
+                <span className="font-bold text-slate-100 uppercase tracking-wider text-[11px] truncate">
+                  {hoveredCell.cell.type === 'chest' ? '🧰' : '💎'} {hoveredCell.cell.chestConfig?.name || 'Recipiente'}
+                </span>
+                {hoveredCell.cell.chestConfig?.containerType === 'mimic' && (
+                  <span className="px-1.5 py-0.2 bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded text-[9px] font-bold">
+                    🦷 MÍMICO
+                  </span>
+                )}
+              </div>
+              <div className="pt-0.5 flex flex-col gap-1 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Estado:</span>
+                  <span className={`font-bold capitalize ${
+                    hoveredCell.cell.chestConfig?.status === 'open' ? 'text-indigo-400' :
+                    hoveredCell.cell.chestConfig?.status === 'looted' ? 'text-emerald-400' :
+                    hoveredCell.cell.chestConfig?.status === 'unlocked' ? 'text-sky-400' : 'text-amber-400'
+                  }`}>
+                    {hoveredCell.cell.chestConfig?.status === 'open' ? '📦 Aberto' :
+                     hoveredCell.cell.chestConfig?.status === 'looted' ? '✨ Saqueado' :
+                     hoveredCell.cell.chestConfig?.status === 'unlocked' ? '🔓 Destrancado' : '🔒 Trancado'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">CDs (Lock / Força):</span>
+                  <span className="font-mono font-bold text-slate-300">
+                    DC {hoveredCell.cell.chestConfig?.lockpickDC ?? 15} / {hoveredCell.cell.chestConfig?.breakDC ?? 16}
+                  </span>
+                </div>
+                {hoveredCell.cell.chestConfig?.detectDC && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">CD Percepção/Invest.:</span>
+                    <span className="font-mono font-bold text-slate-300">
+                      DC {hoveredCell.cell.chestConfig.detectDC}
+                    </span>
+                  </div>
+                )}
+                {hoveredCell.cell.chestConfig?.isTrapped && (
+                  <div className="flex justify-between text-rose-400 border-t border-slate-800/40 pt-1">
+                    <span>⚠️ Armadilha no Fecho:</span>
+                    <span className="font-mono font-bold">DC {hoveredCell.cell.chestConfig.trapDisarmDC ?? 15}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-slate-800/50 pt-1 mt-0.5">
+                  <span className="text-slate-400">Visível aos Jogadores:</span>
+                  <span className={`font-bold ${hoveredCell.cell.chestConfig?.revealedToPlayers ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {hoveredCell.cell.chestConfig?.revealedToPlayers ? 'Sim' : 'Não'}
+                  </span>
+                </div>
+                {/* Loot preview */}
+                {hoveredCell.cell.chestConfig?.loot && (
+                  <div className="bg-slate-950/60 rounded p-1.5 border border-slate-800/60 mt-1 space-y-0.5">
+                    <div className="flex flex-wrap gap-1 text-[10px] text-amber-300 font-mono">
+                      {hoveredCell.cell.chestConfig.loot.gp ? <span>🪙 {hoveredCell.cell.chestConfig.loot.gp} PO</span> : null}
+                      {hoveredCell.cell.chestConfig.loot.sp ? <span>⚪ {hoveredCell.cell.chestConfig.loot.sp} PP</span> : null}
+                      {hoveredCell.cell.chestConfig.loot.cp ? <span>🟤 {hoveredCell.cell.chestConfig.loot.cp} PC</span> : null}
+                      {hoveredCell.cell.chestConfig.loot.pp ? <span>💎 {hoveredCell.cell.chestConfig.loot.pp} PL</span> : null}
+                    </div>
+                    {hoveredCell.cell.chestConfig.loot.items && hoveredCell.cell.chestConfig.loot.items.length > 0 && (
+                      <div className="text-[10px] text-slate-300 truncate">
+                        📦 {hoveredCell.cell.chestConfig.loot.items.join(', ')}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
