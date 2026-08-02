@@ -5,6 +5,7 @@ import {
   Eye, 
   EyeOff, 
   Paintbrush, 
+  Square,
   MapPin, 
   Upload,
   Ruler,
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Combatant, CampaignMap } from '@/lib/types';
 import { useSession } from '@/context/SessionContext';
+import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { toast } from 'sonner';
 import { storageService } from '@/lib/services/storageService';
 import { DysonCanvas } from './map/DysonCanvas';
@@ -78,11 +80,14 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     campaignMaps, 
     createCampaignMap, 
     updateCampaignMap, 
-    deleteCampaignMap 
+    deleteCampaignMap,
+    activeScene
   } = useSession();
+  const { broadcastToPlayerView } = useLiveCockpit();
 
   const [grid, setGrid] = useState<Cell[][]>(() => createInitialGrid());
-  const [selectedTool, setSelectedTool] = useState<'paint' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan'>('fog-reveal');
+  const [selectedTool, setSelectedTool] = useState<'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan'>('fog-reveal');
+  const [boxMode, setBoxMode] = useState<'fill' | 'room' | 'hollow' | 'fog-reveal' | 'fog-cover'>('fill');
   const [selectedTileType, setSelectedTileType] = useState<TileType>('floor');
   const [selectedTokenCombatant, setSelectedTokenCombatant] = useState<Combatant | null>(null);
   
@@ -176,19 +181,28 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     if (!activeMap) return;
 
     const delayDebounce = setTimeout(() => {
-      updateCampaignMap(activeMap.id, mapTitle || activeMap.title, {
+      const payload = {
         grid,
         bgImageUrl,
         gridScale,
         gridOffsetX,
         gridOffsetY,
+      };
+      updateCampaignMap(activeMap.id, mapTitle || activeMap.title, payload).then(() => {
+        broadcastToPlayerView({
+          mapData: {
+            ...payload,
+            activeMapId: activeMap.id,
+            sceneId: activeScene?.id,
+          }
+        });
       }).catch((e) => {
         console.error('Auto-save CampaignMap failed:', e);
       });
     }, 1200);
 
     return () => clearTimeout(delayDebounce);
-  }, [grid, bgImageUrl, gridScale, gridOffsetX, gridOffsetY, activeMap, mapTitle, updateCampaignMap]);
+  }, [grid, bgImageUrl, gridScale, gridOffsetX, gridOffsetY, activeMap, mapTitle, updateCampaignMap, broadcastToPlayerView, activeScene?.id]);
 
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
@@ -265,13 +279,21 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
       toast.error('Nenhum mapa selecionado para salvar.');
       return;
     }
+    const payload = { 
+      grid, 
+      bgImageUrl, 
+      gridScale, 
+      gridOffsetX, 
+      gridOffsetY 
+    };
     try {
-      await updateCampaignMap(activeMap.id, mapTitle || activeMap.title, { 
-        grid, 
-        bgImageUrl, 
-        gridScale, 
-        gridOffsetX, 
-        gridOffsetY 
+      await updateCampaignMap(activeMap.id, mapTitle || activeMap.title, payload);
+      broadcastToPlayerView({
+        mapData: {
+          ...payload,
+          activeMapId: activeMap.id,
+          sceneId: activeScene?.id,
+        }
       });
       toast.success('Mapa salvo com sucesso!');
     } catch (e) {
@@ -387,75 +409,86 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
                <div className="space-y-2">
                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Ferramentas de Edição</span>
                  <div className="grid grid-cols-2 gap-1.5">
-                   <button
-                     onClick={() => setSelectedTool('paint')}
-                     className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
-                       selectedTool === 'paint'
-                         ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
-                         : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
-                     }`}
-                   >
-                     <Paintbrush className="w-3.5 h-3.5" />
-                     Pintar
-                   </button>
-                   <button
-                     onClick={() => setSelectedTool('fog-reveal')}
-                     className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
-                       selectedTool === 'fog-reveal'
-                         ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
-                         : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
-                     }`}
-                   >
-                     <Eye className="w-3.5 h-3.5" />
-                     Revelar Fog
-                   </button>
-                   <button
-                     onClick={() => setSelectedTool('fog-cover')}
-                     className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
-                       selectedTool === 'fog-cover'
-                         ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
-                         : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
-                     }`}
-                   >
-                     <EyeOff className="w-3.5 h-3.5" />
-                     Ocultar Fog
-                   </button>
-                   <button
-                     onClick={() => setSelectedTool('token')}
-                     className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
-                       selectedTool === 'token'
-                         ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
-                         : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
-                     }`}
-                   >
-                     <MapPin className="w-3.5 h-3.5" />
-                     Token
-                   </button>
-                   <button
-                     onClick={() => {
-                       setSelectedTool('measure');
-                       setMeasureStart(null);
-                     }}
-                     className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
-                       selectedTool === 'measure'
-                         ? 'bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow'
-                         : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
-                     }`}
-                   >
-                     <Ruler className="w-3.5 h-3.5" />
-                     Régua
-                   </button>
-                   <button
-                     onClick={() => setSelectedTool('pan')}
-                     className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
-                       selectedTool === 'pan'
-                         ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
-                         : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
-                     }`}
-                   >
-                     <Hand className="w-3.5 h-3.5" />
-                     Mover
-                   </button>
+                    <button
+                      onClick={() => setSelectedTool('paint')}
+                      className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                        selectedTool === 'paint'
+                          ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
+                          : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                      }`}
+                    >
+                      <Paintbrush className="w-3.5 h-3.5" />
+                      Pintar
+                    </button>
+                    <button
+                      onClick={() => setSelectedTool('box')}
+                      className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                        selectedTool === 'box'
+                          ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
+                          : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                      }`}
+                    >
+                      <Square className="w-3.5 h-3.5" />
+                      Retângulo
+                    </button>
+                    <button
+                      onClick={() => setSelectedTool('fog-reveal')}
+                      className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                        selectedTool === 'fog-reveal'
+                          ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
+                          : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                      }`}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Revelar Fog
+                    </button>
+                    <button
+                      onClick={() => setSelectedTool('fog-cover')}
+                      className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                        selectedTool === 'fog-cover'
+                          ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
+                          : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                      }`}
+                    >
+                      <EyeOff className="w-3.5 h-3.5" />
+                      Ocultar Fog
+                    </button>
+                    <button
+                      onClick={() => setSelectedTool('token')}
+                      className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                        selectedTool === 'token'
+                          ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
+                          : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                      }`}
+                    >
+                      <MapPin className="w-3.5 h-3.5" />
+                      Token
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedTool('measure');
+                        setMeasureStart(null);
+                      }}
+                      className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                        selectedTool === 'measure'
+                          ? 'bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow'
+                          : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                      }`}
+                    >
+                      <Ruler className="w-3.5 h-3.5" />
+                      Régua
+                    </button>
+                    <button
+                      onClick={() => setSelectedTool('pan')}
+                      className={`col-span-2 flex items-center justify-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                        selectedTool === 'pan'
+                          ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
+                          : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                      }`}
+                    >
+                      <Hand className="w-3.5 h-3.5" />
+                      Mover
+                    </button>
                    {bgImageUrl && (
                      <button
                        onClick={() => setSelectedTool('calibrate')}
@@ -563,6 +596,52 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
           </div>
         )}
 
+        {selectedTool === 'box' && activeMap && (
+          <div className="absolute top-4 left-16 z-30 px-3 py-2 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl flex flex-wrap items-center gap-3 shadow-2xl">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] uppercase font-bold text-amber-400">Modo Forma:</span>
+              {[
+                { id: 'fill', label: 'Preencher Tudo' },
+                { id: 'room', label: 'Criar Sala (Paredes+Piso)' },
+                { id: 'hollow', label: 'Apenas Contorno' },
+                { id: 'fog-reveal', label: 'Revelar Fog' },
+                { id: 'fog-cover', label: 'Ocultar Fog' },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => setBoxMode(m.id as any)}
+                  className={`px-2 py-1 rounded text-[11px] font-semibold transition-all ${
+                    boxMode === m.id
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                      : 'bg-[#161c28] text-slate-300 hover:bg-[#20293a] border border-[#2a3449]'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            {(boxMode === 'fill' || boxMode === 'hollow') && (
+              <div className="flex items-center gap-1.5 pl-2 border-l border-slate-700/60">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Terreno:</span>
+                {(['floor', 'wall', 'grass', 'water'] as TileType[]).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setSelectedTileType(t)}
+                    className={`px-2 py-0.5 rounded text-xs capitalize font-semibold transition-all ${
+                      selectedTileType === t
+                        ? 'bg-cyan-500 text-slate-950 font-bold'
+                        : 'bg-[#161c28] text-slate-300 border border-[#2a3449]'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {selectedTool === 'token' && activeMap && (
           <div className="absolute top-4 left-16 z-30 px-3 py-2 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl flex items-center gap-1.5 shadow-2xl max-w-[60vw] overflow-x-auto scrollbar-none">
             <span className="text-[10px] uppercase font-bold text-slate-400 flex-shrink-0">Tokens:</span>
@@ -660,6 +739,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
           gridOffsetY={gridOffsetY}
           combatants={combatants}
           selectedTool={selectedTool}
+          boxMode={boxMode}
           selectedTileType={selectedTileType}
           selectedTokenCombatant={selectedTokenCombatant}
           measureStart={measureStart}

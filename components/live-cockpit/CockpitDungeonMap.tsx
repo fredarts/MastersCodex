@@ -65,69 +65,108 @@ export const CockpitDungeonMap: React.FC = () => {
     }
 
     const savedMap = multiState.maps[mapId];
-    if (savedMap) {
+    const associatedMap = campaignMaps.find(m => m.id === mapId);
+
+    if (savedMap && associatedMap && associatedMap.gridData) {
+      // Merge: Update terrain/layout from the campaignMap template while preserving runtime fog and active tokens
+      const tGrid = associatedMap.gridData.grid || createInitialGrid();
+      const sGrid = savedMap.grid || [];
+
+      const mergedGrid: Cell[][] = tGrid.map((row: Cell[], r: number) =>
+        row.map((cell: Cell, c: number) => {
+          const sCell = sGrid[r]?.[c];
+          return {
+            ...cell, // template tile type, doorConfig, trapConfig
+            fog: sCell !== undefined ? sCell.fog : true, // preserve explored fog state
+            tokenName: sCell?.tokenName ?? cell.tokenName, // preserve active placed token
+            tokenColor: sCell?.tokenColor ?? cell.tokenColor,
+          };
+        })
+      );
+
+      // Re-apply LOS for active tokens to ensure no walls are breached
+      for (let r = 0; r < mergedGrid.length; r++) {
+        for (let c = 0; c < mergedGrid[r].length; c++) {
+          if (mergedGrid[r][c].tokenName) {
+            const radius = getTokenVisionRadius(mergedGrid[r][c].tokenName, combatants);
+            revealVisionWithLOS(mergedGrid, r, c, radius);
+          }
+        }
+      }
+
+      setGrid(mergedGrid);
+      setBgImageUrl(associatedMap.gridData.bgImageUrl ?? savedMap.bgImageUrl ?? null);
+      setGridScale(associatedMap.gridData.gridScale ?? savedMap.gridScale ?? 40);
+      setGridOffsetX(associatedMap.gridData.gridOffsetX ?? savedMap.gridOffsetX ?? 0);
+      setGridOffsetY(associatedMap.gridData.gridOffsetY ?? savedMap.gridOffsetY ?? 0);
+
+      multiState.maps[mapId] = {
+        grid: mergedGrid,
+        bgImageUrl: associatedMap.gridData.bgImageUrl ?? savedMap.bgImageUrl ?? null,
+        gridScale: associatedMap.gridData.gridScale ?? savedMap.gridScale ?? 40,
+        gridOffsetX: associatedMap.gridData.gridOffsetX ?? savedMap.gridOffsetX ?? 0,
+        gridOffsetY: associatedMap.gridData.gridOffsetY ?? savedMap.gridOffsetY ?? 0,
+      };
+    } else if (savedMap) {
       setGrid(savedMap.grid || []);
       setBgImageUrl(savedMap.bgImageUrl || null);
       setGridScale(savedMap.gridScale || 40);
       setGridOffsetX(savedMap.gridOffsetX || 0);
       setGridOffsetY(savedMap.gridOffsetY || 0);
-    } else {
+    } else if (associatedMap && associatedMap.gridData) {
       // Clone from campaignMaps template
-      const associatedMap = campaignMaps.find(m => m.id === mapId);
-      if (associatedMap && associatedMap.gridData) {
-        const tGrid = associatedMap.gridData.grid || createInitialGrid();
-        
-        // Clone and cover everything in fog initially
-        const coveredGrid = tGrid.map((row: Cell[]) =>
-          row.map((cell: Cell) => ({
-            ...cell,
-            fog: true
-          }))
-        );
+      const tGrid = associatedMap.gridData.grid || createInitialGrid();
+      
+      // Clone and cover everything in fog initially
+      const coveredGrid = tGrid.map((row: Cell[]) =>
+        row.map((cell: Cell) => ({
+          ...cell,
+          fog: true
+        }))
+      );
 
-        // Reveal vision where tokens exist in the template respecting walls / LOS
-        for (let r = 0; r < coveredGrid.length; r++) {
-          for (let c = 0; c < coveredGrid[r].length; c++) {
-            if (tGrid[r]?.[c]?.tokenName) {
-              coveredGrid[r][c].tokenName = tGrid[r][c].tokenName;
-              coveredGrid[r][c].tokenColor = tGrid[r][c].tokenColor;
-              const radius = getTokenVisionRadius(tGrid[r][c].tokenName, combatants);
-              revealVisionWithLOS(coveredGrid, r, c, radius);
-            }
+      // Reveal vision where tokens exist in the template respecting walls / LOS
+      for (let r = 0; r < coveredGrid.length; r++) {
+        for (let c = 0; c < coveredGrid[r].length; c++) {
+          if (tGrid[r]?.[c]?.tokenName) {
+            coveredGrid[r][c].tokenName = tGrid[r][c].tokenName;
+            coveredGrid[r][c].tokenColor = tGrid[r][c].tokenColor;
+            const radius = getTokenVisionRadius(tGrid[r][c].tokenName, combatants);
+            revealVisionWithLOS(coveredGrid, r, c, radius);
           }
         }
-
-        setGrid(coveredGrid);
-        setBgImageUrl(associatedMap.gridData.bgImageUrl || null);
-        setGridScale(associatedMap.gridData.gridScale || 40);
-        setGridOffsetX(associatedMap.gridData.gridOffsetX || 0);
-        setGridOffsetY(associatedMap.gridData.gridOffsetY || 0);
-
-        multiState.maps[mapId] = {
-          grid: coveredGrid,
-          bgImageUrl: associatedMap.gridData.bgImageUrl || null,
-          gridScale: associatedMap.gridData.gridScale || 40,
-          gridOffsetX: associatedMap.gridData.gridOffsetX || 0,
-          gridOffsetY: associatedMap.gridData.gridOffsetY || 0,
-        };
-      } else {
-        const bGrid = createInitialGrid();
-        setGrid(bGrid);
-        setBgImageUrl(null);
-        setGridScale(40);
-        setGridOffsetX(0);
-        setGridOffsetY(0);
-
-        multiState.maps[mapId] = {
-          grid: bGrid,
-          bgImageUrl: null,
-          gridScale: 40,
-          gridOffsetX: 0,
-          gridOffsetY: 0,
-        };
       }
+
+      setGrid(coveredGrid);
+      setBgImageUrl(associatedMap.gridData.bgImageUrl || null);
+      setGridScale(associatedMap.gridData.gridScale || 40);
+      setGridOffsetX(associatedMap.gridData.gridOffsetX || 0);
+      setGridOffsetY(associatedMap.gridData.gridOffsetY || 0);
+
+      multiState.maps[mapId] = {
+        grid: coveredGrid,
+        bgImageUrl: associatedMap.gridData.bgImageUrl || null,
+        gridScale: associatedMap.gridData.gridScale || 40,
+        gridOffsetX: associatedMap.gridData.gridOffsetX || 0,
+        gridOffsetY: associatedMap.gridData.gridOffsetY || 0,
+      };
+    } else {
+      const bGrid = createInitialGrid();
+      setGrid(bGrid);
+      setBgImageUrl(null);
+      setGridScale(40);
+      setGridOffsetX(0);
+      setGridOffsetY(0);
+
+      multiState.maps[mapId] = {
+        grid: bGrid,
+        bgImageUrl: null,
+        gridScale: 40,
+        gridOffsetX: 0,
+        gridOffsetY: 0,
+      };
     }
-  }, [campaignMaps]);
+  }, [campaignMaps, combatants]);
 
   // Ref for deduplicating broadcasts
   const lastBroadcast = useRef<string>('');
@@ -192,6 +231,15 @@ export const CockpitDungeonMap: React.FC = () => {
       }
     });
   }, [activeScene, fetchSceneMap, loadMapFromMultiState, broadcastToPlayerView]);
+
+  // Synchronize with updated campaignMaps (e.g. when edited and saved in MapMaker)
+  useEffect(() => {
+    if (!currentMapId || !activeScene || isLoading || !multiMapStateRef.current) return;
+    const associatedMap = campaignMaps.find(m => m.id === currentMapId);
+    if (!associatedMap || !associatedMap.gridData) return;
+
+    loadMapFromMultiState(multiMapStateRef.current, currentMapId);
+  }, [campaignMaps, currentMapId, activeScene, isLoading, loadMapFromMultiState]);
 
   // Debounced auto-save & Realtime Broadcast to Players
   useEffect(() => {

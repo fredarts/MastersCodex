@@ -11,6 +11,7 @@ import {
 } from './dysonCore';
 import { 
   hasLineOfSight, 
+  isCellBlockingVision,
   revealVisionWithLOS, 
   computeVisibilityPolygon, 
   getTokenVisionRadius 
@@ -25,7 +26,8 @@ interface DysonCanvasProps {
   gridOffsetX: number;
   gridOffsetY: number;
   combatants: Combatant[];
-  selectedTool: 'paint' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan';
+  selectedTool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan';
+  boxMode?: 'fill' | 'room' | 'hollow' | 'fog-reveal' | 'fog-cover';
   selectedTileType: string;
   selectedTokenCombatant: Combatant | null;
   measureStart?: { r: number; c: number } | null;
@@ -45,6 +47,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   gridOffsetX,
   gridOffsetY,
   selectedTool,
+  boxMode = 'fill',
   selectedTileType,
   selectedTokenCombatant,
   measureStart,
@@ -62,6 +65,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawButton, setDrawButton] = useState(-1);
+  const [selectionBox, setSelectionBox] = useState<{ startR: number; startC: number; currentR: number; currentC: number } | null>(null);
   const [zoom, setZoom] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -602,8 +606,67 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       ctx.fill();
     }
 
+    // 7. Draw Rectangle Selection Box Overlay
+    if (selectedTool === 'box' && selectionBox) {
+      const minR = Math.min(selectionBox.startR, selectionBox.currentR);
+      const maxR = Math.max(selectionBox.startR, selectionBox.currentR);
+      const minC = Math.min(selectionBox.startC, selectionBox.currentC);
+      const maxC = Math.max(selectionBox.startC, selectionBox.currentC);
+
+      const bx = bgImage ? gridOffsetX + minC * CELL_SIZE : minC * CELL_SIZE;
+      const by = bgImage ? gridOffsetY + minR * CELL_SIZE : minR * CELL_SIZE;
+      const bw = (maxC - minC + 1) * CELL_SIZE;
+      const bh = (maxR - minR + 1) * CELL_SIZE;
+
+      // Fill translucent preview
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.25)';
+      ctx.fillRect(bx, by, bw, bh);
+
+      // Dashed border
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = Math.max(1.5, 2 / zoom);
+      ctx.setLineDash([6 / zoom, 4 / zoom]);
+      ctx.strokeRect(bx, by, bw, bh);
+      ctx.setLineDash([]);
+
+      // Corner handles
+      ctx.fillStyle = '#f59e0b';
+      const handleSize = Math.max(4, 6 / zoom);
+      ctx.fillRect(bx - handleSize / 2, by - handleSize / 2, handleSize, handleSize);
+      ctx.fillRect(bx + bw - handleSize / 2, by - handleSize / 2, handleSize, handleSize);
+      ctx.fillRect(bx - handleSize / 2, by + bh - handleSize / 2, handleSize, handleSize);
+      ctx.fillRect(bx + bw - handleSize / 2, by + bh - handleSize / 2, handleSize, handleSize);
+
+      // Dimensions badge
+      const countW = maxC - minC + 1;
+      const countH = maxR - minR + 1;
+      const feetW = countW * 5;
+      const feetH = countH * 5;
+      const badgeText = `${countW}x${countH} (${feetW}ft x ${feetH}ft)`;
+
+      ctx.font = `bold ${Math.max(11, 13 / zoom)}px Inter, sans-serif`;
+      const textWidth = ctx.measureText(badgeText).width;
+      const badgePadX = 6 / zoom;
+      const badgePadY = 3 / zoom;
+      const badgeX = bx + bw / 2 - textWidth / 2 - badgePadX;
+      const badgeY = by - (18 / zoom);
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+      ctx.beginPath();
+      ctx.roundRect(badgeX, badgeY, textWidth + badgePadX * 2, (16 / zoom) + badgePadY, 4 / zoom);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.6)';
+      ctx.lineWidth = 1 / zoom;
+      ctx.stroke();
+
+      ctx.fillStyle = '#fbbf24';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(badgeText, badgeX + badgePadX, badgeY + badgePadY);
+    }
+
     ctx.restore();
-  }, [grid, bgImage, CELL_SIZE, COLS, ROWS, gridOffsetX, gridOffsetY, selectedTool, measureStart, calibrationLine, zoom, panOffset, canvasSize, isPlayerView]);
+  }, [grid, bgImage, CELL_SIZE, COLS, ROWS, gridOffsetX, gridOffsetY, selectedTool, selectionBox, measureStart, calibrationLine, zoom, panOffset, canvasSize, isPlayerView]);
 
   // Utility to convert client mouse events to Canvas coordinates
   const getCanvasCoords = (e: React.MouseEvent) => {
@@ -760,6 +823,18 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return;
     }
 
+    if (selectedTool === 'box') {
+      setIsDrawing(true);
+      setDrawButton(e.button);
+      setSelectionBox({
+        startR: pos.r,
+        startC: pos.c,
+        currentR: pos.r,
+        currentC: pos.c
+      });
+      return;
+    }
+
     const clickedCell = grid[pos.r]?.[pos.c];
 
     // Token drag takes priority over door/trap editing
@@ -810,6 +885,11 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     const pos = getGridPos(x, y);
 
+    if (selectedTool === 'box' && isDrawing && selectionBox) {
+      setSelectionBox(prev => prev ? { ...prev, currentR: pos.r, currentC: pos.c } : null);
+      return;
+    }
+
     if (!isPlayerView && !isPanning && !draggingToken) {
       const cell = grid[pos.r]?.[pos.c];
       if (cell && (cell.type === 'door' || cell.type === 'trap')) {
@@ -827,6 +907,15 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     if (draggingToken) {
       if (pos.r !== draggingToken.currentR || pos.c !== draggingToken.currentC) {
+        // Block movement into walls or closed doors
+        const targetCell = grid[pos.r]?.[pos.c];
+        if (isCellBlockingVision(targetCell)) {
+          return;
+        }
+        // Block movement through walls diagonally (no jumping over corners)
+        if (!hasLineOfSight(draggingToken.currentC, draggingToken.currentR, pos.c, pos.r, grid)) {
+          return;
+        }
         moveToken(draggingToken.name, draggingToken.color, pos.r, pos.c);
         setDraggingToken(prev => prev ? { ...prev, currentR: pos.r, currentC: pos.c } : null);
       }
@@ -858,6 +947,11 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         onCalibrateGridSize?.(Math.round(length));
       }
       setCalibrationLine?.(null);
+    }
+
+    if (selectedTool === 'box' && selectionBox) {
+      handleBoxAction(selectionBox, drawButton);
+      setSelectionBox(null);
     }
 
     setIsDrawing(false);
@@ -993,6 +1087,124 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     });
   };
 
+  const handleBoxAction = (box: { startR: number; startC: number; currentR: number; currentC: number }, button: number) => {
+    const minR = Math.min(box.startR, box.currentR);
+    const maxR = Math.max(box.startR, box.currentR);
+    const minC = Math.min(box.startC, box.currentC);
+    const maxC = Math.max(box.startC, box.currentC);
+
+    const { rows: currentRows, cols: currentCols } = gridDims.current;
+    
+    let expandN = 0, expandS = 0, expandW = 0, expandE = 0;
+    const margin = 3;
+    if (minR < 0) expandN = Math.abs(minR) + margin;
+    if (maxR >= currentRows) expandS = (maxR - currentRows) + margin + 1;
+    
+    if (minC < 0) expandW = Math.abs(minC) + margin;
+    if (maxC >= currentCols) expandE = (maxC - currentCols) + margin + 1;
+    
+    if (expandN > 0 || expandS > 0 || expandW > 0 || expandE > 0) {
+      gridDims.current = { 
+        rows: currentRows + expandN + expandS, 
+        cols: currentCols + expandW + expandE 
+      };
+      
+      if (expandN > 0 || expandW > 0) {
+        const dx = expandW * CELL_SIZE * zoom;
+        const dy = expandN * CELL_SIZE * zoom;
+        panOffsetRef.current = {
+          x: panOffsetRef.current.x - dx,
+          y: panOffsetRef.current.y - dy
+        };
+        setPanOffset(panOffsetRef.current);
+      }
+    }
+
+    onGridChange((prev) => {
+      let copy = prev;
+      
+      if (expandN > 0 || expandS > 0 || expandW > 0 || expandE > 0) {
+        const prevRows = copy.length;
+        const prevCols = copy[0]?.length || 0;
+        const newCols = prevCols + expandW + expandE;
+        const newGrid: Cell[][] = [];
+        
+        for(let i=0; i<expandN; i++) {
+           newGrid.push(Array(newCols).fill(null).map((_, idx) => ({ x: idx, y: i, type: 'wall' as const, fog: true })));
+        }
+        
+        for(let i=0; i<prevRows; i++) {
+           const row = [];
+           for(let j=0; j<expandW; j++) row.push({ x: j, y: i + expandN, type: 'wall' as const, fog: true });
+           for(let j=0; j<prevCols; j++) {
+              row.push({ ...copy[i][j], x: j + expandW, y: i + expandN });
+           }
+           for(let j=0; j<expandE; j++) row.push({ x: prevCols + expandW + j, y: i + expandN, type: 'wall' as const, fog: true });
+           newGrid.push(row);
+        }
+        
+        for(let i=0; i<expandS; i++) {
+           newGrid.push(Array(newCols).fill(null).map((_, idx) => ({ x: idx, y: prevRows + expandN + i, type: 'wall' as const, fog: true })));
+        }
+        
+        copy = newGrid;
+      } else {
+        copy = copy.map(row => row.map(cell => ({...cell})));
+      }
+
+      const startR = minR + expandN;
+      const endR = maxR + expandN;
+      const startC = minC + expandW;
+      const endC = maxC + expandW;
+
+      const paintValue = (button === 2) ? 'wall' as const : selectedTileType as TileType;
+
+      for (let r = Math.max(0, startR); r <= Math.min(copy.length - 1, endR); r++) {
+        for (let c = Math.max(0, startC); c <= Math.min((copy[0]?.length || 1) - 1, endC); c++) {
+          const isBorder = (r === startR || r === endR || c === startC || c === endC);
+          const cell = copy[r][c];
+
+          if (boxMode === 'room') {
+            if (isBorder) {
+              cell.type = 'wall';
+            } else {
+              cell.type = 'floor';
+              cell.fog = false;
+            }
+          } else if (boxMode === 'hollow') {
+            if (isBorder) {
+              cell.type = paintValue;
+              if (paintValue === 'floor' || paintValue === 'grass' || paintValue === 'water') {
+                cell.fog = false;
+              }
+            }
+          } else if (boxMode === 'fog-reveal') {
+            cell.fog = false;
+          } else if (boxMode === 'fog-cover') {
+            cell.fog = true;
+          } else {
+            // 'fill'
+            cell.type = paintValue;
+            if (paintValue === 'floor' || paintValue === 'grass' || paintValue === 'water') {
+              cell.fog = false;
+            }
+          }
+        }
+      }
+
+      // Re-apply LOS for any active tokens
+      for (let r = 0; r < copy.length; r++) {
+        for (let c = 0; c < copy[r].length; c++) {
+          if (copy[r][c].tokenName) {
+            revealVisionWithLOS(copy, r, c, getTokenVisionRadius(copy[r][c].tokenName, combatants));
+          }
+        }
+      }
+
+      return copy;
+    });
+  };
+
   // Zoom handling using wheel event (centered on mouse cursor)
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -1025,7 +1237,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return isPanning ? 'cursor-grabbing' : 'cursor-grab';
     }
     if (draggingToken) return 'cursor-grabbing';
-    if (selectedTool === 'paint') return 'cursor-crosshair';
+    if (selectedTool === 'paint' || selectedTool === 'box') return 'cursor-crosshair';
     return 'cursor-default';
   };
 

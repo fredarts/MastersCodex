@@ -133,12 +133,14 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
         let activeId = savedData?.activeMapId;
         let gridData = null;
         
+        const associatedIds = currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []);
+        if (!activeId || !associatedIds.includes(activeId)) {
+          activeId = associatedIds[0] || null;
+        }
+        const templateMap = campaignMaps.find(m => m.id === activeId);
+
         if (savedData) {
           if (savedData.maps) {
-            const associatedIds = currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []);
-            if (!activeId || !associatedIds.includes(activeId)) {
-              activeId = associatedIds[0] || null;
-            }
             gridData = activeId ? savedData.maps[activeId] : null;
           } else if (savedData.grid) {
             gridData = savedData;
@@ -146,39 +148,63 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
           }
         }
 
-        // FALLBACK: If no active map instance is saved in scene_maps, load from the Campaign Maps template directly!
-        if (!gridData) {
-          const associatedIds = currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []);
-          activeId = activeId || associatedIds[0] || null;
-          const templateMap = campaignMaps.find(m => m.id === activeId);
-          if (templateMap && templateMap.gridData) {
-            const tempGrid = templateMap.gridData.grid || [];
-            
-            // Clone and cover in fog
-            const coveredGrid = tempGrid.map((row: any[]) => 
-              row.map((cell: any) => ({
+        if (gridData && templateMap && templateMap.gridData) {
+          // Merge template terrain with explored fog and tokens
+          const tGrid = templateMap.gridData.grid || [];
+          const sGrid = gridData.grid || [];
+          const mergedGrid = tGrid.map((row: any[], r: number) =>
+            row.map((cell: any, c: number) => {
+              const sCell = sGrid[r]?.[c];
+              return {
                 ...cell,
-                fog: true
-              }))
-            );
-
-            // Reveal where tokens are respecting Line of Sight
-            for (let r = 0; r < coveredGrid.length; r++) {
-              for (let c = 0; c < coveredGrid[r].length; c++) {
-                if (tempGrid[r]?.[c]?.tokenName) {
-                  coveredGrid[r][c].tokenName = tempGrid[r][c].tokenName;
-                  coveredGrid[r][c].tokenColor = tempGrid[r][c].tokenColor;
-                  const radius = getTokenVisionRadius(tempGrid[r][c].tokenName, combatants);
-                  revealVisionWithLOS(coveredGrid, r, c, radius);
-                }
+                fog: sCell !== undefined ? sCell.fog : true,
+                tokenName: sCell?.tokenName ?? cell.tokenName,
+                tokenColor: sCell?.tokenColor ?? cell.tokenColor,
+              };
+            })
+          );
+          for (let r = 0; r < mergedGrid.length; r++) {
+            for (let c = 0; c < mergedGrid[r].length; c++) {
+              if (mergedGrid[r][c].tokenName) {
+                const radius = getTokenVisionRadius(mergedGrid[r][c].tokenName, combatants);
+                revealVisionWithLOS(mergedGrid, r, c, radius);
               }
             }
-
-            gridData = {
-              ...templateMap.gridData,
-              grid: coveredGrid
-            };
           }
+          gridData = {
+            grid: mergedGrid,
+            bgImageUrl: templateMap.gridData.bgImageUrl ?? gridData.bgImageUrl ?? null,
+            gridScale: templateMap.gridData.gridScale ?? gridData.gridScale ?? 40,
+            gridOffsetX: templateMap.gridData.gridOffsetX ?? gridData.gridOffsetX ?? 0,
+            gridOffsetY: templateMap.gridData.gridOffsetY ?? gridData.gridOffsetY ?? 0,
+          };
+        } else if (!gridData && templateMap && templateMap.gridData) {
+          const tempGrid = templateMap.gridData.grid || [];
+          
+          // Clone and cover in fog
+          const coveredGrid = tempGrid.map((row: any[]) => 
+            row.map((cell: any) => ({
+              ...cell,
+              fog: true
+            }))
+          );
+
+          // Reveal where tokens are respecting Line of Sight
+          for (let r = 0; r < coveredGrid.length; r++) {
+            for (let c = 0; c < coveredGrid[r].length; c++) {
+              if (tempGrid[r]?.[c]?.tokenName) {
+                coveredGrid[r][c].tokenName = tempGrid[r][c].tokenName;
+                coveredGrid[r][c].tokenColor = tempGrid[r][c].tokenColor;
+                const radius = getTokenVisionRadius(tempGrid[r][c].tokenName, combatants);
+                revealVisionWithLOS(coveredGrid, r, c, radius);
+              }
+            }
+          }
+
+          gridData = {
+            ...templateMap.gridData,
+            grid: coveredGrid
+          };
         }
 
         if (gridData) {

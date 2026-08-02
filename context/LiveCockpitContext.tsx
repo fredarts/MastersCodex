@@ -123,9 +123,11 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (payload.spellTargetPosition !== undefined) setSpellTargetPositionState(payload.spellTargetPosition);
     if (payload.mapData !== undefined) {
       const data = payload.mapData;
-      if (data && data.fogMatrix) {
+      if (data && data.grid && Array.isArray(data.grid) && data.grid.length > 0) {
+        setMapData(data);
+      } else if (data && data.fogMatrix) {
         setMapData((prev: any) => {
-          if (!prev || prev.activeMapId !== data.activeMapId || !prev.grid) return prev;
+          if (!prev || prev.activeMapId !== data.activeMapId || !prev.grid) return data;
           const gridCopy = prev.grid.map((row: any[]) => row.map(cell => ({ ...cell })));
           
           // 1. Clear old tokens from gridCopy
@@ -157,7 +159,11 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
           }
           return {
             ...prev,
-            grid: gridCopy
+            grid: gridCopy,
+            bgImageUrl: data.bgImageUrl !== undefined ? data.bgImageUrl : prev.bgImageUrl,
+            gridScale: data.gridScale !== undefined ? data.gridScale : prev.gridScale,
+            gridOffsetX: data.gridOffsetX !== undefined ? data.gridOffsetX : prev.gridOffsetX,
+            gridOffsetY: data.gridOffsetY !== undefined ? data.gridOffsetY : prev.gridOffsetY,
           };
         });
       } else {
