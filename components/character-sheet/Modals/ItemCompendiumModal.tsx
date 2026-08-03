@@ -22,7 +22,7 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
 
   if (!isOpen) return null;
 
-  const categories = ['all', 'Equipamento', 'Pção', 'Ferramenta'];
+  const categories = ['all', 'Arma', 'Armadura', 'Equipamento', 'Poção', 'Ferramenta', 'Tesouro'];
 
   const filteredItems = SRD_EQUIPMENT.filter((item) => {
     const matchesSearch =
@@ -34,9 +34,9 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
 
   const handleImportItem = (srdItem: SRDItem) => {
     const itemType: ItemType =
-      srdItem.category === 'Pção' ? 'potion' :
-      srdItem.category === 'Arma' ? 'weapon' :
-      srdItem.category === 'Armadura' ? 'armor' : 'equipment';
+      srdItem.category === 'Poção' ? 'potion' :
+        srdItem.category === 'Arma' ? 'weapon' :
+          srdItem.category === 'Armadura' ? 'armor' : 'equipment';
 
     let potionProps;
     if (itemType === 'potion') {
@@ -71,7 +71,7 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-[#0f172a] border border-amber-500/40 rounded-2xl shadow-2xl w-full max-w-xl h-[80vh] flex flex-col overflow-hidden">
+      <div className="bg-[#0f172a] border border-amber-500/40 rounded-2xl shadow-2xl w-full max-w-3xl h-[80vh] flex flex-col overflow-hidden">
         {/* HEADER */}
         <div className="bg-[#141b2d] border-b border-amber-500/20 px-5 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 text-amber-400">
@@ -96,17 +96,16 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
             />
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {categories.map((cat) => (
               <button
                 key={cat}
                 type="button"
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all uppercase ${
-                  selectedCategory === cat
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all uppercase ${selectedCategory === cat
                     ? 'bg-amber-500 text-slate-950 shadow-md'
                     : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-                }`}
+                  }`}
               >
                 {cat === 'all' ? 'Todos' : cat}
               </button>
@@ -138,11 +137,10 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
                   type="button"
                   onClick={() => handleImportItem(item)}
                   disabled={isAdded}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-                    isAdded
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${isAdded
                       ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-default'
                       : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md active:scale-95'
-                  }`}
+                    }`}
                 >
                   {isAdded ? (
                     <>
