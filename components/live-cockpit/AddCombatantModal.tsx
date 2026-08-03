@@ -56,12 +56,38 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
 
   const handleAddPlayer = (member: CampaignMember) => {
     const rollInit = Math.floor(Math.random() * 20) + 1;
+    const pName = member.characterName || member.displayName || 'Jogador';
+
+    // Read real HP and AC from character sheet in localStorage
+    let resolvedHp = 20;
+    let resolvedMaxHp = 20;
+    let resolvedAc = 10;
+    try {
+      const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
+      if (saved) {
+        const sheets: any[] = JSON.parse(saved);
+        const cClean = pName.split('(')[0].trim().toLowerCase();
+        const found = sheets.find(
+          (s) =>
+            (s.characterName && s.characterName.split('(')[0].trim().toLowerCase() === cClean) ||
+            (s.characterName && pName.toLowerCase().includes(s.characterName.toLowerCase())) ||
+            (s.characterName && s.characterName.toLowerCase().includes(pName.toLowerCase()))
+        );
+        if (found) {
+          if (found.maxHp) resolvedMaxHp = found.maxHp;
+          if (found.currentHp != null) resolvedHp = found.currentHp;
+          else resolvedHp = resolvedMaxHp;
+          if (found.armorClass) resolvedAc = found.armorClass;
+        }
+      }
+    } catch (e) {}
+
     const newCombatant: Combatant = {
       id: `pc-${Date.now()}-${member.id}`,
-      name: member.characterName || member.displayName || 'Jogador',
-      hp: 25,
-      maxHp: 25,
-      ac: 15,
+      name: pName,
+      hp: resolvedHp,
+      maxHp: resolvedMaxHp,
+      ac: resolvedAc,
       initiative: rollInit,
       type: 'player',
       conditions: [],

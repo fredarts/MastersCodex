@@ -337,31 +337,38 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
   const handleAddPlayerToScene = (mem: typeof campaignMembers[0]) => {
     const pName = mem.characterName || mem.displayName || 'Jogador';
 
-    // 1. Usa o modelUrl vindo do cadastro do membro no Supabase (fonte de verdade cross-account)
+    // Busca a ficha do personagem no localStorage para ler HP, maxHp e AC reais
     let resolvedModelUrl: string | undefined = mem.modelUrl;
+    let resolvedHp = 10;
+    let resolvedMaxHp = 10;
+    let resolvedAc = 10;
 
-    // 2. Se não estiver no cadastro do membro, busca no localStorage (fallback local)
-    if (!resolvedModelUrl) {
-      try {
-        const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
-        if (saved) {
-          const sheets: any[] = JSON.parse(saved);
-          const cClean = pName.split('(')[0].trim().toLowerCase();
-          const found = sheets.find(
-            (s) =>
-              (s.characterName && s.characterName.split('(')[0].trim().toLowerCase() === cClean) ||
-              (s.characterName && pName.toLowerCase().includes(s.characterName.toLowerCase())) ||
-              (s.characterName && s.characterName.toLowerCase().includes(pName.toLowerCase()))
-          );
-          if (found) {
+    try {
+      const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
+      if (saved) {
+        const sheets: any[] = JSON.parse(saved);
+        const cClean = pName.split('(')[0].trim().toLowerCase();
+        const found = sheets.find(
+          (s) =>
+            (s.characterName && s.characterName.split('(')[0].trim().toLowerCase() === cClean) ||
+            (s.characterName && pName.toLowerCase().includes(s.characterName.toLowerCase())) ||
+            (s.characterName && s.characterName.toLowerCase().includes(pName.toLowerCase()))
+        );
+        if (found) {
+          // Model URL
+          if (!resolvedModelUrl) {
             if (found.modelUrl) resolvedModelUrl = found.modelUrl;
             else if (found.className) resolvedModelUrl = getModelUrlByNameOrPath(found.className);
           }
+          // HP e AC reais da ficha
+          if (found.maxHp) resolvedMaxHp = found.maxHp;
+          resolvedHp = (found.currentHp != null) ? found.currentHp : resolvedMaxHp;
+          if (found.armorClass) resolvedAc = found.armorClass;
         }
-      } catch (e) {}
-    }
+      }
+    } catch (e) {}
 
-    // 3. Fallback por nome
+    // Fallback por nome se modelUrl ainda não foi resolvido
     if (!resolvedModelUrl) {
       resolvedModelUrl = getModelUrlByNameOrPath(pName);
     }
@@ -370,9 +377,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       id: `c-pl-${Date.now()}-${Math.random()}`,
       name: pName,
       type: 'player',
-      hp: 35,
-      maxHp: 35,
-      ac: 16,
+      hp: resolvedHp,
+      maxHp: resolvedMaxHp,
+      ac: resolvedAc,
       initiative: Math.floor(Math.random() * 20) + 1,
       conditions: [],
       modelUrl: resolvedModelUrl,
