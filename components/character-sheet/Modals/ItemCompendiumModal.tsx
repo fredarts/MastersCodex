@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { CharacterSheet, CharacterEquipmentItem } from '@/lib/types';
+import { CharacterSheet, CharacterEquipmentItem, ItemType } from '@/lib/types';
 import { SRD_EQUIPMENT, SRDItem } from '@/lib/srd-compendium';
 import { Search, Package, Plus, Check, X, Shield, Wrench } from 'lucide-react';
 
 interface ItemCompendiumModalProps {
-  sheet: CharacterSheet;
+  sheet?: CharacterSheet;
   isOpen: boolean;
   onClose: () => void;
   onAddItem: (item: CharacterEquipmentItem) => void;
@@ -33,12 +33,36 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
   });
 
   const handleImportItem = (srdItem: SRDItem) => {
+    const itemType: ItemType =
+      srdItem.category === 'Pção' ? 'potion' :
+      srdItem.category === 'Arma' ? 'weapon' :
+      srdItem.category === 'Armadura' ? 'armor' : 'equipment';
+
+    let potionProps;
+    if (itemType === 'potion') {
+      let healingDice = '2d4+2';
+      const nameLower = srdItem.name.toLowerCase();
+      if (nameLower.includes('maior')) {
+        healingDice = '4d4+4';
+      } else if (nameLower.includes('superior')) {
+        healingDice = '8d4+8';
+      } else if (nameLower.includes('suprema')) {
+        healingDice = '10d4+20';
+      }
+      potionProps = {
+        healingDice,
+        effectDesc: srdItem.description,
+      };
+    }
+
     const newItem: CharacterEquipmentItem = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
       name: srdItem.name,
       quantity: 1,
       weight: `${srdItem.weight} lb`,
       notes: `${srdItem.description} (Custo: ${srdItem.cost})`,
+      itemType,
+      potionProps,
     };
 
     onAddItem(newItem);

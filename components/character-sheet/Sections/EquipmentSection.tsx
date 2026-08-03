@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CharacterSheet, CharacterEquipmentItem } from '@/lib/types';
 import { Coins, Package, Plus, Trash2, Gem, Weight, Scale, Sparkles } from 'lucide-react';
 import { ItemCompendiumModal } from '../Modals/ItemCompendiumModal';
+import { toast } from 'sonner';
 
 interface EquipmentSectionProps {
   sheet: CharacterSheet;
@@ -10,21 +11,85 @@ interface EquipmentSectionProps {
 
 export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onChange }) => {
   const [isItemCompendiumOpen, setIsItemCompendiumOpen] = useState(false);
-  const [items, setItems] = useState<CharacterEquipmentItem[]>(() => {
-    return [
-      { id: '1', name: 'Mochila de Aventureiro', quantity: 1, weight: '5 lb', notes: 'Contém corda e rações' },
-      { id: '2', name: 'Tochas', quantity: 5, weight: '1 lb', notes: 'Dura 1 hora cada' },
-      { id: '3', name: 'Odre de Água', quantity: 1, weight: '5 lb', notes: 'Cheio' },
-    ];
-  });
+  const items = sheet.equipment || [];
 
-  const [coins, setCoins] = useState({
-    po: 15,
-    pp: 20,
-    pc: 50,
+  const coins = sheet.currency || {
+    po: 0,
+    pp: 0,
+    pc: 0,
     pe: 0,
     pl: 0,
-  });
+  };
+
+  const updateItems = (newItems: CharacterEquipmentItem[]) => {
+    onChange({ ...sheet, equipment: newItems });
+  };
+
+  const updateCoins = (newCoins: typeof coins) => {
+    onChange({ ...sheet, currency: newCoins });
+  };
+
+  const handleUsePotion = (item: CharacterEquipmentItem) => {
+    if (item.quantity <= 0) return;
+
+    // Determine healing dice
+    let healingDice = item.potionProps?.healingDice || '2d4+2';
+    const nameLower = item.name.toLowerCase();
+    
+    // Fallback parsing if potionProps is empty
+    if (!item.potionProps?.healingDice) {
+      if (nameLower.includes('maior')) {
+        healingDice = '4d4+4';
+      } else if (nameLower.includes('superior')) {
+        healingDice = '8d4+8';
+      } else if (nameLower.includes('suprema')) {
+        healingDice = '10d4+20';
+      }
+    }
+
+    // Roll dice
+    const match = healingDice.match(/(\d+)d(\d+)(?:\+(\d+))?/);
+    let total = 0;
+    let rolls: number[] = [];
+    let modifier = 0;
+    if (match) {
+      const count = parseInt(match[1]);
+      const sides = parseInt(match[2]);
+      modifier = parseInt(match[3] || '0');
+      for (let i = 0; i < count; i++) {
+        rolls.push(Math.floor(Math.random() * sides) + 1);
+      }
+      total = rolls.reduce((a, b) => a + b, 0) + modifier;
+    } else {
+      total = 6; // average fallback
+    }
+
+    const currentHp = sheet.currentHp || 0;
+    const maxHp = sheet.maxHp || 10;
+    const newHp = Math.min(maxHp, currentHp + total);
+    const healedAmount = newHp - currentHp;
+
+    // Update inventory
+    let updatedEquipment = items;
+    if (item.quantity <= 1) {
+      updatedEquipment = items.filter((i) => i.id !== item.id);
+    } else {
+      updatedEquipment = items.map((i) =>
+        i.id === item.id ? { ...i, quantity: i.quantity - 1 } : i
+      );
+    }
+
+    onChange({
+      ...sheet,
+      currentHp: newHp,
+      equipment: updatedEquipment,
+    });
+
+    toast.success(
+      `🧪 Você bebeu "${item.name}"! Recuperou ${healedAmount} PV. Rolagem: ${rolls.join('+')}${modifier ? `+${modifier}` : ''} = ${total} PV.`,
+      { duration: 5000 }
+    );
+  };
 
   // CÁLCULO DA CAPACIDADE DE CARGA (D&D 5e: FORÇA * 15 lb)
   const strScore = sheet.attributes.str.score || 10;
@@ -46,15 +111,15 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
       weight: '1 lb',
       notes: '',
     };
-    setItems([...items, newItem]);
+    updateItems([...items, newItem]);
   };
 
   const handleRemoveEquipment = (id: string) => {
-    setItems(items.filter((i) => i.id !== id));
+    updateItems(items.filter((i) => i.id !== id));
   };
 
   const handleUpdateEquipment = (id: string, updated: Partial<CharacterEquipmentItem>) => {
-    setItems(items.map((i) => (i.id === id ? { ...i, ...updated } : i)));
+    updateItems(items.map((i) => (i.id === id ? { ...i, ...updated } : i)));
   };
 
   return (
@@ -65,7 +130,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
         isOpen={isItemCompendiumOpen}
         onClose={() => setIsItemCompendiumOpen(false)}
         onAddItem={(newItem) => {
-          setItems((prev) => [...prev, newItem]);
+          updateItems([...items, newItem]);
         }}
       />
 
@@ -84,7 +149,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
               type="number"
               min={0}
               value={coins.pc}
-              onChange={(e) => setCoins({ ...coins, pc: parseInt(e.target.value, 10) || 0 })}
+              onChange={(e) => updateCoins({ ...coins, pc: parseInt(e.target.value, 10) || 0 })}
               className="w-full bg-slate-900 border border-slate-700 rounded-lg py-1 text-center text-xs font-bold text-amber-600 focus:outline-none"
             />
           </div>
@@ -96,7 +161,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
               type="number"
               min={0}
               value={coins.pp}
-              onChange={(e) => setCoins({ ...coins, pp: parseInt(e.target.value, 10) || 0 })}
+              onChange={(e) => updateCoins({ ...coins, pp: parseInt(e.target.value, 10) || 0 })}
               className="w-full bg-slate-900 border border-slate-700 rounded-lg py-1 text-center text-xs font-bold text-slate-300 focus:outline-none"
             />
           </div>
@@ -108,7 +173,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
               type="number"
               min={0}
               value={coins.pe}
-              onChange={(e) => setCoins({ ...coins, pe: parseInt(e.target.value, 10) || 0 })}
+              onChange={(e) => updateCoins({ ...coins, pe: parseInt(e.target.value, 10) || 0 })}
               className="w-full bg-slate-900 border border-slate-700 rounded-lg py-1 text-center text-xs font-bold text-emerald-400 focus:outline-none"
             />
           </div>
@@ -120,7 +185,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
               type="number"
               min={0}
               value={coins.po}
-              onChange={(e) => setCoins({ ...coins, po: parseInt(e.target.value, 10) || 0 })}
+              onChange={(e) => updateCoins({ ...coins, po: parseInt(e.target.value, 10) || 0 })}
               className="w-full bg-slate-900 border border-amber-500/40 rounded-lg py-1 text-center text-sm font-black text-amber-400 focus:outline-none"
             />
           </div>
@@ -132,7 +197,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
               type="number"
               min={0}
               value={coins.pl}
-              onChange={(e) => setCoins({ ...coins, pl: parseInt(e.target.value, 10) || 0 })}
+              onChange={(e) => updateCoins({ ...coins, pl: parseInt(e.target.value, 10) || 0 })}
               className="w-full bg-slate-900 border border-slate-700 rounded-lg py-1 text-center text-xs font-bold text-cyan-300 focus:outline-none"
             />
           </div>
@@ -224,6 +289,16 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
                   placeholder="Peso (1 lb)"
                   className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-400 text-center"
                 />
+                {(item.itemType === 'potion' || item.name.toLowerCase().includes('poção') || item.name.toLowerCase().includes('potion')) && (
+                  <button
+                    type="button"
+                    onClick={() => handleUsePotion(item)}
+                    className="p-1.5 bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-400 hover:text-emerald-300 rounded border border-emerald-500/30 transition-colors text-[10px] font-bold uppercase tracking-wider px-2 shrink-0"
+                    title={`Beber ${item.name}`}
+                  >
+                    Beber
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => handleRemoveEquipment(item.id)}

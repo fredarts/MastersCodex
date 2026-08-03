@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS active_world_id UUID;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS active_campaign_id UUID;
 ALTER TABLE public.campaigns ADD COLUMN IF NOT EXISTS world_id UUID REFERENCES public.worlds(id) ON DELETE SET NULL;
+ALTER TABLE public.campaigns ADD COLUMN IF NOT EXISTS party_members JSONB DEFAULT '[]'::jsonb;
 
 -- 1.2 Tabela Worlds
 CREATE TABLE IF NOT EXISTS public.worlds (

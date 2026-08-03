@@ -62,6 +62,7 @@ export function mapCampaignRowToDomain(row: CampaignRow, role: 'dm' | 'player' =
     inviteCode: row.invite_code,
     role,
     characterName: characterName || undefined,
+    partyMembers: Array.isArray(row.party_members) ? row.party_members : undefined,
   };
 }
 

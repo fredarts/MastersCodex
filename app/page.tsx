@@ -82,6 +82,8 @@ function MainApp() {
     }
   }, []);
 
+
+
   const toggleSidebar = () => {
     setIsSidebarCollapsed((prev) => {
       const next = !prev;

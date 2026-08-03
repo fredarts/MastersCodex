@@ -25,7 +25,10 @@ interface PartyLootContextType {
   setIsTransferModalOpen: (open: boolean) => void;
   transferTargetItem: CharacterEquipmentItem | null;
   setTransferTargetItem: (item: CharacterEquipmentItem | null) => void;
-  
+  // Controla se o jogador está na view de campanha do modo jogador
+  isOnPlayerCampaignView: boolean;
+  setIsOnPlayerCampaignView: (active: boolean) => void;
+
   // Ações de Negócio
   createLootSession: (params: {
     title: string;
@@ -54,13 +57,22 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isPartyLootModalOpen, setIsPartyLootModalOpen] = useState<boolean>(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState<boolean>(false);
   const [transferTargetItem, setTransferTargetItem] = useState<CharacterEquipmentItem | null>(null);
+  // Flag: true quando o jogador está na view de campanha (feed) do modo jogador
+  const [isOnPlayerCampaignView, setIsOnPlayerCampaignView] = useState<boolean>(false);
+
+  // Abre o modal de loot quando o jogador entra na tela de campanha e há loot ativo
+  useEffect(() => {
+    if (isOnPlayerCampaignView && activeLootSession?.status === 'active') {
+      setIsPartyLootModalOpen(true);
+    }
+  }, [isOnPlayerCampaignView, activeLootSession]);
 
   // Escutar eventos em tempo real
   const handleRealtimeLootUpdate = useCallback(({ session }: { session: PartyLootSession }) => {
+    // Apenas armazena a sessão — o modal só abre quando o jogador entrar na view de campanha.
+    // Isso evita que o modal apareça para quem está na tela de mestre ou em outra tela.
     setActiveLootSession(session);
-    if (session.status === 'active') {
-      setIsPartyLootModalOpen(true);
-    } else {
+    if (session.status !== 'active') {
       toast.success('🎉 Recompensas totalmente distribuídas! Baú de Loot encerrado.');
       setIsPartyLootModalOpen(false);
     }
@@ -78,6 +90,18 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const handleRealtimeDirectTransfer = useCallback(
     ({ transfer }: { transfer: DirectTransferPayload }) => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('masters_codex_loot_received', {
+            detail: { 
+              characterName: transfer.toCharacterName, 
+              item: transfer.item, 
+              currency: transfer.currency 
+            },
+          })
+        );
+      }
+
       toast.info(
         `📦 ${transfer.fromCharacterName} enviou ${
           transfer.item ? `o item "${transfer.item.name}"` : 'moedas'
@@ -167,6 +191,16 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (res.ok) {
       setActiveLootSession(res.value);
       broadcastPartyLootUpdate({ session: res.value });
+
+      const claimedItem = activeLootSession.items.find((i) => i.id === itemId);
+      if (typeof window !== 'undefined' && claimedItem) {
+        window.dispatchEvent(
+          new CustomEvent('masters_codex_loot_received', {
+            detail: { characterName, item: claimedItem },
+          })
+        );
+      }
+
       toast.success(`Você pegou: ${updatedItems.find((i) => i.id === itemId)?.name}`);
     } else {
       toast.error(res.error.message);
@@ -202,6 +236,15 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (res.ok) {
       setActiveLootSession(res.value);
       broadcastPartyLootUpdate({ session: res.value });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('masters_codex_loot_received', {
+            detail: { characterName: targetCharacterName, item: targetItem },
+          })
+        );
+      }
+
       toast.success(`Líder atribuiu "${targetItem.name}" para ${targetCharacterName}!`);
     } else {
       toast.error(res.error.message);
@@ -228,6 +271,17 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (res.ok) {
       setActiveLootSession(res.value);
       broadcastPartyLootUpdate({ session: res.value });
+
+      if (typeof window !== 'undefined') {
+        characterNames.forEach((charName) => {
+          window.dispatchEvent(
+            new CustomEvent('masters_codex_loot_received', {
+              detail: { characterName: charName, currency: share },
+            })
+          );
+        });
+      }
+
       toast.success(
         `💰 Dinheiro dividido! Cada um dos ${playerCount} membros recebeu: ${share.po} PO, ${share.pl} PL, ${share.pp} PP, ${share.pc} PC.`
       );
@@ -283,6 +337,8 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setIsTransferModalOpen,
         transferTargetItem,
         setTransferTargetItem,
+        isOnPlayerCampaignView,
+        setIsOnPlayerCampaignView,
         createLootSession,
         claimItem,
         distributeItem,

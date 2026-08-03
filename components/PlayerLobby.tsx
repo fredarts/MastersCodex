@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Shield, 
   Sparkles, 
@@ -37,6 +37,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useCustomDialog } from '@/context/CustomDialogContext';
+import { usePartyLoot } from '@/context/PartyLootContext';
 
 interface PlayerLobbyProps {
   onOpenPlayerView: () => void;
@@ -47,6 +48,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   const { tokenPositions3D, updateTokenPosition3D, combatants, currentTurnIndex, roundCount, liveDisplayMode } = useLiveCockpit();
   const { user } = useAuth();
   const { showAlert, showConfirm } = useCustomDialog();
+  const { setIsOnPlayerCampaignView } = usePartyLoot();
   
   // Navigation & Modal States
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(activeCampaign?.id || null);
@@ -450,6 +452,49 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
       }
     } catch (e) {}
   };
+
+  const handleSaveSheetRef = useRef(handleSaveSheet);
+  const characterSheetsRef = useRef(characterSheets);
+
+  useEffect(() => {
+    handleSaveSheetRef.current = handleSaveSheet;
+    characterSheetsRef.current = characterSheets;
+  });
+
+  // Listen for loot received events (claims/direct transfers) and update active sheets in player lobby
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleLootReceived = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { characterName, item, currency } = customEvent.detail;
+      
+      const sheet = characterSheetsRef.current.find(
+        (s) => s.characterName.toLowerCase() === characterName.toLowerCase()
+      );
+      
+      if (sheet) {
+        const updated = { ...sheet };
+        if (item) {
+          updated.equipment = [...(updated.equipment || []), item];
+        }
+        if (currency) {
+          const cur = updated.currency || { po: 0, pp: 0, pc: 0, pe: 0, pl: 0 };
+          updated.currency = {
+            po: cur.po + (currency.po || 0),
+            pp: cur.pp + (currency.pp || 0),
+            pc: cur.pc + (currency.pc || 0),
+            pe: cur.pe + (currency.pe || 0),
+            pl: cur.pl + (currency.pl || 0),
+          };
+        }
+        handleSaveSheetRef.current(updated);
+      }
+    };
+
+    window.addEventListener('masters_codex_loot_received', handleLootReceived);
+    return () => window.removeEventListener('masters_codex_loot_received', handleLootReceived);
+  }, []);
   
   // Form States
   const [inviteCodeInput, setInviteCodeInput] = useState('');
@@ -554,6 +599,16 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     setActiveCampaign(camp);
     setSelectedCampaignId(camp.id);
   };
+
+  // Sinaliza ao PartyLootContext se o jogador está na view de campanha (para controlar o modal de loot)
+  useEffect(() => {
+    const isOnView = !!selectedCampaignId;
+    setIsOnPlayerCampaignView(isOnView);
+    // Limpa a flag ao desmontar
+    return () => {
+      setIsOnPlayerCampaignView(false);
+    };
+  }, [selectedCampaignId, setIsOnPlayerCampaignView]);
 
   const handleBackToHub = () => {
     setSelectedCampaignId(null);

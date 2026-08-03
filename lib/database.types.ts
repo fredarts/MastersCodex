@@ -30,6 +30,7 @@ export interface CampaignRow {
   description?: string | null;
   invite_code: string;
   created_at?: string;
+  party_members?: any[];
 }
 
 export interface CampaignMemberRow {

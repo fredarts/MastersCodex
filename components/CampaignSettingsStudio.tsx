@@ -61,7 +61,7 @@ export const CampaignSettingsStudio: React.FC = () => {
     return !c.worldId || c.worldId === activeWorld.id;
   });
 
-  const [activeTab, setActiveTab] = useState<'feed' | 'roster' | 'houserules' | 'ai' | 'export'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'roster' | 'party' | 'houserules' | 'ai' | 'export'>('feed');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('masters_codex_campaign_settings_sidebar_collapsed');
@@ -454,6 +454,19 @@ export const CampaignSettingsStudio: React.FC = () => {
               </button>
 
               <button
+                onClick={() => setActiveTab('party')}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'party'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                }`}
+                title={`Membros da Party (${activeCampaign?.partyMembers?.length || 0})`}
+              >
+                <Swords className={`w-4 h-4 flex-shrink-0 ${activeTab === 'party' ? 'text-slate-950' : 'text-rose-400'}`} />
+                {!isSidebarCollapsed && <span className="truncate">Party ({activeCampaign?.partyMembers?.length || 0})</span>}
+              </button>
+
+              <button
                 onClick={() => setActiveTab('houserules')}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
                   activeTab === 'houserules'
@@ -756,6 +769,102 @@ export const CampaignSettingsStudio: React.FC = () => {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'party' && (
+          <div className="flex-1 flex flex-col h-full bg-[#0a0d14]">
+            <div className="p-6 border-b border-[#2a3449]">
+              <h3 className="font-bold text-lg text-slate-100 flex items-center gap-2">
+                <Swords className="w-5 h-5 text-rose-400" /> Membros da Party Oficial
+              </h3>
+              <p className="text-sm text-slate-400 mt-2">
+                Defina os personagens e NPCs que formam o grupo oficial da campanha.
+                Esta lista será usada para dividir ouro automaticamente e enviar loots.
+              </p>
+            </div>
+            
+            <div className="flex-1 p-6 overflow-y-auto space-y-4">
+              {activeCampaign?.partyMembers && activeCampaign.partyMembers.length > 0 ? (
+                activeCampaign.partyMembers.map((member) => (
+                  <div key={member.id} className="p-4 bg-[#161c28] border border-[#2a3449] rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center overflow-hidden">
+                        {member.avatarUrl ? (
+                          <img src={member.avatarUrl} alt={member.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-slate-500 font-bold text-xs">{member.type === 'player' ? 'PC' : 'NPC'}</span>
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-100">{member.name}</div>
+                        <div className="text-[10px] uppercase font-semibold text-slate-400">
+                          {member.type === 'player' ? 'Personagem de Jogador' : 'NPC do Mestre'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const newParty = (activeCampaign.partyMembers || []).filter(m => m.id !== member.id);
+                        await updateCampaign({ ...activeCampaign, partyMembers: newParty });
+                      }}
+                      className="p-2 bg-rose-950/40 text-rose-400 hover:bg-rose-900/60 rounded-lg transition-colors border border-rose-900/50"
+                      title="Remover da Party"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center text-slate-500 bg-[#0f141d]/40 rounded-2xl border border-dashed border-[#2a3449]">
+                  Nenhum membro na party oficial ainda.
+                </div>
+              )}
+
+              <div className="pt-6 border-t border-[#2a3449]">
+                <h4 className="font-bold text-sm text-slate-200 mb-4">Adicionar à Party</h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 bg-[#161c28] rounded-xl border border-[#2a3449]">
+                    <div className="text-xs font-bold text-slate-400 mb-3">Jogadores do Elenco</div>
+                    <div className="space-y-2">
+                      {rosterMembers
+                        .filter(m => m.role === 'player' && !(activeCampaign?.partyMembers || []).some(pm => pm.id === m.id))
+                        .map(m => (
+                          <div key={m.id} className="flex items-center justify-between bg-[#0a0d14] p-2 rounded-lg border border-[#2a3449]/50">
+                            <span className="text-sm font-semibold text-slate-300">{m.characterName || m.displayName}</span>
+                            <button
+                              onClick={async () => {
+                                const newParty = [...(activeCampaign?.partyMembers || []), {
+                                  id: m.id,
+                                  name: m.characterName || m.displayName || 'Desconhecido',
+                                  type: 'player' as const,
+                                  userId: m.userId,
+                                  avatarUrl: m.avatarUrl
+                                }];
+                                await updateCampaign({ ...activeCampaign, partyMembers: newParty });
+                              }}
+                              className="px-3 py-1 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40 rounded text-xs font-bold border border-emerald-500/30"
+                            >
+                              Adicionar
+                            </button>
+                          </div>
+                      ))}
+                      {rosterMembers.filter(m => m.role === 'player' && !(activeCampaign?.partyMembers || []).some(pm => pm.id === m.id)).length === 0 && (
+                        <div className="text-xs text-slate-500 text-center py-2">Todos os jogadores já estão na party.</div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 bg-[#161c28] rounded-xl border border-[#2a3449]">
+                    <div className="text-xs font-bold text-slate-400 mb-3">NPCs do Mundo (Em breve)</div>
+                    <div className="text-xs text-slate-500 text-center py-4 bg-[#0a0d14] rounded-lg border border-[#2a3449]/50">
+                      Adicionar NPCs criados no mundo à party estará disponível na próxima atualização.
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

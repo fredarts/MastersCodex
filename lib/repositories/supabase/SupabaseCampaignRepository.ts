@@ -194,6 +194,7 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
         title: campaign.title,
         description: campaign.description,
         world_id: isValidUuid(campaign.worldId) ? campaign.worldId : null,
+        party_members: campaign.partyMembers || [],
       })
       .eq('id', campaign.id)
       .select()

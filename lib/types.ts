@@ -193,6 +193,14 @@ export interface CampaignMember {
   joinedAt?: string;
 }
 
+export interface CampaignPartyMember {
+  id: string; // The character sheet ID or NPC entity ID
+  name: string;
+  type: 'player' | 'npc';
+  userId?: string; // Optional, for players. In the future NPCs might also have character sheets.
+  avatarUrl?: string;
+}
+
 export interface UserCampaign {
   id: string;
   dmId: string;
@@ -202,6 +210,7 @@ export interface UserCampaign {
   inviteCode: string;
   role: UserRoleMode;
   characterName?: string;
+  partyMembers?: CampaignPartyMember[];
 }
 
 export interface Combatant {
@@ -501,12 +510,33 @@ export interface CharacterCurrency {
   pl: number; // Peças de Platina
 }
 
+export type ItemType = 'equipment' | 'weapon' | 'armor' | 'potion' | 'scroll';
+
 export interface CharacterEquipmentItem {
   id: string;
   name: string;
   quantity: number;
   weight?: string;
   notes?: string;
+  rarity?: 'Comum' | 'Incomum' | 'Raro' | 'Muito Raro' | 'Lendário' | 'Artefato';
+  itemType?: ItemType;
+  potionProps?: {
+    healingDice?: string;
+    effectDesc?: string;
+  };
+  weaponProps?: {
+    damage: string;
+    damageType: string;
+    atkBonus?: number;
+  };
+  armorProps?: {
+    acBonus: number;
+    armorType: 'light' | 'medium' | 'heavy' | 'shield';
+  };
+  scrollProps?: {
+    spellName: string;
+    spellLevel: number;
+  };
 }
 
 export interface CharacterSpell {
@@ -608,6 +638,8 @@ export interface CharacterSheet {
   factionSymbolUrl?: string;
   otherFeatures?: string;
   treasure?: string;
+  equipment?: CharacterEquipmentItem[];
+  currency?: CharacterCurrency;
 
   // Página 3: Magias
   spellcastingClass?: string;
@@ -642,6 +674,11 @@ export interface PartyLootItem {
     characterName: string;
     claimedAt: string;
   } | null;
+  itemType?: ItemType;
+  potionProps?: any;
+  weaponProps?: any;
+  armorProps?: any;
+  scrollProps?: any;
 }
 
 export interface PartyLootSession {

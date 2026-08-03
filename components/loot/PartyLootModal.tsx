@@ -31,43 +31,61 @@ export const PartyLootModal: React.FC<{ currentCharacterName?: string; currentUs
     closeLootSession,
   } = usePartyLoot();
 
-  const { campaignMembers } = useCampaign();
+  const { campaignMembers, activeCampaign } = useCampaign();
   const playerMembers = campaignMembers.filter((m) => m.role === 'player');
+  const partyMembers = activeCampaign?.partyMembers || [];
 
   // Estado local para seleção do destinatário pelo líder em cada item
   const [selectedTargets, setSelectedTargets] = useState<Record<string, string>>({});
 
-  if (!isPartyLootModalOpen || !activeLootSession) return null;
-
   const isLeader =
-    activeLootSession.distributionMode === 'leader_assigned' &&
-    (activeLootSession.leaderId === currentUserId ||
-      activeLootSession.leaderCharacterName === currentCharacterName);
+    activeLootSession?.distributionMode === 'leader_assigned' &&
+    (activeLootSession?.leaderId === currentUserId ||
+      activeLootSession?.leaderCharacterName === currentCharacterName);
 
-  const activeCharName = currentCharacterName || 'Seu Personagem';
+  const [activeCharName, setActiveCharName] = useState(currentCharacterName || 'Seu Personagem');
 
-  const totalItemsCount = activeLootSession.items.length;
-  const claimedItemsCount = activeLootSession.items.filter((i) => i.claimedBy !== null).length;
+  // Resolve the active character name from local storage if not provided
+  React.useEffect(() => {
+    if (currentCharacterName) return;
+    try {
+      const saved = localStorage.getItem('masters_codex_character_sheets_v1');
+      if (saved) {
+        const sheets = JSON.parse(saved);
+        // Find sheet for this campaign, or just the first one if only one exists
+        const campSheet = sheets.find((s: any) => s.campaignId === activeCampaign?.id) || sheets[0];
+        if (campSheet && campSheet.characterName && campSheet.characterName !== 'Novo Aventureiro') {
+          setActiveCharName(campSheet.characterName);
+        }
+      }
+    } catch (e) {}
+  }, [currentCharacterName, activeCampaign?.id]);
+
+  const totalItemsCount = activeLootSession?.items.length || 0;
+  const claimedItemsCount = activeLootSession?.items.filter((i) => i.claimedBy !== null).length || 0;
 
   const totalCurrencySum =
-    (activeLootSession.currency.po || 0) +
-    (activeLootSession.currency.pl || 0) +
-    (activeLootSession.currency.pp || 0) +
-    (activeLootSession.currency.pc || 0) +
-    (activeLootSession.currency.pe || 0);
+    (activeLootSession?.currency.po || 0) +
+    (activeLootSession?.currency.pl || 0) +
+    (activeLootSession?.currency.pp || 0) +
+    (activeLootSession?.currency.pc || 0) +
+    (activeLootSession?.currency.pe || 0);
 
   const handleClaim = async (itemId: string) => {
     await claimItem(itemId, activeCharName, currentUserId);
   };
 
   const handleDistribute = async (itemId: string) => {
-    const target = selectedTargets[itemId] || playerMembers[0]?.characterName || activeCharName;
-    const targetMember = playerMembers.find((m) => m.characterName === target);
-    await distributeItem(itemId, target, targetMember?.userId);
+    const target = selectedTargets[itemId] || partyMembers[0]?.name || playerMembers[0]?.characterName || activeCharName;
+    const partyMatch = partyMembers.find((pm) => pm.name === target);
+    const memberMatch = playerMembers.find((m) => m.characterName === target);
+    await distributeItem(itemId, target, partyMatch?.userId || memberMatch?.userId);
   };
 
   const handleSplitMoney = async () => {
-    const names = playerMembers.map((m) => m.characterName || m.displayName || 'Jogador');
+    const names = partyMembers.length > 0
+      ? partyMembers.map((pm) => pm.name)
+      : playerMembers.map((m) => m.characterName || m.displayName || 'Jogador');
     await splitCurrencyEqually(names.length > 0 ? names : [activeCharName]);
   };
 
@@ -82,14 +100,15 @@ export const PartyLootModal: React.FC<{ currentCharacterName?: string; currentUs
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-6 text-slate-100 flex flex-col gap-6"
-        >
-          {/* Header */}
+      {isPartyLootModalOpen && activeLootSession && (
+        <div key="party-loot-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-6 text-slate-100 flex flex-col gap-6"
+          >
+            {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-800 pb-4">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400">
@@ -173,7 +192,7 @@ export const PartyLootModal: React.FC<{ currentCharacterName?: string; currentUs
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold transition"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  Dividir Dinheiro Igualmente ({playerMembers.length || 1} Players)
+                  Dividir Dinheiro Igualmente ({partyMembers.length || playerMembers.length || 1} Membros)
                 </button>
               </div>
 
@@ -262,11 +281,14 @@ export const PartyLootModal: React.FC<{ currentCharacterName?: string; currentUs
                               }
                               className="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-amber-200 focus:outline-none focus:border-amber-500"
                             >
-                              {playerMembers.map((m) => (
-                                <option key={m.id} value={m.characterName}>
-                                  {m.characterName || m.displayName}
-                                </option>
-                              ))}
+                              {(partyMembers.length > 0 ? partyMembers : playerMembers).map((m) => {
+                                const name = 'name' in m ? m.name : (m.characterName || m.displayName);
+                                return (
+                                  <option key={m.id} value={name}>
+                                    {name}
+                                  </option>
+                                );
+                              })}
                             </select>
                             <button
                               onClick={() => handleDistribute(item.id)}
@@ -304,6 +326,7 @@ export const PartyLootModal: React.FC<{ currentCharacterName?: string; currentUs
           </div>
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   );
 };

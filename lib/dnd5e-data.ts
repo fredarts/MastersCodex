@@ -466,6 +466,8 @@ export function createEmptyCharacterSheet(userId: string, campaignId?: string): 
     factionSymbolUrl: '',
     otherFeatures: '',
     treasure: '',
+    equipment: [],
+    currency: { po: 0, pp: 0, pc: 0, pe: 0, pl: 0 },
 
     spellcastingClass: '',
     spellcastingAbility: 'int',
