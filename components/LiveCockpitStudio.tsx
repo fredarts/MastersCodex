@@ -208,10 +208,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       if (!currentScene || !currentCombatants.length) return;
 
       let hasChanges = false;
-      const updatedCombatants = currentCombatants.map((c) => {
-        const key = c.id || c.name;
-        const pos = tokenPositions3D[key];
-        const rot = tokenRotations3D[key];
+      const updatedCombatants = currentCombatants.map((c, idx) => {
+        // Use same unique key strategy as BattleGrid3D: id preferred, fall back to name+idx
+        const key = c.id ? c.id : `${c.name}__${idx}`;
+        const pos = tokenPositions3D[key] ?? tokenPositions3D[c.id || c.name];
+        const rot = tokenRotations3D[key] ?? tokenRotations3D[c.id || c.name];
 
         const newX = pos !== undefined ? pos.x : c.x;
         const newZ = pos !== undefined ? pos.z : c.z;

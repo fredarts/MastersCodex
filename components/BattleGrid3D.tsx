@@ -219,7 +219,11 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   );
 
   const [targetIdState, setTargetIdState] = useState<string | undefined>(propSelectedTargetId);
+  const [hoveredTargetId, setHoveredTargetId] = useState<string | undefined>(undefined);
   const [showHelpModal, setShowHelpModal] = useState(false);
+
+  // Three.js hover ring for attack targeting mode
+  const hoverRingRef = useRef<THREE.Mesh | null>(null);
 
   useEffect(() => {
     setTargetIdState(propSelectedTargetId);
@@ -595,7 +599,8 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     getCombatantPos,
     pendingAttack,
     targetIdState,
-    propOnAttackTarget
+    propOnAttackTarget,
+    setHoveredTargetId,
   });
 
   useEffect(() => {
@@ -614,7 +619,8 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       getCombatantPos,
       pendingAttack,
       targetIdState,
-      propOnAttackTarget
+      propOnAttackTarget,
+      setHoveredTargetId,
     };
   });
 
@@ -681,7 +687,8 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       instancedTokenManagerRef.current = new InstancedTokenManager(sceneRef.current, 1000);
     }
 
-    const activeKeys = new Set(combatants.map((c) => c.id || c.name));
+    // Build unique keys: prefer id, fall back to name+idx to avoid collisions between same-named combatants
+    const activeKeys = new Set(combatants.map((c, idx) => c.id ? c.id : `${c.name}__${idx}`));
 
     // Remove deleted tokens (Unique ones)
     for (const [key, group] of tokenMeshMapRef.current.entries()) {
@@ -697,9 +704,10 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
     // Sync active combatants
     combatants.forEach((c, idx) => {
-      const key = c.id || c.name;
-      const pos = localPositions[key] || (c.x !== undefined && c.z !== undefined ? { x: c.x, z: c.z } : getStableDefaultPos(key));
-      const rot = localRotations[key] || 0;
+      // Use unique key: id preferred, fall back to name+idx to prevent same-named tokens colliding
+      const key = c.id ? c.id : `${c.name}__${idx}`;
+      const pos = localPositions[key] || localPositions[c.id || c.name] || (c.x !== undefined && c.z !== undefined ? { x: c.x, z: c.z } : getStableDefaultPos(key));
+      const rot = localRotations[key] || localRotations[c.id || c.name] || 0;
 
       const targeted = activeSpellTargeting && casterTokenKey && isCombatantInSpellArea(c, pos);
 
@@ -830,6 +838,22 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     const tokenGroup = new THREE.Group();
     scene.add(tokenGroup);
     tokenGroupRef.current = tokenGroup;
+
+    // Attack Targeting Hover Ring (hidden by default)
+    const hoverRingGeo = new THREE.RingGeometry(1.1, 1.4, 48);
+    const hoverRingMat = new THREE.MeshBasicMaterial({
+      color: 0xfbbf24, // amber-400
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.0,
+      depthWrite: false,
+    });
+    const hoverRing = new THREE.Mesh(hoverRingGeo, hoverRingMat);
+    hoverRing.rotation.x = -Math.PI / 2;
+    hoverRing.position.y = 0.05;
+    hoverRing.name = 'attackHoverRing';
+    scene.add(hoverRing);
+    hoverRingRef.current = hoverRing;
 
     // Skysphere Dome
     const skyDome = createBattleSkyDome(scene);
@@ -1029,6 +1053,48 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         return;
       }
 
+      // Attack targeting mode: show hover ring over hovered token
+      if (callbacksRef.current.pendingAttack && tokenGroupRef.current && hoverRingRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+
+        const tokenIntersects = raycaster.intersectObjects(tokenGroupRef.current.children, true);
+        const ring = hoverRingRef.current;
+        if (tokenIntersects.length > 0) {
+          let obj: THREE.Object3D | null = tokenIntersects[0].object;
+          while (obj && !obj.name.startsWith('token-')) obj = obj.parent;
+          if (obj) {
+            const hKey = obj.name.replace('token-', '');
+            const hCombatant = callbacksRef.current.combatants.find(
+              (c) => (c.id || c.name) === hKey || c.id === hKey
+            );
+            // Only highlight enemies (not the active combatant)
+            const activeId = callbacksRef.current.combatants[callbacksRef.current.currentTurnIndex]?.id;
+            if (hCombatant && hCombatant.id !== activeId) {
+              const pos = callbacksRef.current.getCombatantPos(hKey);
+              ring.position.x = pos.x;
+              ring.position.z = pos.z;
+              (ring.material as THREE.MeshBasicMaterial).opacity = 0.75;
+              callbacksRef.current.setHoveredTargetId(hCombatant.id);
+            } else {
+              (ring.material as THREE.MeshBasicMaterial).opacity = 0.0;
+              callbacksRef.current.setHoveredTargetId(undefined);
+            }
+          } else {
+            (ring.material as THREE.MeshBasicMaterial).opacity = 0.0;
+            callbacksRef.current.setHoveredTargetId(undefined);
+          }
+        } else {
+          (ring.material as THREE.MeshBasicMaterial).opacity = 0.0;
+          callbacksRef.current.setHoveredTargetId(undefined);
+        }
+      } else if (hoverRingRef.current) {
+        // Not in attack mode: ensure ring is hidden
+        (hoverRingRef.current.material as THREE.MeshBasicMaterial).opacity = 0.0;
+      }
+
       if (!isDraggingRef.current || !draggedTokenKeyRef.current) return;
 
       const rect = containerRef.current.getBoundingClientRect();
@@ -1165,8 +1231,9 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
             if (targetC) {
               if (isPlacementPhase) {
                 // Placement phase: only update position without tracking movement cost
+                // Use strict ID match only — prevents same-named monsters from all moving together
                 const nextCombatants = activeCombatants.map((c) => {
-                  if (c.id === targetC.id || c.name === targetC.name) {
+                  if (c.id === targetC.id) {
                     return { ...c, x: snappedX, z: snappedZ };
                   }
                   return c;
@@ -1177,11 +1244,12 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
                 }
               } else {
                 // Combat phase: track movement cost via trail
+                // Use strict ID match only — prevents same-named monsters from all moving together
                 const trailSquares = Math.max(0, dragTrailRef.current.length - 1);
                 const trailCostMeters = trailSquares * 1.5;
 
                 const nextCombatants = activeCombatants.map((c) => {
-                  if (c.id === targetC.id || c.name === targetC.name) {
+                  if (c.id === targetC.id) {
                     return {
                       ...c,
                       x: snappedX,
@@ -1309,6 +1377,12 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       if (groundFogSysRef.current) {
         groundFogSysRef.current.dispose();
         groundFogSysRef.current = null;
+      }
+      if (hoverRingRef.current) {
+        scene.remove(hoverRingRef.current);
+        hoverRingRef.current.geometry.dispose();
+        (hoverRingRef.current.material as THREE.MeshBasicMaterial).dispose();
+        hoverRingRef.current = null;
       }
       renderer.dispose();
       disposeHierarchy(scene);
@@ -1668,9 +1742,36 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     ? localRotations[selectedCombatantId] || 0
     : 0;
 
+  // Sword cursor SVG data URI for attack targeting mode
+  const swordCursorSvg = `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><g transform='rotate(-45 16 16)'><rect x='14.5' y='2' width='3' height='20' rx='1.5' fill='%23f8fafc'/><rect x='11' y='8' width='10' height='2.5' rx='1.25' fill='%23fbbf24'/><polygon points='14.5,22 17.5,22 16,30' fill='%23f8fafc'/></g></svg>`;
+  const swordCursorUrl = `url("data:image/svg+xml,${swordCursorSvg}") 16 16, crosshair`;
+
   return (
     <div className="relative w-full h-full min-h-[450px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800 select-none">
-      <div ref={containerRef} className="w-full h-full absolute inset-0 cursor-grab active:cursor-grabbing" />
+      <div
+        ref={containerRef}
+        className="w-full h-full absolute inset-0"
+        style={{
+          cursor: pendingAttack ? swordCursorUrl : 'grab',
+        }}
+        onMouseDown={(e) => { if (!pendingAttack) e.currentTarget.style.cursor = 'grabbing'; }}
+        onMouseUp={(e) => { if (!pendingAttack) e.currentTarget.style.cursor = 'grab'; }}
+      />
+
+      {/* Attack mode: hover token name tooltip */}
+      {pendingAttack && hoveredTargetId && (() => {
+        const hov = combatants.find((c) => c.id === hoveredTargetId);
+        if (!hov) return null;
+        return (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-in fade-in duration-150">
+            <div className="bg-amber-500/90 backdrop-blur-sm text-slate-900 text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5">
+              <span>🎯</span>
+              <span>{hov.name}</span>
+              <span className="text-amber-800 text-[10px]">CA {hov.ac}</span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modular Battle Controls Toolbar (Top & Bottom HUD Overlay) */}
       <BattleControlsToolbar
@@ -1713,7 +1814,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         floorTextureUrl={floorTextureUrl}
         onFloorTextureChange={onFloorTextureChange}
         onConfirmPlacement={onConfirmPlacement}
-        onAttackTarget={(target) => {
+        onAttackTarget={pendingAttack ? undefined : (target) => {
           if (propOnAttackTarget) {
             propOnAttackTarget(target);
           } else if (onSelectTarget) {

@@ -80,8 +80,10 @@ export const useBattleGridStore = create<BattleGridStoreState>((set, get) => ({
     const posMap: Record<string, { x: number; z: number }> = {};
     const rotMap: Record<string, number> = {};
 
-    combatants.forEach((c) => {
-      const key = c.id || c.name;
+    combatants.forEach((c, idx) => {
+      // Always use a unique key: id preferred, fall back to name+idx to avoid
+      // collisions when multiple monsters share the same name (e.g. two Goblins)
+      const key = c.id ? c.id : `${c.name}__${idx}`;
       if (c.x !== undefined && c.z !== undefined) {
         posMap[key] = { x: c.x, z: c.z };
       }
