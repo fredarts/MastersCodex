@@ -14,7 +14,7 @@ export class LocalStorageCampaignRepository implements ICampaignRepository {
         .filter((m) => m.userId === userId)
         .map((m) => m.campaignId);
 
-      return all.filter((c) => c.dmId === userId || memberCampaignIds.includes(c.id));
+      return all.filter((c) => !c.dmId || c.dmId === userId || memberCampaignIds.includes(c.id));
     } catch (_e) {
       return [];
     }

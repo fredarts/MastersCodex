@@ -152,7 +152,7 @@ describe('D&D 5e Rules Calculator Unit Tests', () => {
         attributes: {
           con: { score: 14 } // mod = +2
         } as any,
-        hitDiceUsed: '21d10', // Usados: 2. Totais: 5. Disponíveis: 3.
+        hitDiceUsed: '2d10', // Usados: 2. Totais: 5. Disponíveis: 3.
       };
 
       // Spy no Math.random para controlar o rolo do dado
@@ -163,7 +163,7 @@ describe('D&D 5e Rules Calculator Unit Tests', () => {
       // Roll: 6 + 2 = 8 por dado. 2 dados = 16.
       expect(hpRecovered).toBe(16);
       expect(updatedSheet.currentHp).toBe(26);
-      expect(updatedSheet.hitDiceUsed).toBe('41d10'); // 2 já usados + 2 = 4
+      expect(updatedSheet.hitDiceUsed).toBe('4d10'); // 2 já usados + 2 = 4
 
       randomSpy.mockRestore();
     });
