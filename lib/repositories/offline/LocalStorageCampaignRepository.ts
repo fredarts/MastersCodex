@@ -5,7 +5,16 @@ export class LocalStorageCampaignRepository implements ICampaignRepository {
   async fetchUserCampaigns(userId?: string): Promise<UserCampaign[]> {
     try {
       const saved = localStorage.getItem('codex_campaigns');
-      return saved ? JSON.parse(saved) : [];
+      const all: UserCampaign[] = saved ? JSON.parse(saved) : [];
+      if (!userId) return all;
+
+      const savedMembers = localStorage.getItem('codex_members');
+      const members: CampaignMember[] = savedMembers ? JSON.parse(savedMembers) : [];
+      const memberCampaignIds = members
+        .filter((m) => m.userId === userId)
+        .map((m) => m.campaignId);
+
+      return all.filter((c) => c.dmId === userId || memberCampaignIds.includes(c.id));
     } catch (_e) {
       return [];
     }

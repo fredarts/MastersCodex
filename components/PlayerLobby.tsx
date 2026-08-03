@@ -35,6 +35,8 @@ import { createEmptyCharacterSheet, generateUuid } from '@/lib/dnd5e-data';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { useAuth } from '@/context/AuthContext';
 import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
+import { toast } from 'sonner';
+import { useCustomDialog } from '@/context/CustomDialogContext';
 
 interface PlayerLobbyProps {
   onOpenPlayerView: () => void;
@@ -44,11 +46,11 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   const { activeCampaign, setActiveCampaign, userCampaigns, joinCampaignByCode, leaveCampaign, feedEvents, updateCampaignMemberModelUrl } = useCampaign();
   const { tokenPositions3D, updateTokenPosition3D, combatants, currentTurnIndex, roundCount, liveDisplayMode } = useLiveCockpit();
   const { user } = useAuth();
+  const { showAlert, showConfirm } = useCustomDialog();
   
   // Navigation & Modal States
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(activeCampaign?.id || null);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
-  const [campaignToLeave, setCampaignToLeave] = useState<UserCampaign | null>(null);
   
   // D&D 5e Character Sheets Multi-State
   const STORAGE_KEY = 'masters_codex_character_sheets_v1';
@@ -113,18 +115,25 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
           .select('*')
           .eq('user_id', uId);
           
-        if (!error && data && data.length > 0) {
+        if (!error && data) {
           const dbSheets = data.map((row) => ({
             ...row.data,
             id: row.id,
             userId: row.user_id,
             campaignId: row.campaign_id,
-            characterName: row.character_name || row.data.characterName,
+            characterName: row.character_name || row.data?.characterName,
             updatedAt: row.updated_at,
           }));
+
+          const dbSheetIds = new Set(dbSheets.map((s) => s.id));
           
           setCharacterSheets((prev) => {
-            const merged = [...prev];
+            // Remove local sheets that have a UUID ID but were deleted in Supabase
+            const validLocalSheets = prev.filter(
+              (s) => !isValidUuid(s.id) || dbSheetIds.has(s.id)
+            );
+
+            const merged = [...validLocalSheets];
             dbSheets.forEach((dbS) => {
               const idx = merged.findIndex((s) => s.id === dbS.id);
               if (idx >= 0) {
@@ -137,7 +146,23 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                 merged.push(dbS);
               }
             });
-            return merged;
+            
+            const filtered = merged.filter((s) => {
+              const isDefaultMock = s.characterName === 'Novo Aventureiro' && !dbSheets.some((dbS) => dbS.id === s.id);
+              return !isDefaultMock;
+            });
+            const finalSheets = filtered.length > 0 ? filtered : (merged.length > 0 ? merged : []);
+            
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(finalSheets));
+            } catch (e) {}
+
+            const targetActive = finalSheets.find((s) => s.characterName !== 'Novo Aventureiro') || finalSheets[0] || createEmptyCharacterSheet('player-1');
+            if (targetActive) {
+              setActiveSheet(targetActive);
+            }
+
+            return finalSheets;
           });
         }
       } catch (err) {
@@ -201,9 +226,20 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
       } catch (_) {}
     }
     setLoadingMemberSheet(null);
-    if (!foundSheet) { alert(`Nenhuma ficha encontrada para ${member.characterName || 'este jogador'}.`); return; }
+    if (!foundSheet) {
+      showAlert({
+        title: 'Ficha Não Encontrada',
+        message: `Nenhuma ficha encontrada para ${member.characterName || 'este jogador'}.`,
+        variant: 'warning'
+      });
+      return;
+    }
     if (foundSheet.isPublic === false) {
-      alert(`\ud83d\udd12 ${member.characterName || 'Este jogador'} bloqueou a visualiza\u00e7\u00e3o da sua ficha.`);
+      showAlert({
+        title: 'Ficha Privada',
+        message: `🔒 ${member.characterName || 'Este jogador'} bloqueou a visualização da sua ficha.`,
+        variant: 'info'
+      });
       return;
     }
     setViewingSheet(foundSheet);
@@ -211,21 +247,42 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   };
 
   const handleOpenSheetForCampaign = (camp?: UserCampaign) => {
-    // Procura se já existe uma ficha vinculada à campanha ou com o nome do personagem
     const charName = resolveCharName(camp);
-    const foundSheet = characterSheets.find(
-      (s) => (camp?.id && s.campaignId === camp.id) || s.characterName.toLowerCase() === charName.toLowerCase()
-    );
+    
+    // 1. Procura ficha vinculada à campanha
+    let foundSheet = characterSheets.find((s) => camp?.id && s.campaignId === camp.id);
+    
+    // 2. Se não achar, procura pelo nome do personagem
+    if (!foundSheet && charName && charName !== 'Aventureiro') {
+      foundSheet = characterSheets.find(
+        (s) => s.characterName.toLowerCase() === charName.toLowerCase()
+      );
+    }
+
+    // 3. Se não achar por nome, mas o usuário tiver apenas uma ficha, vamos sugerir usar essa única ficha
+    if (!foundSheet && characterSheets.length === 1 && characterSheets[0].characterName !== 'Novo Aventureiro') {
+      foundSheet = characterSheets[0];
+      if (camp?.id) {
+        foundSheet.campaignId = camp.id;
+        handleSaveSheet(foundSheet);
+      }
+    }
 
     if (foundSheet) {
       setActiveSheet(foundSheet);
+      setIsSheetModalOpen(true);
     } else {
-      const newSheet = createEmptyCharacterSheet('player-1', camp?.id);
-      newSheet.characterName = charName;
-      setCharacterSheets((prev) => [newSheet, ...prev]);
-      setActiveSheet(newSheet);
+      if (characterSheets.length > 0) {
+        setIsManagerModalOpen(true);
+        toast.info('Selecione uma ficha de personagem existente ou crie uma nova para esta campanha.');
+      } else {
+        const newSheet = createEmptyCharacterSheet(user?.id || 'player-1', camp?.id);
+        newSheet.characterName = charName !== 'Aventureiro' ? charName : `Aventureiro ${characterSheets.length + 1}`;
+        setCharacterSheets((prev) => [newSheet, ...prev]);
+        setActiveSheet(newSheet);
+        setIsSheetModalOpen(true);
+      }
     }
-    setIsSheetModalOpen(true);
   };
 
   const handleCreateNewSheet = () => {
@@ -257,8 +314,45 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     setCharacterSheets((prev) => [cloned, ...prev]);
   };
 
-  const handleDeleteSheet = (sheetId: string) => {
-    if (confirm('Tem certeza que deseja excluir esta ficha de personagem?')) {
+  const handleDeleteSheet = async (sheetId: string) => {
+    const confirmed = await showConfirm({
+      title: 'Excluir Ficha de Personagem',
+      message: 'Tem certeza que deseja excluir esta ficha de personagem? Esta ação não pode ser desfeita.',
+      confirmText: 'Excluir Ficha',
+      cancelText: 'Cancelar',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    const sheetToDelete = characterSheets.find((s) => s.id === sheetId);
+
+      // 1. Excluir ficha do Supabase
+      if (isSupabaseConfigured()) {
+        try {
+          if (isValidUuid(sheetId)) {
+            const { error: delErr } = await supabase.from('character_sheets').delete().eq('id', sheetId);
+            if (delErr) {
+              console.error('Erro ao excluir ficha no Supabase:', delErr);
+            } else {
+              console.log('Ficha excluída com sucesso do Supabase.');
+            }
+          }
+
+          // Se a ficha estava vinculada a uma campanha, remover a inscrição em campaign_members
+          const uId = user?.id || sheetToDelete?.userId;
+          if (sheetToDelete?.campaignId && uId) {
+            await supabase
+              .from('campaign_members')
+              .delete()
+              .eq('campaign_id', sheetToDelete.campaignId)
+              .eq('user_id', uId);
+          }
+        } catch (err) {
+          console.error('Erro ao excluir ficha do Supabase:', err);
+        }
+      }
+
+      // 2. Atualizar estado local
       setCharacterSheets((prev) => {
         const next = prev.filter((s) => s.id !== sheetId);
         if (activeSheet?.id === sheetId) {
@@ -270,7 +364,6 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
         } catch (e) {}
         return next;
       });
-    }
   };
 
   const handleSaveSheet = (updatedSheet: CharacterSheet) => {
@@ -441,13 +534,20 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     }
   };
 
-  const handleConfirmLeave = async () => {
-    if (!campaignToLeave) return;
-    await leaveCampaign(campaignToLeave.id);
-    if (selectedCampaignId === campaignToLeave.id) {
+  const handleLeaveCampaign = async (camp: UserCampaign) => {
+    const confirmed = await showConfirm({
+      title: 'Sair da Campanha',
+      message: `Tem certeza que deseja sair da mesa de jogo "${camp.title}"?`,
+      confirmText: 'Sair da Campanha',
+      cancelText: 'Cancelar',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    await leaveCampaign(camp.id);
+    if (selectedCampaignId === camp.id) {
       setSelectedCampaignId(null);
     }
-    setCampaignToLeave(null);
   };
 
   const handleSelectCampaign = (camp: UserCampaign) => {
@@ -461,45 +561,6 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
   return (
     <div className="flex-1 bg-[#0a0d14] flex flex-col p-6 overflow-y-auto select-none relative">
-      {/* ==================== MODAL: CONFIRMAR SAÍDA DA CAMPANHA ==================== */}
-      {campaignToLeave && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-[#161c28] border border-rose-500/40 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 relative">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400">
-                <LogOut className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-100">Sair da Campanha</h3>
-                <p className="text-xs text-slate-400">Tem certeza que deseja sair desta mesa de jogo?</p>
-              </div>
-            </div>
-
-            <div className="p-3.5 bg-[#0a0d14] border border-[#2a3449] rounded-xl text-xs space-y-1">
-              <span className="text-slate-400">Campanha:</span>
-              <strong className="block text-slate-100 font-bold text-sm">{campaignToLeave.title}</strong>
-            </div>
-
-            <div className="pt-2 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setCampaignToLeave(null)}
-                className="px-4 py-2.5 rounded-xl border border-[#2a3449] text-slate-400 hover:text-slate-200 text-xs font-bold transition-all"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmLeave}
-                className="px-4 py-2.5 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-slate-100 font-bold text-xs rounded-xl shadow-lg shadow-rose-900/30 transition-all flex items-center gap-1.5"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Sair da Campanha</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ==================== 1. MODAL: ADICIONAR CAMPANHA VIA CÓDIGO ==================== */}
       {isJoinModalOpen && (
@@ -711,7 +772,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setCampaignToLeave(camp);
+                              handleLeaveCampaign(camp);
                             }}
                             className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 rounded-lg transition-all"
                             title="Sair desta Campanha"
@@ -807,7 +868,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
               {currentCampaign && (
                 <button
-                  onClick={() => setCampaignToLeave(currentCampaign)}
+                  onClick={() => handleLeaveCampaign(currentCampaign)}
                   className="flex items-center gap-1.5 bg-[#0a0d14] hover:bg-rose-950/40 border border-[#2a3449] hover:border-rose-500/40 text-slate-400 hover:text-rose-400 font-bold px-3 py-2 rounded-xl text-xs transition-all"
                   title="Sair desta Campanha"
                 >

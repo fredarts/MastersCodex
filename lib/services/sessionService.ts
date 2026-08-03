@@ -2,7 +2,8 @@ import { RepositoryFactory } from '@/lib/repositories/RepositoryFactory';
 import { GameSession, GameScene, CampaignMap, Result } from '@/lib/types';
 
 export const sessionService = {
-  async fetchSessions(campaignId: string): Promise<Result<GameSession[]>> {
+  async fetchSessions(campaignId?: string): Promise<Result<GameSession[]>> {
+    if (!campaignId) return { ok: true, value: [] };
     try {
       const repo = RepositoryFactory.getSessionRepository(campaignId);
       const data = await repo.fetchSessions(campaignId);
@@ -119,7 +120,8 @@ export const sessionService = {
     }
   },
 
-  async fetchCampaignMaps(campaignId: string): Promise<Result<CampaignMap[]>> {
+  async fetchCampaignMaps(campaignId?: string): Promise<Result<CampaignMap[]>> {
+    if (!campaignId) return { ok: true, value: [] };
     try {
       const repo = RepositoryFactory.getSessionRepository(campaignId);
       const data = await repo.fetchCampaignMaps(campaignId);
@@ -145,7 +147,7 @@ export const sessionService = {
     }
   },
 
-  async updateCampaignMap(mapId: string, title: string, gridData: any, campaignId: string): Promise<Result<void>> {
+  async updateCampaignMap(mapId: string, title: string, gridData: any, campaignId?: string): Promise<Result<void>> {
     try {
       const repo = RepositoryFactory.getSessionRepository(campaignId);
       await repo.updateCampaignMap(mapId, title, gridData);
@@ -158,7 +160,7 @@ export const sessionService = {
     }
   },
 
-  async deleteCampaignMap(mapId: string, campaignId: string): Promise<Result<void>> {
+  async deleteCampaignMap(mapId: string, campaignId?: string): Promise<Result<void>> {
     try {
       const repo = RepositoryFactory.getSessionRepository(campaignId);
       await repo.deleteCampaignMap(mapId);

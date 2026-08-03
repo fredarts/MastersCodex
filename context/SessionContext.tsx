@@ -45,9 +45,17 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [activeScene?.id]);
 
   const { activeCampaign } = useCampaign();
-  const campaignId = activeCampaign?.id || 'camp-demo-1';
+  const campaignId = activeCampaign?.id;
 
   useEffect(() => {
+    if (!campaignId) {
+      setSessions([]);
+      setActiveSessionState(null);
+      setScenes([]);
+      setActiveSceneState(null);
+      return;
+    }
+
     sessionService.fetchSessions(campaignId).then((res) => {
       if (res.ok) {
         const fetchedSessions = res.value;
@@ -81,16 +89,26 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setActiveSceneState(null);
         }
       } else {
+        setSessions([]);
+        setActiveSessionState(null);
+        setScenes([]);
+        setActiveSceneState(null);
         toast.error(res.error.message);
       }
     });
   }, [campaignId]);
 
   useEffect(() => {
+    if (!campaignId) {
+      setCampaignMaps([]);
+      return;
+    }
+
     sessionService.fetchCampaignMaps(campaignId).then((res) => {
       if (res.ok) {
         setCampaignMaps(res.value);
       } else {
+        setCampaignMaps([]);
         toast.error(res.error.message);
       }
     });
@@ -256,7 +274,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [campaignId]);
 
   const createCampaignMap = async (title: string, gridData: any): Promise<CampaignMap | null> => {
-    const res = await sessionService.createCampaignMap(campaignId, title, gridData);
+    const res = await sessionService.createCampaignMap(campaignId || 'camp-demo-1', title, gridData);
     if (res.ok) {
       const newMap = res.value;
       setCampaignMaps(prev => [...prev, newMap]);

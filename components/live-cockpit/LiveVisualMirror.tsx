@@ -14,6 +14,7 @@ import { LiveCockpitAudioController } from '@/components/live-cockpit/LiveCockpi
 import { CockpitDungeonMap } from '@/components/live-cockpit/CockpitDungeonMap';
 import { GameScene, Combatant } from '@/lib/types';
 import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from '@/lib/imageUtils';
+import { useCustomDialog } from '@/context/CustomDialogContext';
 
 interface LiveVisualMirrorProps {
   onSlideChange: (index: number) => Promise<void>;
@@ -26,6 +27,7 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
 }) => {
   const { activeCampaign } = useCampaign();
   const { activeScene, updateScene } = useSession();
+  const { showConfirm } = useCustomDialog();
   const {
     combatants,
     setCombatants,
@@ -105,9 +107,13 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
   const handleResetBattle = async () => {
     if (!activeScene) return;
     
-    const confirmReset = window.confirm(
-      'Tem certeza que deseja resetar a batalha?\n\nIsso voltará todos os combatentes para suas vidas e posições originais de quando a batalha começou, e retornará para o Turno 1.'
-    );
+    const confirmReset = await showConfirm({
+      title: 'Resetar Batalha',
+      message: 'Tem certeza que deseja resetar a batalha?\n\nIsso voltará todos os combatentes para suas vidas e posições originais de quando a batalha começou, e retornará para o Turno 1.',
+      confirmText: 'Resetar Batalha',
+      cancelText: 'Cancelar',
+      variant: 'warning',
+    });
     
     if (!confirmReset) return;
     

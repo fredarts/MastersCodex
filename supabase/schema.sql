@@ -205,6 +205,44 @@ BEGIN
 END $$;
 
 -- ==============================================================================
+-- FUNÇÕES DE AJUDA COM SECURITY DEFINER (EVITAM RECURSÃO INFINITA NO RLS)
+-- ==============================================================================
+
+CREATE OR REPLACE FUNCTION public.is_campaign_member(_campaign_id UUID, _user_id TEXT)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.campaign_members 
+    WHERE campaign_id = _campaign_id AND user_id::text = _user_id::text
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.is_campaign_dm(_campaign_id UUID, _user_id TEXT)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.campaigns 
+    WHERE id = _campaign_id AND dm_id::text = _user_id::text
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.is_campaign_dm_or_member(_campaign_id UUID, _user_id TEXT)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.campaigns 
+    WHERE id = _campaign_id AND dm_id::text = _user_id::text
+  ) OR EXISTS (
+    SELECT 1 FROM public.campaign_members 
+    WHERE campaign_id = _campaign_id AND user_id::text = _user_id::text
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- ==============================================================================
 -- RLS - POLÍTICAS SEGURAS POR USUÁRIO E PAPEL
 -- ==============================================================================
 
@@ -213,59 +251,84 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Profiles_Select" ON public.profiles FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "Profiles_Modify" ON public.profiles FOR ALL USING (auth.uid()::text = id::text) WITH CHECK (auth.uid()::text = id::text);
 
--- WORLDS: Todos autenticados leem (necessário para RAG), apenas o DM cria/edita.
+-- WORLDS: Apenas o DM criador pode visualizar e modificar seus mundos.
 ALTER TABLE public.worlds ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Worlds_Select" ON public.worlds FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Worlds_Select" ON public.worlds FOR SELECT USING (auth.uid()::text = dm_id::text);
 CREATE POLICY "Worlds_Modify" ON public.worlds FOR ALL USING (auth.uid()::text = dm_id::text) WITH CHECK (auth.uid()::text = dm_id::text);
 
--- CAMPAIGNS: Todos autenticados leem (para acessar via convite), apenas DM edita.
+-- CAMPAIGNS: DM criador ou membros inscritos na mesa podem visualizar, apenas DM edita.
 ALTER TABLE public.campaigns ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Campaigns_Select" ON public.campaigns FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Campaigns_Select" ON public.campaigns FOR SELECT USING (
+  auth.uid()::text = dm_id::text OR 
+  public.is_campaign_member(id, auth.uid()::text)
+);
 CREATE POLICY "Campaigns_Modify" ON public.campaigns FOR ALL USING (auth.uid()::text = dm_id::text) WITH CHECK (auth.uid()::text = dm_id::text);
 
--- CAMPAIGN_MEMBERS: Todos autenticados leem, usuários inserem a si mesmos, DM ou usuário deleta.
+-- CAMPAIGN_MEMBERS: Integrantes e DM da mesa leem, usuários inserem a si mesmos, DM ou usuário deleta.
 ALTER TABLE public.campaign_members ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Members_Select" ON public.campaign_members FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Members_Select" ON public.campaign_members FOR SELECT USING (
+  auth.uid()::text = user_id::text OR 
+  public.is_campaign_dm(campaign_id, auth.uid()::text)
+);
 CREATE POLICY "Members_Insert" ON public.campaign_members FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
 CREATE POLICY "Members_UpdateDelete" ON public.campaign_members FOR ALL USING (
   auth.uid()::text = user_id::text OR 
-  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
+  public.is_campaign_dm(campaign_id, auth.uid()::text)
 );
 
--- WORLD_ENTITIES: Todos leem, apenas DM do mundo edita.
+-- WORLD_ENTITIES: Apenas o DM dono do mundo lê e edita.
 ALTER TABLE public.world_entities ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Entities_Select" ON public.world_entities FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Entities_Select" ON public.world_entities FOR SELECT USING (
+  EXISTS (SELECT 1 FROM public.worlds w WHERE w.id = world_id AND w.dm_id::text = auth.uid()::text)
+);
 CREATE POLICY "Entities_Modify" ON public.world_entities FOR ALL USING (
   EXISTS (SELECT 1 FROM public.worlds w WHERE w.id = world_id AND w.dm_id::text = auth.uid()::text)
 );
 
--- SESSIONS: Todos leem, apenas DM da campanha edita.
+-- SESSIONS: DM da campanha ou membros da mesa leem, apenas DM edita.
 ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Sessions_Select" ON public.sessions FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Sessions_Select" ON public.sessions FOR SELECT USING (
+  public.is_campaign_dm_or_member(campaign_id, auth.uid()::text)
+);
 CREATE POLICY "Sessions_Modify" ON public.sessions FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
+  public.is_campaign_dm(campaign_id, auth.uid()::text)
 );
 
--- SCENES: Todos leem, apenas DM da campanha edita.
+-- SCENES: DM da campanha ou membros da mesa leem, apenas DM edita.
 ALTER TABLE public.scenes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Scenes_Select" ON public.scenes FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Scenes_Select" ON public.scenes FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.sessions s 
+    WHERE s.id = session_id 
+    AND public.is_campaign_dm_or_member(s.campaign_id, auth.uid()::text)
+  )
+);
 CREATE POLICY "Scenes_Modify" ON public.scenes FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.sessions s JOIN public.campaigns c ON s.campaign_id = c.id WHERE s.id = session_id AND c.dm_id::text = auth.uid()::text)
+  EXISTS (
+    SELECT 1 FROM public.sessions s 
+    WHERE s.id = session_id 
+    AND public.is_campaign_dm(s.campaign_id, auth.uid()::text)
+  )
 );
 
--- CAMPAIGN_FEED_EVENTS: Todos leem, apenas DM da campanha edita.
+-- CAMPAIGN_FEED_EVENTS: DM ou membros leem, apenas DM edita.
 ALTER TABLE public.campaign_feed_events ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Feed_Select" ON public.campaign_feed_events FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Feed_Select" ON public.campaign_feed_events FOR SELECT USING (
+  public.is_campaign_dm_or_member(campaign_id, auth.uid()::text)
+);
 CREATE POLICY "Feed_Modify" ON public.campaign_feed_events FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
+  public.is_campaign_dm(campaign_id, auth.uid()::text)
 );
 
--- CHARACTER_SHEETS: Todos leem (necessário para a mesa ver o combate), Dono da ficha ou DM edita.
+-- CHARACTER_SHEETS: DM ou integrantes leem, Dono da ficha ou DM edita.
 ALTER TABLE public.character_sheets ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Characters_Select" ON public.character_sheets FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Characters_Select" ON public.character_sheets FOR SELECT USING (
+  auth.uid()::text = user_id::text OR
+  (campaign_id IS NOT NULL AND public.is_campaign_dm_or_member(campaign_id, auth.uid()::text))
+);
 CREATE POLICY "Characters_Modify" ON public.character_sheets FOR ALL USING (
   auth.uid()::text = user_id::text OR 
-  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
+  (campaign_id IS NOT NULL AND public.is_campaign_dm(campaign_id, auth.uid()::text))
 );
 
 
@@ -337,7 +400,14 @@ CREATE TABLE IF NOT EXISTS public.lore_embeddings (
 );
 
 ALTER TABLE public.lore_embeddings ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Lore_Select" ON public.lore_embeddings FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Lore_Select" ON public.lore_embeddings FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.campaigns c 
+    WHERE c.id = campaign_id 
+    AND (c.dm_id::text = auth.uid()::text OR EXISTS (SELECT 1 FROM public.campaign_members cm WHERE cm.campaign_id = c.id AND cm.user_id::text = auth.uid()::text))
+  )
+  OR EXISTS (SELECT 1 FROM public.worlds w WHERE w.id = world_id AND w.dm_id::text = auth.uid()::text)
+);
 CREATE POLICY "Lore_Modify" ON public.lore_embeddings FOR ALL USING (
   EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
   OR EXISTS (SELECT 1 FROM public.worlds w WHERE w.id = world_id AND w.dm_id::text = auth.uid()::text)
@@ -357,9 +427,11 @@ CREATE TABLE IF NOT EXISTS public.campaign_audio_assets (
 );
 
 ALTER TABLE public.campaign_audio_assets ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "AudioAssets_Select" ON public.campaign_audio_assets FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "AudioAssets_Select" ON public.campaign_audio_assets FOR SELECT USING (
+  public.is_campaign_dm_or_member(campaign_id, auth.uid()::text)
+);
 CREATE POLICY "AudioAssets_Modify" ON public.campaign_audio_assets FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
+  public.is_campaign_dm(campaign_id, auth.uid()::text)
 );
 
 -- CAMPAIGN AUDIO FAVORITES
@@ -372,9 +444,11 @@ CREATE TABLE IF NOT EXISTS public.campaign_audio_favorites (
 );
 
 ALTER TABLE public.campaign_audio_favorites ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "AudioFav_Select" ON public.campaign_audio_favorites FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "AudioFav_Select" ON public.campaign_audio_favorites FOR SELECT USING (
+  public.is_campaign_dm_or_member(campaign_id, auth.uid()::text)
+);
 CREATE POLICY "AudioFav_Modify" ON public.campaign_audio_favorites FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
+  public.is_campaign_dm(campaign_id, auth.uid()::text)
 );
 
 -- SCENE MAPS
@@ -386,13 +460,20 @@ CREATE TABLE IF NOT EXISTS public.scene_maps (
 );
 
 ALTER TABLE public.scene_maps ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "SceneMaps_Select" ON public.scene_maps FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "SceneMaps_Select" ON public.scene_maps FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.scenes sc 
+    JOIN public.sessions s ON s.id = sc.session_id
+    WHERE sc.id = scene_maps.scene_id 
+    AND public.is_campaign_dm_or_member(s.campaign_id, auth.uid()::text)
+  )
+);
 CREATE POLICY "SceneMaps_Modify" ON public.scene_maps FOR ALL USING (
   EXISTS (
-    SELECT 1 FROM public.scenes s 
-    JOIN public.sessions sess ON s.session_id = sess.id 
-    JOIN public.campaigns c ON sess.campaign_id = c.id 
-    WHERE s.id = scene_maps.scene_id AND c.dm_id::text = auth.uid()::text
+    SELECT 1 FROM public.scenes sc 
+    JOIN public.sessions s ON s.id = sc.session_id
+    WHERE sc.id = scene_maps.scene_id 
+    AND public.is_campaign_dm(s.campaign_id, auth.uid()::text)
   )
 );
 
@@ -407,9 +488,11 @@ CREATE TABLE IF NOT EXISTS public.campaign_maps (
 );
 
 ALTER TABLE public.campaign_maps ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "CampaignMaps_Select" ON public.campaign_maps FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "CampaignMaps_Select" ON public.campaign_maps FOR SELECT USING (
+  public.is_campaign_dm_or_member(campaign_id, auth.uid()::text)
+);
 CREATE POLICY "CampaignMaps_Modify" ON public.campaign_maps FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.campaigns c WHERE c.id = campaign_id AND c.dm_id::text = auth.uid()::text)
+  public.is_campaign_dm(campaign_id, auth.uid()::text)
 );
 
 -- SRD ITEMS
@@ -472,5 +555,49 @@ CREATE TABLE IF NOT EXISTS public.srd_spells (
 
 ALTER TABLE public.srd_spells ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "SRD_Spells_Select" ON public.srd_spells FOR SELECT USING (auth.role() = 'authenticated');
+
+-- 1.10 Tabela Party Loot Sessions (Loot do Grupo de Jogadores)
+CREATE TABLE IF NOT EXISTS public.party_loot_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id UUID NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  distribution_mode TEXT NOT NULL DEFAULT 'free_for_all' CHECK (distribution_mode IN ('leader_assigned', 'free_for_all')),
+  leader_id TEXT,
+  leader_character_name TEXT,
+  currency JSONB DEFAULT '{"po": 0, "pl": 0, "pp": 0, "pc": 0, "pe": 0}'::jsonb,
+  items JSONB DEFAULT '[]'::jsonb,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed')),
+  created_by_name TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.party_loot_sessions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "PartyLootSessions_Select" ON public.party_loot_sessions 
+  FOR SELECT USING (
+    public.is_campaign_dm_or_member(campaign_id, auth.uid()::text)
+  );
+
+CREATE POLICY "PartyLootSessions_Insert" ON public.party_loot_sessions 
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "PartyLootSessions_Update" ON public.party_loot_sessions 
+  FOR UPDATE USING (true);
+
+CREATE POLICY "PartyLootSessions_Delete" ON public.party_loot_sessions 
+  FOR DELETE USING (true);
+
+-- Publicar no Supabase Realtime
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.party_loot_sessions;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END $$;
+
 
 

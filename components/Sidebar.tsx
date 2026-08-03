@@ -57,8 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const dmCampaigns = userCampaigns.filter((c) => {
     if (c.role !== 'dm') return false;
     if (!activeWorld) return true;
-    const effectiveWorldId = c.worldId || (userWorlds.length > 0 ? userWorlds[0].id : null);
-    return effectiveWorldId === activeWorld.id;
+    return !c.worldId || c.worldId === activeWorld.id;
   });
 
   const handleSaveWorldTitle = async () => {

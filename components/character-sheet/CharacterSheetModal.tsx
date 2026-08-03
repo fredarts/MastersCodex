@@ -10,6 +10,7 @@ import { ClassAbilitiesSection } from './Sections/ClassAbilitiesSection';
 import { QuickCombatBar } from './QuickCombatBar';
 import { CharacterBuilderWizardModal } from './Modals/CharacterBuilderWizardModal';
 import { exportCharacterToJson, importCharacterFromJson, exportCharacterToPrintablePdf } from '@/lib/character-exporter';
+import { useCustomDialog } from '@/context/CustomDialogContext';
 import {
   Menu,
   X,
@@ -68,6 +69,7 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
   lockBaseAttributes = false,
   readOnly = false,
 }) => {
+  const { showAlert } = useCustomDialog();
   const [sheet, setSheet] = useState<CharacterSheet>(initialSheet);
   const [activeTab, setActiveTab] = useState<TabType>('general');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -137,9 +139,17 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
       const imported = await importCharacterFromJson(file);
       setSheet(imported);
       onSave(imported);
-      alert('Ficha importada com sucesso!');
+      showAlert({
+        title: 'Ficha Importada',
+        message: 'Ficha importada com sucesso!',
+        variant: 'success',
+      });
     } catch (err) {
-      alert('Erro ao importar ficha: ' + (err as Error).message);
+      showAlert({
+        title: 'Erro de Importação',
+        message: 'Erro ao importar ficha: ' + (err as Error).message,
+        variant: 'danger',
+      });
     }
   };
 

@@ -274,15 +274,64 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
   }
 
   async leaveCampaign(campaignId: string, userId: string): Promise<boolean> {
-    if (!isValidUuid(campaignId) || !isValidUuid(userId)) return false;
+    if (!campaignId) return false;
 
-    const { error } = await supabase
-      .from('campaign_members')
-      .delete()
-      .eq('campaign_id', campaignId)
-      .eq('user_id', userId);
+    if (isValidUuid(campaignId)) {
+      if (userId && isValidUuid(userId)) {
+        // Verificar se o usuário é o Mestre (DM) desta campanha
+        const { data: campData } = await supabase
+          .from('campaigns')
+          .select('dm_id')
+          .eq('id', campaignId)
+          .maybeSingle();
 
-    if (error) throw error;
+        if (campData && campData.dm_id === userId) {
+          // Mestre saindo: Exclui eventos do feed, membros e a campanha
+          await supabase.from('campaign_feed_events').delete().eq('campaign_id', campaignId);
+          await supabase.from('campaign_members').delete().eq('campaign_id', campaignId);
+          const { error: delErr } = await supabase.from('campaigns').delete().eq('id', campaignId);
+          if (delErr) throw delErr;
+        } else {
+          // Jogador saindo: Exclui apenas o registro do membro
+          const { error } = await supabase
+            .from('campaign_members')
+            .delete()
+            .eq('campaign_id', campaignId)
+            .eq('user_id', userId);
+
+          if (error) throw error;
+        }
+
+        // Desvincular a campanha da ficha do usuário no Supabase
+        await supabase
+          .from('character_sheets')
+          .update({ campaign_id: null })
+          .eq('campaign_id', campaignId)
+          .eq('user_id', userId);
+      } else {
+        // Fallback sem userId válido: remove das tabelas associadas
+        await supabase.from('campaign_members').delete().eq('campaign_id', campaignId);
+      }
+    }
+
+    // Limpa também o cache no LocalStorage para garantir sincronia offline/demo
+    try {
+      if (typeof window !== 'undefined') {
+        const savedCamps = localStorage.getItem('codex_campaigns');
+        if (savedCamps) {
+          const camps: UserCampaign[] = JSON.parse(savedCamps);
+          const updated = camps.filter((c) => c.id !== campaignId);
+          localStorage.setItem('codex_campaigns', JSON.stringify(updated));
+        }
+        const savedMembers = localStorage.getItem('codex_members');
+        if (savedMembers) {
+          const members: any[] = JSON.parse(savedMembers);
+          const updated = members.filter((m) => m.campaignId !== campaignId);
+          localStorage.setItem('codex_members', JSON.stringify(updated));
+        }
+      }
+    } catch (_e) {}
+
     return true;
   }
 

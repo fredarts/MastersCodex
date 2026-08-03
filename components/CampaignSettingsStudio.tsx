@@ -32,9 +32,11 @@ import { useWorld } from '@/lib/hooks/useWorld';
 import { CampaignFeedEventType, CampaignMember } from '@/lib/types';
 import { CreateCampaignModal } from '@/components/CreateCampaignModal';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
+import { useCustomDialog } from '@/context/CustomDialogContext';
 
 export const CampaignSettingsStudio: React.FC = () => {
   const { user } = useAuth();
+  const { showConfirm } = useCustomDialog();
   const { userWorlds, activeWorld } = useWorld();
   const { 
     userCampaigns,
@@ -54,9 +56,9 @@ export const CampaignSettingsStudio: React.FC = () => {
   const { openSheet } = useLiveCockpit();
 
   const worldCampaigns = userCampaigns.filter((c) => {
+    if (c.role !== 'dm') return false;
     if (!activeWorld) return true;
-    const effectiveWorldId = c.worldId || (userWorlds.length > 0 ? userWorlds[0].id : null);
-    return effectiveWorldId === activeWorld.id;
+    return !c.worldId || c.worldId === activeWorld.id;
   });
 
   const [activeTab, setActiveTab] = useState<'feed' | 'roster' | 'houserules' | 'ai' | 'export'>('feed');
@@ -116,7 +118,7 @@ export const CampaignSettingsStudio: React.FC = () => {
   const [aiTone, setAiTone] = useState<'heroic' | 'dark' | 'gritty' | 'funny'>('heroic');
 
   // Empty State: Allow selecting or creating campaigns directly from here!
-  if (!activeCampaign) {
+  if (!activeCampaign || activeCampaign.role !== 'dm') {
     return (
       <div className="flex-1 bg-[#0a0d14] flex flex-col p-6 overflow-y-auto select-none">
         <div className="bg-gradient-to-r from-[#161c28] via-[#1a2234] to-[#0f141d] border border-amber-500/30 p-6 rounded-2xl mb-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
@@ -730,9 +732,16 @@ export const CampaignSettingsStudio: React.FC = () => {
                         {!isDM && (
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={async () => {
                               const pName = mem.characterName || mem.displayName || 'Jogador';
-                              if (confirm(`Tem certeza que deseja remover o jogador "${pName}" desta campanha?`)) {
+                              const confirmed = await showConfirm({
+                                title: 'Remover Jogador',
+                                message: `Tem certeza que deseja remover o jogador "${pName}" desta campanha?`,
+                                confirmText: 'Remover Jogador',
+                                cancelText: 'Cancelar',
+                                variant: 'danger',
+                              });
+                              if (confirmed) {
                                 removeCampaignMember(mem.id);
                               }
                             }}

@@ -3,6 +3,7 @@ import { CharacterSheet, ClassFeature, CharacterResource, ActiveClassBuff } from
 import { getAttributeModifier, recalculateSheetDerivedStats, hasClass } from '@/lib/dnd5e-calculator';
 import { executeCheckRoll, broadcastDiceRoll } from '@/lib/dnd5e-dice';
 import { Zap, Flame, Shield, Plus, Minus, Heart, Swords, ShieldAlert, Sparkles, Wand2 } from 'lucide-react';
+import { useCustomDialog } from '@/context/CustomDialogContext';
 
 interface ClassAbilitiesSectionProps {
   sheet: CharacterSheet;
@@ -13,6 +14,7 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
   sheet,
   onChange,
 }) => {
+  const { showAlert } = useCustomDialog();
   const [smiteSlotLevel, setSmiteSlotLevel] = useState<number>(1);
   const [layOnHandsAmount, setLayOnHandsAmount] = useState<number>(5);
   const [showSmiteModal, setShowSmiteModal] = useState<boolean>(false);
@@ -45,7 +47,11 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
       // Activate Rage
       const rageResource = resources['furia'];
       if (rageResource && rageResource.current <= 0 && rageResource.max !== 9999) {
-        alert('Você não tem usos de Fúria restantes!');
+        showAlert({
+          title: 'Fúria Esgotada',
+          message: 'Você não tem usos de Fúria restantes!',
+          variant: 'warning',
+        });
         return;
       }
 
@@ -87,7 +93,11 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
   const handleLayOnHands = () => {
     const lohResource = resources['lay_on_hands'];
     if (!lohResource || lohResource.current < layOnHandsAmount) {
-      alert('Você não tem pontos suficientes de Mãos Curativas!');
+      showAlert({
+        title: 'Pontos Insuficientes',
+        message: 'Você não tem pontos suficientes de Mãos Curativas!',
+        variant: 'warning',
+      });
       return;
     }
 
@@ -121,11 +131,19 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
   const handlePrepareSmite = () => {
     const slot = sheet.spellSlots[smiteSlotLevel];
     if (!slot || slot.total === 0) {
-      alert(`Você não possui espaços de magia de nível ${smiteSlotLevel}!`);
+      showAlert({
+        title: 'Espaços Indisponíveis',
+        message: `Você não possui espaços de magia de nível ${smiteSlotLevel}!`,
+        variant: 'warning',
+      });
       return;
     }
     if (slot.used >= slot.total) {
-      alert(`Você já gastou todos os espaços de magia de nível ${smiteSlotLevel}!`);
+      showAlert({
+        title: 'Espaços Esgotados',
+        message: `Você já gastou todos os espaços de magia de nível ${smiteSlotLevel}!`,
+        variant: 'warning',
+      });
       return;
     }
 

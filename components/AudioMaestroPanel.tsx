@@ -10,12 +10,14 @@ import { useSession } from '@/lib/hooks/useSession';
 import { storageService } from '@/lib/services/storageService';
 import { supabase, isValidUuid } from '@/lib/supabase';
 import { BGM_TRACKS, SFX_BUTTONS } from '@/lib/srd-data';
+import { useCustomDialog } from '@/context/CustomDialogContext';
 
 export const AudioMaestroPanel: React.FC = () => {
   const { activeCampaign } = useCampaign();
   const campaignId = activeCampaign?.id;
   const { playBgm, pauseBgm, activeBgm, isPlayingBgm, playSfx } = useAudio();
   const { activeScene, updateScene } = useSession();
+  const { showConfirm } = useCustomDialog();
 
   const [customAudios, setCustomAudios] = useState<any[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -150,7 +152,14 @@ export const AudioMaestroPanel: React.FC = () => {
   };
 
   const handleDeleteAudio = async (id: string) => {
-    if (!confirm('Deseja excluir este áudio permanentemente?')) return;
+    const confirmed = await showConfirm({
+      title: 'Excluir Áudio',
+      message: 'Deseja excluir este áudio permanentemente?',
+      confirmText: 'Excluir Áudio',
+      cancelText: 'Cancelar',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     
     const { error } = await supabase
       .from('campaign_audio_assets')

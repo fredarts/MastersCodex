@@ -43,13 +43,15 @@ import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
 import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
 import { useBattleGridStore } from '@/lib/stores/useBattleGridStore';
+import { useCustomDialog } from '@/context/CustomDialogContext';
 
 interface SessionStudioProps {
-  onEquipScene: (scene: GameScene) => void;
+  onEquipScene?: (scene: GameScene) => void;
 }
 
 export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) => {
   const { activeCampaign, campaignMembers, createFeedEvent } = useCampaign();
+  const { showAlert } = useCustomDialog();
   const { 
     sessions, 
     activeSession, 
@@ -546,7 +548,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                         });
                         const sceneWithPositions = { ...selectedScene, combatants: mergedCombatants };
                         setActiveScene(sceneWithPositions);
-                        onEquipScene(sceneWithPositions);
+                        onEquipScene?.(sceneWithPositions);
                       }
                     }}
                     className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-slate-950 font-black rounded-xl text-xs shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
@@ -738,7 +740,11 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                                 setSceneImages(prev => [...prev, newImg]);
                                 if (!imageUrl) setImageUrl(publicUrl); // set primary fallback if empty
                               } catch (err: any) {
-                                alert(err.message || 'Erro ao fazer upload do arquivo.');
+                                showAlert({
+                                  title: 'Erro de Upload',
+                                  message: err.message || 'Erro ao fazer upload do arquivo.',
+                                  variant: 'danger',
+                                });
                               }
                             }}
                             className={`w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2 py-1 text-xs text-slate-300 file:bg-purple-600/20 file:border-0 file:text-purple-300 file:px-3 file:py-1 file:rounded-md file:text-[10px] file:font-bold file:cursor-pointer ${
@@ -817,7 +823,11 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                       <div className="pt-2 border-t border-[#2a3449]/40 flex justify-end">
                         <button
                           type="button"
-                          onClick={() => alert('Integração com Nano Banana/Gemini IA estará disponível em breve!')}
+                          onClick={() => showAlert({
+                            title: 'Em Breve',
+                            message: 'Integração com Nano Banana/Gemini IA estará disponível em breve!',
+                            variant: 'info',
+                          })}
                           className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow active:scale-95 cursor-pointer"
                         >
                           <Sparkles className="w-3.5 h-3.5 fill-slate-950" />

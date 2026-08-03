@@ -5,7 +5,8 @@ export class LocalStorageSessionRepository implements ISessionRepository {
   async fetchSessions(campaignId: string): Promise<GameSession[]> {
     try {
       const saved = localStorage.getItem('codex_sessions');
-      return saved ? JSON.parse(saved) : [];
+      const all: GameSession[] = saved ? JSON.parse(saved) : [];
+      return all.filter((s) => s.campaignId === campaignId);
     } catch (_e) {
       return [];
     }

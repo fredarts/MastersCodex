@@ -23,6 +23,7 @@ import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { toast } from 'sonner';
 import { storageService } from '@/lib/services/storageService';
 import { DysonCanvas } from './map/DysonCanvas';
+import { useCustomDialog } from '@/context/CustomDialogContext';
 
 interface MapMakerProps {
   combatants: Combatant[];
@@ -157,6 +158,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     activeScene
   } = useSession();
   const { broadcastToPlayerView } = useLiveCockpit();
+  const { showConfirm, showPrompt } = useCustomDialog();
 
   const [grid, setGrid] = useState<Cell[][]>(() => createInitialGrid());
   const [selectedTool, setSelectedTool] = useState<'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan'>('fog-reveal');
@@ -326,19 +328,36 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     setGrid((prev) => prev.map((row) => row.map((cell) => ({ ...cell, fog: true }))));
   };
 
-  const clearGridContent = () => {
-    if (window.confirm("Deseja limpar todo o mapa e resetar para um grid gigante de 80x80 células de rocha sólida?")) {
+  const clearGridContent = async () => {
+    const fullReset = await showConfirm({
+      title: 'Resetar Grid Completo',
+      message: 'Deseja limpar todo o mapa e resetar para um grid gigante de 80x80 células de rocha sólida?',
+      confirmText: 'Resetar Tudo (80x80)',
+      cancelText: 'Limpar apenas terreno',
+      variant: 'warning',
+    });
+
+    if (fullReset) {
       setGrid(createInitialGrid(80, 80));
       toast.success("Grid resetado para 80x80 de rocha!");
-    } else if (window.confirm("Deseja apenas limpar os terrenos desenhados no grid atual? (Mantendo o tamanho do grid atual)")) {
-      setGrid((prev) => prev.map((row) => row.map((cell) => ({
-        ...cell,
-        type: 'wall',
-        fog: true,
-        tokenName: undefined,
-        tokenColor: undefined,
-      }))));
-      toast.info("Terreno do grid atual limpo.");
+    } else {
+      const partialClear = await showConfirm({
+        title: 'Limpar Terreno Atual',
+        message: 'Deseja apenas limpar os terrenos desenhados no grid atual? (Mantendo o tamanho do grid atual)',
+        confirmText: 'Limpar Terreno',
+        cancelText: 'Cancelar',
+        variant: 'info',
+      });
+      if (partialClear) {
+        setGrid((prev) => prev.map((row) => row.map((cell) => ({
+          ...cell,
+          type: 'wall',
+          fog: true,
+          tokenName: undefined,
+          tokenColor: undefined,
+        }))));
+        toast.info("Terreno do grid atual limpo.");
+      }
     }
   };
 
@@ -411,8 +430,14 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
              <div className="flex items-center justify-between">
                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Meus Mapas</span>
                <button
-                 onClick={() => {
-                   const title = prompt('Nome do Novo Mapa:', `Masmorra ${campaignMaps.length + 1}`);
+                 onClick={async () => {
+                   const title = await showPrompt({
+                     title: 'Novo Mapa',
+                     message: 'Digite o nome para o novo mapa:',
+                     defaultValue: `Masmorra ${campaignMaps.length + 1}`,
+                     placeholder: 'Ex: Catacumbas Escuras',
+                     confirmText: 'Criar Mapa',
+                   });
                    if (title && title.trim()) {
                      createCampaignMap(title.trim(), {
                        grid: createInitialGrid(80, 80),
@@ -447,9 +472,16 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
                      <span className="truncate pr-2">{m.title}</span>
                      {campaignMaps.length > 1 && (
                        <button
-                         onClick={(e) => {
+                         onClick={async (e) => {
                            e.stopPropagation();
-                           if (window.confirm(`Deseja deletar o mapa "${m.title}"?`)) {
+                           const confirmed = await showConfirm({
+                             title: 'Deletar Mapa',
+                             message: `Deseja deletar o mapa "${m.title}"? Esta ação é irreversível.`,
+                             confirmText: 'Deletar',
+                             cancelText: 'Cancelar',
+                             variant: 'danger',
+                           });
+                           if (confirmed) {
                              deleteCampaignMap(m.id);
                            }
                          }}

@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Combatant, CombatLogEntry, PlayerRollEvent } from '@/lib/types';
 import { useRealtimeSync } from '@/lib/hooks/useRealtimeSync';
 import { useCampaign } from '@/context/CampaignContext';
+import { useAuth } from '@/context/AuthContext';
 
 import { useBattleGridStore } from '@/lib/stores/useBattleGridStore';
 
@@ -85,7 +86,8 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // Active campaign ID for Supabase WebSocket channels
   const { activeCampaign } = useCampaign();
-  const campaignId = activeCampaign?.id || 'camp-demo-1';
+  const { user } = useAuth();
+  const campaignId = activeCampaign?.id || ((!user || user.id === 'user-demo') ? 'camp-demo-1' : null);
 
   // Helper to compare combat states
   const isCombatStateEqual = useCallback((

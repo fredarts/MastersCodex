@@ -389,8 +389,8 @@ export function applyClassPreset(sheet: CharacterSheet, className: string): Char
     ...sheet,
     className,
     savingThrows: newSavingThrows,
-    hitDiceTotal: `${sheet.level}${classData.hitDie}`,
-    hitDiceUsed: `0${classData.hitDie}`,
+    hitDiceTotal: `${sheet.level}${classData.hitDie.replace(/^1/, '')}`,
+    hitDiceUsed: `0${classData.hitDie.replace(/^1/, '')}`,
     maxHp: Math.max(1, estimatedMaxHp),
     currentHp: Math.max(1, estimatedMaxHp),
     spellcastingAbility: classData.spellcastingAbility || sheet.spellcastingAbility,
@@ -435,10 +435,9 @@ export function applyLevelChange(sheet: CharacterSheet, level: number, leveledCl
     currentClasses[0].level = safeLevel;
   }
 
-  // Calcula Hit Dice Total e Usado
-  const hitDiceTotal = currentClasses.map(c => `${c.level}${DND_CLASSES[c.name]?.hitDie || '1d8'}`).join(', ');
+  const hitDiceTotal = currentClasses.map(c => `${c.level}${(DND_CLASSES[c.name]?.hitDie || '1d8').replace(/^1/, '')}`).join(', ');
   // Preserva os dados usados anteriores se possível, ou formata zerado
-  const hitDiceUsed = currentClasses.map(c => `0${DND_CLASSES[c.name]?.hitDie || '1d8'}`).join(', ');
+  const hitDiceUsed = currentClasses.map(c => `0${(DND_CLASSES[c.name]?.hitDie || '1d8').replace(/^1/, '')}`).join(', ');
 
   // HP: Apenas calculamos estimated se a ficha não tiver HP ou for nível 1 (Criação)
   // Caso contrário, respeitamos o maxHp existente (que o Modal atualizou com a rolagem)
@@ -782,15 +781,19 @@ export function applyShortRest(
 ): { updatedSheet: CharacterSheet; hpRecovered: number } {
   const classData = DND_CLASSES[sheet.className];
   const hitDie = classData ? classData.hitDie : '1d8';
-  const hitDieVal = parseInt(hitDie.replace('1d', ''), 10) || 8;
+  const dieType = hitDie.replace(/^1/, ''); // e.g. "d8"
+  const hitDieVal = parseInt(dieType.replace('d', ''), 10) || 8;
   const conMod = getAttributeModifier(sheet, 'con');
 
   // Dados de vida já usados e totais
-  const usedCountStr = sheet.hitDiceUsed.replace(hitDie, '');
-  let usedCount = parseInt(usedCountStr, 10) || 0;
+  const usedCountStr = sheet.hitDiceUsed.replace(dieType, '');
   const totalDice = sheet.level;
-  const availableDice = Math.max(0, totalDice - usedCount);
+  let usedCount = parseInt(usedCountStr, 10) || 0;
+  if (usedCount > totalDice) {
+    usedCount = totalDice; // Cap it for backwards compatibility with old corrupt data
+  }
 
+  const availableDice = Math.max(0, totalDice - usedCount);
   const actualSpend = Math.min(diceToSpend, availableDice);
   if (actualSpend <= 0) {
     return { updatedSheet: sheet, hpRecovered: 0 };
@@ -818,7 +821,7 @@ export function applyShortRest(
     updatedSheet: {
       ...sheet,
       currentHp: newCurrentHp,
-      hitDiceUsed: `${usedCount}${hitDie}`,
+      hitDiceUsed: `${usedCount}${dieType}`,
       classResources: newResources,
     },
     hpRecovered,
@@ -835,11 +838,15 @@ export function applyShortRest(
 export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
   const classData = DND_CLASSES[sheet.className];
   const hitDie = classData ? classData.hitDie : '1d8';
+  const dieType = hitDie.replace(/^1/, ''); // e.g. "d8"
   const totalDice = sheet.level;
 
   // Recupera metade dos dados de vida (mínimo 1)
-  const usedCountStr = sheet.hitDiceUsed.replace(hitDie, '');
+  const usedCountStr = sheet.hitDiceUsed.replace(dieType, '');
   let usedCount = parseInt(usedCountStr, 10) || 0;
+  if (usedCount > totalDice) {
+    usedCount = totalDice; // Cap it for backwards compatibility
+  }
   const recovered = Math.max(1, Math.floor(totalDice / 2));
   usedCount = Math.max(0, usedCount - recovered);
 
@@ -859,7 +866,7 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
     ...sheet,
     currentHp: sheet.maxHp,
     tempHp: 0,
-    hitDiceUsed: `${usedCount}${hitDie}`,
+    hitDiceUsed: `${usedCount}${dieType}`,
     deathSaves: { successes: 0, failures: 0 },
     spellSlots: newSlots,
     classResources: newResources,
@@ -953,6 +960,19 @@ export function recalculateSheetDerivedStats(sheet: CharacterSheet): CharacterSh
   // Ajusta o HP Atual para manter a mesma proporção ou respeitar o novo teto
   const hpDiff = newMaxHp - sheet.maxHp;
   const newCurrentHp = hpDiff > 0 ? sheet.currentHp + hpDiff : Math.min(sheet.currentHp, newMaxHp);
+
+  // Sanitize existing Hit Dice strings (Backward Compatibility for "11d8" bug)
+  const currentClasses = getCharacterClasses(sheet);
+  const correctHitDiceTotal = currentClasses.map(c => `${c.level}${(DND_CLASSES[c.name]?.hitDie || '1d8').replace(/^1/, '')}`).join(', ');
+  
+  // Try to preserve hitDiceUsed count, but fix the format if it's broken
+  let safeHitDiceUsed = sheet.hitDiceUsed || `0${hitDieVal}`;
+  // If it's a single class and doesn't match the comma format, we fix it
+  if (currentClasses.length === 1 && typeof safeHitDiceUsed === 'string') {
+     const usedMatch = safeHitDiceUsed.match(/^(\d+)/);
+     const usedCount = usedMatch ? Math.min(parseInt(usedMatch[1], 10), currentClasses[0].level) : 0;
+     safeHitDiceUsed = `${usedCount}${(DND_CLASSES[currentClasses[0].name]?.hitDie || '1d8').replace(/^1/, '')}`;
+  }
 
   // 3. Recalcula Ataques de Armas com Proficiência e Força/Destreza
   const updatedAttacks = sheet.attacks.map((atk) => {
@@ -1049,6 +1069,8 @@ export function recalculateSheetDerivedStats(sheet: CharacterSheet): CharacterSh
     speed: newSpeed,
     maxHp: newMaxHp,
     currentHp: Math.max(1, newCurrentHp),
+    hitDiceTotal: correctHitDiceTotal,
+    hitDiceUsed: safeHitDiceUsed,
     attacks: updatedAttacks,
     classFeatures: classFeaturesList,
     classResources: updatedResources,

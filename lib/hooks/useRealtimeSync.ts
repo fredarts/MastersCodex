@@ -4,7 +4,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { offlineQueue } from '@/lib/sync/OfflineQueueManager';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { CombatLogEntry, PlayerRollEvent } from '@/lib/types';
+import { CombatLogEntry, PlayerRollEvent, PartyLootSession, DirectTransferPayload } from '@/lib/types';
 
 export interface RealtimeSyncPayloads {
   TOKEN_MOVE_3D: { combatantId: string; characterName?: string; newX: number; newZ: number };
@@ -36,6 +36,9 @@ export interface RealtimeSyncPayloads {
   COMBAT_UPDATE: { combatants: any[]; currentTurnIndex: number; roundCount: number };
   COMBAT_LOG_ENTRY: { entry: CombatLogEntry };
   PLAYER_ROLL: { roll: PlayerRollEvent };
+  PARTY_LOOT_UPDATE: { session: PartyLootSession };
+  PARTY_LOOT_CLOSE: { sessionId: string };
+  DIRECT_TRANSFER: { transfer: DirectTransferPayload };
 }
 
 export interface UseRealtimeSyncOptions {
@@ -47,6 +50,9 @@ export interface UseRealtimeSyncOptions {
   onCombatUpdate?: (payload: RealtimeSyncPayloads['COMBAT_UPDATE']) => void;
   onCombatLogEntry?: (payload: RealtimeSyncPayloads['COMBAT_LOG_ENTRY']) => void;
   onPlayerRoll?: (payload: RealtimeSyncPayloads['PLAYER_ROLL']) => void;
+  onPartyLootUpdate?: (payload: RealtimeSyncPayloads['PARTY_LOOT_UPDATE']) => void;
+  onPartyLootClose?: (payload: RealtimeSyncPayloads['PARTY_LOOT_CLOSE']) => void;
+  onDirectTransfer?: (payload: RealtimeSyncPayloads['DIRECT_TRANSFER']) => void;
 }
 
 export function useRealtimeSync({
@@ -58,6 +64,9 @@ export function useRealtimeSync({
   onCombatUpdate,
   onCombatLogEntry,
   onPlayerRoll,
+  onPartyLootUpdate,
+  onPartyLootClose,
+  onDirectTransfer,
 }: UseRealtimeSyncOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const isSubscribedRef = useRef<boolean>(false);
@@ -71,6 +80,9 @@ export function useRealtimeSync({
     onCombatUpdate,
     onCombatLogEntry,
     onPlayerRoll,
+    onPartyLootUpdate,
+    onPartyLootClose,
+    onDirectTransfer,
   });
 
   useEffect(() => {
@@ -82,8 +94,22 @@ export function useRealtimeSync({
       onCombatUpdate,
       onCombatLogEntry,
       onPlayerRoll,
+      onPartyLootUpdate,
+      onPartyLootClose,
+      onDirectTransfer,
     };
-  }, [onTokenMove, onTokenRotate, onLiveProjectionChange, onDiceRoll, onCombatUpdate, onCombatLogEntry, onPlayerRoll]);
+  }, [
+    onTokenMove,
+    onTokenRotate,
+    onLiveProjectionChange,
+    onDiceRoll,
+    onCombatUpdate,
+    onCombatLogEntry,
+    onPlayerRoll,
+    onPartyLootUpdate,
+    onPartyLootClose,
+    onDirectTransfer,
+  ]);
 
   // Cross-tab BroadcastChannel fallback
   const bcRef = useRef<BroadcastChannel | null>(null);
@@ -94,13 +120,16 @@ export function useRealtimeSync({
       bcRef.current.onmessage = (event) => {
         const { type, ...data } = event.data || {};
         const cb = callbacksRef.current;
-        if (type === 'TOKEN_MOVE_3D' && cb.onTokenMove) cb.onTokenMove(data);
-        if (type === 'TOKEN_ROTATE_3D' && cb.onTokenRotate) cb.onTokenRotate(data);
-        if (type === 'LIVE_PROJECTION_UPDATE' && cb.onLiveProjectionChange) cb.onLiveProjectionChange(data);
-        if (type === 'DICE_ROLL' && cb.onDiceRoll) cb.onDiceRoll(data);
-        if (type === 'COMBAT_UPDATE' && cb.onCombatUpdate) cb.onCombatUpdate(data);
-        if (type === 'COMBAT_LOG_ENTRY' && cb.onCombatLogEntry) cb.onCombatLogEntry(data);
-        if (type === 'PLAYER_ROLL' && cb.onPlayerRoll) cb.onPlayerRoll(data);
+        if (type === 'TOKEN_MOVE_3D' && cb.onTokenMove) cb.onTokenMove(data as any);
+        if (type === 'TOKEN_ROTATE_3D' && cb.onTokenRotate) cb.onTokenRotate(data as any);
+        if (type === 'LIVE_PROJECTION_UPDATE' && cb.onLiveProjectionChange) cb.onLiveProjectionChange(data as any);
+        if (type === 'DICE_ROLL' && cb.onDiceRoll) cb.onDiceRoll(data as any);
+        if (type === 'COMBAT_UPDATE' && cb.onCombatUpdate) cb.onCombatUpdate(data as any);
+        if (type === 'COMBAT_LOG_ENTRY' && cb.onCombatLogEntry) cb.onCombatLogEntry(data as any);
+        if (type === 'PLAYER_ROLL' && cb.onPlayerRoll) cb.onPlayerRoll(data as any);
+        if (type === 'PARTY_LOOT_UPDATE' && cb.onPartyLootUpdate) cb.onPartyLootUpdate(data as any);
+        if (type === 'PARTY_LOOT_CLOSE' && cb.onPartyLootClose) cb.onPartyLootClose(data as any);
+        if (type === 'DIRECT_TRANSFER' && cb.onDirectTransfer) cb.onDirectTransfer(data as any);
       };
     } catch (e) {}
 
@@ -151,6 +180,18 @@ export function useRealtimeSync({
       .on('broadcast', { event: 'PLAYER_ROLL' }, ({ payload }) => {
         const cb = callbacksRef.current;
         if (cb.onPlayerRoll) cb.onPlayerRoll(payload);
+      })
+      .on('broadcast', { event: 'PARTY_LOOT_UPDATE' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onPartyLootUpdate) cb.onPartyLootUpdate(payload);
+      })
+      .on('broadcast', { event: 'PARTY_LOOT_CLOSE' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onPartyLootClose) cb.onPartyLootClose(payload);
+      })
+      .on('broadcast', { event: 'DIRECT_TRANSFER' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onDirectTransfer) cb.onDirectTransfer(payload);
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -245,6 +286,18 @@ export function useRealtimeSync({
     sendBroadcast('PLAYER_ROLL', payload);
   }, [sendBroadcast]);
 
+  const broadcastPartyLootUpdate = useCallback((payload: RealtimeSyncPayloads['PARTY_LOOT_UPDATE']) => {
+    sendBroadcast('PARTY_LOOT_UPDATE', payload);
+  }, [sendBroadcast]);
+
+  const broadcastPartyLootClose = useCallback((payload: RealtimeSyncPayloads['PARTY_LOOT_CLOSE']) => {
+    sendBroadcast('PARTY_LOOT_CLOSE', payload);
+  }, [sendBroadcast]);
+
+  const broadcastDirectTransfer = useCallback((payload: RealtimeSyncPayloads['DIRECT_TRANSFER']) => {
+    sendBroadcast('DIRECT_TRANSFER', payload);
+  }, [sendBroadcast]);
+
   return {
     broadcastTokenMove,
     broadcastTokenRotate,
@@ -253,5 +306,8 @@ export function useRealtimeSync({
     broadcastCombatUpdate,
     broadcastCombatLogEntry,
     broadcastPlayerRoll,
+    broadcastPartyLootUpdate,
+    broadcastPartyLootClose,
+    broadcastDirectTransfer,
   };
 }

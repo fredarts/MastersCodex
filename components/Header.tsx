@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut } from 'lucide-react';
+import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut, Gift } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { useAudio } from '@/context/AudioContext';
+import { usePartyLoot } from '@/context/PartyLootContext';
 
 interface HeaderProps {
   onOpenSearch: () => void;
@@ -33,6 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
   const { activeCampaign } = useCampaign();
   const { activeWorld } = useWorld();
   const { playDiceSound } = useAudio();
+  const { setIsDmLootModalOpen, setIsPartyLootModalOpen, activeLootSession } = usePartyLoot();
   const [diceResult, setDiceResult] = useState<number | null>(null);
   const [lastDiceType, setLastDiceType] = useState<string>('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -142,13 +144,38 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Global Search Button */}
         <button
           onClick={onOpenSearch}
-          className="flex items-center gap-2 bg-[#161c28] hover:bg-[#1f2738] text-slate-300 hover:text-amber-400 border border-[#2a3449] hover:border-amber-500/50 px-3 py-1.5 rounded-lg text-xs font-medium transition-all group"
+          className="flex items-center gap-2 bg-[#161c28] hover:bg-[#1f2738] text-slate-300 hover:text-amber-400 border border-[#2a3449] hover:border-amber-500/50 px-3 py-1.5 rounded-lg text-xs font-medium transition-all group cursor-pointer"
         >
           <Search className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
           <span className="hidden md:inline">Compêndio</span>
           <kbd className="hidden lg:inline-block bg-[#0f141d] border border-[#2a3449] text-[10px] text-slate-400 px-1.5 py-0.5 rounded font-mono">
             Ctrl + Espaço
           </kbd>
+        </button>
+
+        {/* Party Loot Button */}
+        <button
+          onClick={() => {
+            if (roleMode === 'dm') {
+              setIsDmLootModalOpen(true);
+            } else {
+              setIsPartyLootModalOpen(true);
+            }
+          }}
+          className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+            activeLootSession && activeLootSession.status === 'active'
+              ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-950/40 animate-pulse'
+              : 'bg-[#161c28] border-[#2a3449] text-slate-300 hover:text-amber-400 hover:border-amber-500/50'
+          }`}
+          title={roleMode === 'dm' ? 'Criar & Enviar Loot para a Party' : 'Ver Loot Ativo da Party'}
+        >
+          <Gift className="w-4 h-4 text-amber-400" />
+          <span className="hidden sm:inline">
+            {roleMode === 'dm' ? 'Enviar Loot' : 'Loot da Party'}
+          </span>
+          {activeLootSession && activeLootSession.status === 'active' && (
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-0.5 -right-0.5" />
+          )}
         </button>
 
 

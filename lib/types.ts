@@ -628,3 +628,48 @@ export type Result<T, E = Error> =
   | { ok: true; value: T } 
   | { ok: false; error: E };
 
+export type LootDistributionMode = 'leader_assigned' | 'free_for_all';
+
+export interface PartyLootItem {
+  id: string;
+  name: string;
+  quantity: number;
+  weight?: string;
+  notes?: string;
+  rarity?: 'Comum' | 'Incomum' | 'Raro' | 'Muito Raro' | 'Lendário' | 'Artefato';
+  claimedBy?: {
+    userId?: string;
+    characterName: string;
+    claimedAt: string;
+  } | null;
+}
+
+export interface PartyLootSession {
+  id: string;
+  campaignId: string;
+  title: string;
+  description?: string;
+  distributionMode: LootDistributionMode;
+  leaderId?: string;
+  leaderCharacterName?: string;
+  currency: CharacterCurrency;
+  items: PartyLootItem[];
+  status: 'active' | 'completed';
+  createdByName?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface DirectTransferPayload {
+  id: string;
+  campaignId: string;
+  fromUserId?: string;
+  fromCharacterName: string;
+  toUserId?: string;
+  toCharacterName: string;
+  item?: CharacterEquipmentItem;
+  currency?: Partial<CharacterCurrency>;
+  sentAt: string;
+}
+
+

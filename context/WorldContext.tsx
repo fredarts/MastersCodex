@@ -30,6 +30,13 @@ export const WorldProvider: React.FC<{ children: React.ReactNode; currentUserId?
   const [worldEntities, setWorldEntities] = useState<WorldEntity[]>([]);
 
   useEffect(() => {
+    if (!currentUserId) {
+      setUserWorlds([]);
+      setActiveWorldState(null);
+      setWorldEntities([]);
+      return;
+    }
+
     worldService.fetchWorlds(currentUserId).then((res) => {
       if (res.ok) {
         const worlds = res.value;
@@ -47,8 +54,15 @@ export const WorldProvider: React.FC<{ children: React.ReactNode; currentUserId?
               toast.error(entitiesRes.error.message);
             }
           });
+        } else {
+          setUserWorlds([]);
+          setActiveWorldState(null);
+          setWorldEntities([]);
         }
       } else {
+        setUserWorlds([]);
+        setActiveWorldState(null);
+        setWorldEntities([]);
         toast.error(res.error.message);
       }
     });

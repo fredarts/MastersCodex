@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { UserCampaign, CampaignMember, CampaignFeedEvent } from '@/lib/types';
 import { campaignService } from '@/lib/services/campaignService';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 interface CampaignContextType {
   userCampaigns: UserCampaign[];
@@ -38,37 +39,62 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   const [campaignMembers, setCampaignMembers] = useState<CampaignMember[]>([]);
   const [feedEvents, setFeedEvents] = useState<CampaignFeedEvent[]>([]);
 
+  const { roleMode } = useAuth();
+
   useEffect(() => {
+    if (!currentUserId) {
+      setUserCampaigns([]);
+      return;
+    }
+
     campaignService.fetchUserCampaigns(currentUserId).then((res) => {
       if (res.ok) {
-        const camps = res.value;
-        if (camps.length > 0) {
-          setUserCampaigns(camps);
-          const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem('codex_activeCampaignId') : null;
-          const found = savedActiveId ? camps.find((c) => c.id === savedActiveId) : null;
-          const target = found || camps[0];
-          setActiveCampaignState(target);
-
-          campaignService.fetchCampaignMembers(target.id, currentUserId).then((mRes) => {
-            if (mRes.ok) setCampaignMembers(mRes.value);
-            else toast.error(mRes.error.message);
-          });
-          campaignService.fetchFeedEvents(target.id, currentUserId).then((fRes) => {
-            if (fRes.ok) setFeedEvents(fRes.value);
-            else toast.error(fRes.error.message);
-          });
-        }
+        setUserCampaigns(res.value);
       } else {
+        setUserCampaigns([]);
         toast.error(res.error.message);
       }
     });
   }, [currentUserId]);
 
+  // Scope active campaign by roleMode (dm vs player)
+  useEffect(() => {
+    if (!currentUserId || userCampaigns.length === 0) {
+      setActiveCampaignState(null);
+      setCampaignMembers([]);
+      setFeedEvents([]);
+      return;
+    }
+
+    const key = `codex_activeCampaignId_${roleMode}`;
+    const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+    const filteredCamps = userCampaigns.filter((c) => c.role === roleMode);
+
+    if (filteredCamps.length > 0) {
+      const found = savedActiveId ? filteredCamps.find((c) => c.id === savedActiveId) : null;
+      const target = found || filteredCamps[0];
+      
+      setActiveCampaignState(target);
+      campaignService.fetchCampaignMembers(target.id, currentUserId).then((mRes) => {
+        if (mRes.ok) setCampaignMembers(mRes.value);
+        else toast.error(mRes.error.message);
+      });
+      campaignService.fetchFeedEvents(target.id, currentUserId).then((fRes) => {
+        if (fRes.ok) setFeedEvents(fRes.value);
+        else toast.error(fRes.error.message);
+      });
+    } else {
+      setActiveCampaignState(null);
+      setCampaignMembers([]);
+      setFeedEvents([]);
+    }
+  }, [roleMode, userCampaigns, currentUserId]);
+
   const setActiveCampaign = (camp: UserCampaign | null) => {
     setActiveCampaignState(camp);
     try {
       if (camp) {
-        localStorage.setItem('codex_activeCampaignId', camp.id);
+        localStorage.setItem(`codex_activeCampaignId_${roleMode}`, camp.id);
         campaignService.fetchCampaignMembers(camp.id, currentUserId).then((mRes) => {
           if (mRes.ok) setCampaignMembers(mRes.value);
           else toast.error(mRes.error.message);
@@ -78,7 +104,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
           else toast.error(fRes.error.message);
         });
       } else {
-        localStorage.removeItem('codex_activeCampaignId');
+        localStorage.removeItem(`codex_activeCampaignId_${roleMode}`);
       }
     } catch (e) {}
   };

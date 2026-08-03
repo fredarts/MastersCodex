@@ -11,6 +11,7 @@ import { LevelUpModal } from '../Modals/LevelUpModal';
 import { ZoomableImageModal } from '@/components/ui/ZoomableImageModal';
 import { AvatarCropperModal, AvatarSettings } from '@/components/ui/AvatarCropperModal';
 import { Settings2 } from 'lucide-react';
+import { useCustomDialog } from '@/context/CustomDialogContext';
 
 interface GeneralSectionProps {
   sheet: CharacterSheet;
@@ -18,6 +19,7 @@ interface GeneralSectionProps {
 }
 
 export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange }) => {
+  const { showAlert } = useCustomDialog();
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isCropperModalOpen, setIsCropperModalOpen] = useState(false);
   const [avatarAspect, setAvatarAspect] = useState(1);
@@ -156,7 +158,11 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
                     const publicUrl = await storageService.uploadAsset(file, 'avatars');
                     onChange({ ...sheet, avatarUrl: publicUrl });
                   } catch (err: any) {
-                    alert(err.message || 'Erro ao carregar avatar.');
+                    showAlert({
+                      title: 'Erro no Avatar',
+                      message: err.message || 'Erro ao carregar avatar.',
+                      variant: 'danger',
+                    });
                   }
                 }}
                 className="hidden"

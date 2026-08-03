@@ -5,6 +5,8 @@ import { storageService } from '@/lib/services/storageService';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useUserSettings } from '@/lib/hooks/useUserSettings';
 import { ZoomableImageModal } from '@/components/ui/ZoomableImageModal';
+import { CharacterRPAiGeneratorModal } from '../Modals/CharacterRPAiGeneratorModal';
+import { useCustomDialog } from '@/context/CustomDialogContext';
 
 interface RPSectionProps {
   sheet: CharacterSheet;
@@ -12,8 +14,10 @@ interface RPSectionProps {
 }
 
 export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
+  const { showAlert } = useCustomDialog();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const { settings } = useUserSettings();
 
   const generateImage = async () => {
@@ -55,7 +59,11 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
       onChange({ ...sheet, avatarUrl: finalUrl });
 
     } catch (error: any) {
-      alert(error.message || 'Erro ao gerar imagem.');
+      showAlert({
+        title: 'Erro de Geração',
+        message: error.message || 'Erro ao gerar imagem.',
+        variant: 'danger',
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -65,20 +73,30 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
     <div className="space-y-6 pb-20 animate-fade-in select-none">
       {/* IMAGEM E GERAÇÃO IA */}
       <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
             <ImageIcon className="w-4 h-4 text-amber-400" />
             Visual do Personagem
           </h3>
-          <button
-            type="button"
-            onClick={generateImage}
-            disabled={isGenerating}
-            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-3 py-1.5 rounded-lg font-bold text-xs transition-colors disabled:opacity-50"
-          >
-            {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
-            {isGenerating ? 'Gerando IA...' : 'Gerar Imagem com IA'}
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsAiModalOpen(true)}
+              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-slate-100 px-3 py-1.5 rounded-lg font-bold text-xs transition-colors shadow-lg shadow-purple-500/20 active:scale-95"
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              Preencher com IA
+            </button>
+            <button
+              type="button"
+              onClick={generateImage}
+              disabled={isGenerating}
+              className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-3 py-1.5 rounded-lg font-bold text-xs transition-colors disabled:opacity-50 active:scale-95 shadow-md shadow-amber-500/20"
+            >
+              {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+              {isGenerating ? 'Gerando...' : 'Gerar Imagem IA'}
+            </button>
+          </div>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-4">
@@ -199,7 +217,7 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
             <label className="text-[11px] font-bold text-slate-300">Traços de Personalidade</label>
             <textarea
               rows={2}
-              value={sheet.personalityTraits}
+              value={sheet.personalityTraits || ''}
               onChange={(e) => onChange({ ...sheet, personalityTraits: e.target.value })}
               className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
             />
@@ -209,7 +227,7 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
             <label className="text-[11px] font-bold text-slate-300">Ideais</label>
             <textarea
               rows={2}
-              value={sheet.ideals}
+              value={sheet.ideals || ''}
               onChange={(e) => onChange({ ...sheet, ideals: e.target.value })}
               className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
             />
@@ -219,7 +237,7 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
             <label className="text-[11px] font-bold text-slate-300">Ligações</label>
             <textarea
               rows={2}
-              value={sheet.bonds}
+              value={sheet.bonds || ''}
               onChange={(e) => onChange({ ...sheet, bonds: e.target.value })}
               className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
             />
@@ -229,7 +247,7 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
             <label className="text-[11px] font-bold text-slate-300">Defeitos</label>
             <textarea
               rows={2}
-              value={sheet.flaws}
+              value={sheet.flaws || ''}
               onChange={(e) => onChange({ ...sheet, flaws: e.target.value })}
               className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
             />
@@ -273,6 +291,17 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
         onClose={() => setIsImageModalOpen(false)} 
         imageUrl={sheet.avatarUrl || ''} 
       />
+
+      {/* MODAL DE GERAÇÃO DE LORE VIA IA */}
+      <CharacterRPAiGeneratorModal
+        isOpen={isAiModalOpen}
+        onClose={() => setIsAiModalOpen(false)}
+        sheet={sheet}
+        onApply={(data) => {
+          onChange({ ...sheet, ...data });
+        }}
+      />
     </div>
   );
 };
+

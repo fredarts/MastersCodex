@@ -102,7 +102,7 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
     );
   }
 
-  const activeWorldCampaigns = activeWorld ? userCampaigns.filter((c) => c.worldId === activeWorld.id) : [];
+  const activeWorldCampaigns = activeWorld ? userCampaigns.filter((c) => !c.worldId || c.worldId === activeWorld.id) : userCampaigns;
 
   return (
     <div className="flex-1 bg-[#0a0d14] flex flex-col overflow-hidden select-none">
@@ -287,7 +287,12 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
         ) : (
           userWorlds.map((world) => {
             const isSelected = activeWorld?.id === world.id;
-            const derivedCampaigns = userCampaigns.filter((c) => c.worldId === world.id);
+            const derivedCampaigns = userCampaigns.filter((c) => {
+              if (c.role !== 'dm') return false;
+              if (c.worldId) return c.worldId === world.id;
+              const targetWorld = activeWorld || userWorlds[0];
+              return targetWorld?.id === world.id;
+            });
             return (
               <div
                 key={world.id}
