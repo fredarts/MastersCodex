@@ -775,8 +775,16 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
           if (grid[r]?.[c]?.tokenName) {
+            const tokenNameClean = grid[r][c].tokenName!.trim().toLowerCase();
             const isPlayerToken = grid[r][c].tokenColor?.includes('cyan') || 
-                                  combatants?.find((comb: Combatant) => comb.name.slice(0, 3).toUpperCase() === grid[r][c].tokenName?.toUpperCase())?.type === 'player';
+                                  grid[r][c].tokenColor?.includes('emerald') || 
+                                  grid[r][c].tokenColor?.includes('green') || 
+                                  grid[r][c].tokenColor?.includes('blue') ||
+                                  combatants?.some((comb: Combatant) => {
+                                    if (comb.type !== 'player') return false;
+                                    const cName = comb.name.trim().toLowerCase();
+                                    return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
+                                  });
             
             // In player view, only player tokens project active line-of-sight vision.
             if (isPlayerView && !isPlayerToken) {
@@ -838,8 +846,16 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       for (let c = 0; c < COLS; c++) {
         const cell = grid[r]?.[c];
         if (cell && cell.tokenName) {
+          const tokenNameClean = cell.tokenName.trim().toLowerCase();
           const isPlayerToken = cell.tokenColor?.includes('cyan') || 
-                                combatants?.find((comb: Combatant) => comb.name.slice(0, 3).toUpperCase() === cell.tokenName?.toUpperCase())?.type === 'player';
+                                cell.tokenColor?.includes('emerald') || 
+                                cell.tokenColor?.includes('green') || 
+                                cell.tokenColor?.includes('blue') ||
+                                combatants?.some((comb: Combatant) => {
+                                  if (comb.type !== 'player') return false;
+                                  const cName = comb.name.trim().toLowerCase();
+                                  return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
+                                });
 
           // Hide tokens from players if not within active line of sight / explored areas
           if (isPlayerView) {
@@ -1224,8 +1240,16 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       for (let c = 0; c < COLS; c++) {
         const cell = grid[r]?.[c];
         if (cell && cell.tokenName) {
+          const tokenNameClean = cell.tokenName.trim().toLowerCase();
           const isPlayer = cell.tokenColor?.includes('cyan') || 
-                           combatants?.find((comb: Combatant) => comb.name.slice(0, 3).toUpperCase() === cell.tokenName?.toUpperCase())?.type === 'player';
+                           cell.tokenColor?.includes('emerald') || 
+                           cell.tokenColor?.includes('green') || 
+                           cell.tokenColor?.includes('blue') ||
+                           combatants?.some((comb: Combatant) => {
+                             if (comb.type !== 'player') return false;
+                             const cName = comb.name.trim().toLowerCase();
+                             return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
+                           });
           if (isPlayer) {
             playerTokens.push({
               r,

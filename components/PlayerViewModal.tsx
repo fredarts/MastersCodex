@@ -34,14 +34,40 @@ interface PlayerViewModalProps {
 export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
   isOpen,
   onClose,
-  combatants,
-  currentTurnIndex,
-  roundCount,
+  combatants: propCombatants,
+  currentTurnIndex: propCurrentTurnIndex,
+  roundCount: propRoundCount,
 }) => {
   const { activeScene, fetchSceneMap, campaignMaps } = useSession();
   const { activeCampaign } = useCampaign();
-  const { liveDisplayMode, projectedScene, combatLogs, broadcastPlayerRoll, mapData, setMapData, chatMessages, onlineUsers, dmCursor, pings } = useLiveCockpit();
+  const {
+    liveDisplayMode,
+    projectedScene,
+    combatLogs,
+    broadcastPlayerRoll,
+    mapData,
+    setMapData,
+    chatMessages,
+    onlineUsers,
+    dmCursor,
+    pings,
+    combatants: liveCombatants,
+    currentTurnIndex: liveCurrentTurnIndex,
+    roundCount: liveRoundCount,
+    broadcastStateRequest,
+  } = useLiveCockpit();
   const { user } = useAuth();
+
+  const combatants = (propCombatants && propCombatants.length > 0) ? propCombatants : liveCombatants;
+  const currentTurnIndex = propCurrentTurnIndex ?? liveCurrentTurnIndex;
+  const roundCount = propRoundCount ?? liveRoundCount;
+
+  // Solicita snapshot de estado ao Mestre ao abrir a tela do jogador
+  useEffect(() => {
+    if (isOpen) {
+      broadcastStateRequest();
+    }
+  }, [isOpen, broadcastStateRequest]);
 
   const [rightPanelTab, setRightPanelTab] = useState<'init' | 'log' | 'chat'>('init');
   const [isSheetModalOpen, setIsSheetModalOpen] = useState<boolean>(false);

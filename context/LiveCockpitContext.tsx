@@ -65,6 +65,7 @@ interface LiveCockpitContextType {
   voiceSignal: VoiceSignalPayload | null;
   broadcastVoiceSignal: (payload: VoiceSignalPayload) => void;
   broadcastPresenceUpdate: (payload: PresencePayload) => void;
+  broadcastStateRequest: (payload?: { requesterId?: string }) => void;
 }
 
 const LiveCockpitContext = createContext<LiveCockpitContextType | undefined>(undefined);
@@ -245,6 +246,8 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     broadcastPingLocation: syncBroadcastPingLocation,
     broadcastVoiceSignal: syncBroadcastVoiceSignal,
     broadcastPresenceUpdate: syncBroadcastPresenceUpdate,
+    broadcastStateRequest,
+    broadcastStateSnapshot,
   } = useRealtimeSync({
     campaignId,
     onTokenMove: (payload) => {
@@ -363,7 +366,62 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     onVoiceSignal: (payload) => {
       setVoiceSignal(payload);
     },
+    onStateRequest: () => {
+      // Quando um jogador pede snapshot, se eu for Mestre (ou tiver estado), envio o snapshot atual
+      if (activeCampaign?.role === 'dm') {
+        broadcastStateSnapshot({
+          mode: liveDisplayMode,
+          projectedScene,
+          combatants,
+          currentTurnIndex,
+          roundCount,
+          mapData,
+        });
+      }
+    },
+    onStateSnapshot: (snapshot) => {
+      // Quando recebo o snapshot do Mestre, atualizo o estado local
+      if (snapshot) {
+        if (snapshot.mode) setLiveDisplayModeState(snapshot.mode);
+        if (snapshot.projectedScene !== undefined) setProjectedScene(snapshot.projectedScene);
+        if (snapshot.combatants) setCombatants(snapshot.combatants);
+        if (snapshot.currentTurnIndex !== undefined) setCurrentTurnIndex(snapshot.currentTurnIndex);
+        if (snapshot.roundCount !== undefined) setRoundCount(snapshot.roundCount);
+        if (snapshot.mapData !== undefined) setMapData(snapshot.mapData);
+      }
+    },
   });
+
+  // Carrega estado persistido localmente ao inicializar
+  useEffect(() => {
+    if (typeof window !== 'undefined' && campaignId) {
+      const savedMode = localStorage.getItem(`masters_codex_display_mode_${campaignId}`);
+      if (savedMode === 'artwork' || savedMode === 'map' || savedMode === 'combat') {
+        setLiveDisplayModeState(savedMode);
+      }
+      const savedProj = localStorage.getItem(`masters_codex_live_projection_${campaignId}`);
+      if (savedProj) {
+        try {
+          setProjectedScene(JSON.parse(savedProj));
+        } catch (e) {}
+      }
+    }
+  }, [campaignId]);
+
+  // Persiste modo de exibição e projeção de cena
+  useEffect(() => {
+    if (typeof window !== 'undefined' && campaignId) {
+      localStorage.setItem(`masters_codex_display_mode_${campaignId}`, liveDisplayMode);
+    }
+  }, [liveDisplayMode, campaignId]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && campaignId && projectedScene) {
+      try {
+        localStorage.setItem(`masters_codex_live_projection_${campaignId}`, JSON.stringify(projectedScene));
+      } catch (e) {}
+    }
+  }, [projectedScene, campaignId]);
 
   // Sincroniza estado de combate em tempo real do Mestre para os Jogadores
   useEffect(() => {
@@ -388,8 +446,8 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     
     // Identificação básica do usuário
     const myId = user?.id || `guest-${Math.random().toString(36).substring(2, 9)}`;
-    let myName = user?.user_metadata?.full_name || user?.email || (activeCampaign?.role === 'dm' ? 'Mestre' : 'Jogador');
-    let avatarUrl = user?.user_metadata?.avatar_url;
+    let myName = user?.displayName || user?.user_metadata?.full_name || user?.email || (activeCampaign?.role === 'dm' ? 'Mestre' : 'Jogador');
+    let avatarUrl = user?.avatarUrl || user?.user_metadata?.avatar_url;
     let avatarSettings: { zoom: number; offsetX: number; offsetY: number } | undefined;
 
     // Se for jogador, tenta pegar o nome e o avatar da ficha ativa salva localmente
@@ -640,6 +698,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         voiceSignal,
         broadcastVoiceSignal,
         broadcastPresenceUpdate,
+        broadcastStateRequest,
       }}
     >
       {children}

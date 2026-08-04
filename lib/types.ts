@@ -83,6 +83,7 @@ export interface UserProfile {
   email: string;
   displayName: string;
   avatarUrl?: string;
+  user_metadata?: Record<string, any>;
 }
 
 export interface World {
@@ -765,5 +766,6 @@ export interface PresencePayload {
   displayName: string;
   avatarUrl?: string;
   avatarSettings?: { zoom: number; offsetX: number; offsetY: number };
-  status: 'online' | 'away' | 'speaking';
+  status: 'online' | 'away' | 'speaking' | 'offline';
+  timestamp?: number;
 }

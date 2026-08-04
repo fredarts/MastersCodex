@@ -44,6 +44,15 @@ export interface RealtimeSyncPayloads {
   PING_LOCATION: PingLocationPayload;
   VOICE_SIGNAL: VoiceSignalPayload;
   PRESENCE_UPDATE: PresencePayload;
+  STATE_REQUEST: { requesterId?: string };
+  STATE_SNAPSHOT: {
+    mode?: 'artwork' | 'map' | 'combat';
+    projectedScene?: any;
+    combatants?: any[];
+    currentTurnIndex?: number;
+    roundCount?: number;
+    mapData?: any;
+  };
 }
 
 export interface UseRealtimeSyncOptions {
@@ -63,6 +72,8 @@ export interface UseRealtimeSyncOptions {
   onPingLocation?: (payload: RealtimeSyncPayloads['PING_LOCATION']) => void;
   onVoiceSignal?: (payload: RealtimeSyncPayloads['VOICE_SIGNAL']) => void;
   onPresenceUpdate?: (payload: RealtimeSyncPayloads['PRESENCE_UPDATE']) => void;
+  onStateRequest?: (payload: RealtimeSyncPayloads['STATE_REQUEST']) => void;
+  onStateSnapshot?: (payload: RealtimeSyncPayloads['STATE_SNAPSHOT']) => void;
 }
 
 export function useRealtimeSync({
@@ -82,6 +93,8 @@ export function useRealtimeSync({
   onPingLocation,
   onVoiceSignal,
   onPresenceUpdate,
+  onStateRequest,
+  onStateSnapshot,
 }: UseRealtimeSyncOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const isSubscribedRef = useRef<boolean>(false);
@@ -103,6 +116,8 @@ export function useRealtimeSync({
     onPingLocation,
     onVoiceSignal,
     onPresenceUpdate,
+    onStateRequest,
+    onStateSnapshot,
   });
 
   useEffect(() => {
@@ -122,6 +137,8 @@ export function useRealtimeSync({
       onPingLocation,
       onVoiceSignal,
       onPresenceUpdate,
+      onStateRequest,
+      onStateSnapshot,
     };
   }, [
     onTokenMove,
@@ -139,6 +156,8 @@ export function useRealtimeSync({
     onPingLocation,
     onVoiceSignal,
     onPresenceUpdate,
+    onStateRequest,
+    onStateSnapshot,
   ]);
 
   // Cross-tab BroadcastChannel fallback
@@ -165,6 +184,8 @@ export function useRealtimeSync({
         if (type === 'PING_LOCATION' && cb.onPingLocation) cb.onPingLocation(data as any);
         if (type === 'VOICE_SIGNAL' && cb.onVoiceSignal) cb.onVoiceSignal(data as any);
         if (type === 'PRESENCE_UPDATE' && cb.onPresenceUpdate) cb.onPresenceUpdate(data as any);
+        if (type === 'STATE_REQUEST' && cb.onStateRequest) cb.onStateRequest(data as any);
+        if (type === 'STATE_SNAPSHOT' && cb.onStateSnapshot) cb.onStateSnapshot(data as any);
       };
     } catch (e) {}
 
@@ -248,6 +269,14 @@ export function useRealtimeSync({
         const cb = callbacksRef.current;
         if (cb.onPresenceUpdate) cb.onPresenceUpdate(payload);
       })
+      .on('broadcast', { event: 'STATE_REQUEST' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onStateRequest) cb.onStateRequest(payload);
+      })
+      .on('broadcast', { event: 'STATE_SNAPSHOT' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onStateSnapshot) cb.onStateSnapshot(payload);
+      })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           isSubscribedRef.current = true;
@@ -266,6 +295,15 @@ export function useRealtimeSync({
               await offlineQueue.dequeueEvent(ev.id);
             }
           }
+
+          // Ao conectar com sucesso, solicita o snapshot de estado do Mestre
+          try {
+            channel.send({
+              type: 'broadcast',
+              event: 'STATE_REQUEST',
+              payload: { requesterId: 'connected_client' },
+            });
+          } catch (err) {}
         } else {
           isSubscribedRef.current = false;
         }
@@ -373,6 +411,14 @@ export function useRealtimeSync({
     sendBroadcast('PRESENCE_UPDATE', payload);
   }, [sendBroadcast]);
 
+  const broadcastStateRequest = useCallback((payload: RealtimeSyncPayloads['STATE_REQUEST'] = {}) => {
+    sendBroadcast('STATE_REQUEST', payload);
+  }, [sendBroadcast]);
+
+  const broadcastStateSnapshot = useCallback((payload: RealtimeSyncPayloads['STATE_SNAPSHOT']) => {
+    sendBroadcast('STATE_SNAPSHOT', payload);
+  }, [sendBroadcast]);
+
   return {
     sendBroadcast,
     broadcastTokenMove,
@@ -390,5 +436,7 @@ export function useRealtimeSync({
     broadcastPingLocation,
     broadcastVoiceSignal,
     broadcastPresenceUpdate,
+    broadcastStateRequest,
+    broadcastStateSnapshot,
   };
 }
