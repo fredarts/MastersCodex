@@ -6,9 +6,9 @@ import { Combatant } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { useCampaign } from '@/lib/hooks/useCampaign';
-import { useBattleGridState } from '@/lib/hooks/useBattleGridState';
-import { useRealtimeBattleSync } from '@/lib/hooks/useRealtimeBattleSync';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
+import { useBattleGridState } from '@/lib/hooks/useBattleGridState';
+
 import { applySceneEnvironment } from './battle-3d/BattleEnvironment';
 import { setupCameraAndOrbit, DEFAULT_CAMERA_PRESETS } from './battle-3d/BattleCameraControls';
 import { createTokenMesh, updateTokenMeshState, TokenMeshOptions } from './battle-3d/Token3DMesh';
@@ -174,17 +174,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
   const pendingAttack = useLiveCockpitStudioStore((state) => state.pendingAttack);
 
-  const handleRemoteTokenMove = useCallback((tokenKey: string, position: { x: number; y: number; z: number }, rotation?: number) => {
-    updateTokenPosition3D(tokenKey, position.x, position.z);
-    if (rotation !== undefined) {
-      updateTokenRotation3D(tokenKey, rotation);
-    }
-  }, [updateTokenPosition3D, updateTokenRotation3D]);
 
-  const { broadcastTokenMove } = useRealtimeBattleSync({
-    campaignId: activeCampaign?.id,
-    onTokenMove: handleRemoteTokenMove,
-  });
 
   const activeSpellTargetingRef = useRef(activeSpellTargeting);
   const casterTokenKeyRef = useRef(casterTokenKey);
@@ -246,8 +236,9 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const dirLightRef = useRef<THREE.DirectionalLight | null>(null);
   const floorMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
   const floorTextureUrlRef = useRef<string | undefined>(floorTextureUrl);
-  
-  // Keep floorTextureUrlRef in sync with prop changes
+  const pingGroupRef = useRef<THREE.Group | null>(null);
+
+  const { pings, broadcastPingLocation, removePing } = useLiveCockpit();
   useEffect(() => {
     floorTextureUrlRef.current = floorTextureUrl;
   }, [floorTextureUrl]);
@@ -765,6 +756,110 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     isCombatantInSpellArea,
   ]);
 
+  // Render / Sync 3D Pings on the floor plane
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    if (pingGroupRef.current) {
+      scene.remove(pingGroupRef.current);
+      disposeHierarchy(pingGroupRef.current);
+      pingGroupRef.current = null;
+    }
+
+    if (!pings || pings.length === 0) return;
+
+    const pingGroup = new THREE.Group();
+    pingGroup.name = 'ping3DGroup';
+    pingGroupRef.current = pingGroup;
+    scene.add(pingGroup);
+
+    pings.forEach((ping, idx) => {
+      if (ping.context !== 'battle3d' && ping.worldX === undefined) return;
+
+      const pId = ping.id || `ping-${idx}`;
+      const pingContainer = new THREE.Group();
+      pingContainer.name = `ping-${pId}`;
+      pingGroup.add(pingContainer);
+
+      const rawWx = ping.worldX !== undefined ? ping.worldX : ((ping.x / 100) * 20 - 10);
+      const rawWz = ping.worldZ !== undefined ? ping.worldZ : ((ping.y / 100) * 20 - 10);
+
+      // Snap to 2x2 grid tile center
+      const wx = Math.floor(rawWx / 2) * 2 + 1;
+      const wz = Math.floor(rawWz / 2) * 2 + 1;
+
+      const colorHex = parseInt((ping.color || '#f59e0b').replace('#', '0x'), 16);
+
+      // 1. Solid Center Floor Ring
+      const ringGeo = new THREE.RingGeometry(0.2, 0.8, 32);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+      });
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.rotation.x = -Math.PI / 2;
+      ringMesh.position.set(wx, 0.05, wz);
+      pingContainer.add(ringMesh);
+
+      // 2. Outer Pulsing Floor Ring
+      const pulseGeo = new THREE.RingGeometry(0.8, 1.4, 32);
+      const pulseMat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.45,
+        depthWrite: false,
+      });
+      const pulseMesh = new THREE.Mesh(pulseGeo, pulseMat);
+      pulseMesh.rotation.x = -Math.PI / 2;
+      pulseMesh.position.set(wx, 0.05, wz);
+      pingContainer.add(pulseMesh);
+
+      // 3. Sender Badge Sprite floating above ping position with Close [✖] Button
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+        ctx.strokeStyle = ping.color || '#f59e0b';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.roundRect(4, 4, 248, 56, 16);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 22px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`📍 ${ping.senderName}`, 16, 32);
+
+        // Close button [✖] box
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.roundRect(200, 12, 40, 40, 10);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 22px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('✖', 220, 32);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+        const sprite = new THREE.Sprite(spriteMat);
+        sprite.position.set(wx, 1.8, wz);
+        sprite.scale.set(3, 0.75, 1);
+        pingContainer.add(sprite);
+      }
+    });
+  }, [pings]);
+
   // 1. Setup Three.js Scene ONCE on mount
   useEffect(() => {
     if (!containerRef.current) return;
@@ -898,6 +993,55 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
+
+      // Verificação de clique em Sinalizador 3D existente para remoção
+      if (pingGroupRef.current) {
+        const pingIntersects = raycaster.intersectObjects(pingGroupRef.current.children, true);
+        if (pingIntersects.length > 0) {
+          let obj: THREE.Object3D | null = pingIntersects[0].object;
+          while (obj && !obj.name.startsWith('ping-')) {
+            obj = obj.parent;
+          }
+          if (obj) {
+            const pId = obj.name.replace('ping-', '');
+            event.preventDefault();
+            event.stopPropagation();
+            removePing(pId);
+            return;
+          }
+        }
+      }
+
+      // Sinalizador 3D (Ctrl + Clique) fixo e alinhado à grade
+      if (event.ctrlKey) {
+        if (raycaster.ray.intersectPlane(groundPlane.current, planeIntersectPoint.current)) {
+          event.preventDefault();
+          event.stopPropagation();
+
+          const rawWx = planeIntersectPoint.current.x;
+          const rawWz = planeIntersectPoint.current.z;
+
+          // Alinha perfeitamente ao centro do quadrado da grade (Snap to Grid)
+          const snappedX = Math.floor(rawWx / 2) * 2 + 1;
+          const snappedZ = Math.floor(rawWz / 2) * 2 + 1;
+
+          const senderName = userRole === 'dm' ? 'Mestre' : (activeCampaign?.characterName || 'Jogador');
+          const color = userRole === 'dm' ? '#f59e0b' : '#38bdf8';
+          const pingId = `ping-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+          broadcastPingLocation({
+            id: pingId,
+            x: ((event.clientX - rect.left) / rect.width) * 100,
+            y: ((event.clientY - rect.top) / rect.height) * 100,
+            worldX: snappedX,
+            worldZ: snappedZ,
+            context: 'battle3d',
+            senderName,
+            color,
+          });
+        }
+        return;
+      }
 
       // Se a mira de magia estiver ativa, confirma a conjuração
       if (activeSpellTargetingRef.current && casterTokenKeyRef.current) {

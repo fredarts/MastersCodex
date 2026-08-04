@@ -3,6 +3,8 @@
 import React from 'react';
 import { Tv, Play, Swords, Map as MapIcon, Image as ImageIcon, Sparkles, Radio } from 'lucide-react';
 import { GameScene } from '@/lib/types';
+import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
+import { PresenceIndicator } from '@/components/live-cockpit/PresenceIndicator';
 
 interface LiveCockpitHeaderProps {
   activeScene: GameScene | null;
@@ -19,6 +21,7 @@ export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
   onOpenPlayerView,
   onOpenCreateScene,
 }) => {
+  const { onlineUsers } = useLiveCockpit();
   return (
     <div className="bg-zinc-900/90 border-b border-zinc-800 p-4 flex flex-wrap items-center justify-between gap-4 backdrop-blur-md sticky top-0 z-30">
       <div className="flex items-center gap-3">
@@ -74,7 +77,9 @@ export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
         </button>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-4">
+        <PresenceIndicator users={onlineUsers} className="border-r border-zinc-800 pr-3 mr-1" />
+
         <button
           onClick={onOpenCreateScene}
           className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold rounded-lg border border-zinc-700 transition-colors"

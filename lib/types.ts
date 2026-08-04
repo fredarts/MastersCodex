@@ -709,4 +709,61 @@ export interface DirectTransferPayload {
   sentAt: string;
 }
 
+// ==========================================
+// REAL-TIME SYNC PAYLOADS (Phase 3)
+// ==========================================
 
+export type ChatChannel = 'general' | 'whisper' | 'ic';
+
+export interface ChatDiceResult {
+  formula: string;
+  rolls: number[];
+  total: number;
+  isCrit?: boolean;
+  isFail?: boolean;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  channel: ChatChannel;
+  whisperTo?: string;
+  whisperToName?: string;
+  content: string;
+  rollResult?: ChatDiceResult;
+  timestamp: string;
+}
+
+export interface DmCursorPayload {
+  x: number;
+  y: number;
+  context: 'map' | 'battle3d';
+}
+
+export interface PingLocationPayload {
+  id?: string;
+  x: number;
+  y: number;
+  worldX?: number;
+  worldZ?: number;
+  context: 'map' | 'battle3d';
+  senderName: string;
+  color: string;
+}
+
+export interface VoiceSignalPayload {
+  type: 'offer' | 'answer' | 'ice-candidate';
+  fromUserId: string;
+  toUserId: string;
+  data: any;
+}
+
+export interface PresencePayload {
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+  avatarSettings?: { zoom: number; offsetX: number; offsetY: number };
+  status: 'online' | 'away' | 'speaking';
+}

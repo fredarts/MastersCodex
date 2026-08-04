@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useRef, useCallback } from 'react';
 import { Eye, Map as MapIcon, Mic, Volume2, Swords, RotateCcw } from 'lucide-react';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
@@ -37,6 +37,8 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
     liveDisplayMode,
     broadcastToPlayerView,
     initializeFromCombatants,
+    broadcastDmCursor,
+    broadcastPingLocation,
   } = useLiveCockpit();
 
   const {
@@ -64,6 +66,45 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
     isBattleStarted,
     setIsBattleStarted,
   } = useLiveCockpitStudioStore();
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const lastCursorSentRef = useRef<number>(0);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const now = Date.now();
+    if (now - lastCursorSentRef.current < 80) return; // 80ms throttle
+    lastCursorSentRef.current = now;
+
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+    broadcastDmCursor({
+      x,
+      y,
+      context: liveDisplayMode === 'combat' ? 'battle3d' : 'map',
+    });
+  };
+
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return;
+    if (e.ctrlKey) {
+      if (liveDisplayMode === 'combat') return; // BattleGrid3D trata pings 3D nativamente no chão
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+      broadcastPingLocation({
+        x,
+        y,
+        context: 'map',
+        senderName: 'Mestre',
+        color: '#f59e0b',
+      });
+      toast.info('Sinalizador de localização enviado!');
+    }
+  };
 
   const activeImageIndex = activeScene?.activeImageIndex ?? 0;
   const activeSlideImage = activeScene?.sceneImages?.[activeImageIndex];
@@ -184,7 +225,12 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
           
           {/* Live Visual Mirror Display Container */}
           <div className="flex-1 flex items-center justify-center min-w-0">
-            <div className="h-full max-w-full w-auto aspect-video bg-black rounded-2xl border border-[#2a3449] overflow-hidden relative shadow-2xl flex items-center justify-center">
+            <div
+              ref={containerRef}
+              onMouseMove={handleMouseMove}
+              onClick={handleClick}
+              className="h-full max-w-full w-auto aspect-video bg-black rounded-2xl border border-[#2a3449] overflow-hidden relative shadow-2xl flex items-center justify-center"
+            >
               {liveDisplayMode === 'combat' ? (
               <ThreeErrorBoundary>
                 <BattleGrid3D

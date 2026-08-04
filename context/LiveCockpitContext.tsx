@@ -1,10 +1,12 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { Combatant, CombatLogEntry, PlayerRollEvent } from '@/lib/types';
+import { Combatant, CombatLogEntry, ChatMessage, PlayerRollEvent, DmCursorPayload, PingLocationPayload, VoiceSignalPayload, PresencePayload } from '@/lib/types';
 import { useRealtimeSync } from '@/lib/hooks/useRealtimeSync';
 import { useCampaign } from '@/context/CampaignContext';
 import { useAuth } from '@/context/AuthContext';
+import { setGlobalBroadcaster } from '@/lib/dnd5e-dice';
+import { CRDTSolver } from '@/lib/sync/CRDTSolver';
 
 import { useBattleGridStore } from '@/lib/stores/useBattleGridStore';
 
@@ -52,6 +54,17 @@ interface LiveCockpitContextType {
   setCombatLogs: React.Dispatch<React.SetStateAction<CombatLogEntry[]>>;
   broadcastCombatLogEntry: (entry: CombatLogEntry) => void;
   broadcastPlayerRoll: (roll: PlayerRollEvent) => void;
+  chatMessages: ChatMessage[];
+  broadcastChatMessage: (message: ChatMessage) => void;
+  onlineUsers: { userId: string; displayName: string; avatarUrl?: string; status: string }[];
+  dmCursor: DmCursorPayload | null;
+  broadcastDmCursor: (payload: DmCursorPayload) => void;
+  pings: PingLocationPayload[];
+  broadcastPingLocation: (payload: PingLocationPayload) => void;
+  removePing: (id: string) => void;
+  voiceSignal: VoiceSignalPayload | null;
+  broadcastVoiceSignal: (payload: VoiceSignalPayload) => void;
+  broadcastPresenceUpdate: (payload: PresencePayload) => void;
 }
 
 const LiveCockpitContext = createContext<LiveCockpitContextType | undefined>(undefined);
@@ -76,6 +89,11 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [spellTargetPosition, setSpellTargetPositionState] = useState<{ x: number; z: number } | null>(null);
   const [activeSheets, setActiveSheets] = useState<ActiveSheetState[]>([]);
   const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<{ userId: string; displayName: string; avatarUrl?: string; status: string }[]>([]);
+  const [dmCursor, setDmCursor] = useState<DmCursorPayload | null>(null);
+  const [pings, setPings] = useState<PingLocationPayload[]>([]);
+  const [voiceSignal, setVoiceSignal] = useState<VoiceSignalPayload | null>(null);
 
   // Ref to track the last synchronized combat state to avoid feedback loops
   const lastSyncStateRef = useRef<{
@@ -83,6 +101,9 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     currentTurnIndex: number;
     roundCount: number;
   } | null>(null);
+
+  const lastTokenMoveTimesRef = useRef<Record<string, number>>({});
+  const lastTokenRotateTimesRef = useRef<Record<string, number>>({});
 
   // Active campaign ID for Supabase WebSocket channels
   const { activeCampaign } = useCampaign();
@@ -211,6 +232,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // Realtime Sync Hook
   const {
+    sendBroadcast,
     broadcastTokenMove,
     broadcastTokenRotate,
     broadcastLiveProjection,
@@ -218,24 +240,39 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     broadcastCombatUpdate,
     broadcastCombatLogEntry: syncBroadcastCombatLogEntry,
     broadcastPlayerRoll: syncBroadcastPlayerRoll,
+    broadcastChatMessage: syncBroadcastChatMessage,
+    broadcastDmCursor: syncBroadcastDmCursor,
+    broadcastPingLocation: syncBroadcastPingLocation,
+    broadcastVoiceSignal: syncBroadcastVoiceSignal,
+    broadcastPresenceUpdate: syncBroadcastPresenceUpdate,
   } = useRealtimeSync({
     campaignId,
     onTokenMove: (payload) => {
       const targetKey = payload.combatantId || payload.characterName;
       if (targetKey) {
-        storeSetTokenPositions3D((prev) => ({
-          ...prev,
-          [targetKey]: { x: payload.newX, z: payload.newZ },
-        }));
+        const remoteTime = payload.timestamp || Date.now();
+        const localLastModified = lastTokenMoveTimesRef.current[targetKey] || 0;
+        if (CRDTSolver.shouldApplyRemoteEvent(localLastModified, remoteTime)) {
+          lastTokenMoveTimesRef.current[targetKey] = remoteTime;
+          storeSetTokenPositions3D((prev) => ({
+            ...prev,
+            [targetKey]: { x: payload.newX, z: payload.newZ },
+          }));
+        }
       }
     },
     onTokenRotate: (payload) => {
       const targetKey = payload.combatantId || payload.characterName;
       if (targetKey && payload.angle !== undefined) {
-        storeSetTokenRotations3D((prev) => ({
-          ...prev,
-          [targetKey]: payload.angle,
-        }));
+        const remoteTime = payload.timestamp || Date.now();
+        const localLastModified = lastTokenRotateTimesRef.current[targetKey] || 0;
+        if (CRDTSolver.shouldApplyRemoteEvent(localLastModified, remoteTime)) {
+          lastTokenRotateTimesRef.current[targetKey] = remoteTime;
+          storeSetTokenRotations3D((prev) => ({
+            ...prev,
+            [targetKey]: payload.angle,
+          }));
+        }
       }
     },
     onLiveProjectionChange: handleLiveProjectionChange,
@@ -280,6 +317,52 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setCombatLogs((prev) => [...prev, entry]);
       }
     },
+    onChatMessage: (payload) => {
+      if (payload.message) {
+        setChatMessages((prev) => {
+          if (prev.some((m) => m.id === payload.message.id)) return prev;
+          return [...prev, payload.message];
+        });
+      }
+    },
+    onPresenceUpdate: (payload) => {
+      setOnlineUsers((prev) => {
+        if (payload.status === 'offline') {
+          return prev.filter((u) => u.userId !== payload.userId);
+        }
+        
+        const idx = prev.findIndex((u) => u.userId === payload.userId);
+        if (payload.status === 'online' || payload.status === 'speaking') {
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = payload;
+            return next;
+          }
+          return [...prev, payload];
+        }
+        
+        return prev;
+      });
+    },
+    onDmCursor: (payload) => {
+      setDmCursor(payload);
+    },
+    onPingLocation: (payload: any) => {
+      if (payload.action === 'remove' && payload.id) {
+        setPings((prev) => prev.filter((p: any) => p.id !== payload.id));
+        return;
+      }
+      setPings((prev) => [...prev, payload]);
+      // Play ping sound effect
+      try {
+        const audio = new Audio('/sounds/ping.mp3');
+        audio.volume = 0.3;
+        audio.play().catch(() => {});
+      } catch (e) {}
+    },
+    onVoiceSignal: (payload) => {
+      setVoiceSignal(payload);
+    },
   });
 
   // Sincroniza estado de combate em tempo real do Mestre para os Jogadores
@@ -298,6 +381,78 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       broadcastCombatUpdate(currentState);
     }
   }, [combatants, currentTurnIndex, roundCount, activeCampaign?.role, broadcastCombatUpdate, isCombatStateEqual]);
+
+  // Presence Heartbeat
+  useEffect(() => {
+    if (!campaignId) return;
+    
+    // Identificação básica do usuário
+    const myId = user?.id || `guest-${Math.random().toString(36).substring(2, 9)}`;
+    let myName = user?.user_metadata?.full_name || user?.email || (activeCampaign?.role === 'dm' ? 'Mestre' : 'Jogador');
+    let avatarUrl = user?.user_metadata?.avatar_url;
+    let avatarSettings: { zoom: number; offsetX: number; offsetY: number } | undefined;
+
+    // Se for jogador, tenta pegar o nome e o avatar da ficha ativa salva localmente
+    if (activeCampaign?.role === 'player') {
+      try {
+        const saved = localStorage.getItem('masters_codex_character_sheets_v1');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const expectedCharName = activeCampaign.characterName || 'Aventureiro';
+          
+          const found = parsed.find((s: any) => 
+            (activeCampaign.id && s.campaignId === activeCampaign.id) ||
+            (s.characterName && s.characterName.toLowerCase() === expectedCharName.toLowerCase())
+          );
+          
+          if (found) {
+            if (found.characterName && found.characterName !== 'Novo Aventureiro') {
+              myName = found.characterName;
+            }
+            if (found.avatarUrl) {
+              avatarUrl = found.avatarUrl;
+            }
+            if (found.avatarSettings) {
+              avatarSettings = found.avatarSettings;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    const pingPresence = () => {
+      syncBroadcastPresenceUpdate({
+        userId: myId,
+        displayName: myName,
+        avatarUrl,
+        avatarSettings,
+        status: 'online',
+        timestamp: Date.now(),
+      });
+    };
+
+    // Primeiro ping com um pequeno delay para garantir que o websocket está conectado
+    const timer = setTimeout(pingPresence, 1500);
+    // Repetir a cada 10 segundos
+    const interval = setInterval(pingPresence, 10000);
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+      syncBroadcastPresenceUpdate({
+        userId: myId,
+        displayName: myName,
+        status: 'offline',
+        timestamp: Date.now(),
+      });
+    };
+  }, [campaignId, user, syncBroadcastPresenceUpdate, activeCampaign?.role]);
+
+  // Register global broadcaster so pure TS modules (dnd5e-dice.ts) can reach Supabase
+  useEffect(() => {
+    setGlobalBroadcaster(sendBroadcast);
+    return () => setGlobalBroadcaster(() => {});
+  }, [sendBroadcast]);
 
   const setLiveDisplayMode = useCallback((mode: 'artwork' | 'map' | 'combat') => {
     setLiveDisplayModeState(mode);
@@ -324,6 +479,11 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setSpellTargetPositionState(pos);
     broadcastToPlayerView({ spellTargetPosition: pos });
   }, [broadcastToPlayerView]);
+
+  const removePing = useCallback((id: string) => {
+    setPings((prev) => prev.filter((p: any) => p.id !== id));
+    syncBroadcastPingLocation({ action: 'remove', id } as any);
+  }, [syncBroadcastPingLocation]);
 
   const openSheet = useCallback((id: string, type: 'pc' | 'player' | 'monster' | 'npc', name: string, data?: any) => {
     const normalizedType: 'pc' | 'monster' | 'npc' = (type as string) === 'player' ? 'pc' : (type as 'pc' | 'monster' | 'npc');
@@ -374,21 +534,27 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     newZ?: number
   ) => {
     storeUpdateTokenPosition3D(idOrName, deltaX, deltaZ, newX, newZ, (id, x, z) => {
+      const now = Date.now();
+      lastTokenMoveTimesRef.current[id] = now;
       broadcastTokenMove({
         combatantId: id,
         characterName: id,
         newX: x,
         newZ: z,
+        timestamp: now,
       });
     });
   };
 
   const updateTokenRotation3D = (idOrName: string, angleInDegrees: number) => {
     storeUpdateTokenRotation3D(idOrName, angleInDegrees, (id, angle) => {
+      const now = Date.now();
+      lastTokenRotateTimesRef.current[id] = now;
       broadcastTokenRotate({
         combatantId: id,
         characterName: id,
         angle,
+        timestamp: now,
       });
     });
   };
@@ -400,6 +566,31 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const broadcastPlayerRoll = useCallback((roll: PlayerRollEvent) => {
     syncBroadcastPlayerRoll({ roll });
   }, [syncBroadcastPlayerRoll]);
+
+  const broadcastChatMessage = useCallback((message: ChatMessage) => {
+    setChatMessages((prev) => {
+      if (prev.some((m) => m.id === message.id)) return prev;
+      return [...prev, message];
+    });
+    syncBroadcastChatMessage({ message });
+  }, [syncBroadcastChatMessage]);
+
+  const broadcastDmCursor = useCallback((payload: DmCursorPayload) => {
+    syncBroadcastDmCursor(payload);
+  }, [syncBroadcastDmCursor]);
+
+  const broadcastPingLocation = useCallback((payload: PingLocationPayload) => {
+    setPings((prev) => [...prev, payload]);
+    syncBroadcastPingLocation(payload);
+  }, [syncBroadcastPingLocation]);
+
+  const broadcastVoiceSignal = useCallback((payload: VoiceSignalPayload) => {
+    syncBroadcastVoiceSignal(payload);
+  }, [syncBroadcastVoiceSignal]);
+
+  const broadcastPresenceUpdate = useCallback((payload: PresencePayload) => {
+    syncBroadcastPresenceUpdate(payload);
+  }, [syncBroadcastPresenceUpdate]);
 
   return (
     <LiveCockpitContext.Provider
@@ -438,6 +629,17 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setCombatLogs,
         broadcastCombatLogEntry,
         broadcastPlayerRoll,
+        chatMessages,
+        broadcastChatMessage,
+        onlineUsers,
+        dmCursor,
+        broadcastDmCursor,
+        pings,
+        broadcastPingLocation,
+        removePing,
+        voiceSignal,
+        broadcastVoiceSignal,
+        broadcastPresenceUpdate,
       }}
     >
       {children}

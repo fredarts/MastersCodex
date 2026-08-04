@@ -44,7 +44,7 @@ export interface MagicMissileModalState {
   dartAllocations: Record<string, number>;
 }
 
-export type RightPanelTab = 'init' | 'log' | 'teleprompter';
+export type RightPanelTab = 'init' | 'log' | 'teleprompter' | 'chat';
 export type AddCombatantTab = 'monsters' | 'players' | 'custom' | 'npcs';
 
 // ── Store Interface ──

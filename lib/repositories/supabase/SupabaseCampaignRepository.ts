@@ -117,9 +117,7 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
     if (!isValidUuid(userId)) return null;
 
     const { data: campData, error: campErr } = await supabase
-      .from('campaigns')
-      .select('*')
-      .eq('invite_code', code.trim().toUpperCase())
+      .rpc('get_campaign_by_invite_code', { p_invite_code: code.trim().toUpperCase() })
       .single();
 
     if (campErr || !campData) return null;

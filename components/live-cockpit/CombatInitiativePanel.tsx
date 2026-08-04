@@ -10,13 +10,15 @@ import {
   UserPlus,
   CheckCircle2,
   Check,
+  MessageSquare,
 } from 'lucide-react';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { useSession } from '@/lib/hooks/useSession';
 import { CombatantCard } from '@/components/live-cockpit/CombatantCard';
 import { NarratorTeleprompterPanel } from '@/components/live-cockpit/NarratorTeleprompterPanel';
-import { BattleLog } from '@/components/BattleLog';
+import { SharedGameLog } from '@/components/live-cockpit/SharedGameLog';
+import { LiveChatPanel } from '@/components/live-cockpit/LiveChatPanel';
 import { Combatant, ConditionType, CharacterSheet, CharacterSpell } from '@/lib/types';
 
 interface CombatInitiativePanelProps {
@@ -56,6 +58,7 @@ export const CombatInitiativePanel: React.FC<CombatInitiativePanelProps> = ({
     broadcastToPlayerView,
     combatLogs,
     setCombatLogs,
+    chatMessages,
   } = useLiveCockpit();
 
   const { activeScene, updateScene } = useSession();
@@ -112,22 +115,30 @@ export const CombatInitiativePanel: React.FC<CombatInitiativePanelProps> = ({
             <ScrollText className="w-3 h-3" />
             <span>Logs ({combatLogs.length})</span>
           </button>
+
+          <button
+            onClick={() => setRightPanelTab('chat')}
+            className={`flex-1 py-1 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
+              rightPanelTab === 'chat'
+                ? 'bg-cyan-500 text-slate-950 shadow font-black'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <MessageSquare className="w-3 h-3" />
+            <span>Chat ({chatMessages.length})</span>
+          </button>
         </div>
       </div>
 
       {rightPanelTab === 'teleprompter' ? (
         <NarratorTeleprompterPanel onSlideChange={onSlideChange} />
       ) : rightPanelTab === 'log' ? (
-        <BattleLog
-          logs={combatLogs}
-          activeAttacker={combatants[currentTurnIndex]}
-          activeTarget={combatants.find((c) => c.id === selectedTargetId)}
-          onClearLogs={() => setCombatLogs([])}
-          onSelectTarget={(target) => {
-            setSelectedTargetId(target?.id);
-            broadcastToPlayerView({ targetId: target?.id });
-          }}
+        <SharedGameLog
+          combatLogs={combatLogs}
+          chatMessages={chatMessages}
         />
+      ) : rightPanelTab === 'chat' ? (
+        <LiveChatPanel />
       ) : !isCombatActive && combatants.length === 0 ? (
         /* Clean Empty State when no combat active */
         <div className="flex-1 p-6 flex flex-col items-center justify-center text-center space-y-4 my-auto">

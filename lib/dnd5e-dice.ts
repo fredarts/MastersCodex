@@ -1,6 +1,17 @@
 import { AdvantageMode, CharacterSheet, DiceRollEvent } from './types';
 import { getClassLevel } from './dnd5e-calculator';
 
+// Global broadcaster registry — allows pure TS modules to send events through Supabase Realtime
+let _globalBroadcaster: ((event: string, payload: any) => void) | null = null;
+
+export function setGlobalBroadcaster(fn: (event: string, payload: any) => void) {
+  _globalBroadcaster = fn;
+}
+
+export function getGlobalBroadcaster() {
+  return _globalBroadcaster;
+}
+
 /**
  * Rola um dado d20 considerando o modo de Vantagem / Desvantagem
  */
@@ -25,26 +36,34 @@ export function rollD20(advantageMode: AdvantageMode = 'normal'): {
 }
 
 /**
- * Transmite um evento de rolagem para o chat/realtime
+ * Transmite um evento de rolagem para o chat/realtime.
+ * Prioridade: Supabase Realtime (global) → BroadcastChannel (cross-tab local)
  */
 export function broadcastDiceRoll(event: DiceRollEvent) {
   if (typeof window === 'undefined') return;
 
-  // Broadcast local via BroadcastChannel
+  const payload = {
+    rollerName: event.characterName,
+    rollType: event.label,
+    diceFormula: event.advantageMode && event.advantageMode !== 'normal'
+      ? `2d20kh1 (${event.advantageMode === 'advantage' ? 'Vantagem' : 'Desvantagem'}) ${event.modifier >= 0 ? '+' : ''}${event.modifier}`
+      : `1d20 ${event.modifier >= 0 ? '+' : ''}${event.modifier}`,
+    result: event.total,
+    isCrit: event.isCrit,
+    isFail: event.isFail,
+    details: event,
+  };
+
+  // 1. Try global broadcaster (Supabase Realtime — reaches remote devices)
+  if (_globalBroadcaster) {
+    _globalBroadcaster('DICE_ROLL', payload);
+    return; // Supabase broadcaster already handles BroadcastChannel internally
+  }
+
+  // 2. Fallback: BroadcastChannel only (cross-tab, same machine)
   try {
     const bc = new BroadcastChannel('masters_codex_sync');
-    bc.postMessage({
-      type: 'DICE_ROLL',
-      rollerName: event.characterName,
-      rollType: event.label,
-      diceFormula: event.advantageMode && event.advantageMode !== 'normal'
-        ? `2d20kh1 (${event.advantageMode === 'advantage' ? 'Vantagem' : 'Desvantagem'}) ${event.modifier >= 0 ? '+' : ''}${event.modifier}`
-        : `1d20 ${event.modifier >= 0 ? '+' : ''}${event.modifier}`,
-      result: event.total,
-      isCrit: event.isCrit,
-      isFail: event.isFail,
-      details: event
-    });
+    bc.postMessage({ type: 'DICE_ROLL', ...payload });
     bc.close();
   } catch (e) {
     // Ignore iframe errors

@@ -1,22 +1,27 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Tv, Swords, Shield, Heart, Sparkles, Map, ScrollText, ListOrdered, FileText } from 'lucide-react';
+import { X, Tv, Swords, Shield, Heart, Sparkles, Map, ScrollText, ListOrdered, FileText, MessageSquare } from 'lucide-react';
 import { Combatant, CharacterSheet } from '@/lib/types';
 import { useSession } from '@/context/SessionContext';
 import { useCampaign } from '@/context/CampaignContext';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
+import { useAuth } from '@/context/AuthContext';
 import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl } from '@/lib/imageUtils';
 import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
 import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
 import { PlayerTurnBanner } from '@/components/player-view/PlayerTurnBanner';
-import { PlayerBattleLogPanel } from '@/components/player-view/PlayerBattleLogPanel';
+import { SharedGameLog } from '@/components/live-cockpit/SharedGameLog';
+import { LiveChatPanel } from '@/components/live-cockpit/LiveChatPanel';
+import { PresenceIndicator } from '@/components/live-cockpit/PresenceIndicator';
 import { CharacterSheetModal } from '@/components/character-sheet/CharacterSheetModal';
 import { createEmptyCharacterSheet } from '@/lib/dnd5e-data';
 import { DysonCanvas } from '@/components/map/DysonCanvas';
 import { revealVisionWithLOS, getTokenVisionRadius } from '@/components/map/visionCore';
 import { Cell } from '@/components/MapMaker';
+import { DmCursorOverlay } from '@/components/live-cockpit/DmCursorOverlay';
+import { PingEffect } from '@/components/live-cockpit/PingEffect';
 
 interface PlayerViewModalProps {
   isOpen: boolean;
@@ -35,9 +40,10 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
 }) => {
   const { activeScene, fetchSceneMap, campaignMaps } = useSession();
   const { activeCampaign } = useCampaign();
-  const { liveDisplayMode, projectedScene, combatLogs, broadcastPlayerRoll, mapData, setMapData } = useLiveCockpit();
+  const { liveDisplayMode, projectedScene, combatLogs, broadcastPlayerRoll, mapData, setMapData, chatMessages, onlineUsers, dmCursor, pings } = useLiveCockpit();
+  const { user } = useAuth();
 
-  const [rightPanelTab, setRightPanelTab] = useState<'init' | 'log'>('init');
+  const [rightPanelTab, setRightPanelTab] = useState<'init' | 'log' | 'chat'>('init');
   const [isSheetModalOpen, setIsSheetModalOpen] = useState<boolean>(false);
   const [isMapLoading, setIsMapLoading] = useState<boolean>(false);
   const [lastLoadedSceneMapKey, setLastLoadedSceneMapKey] = useState<string | null>(null);
@@ -272,6 +278,8 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          <PresenceIndicator users={onlineUsers} className="border-r border-[#2a3449] pr-3 mr-1" />
+
           <button
             onClick={() => setIsSheetModalOpen(true)}
             className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-lg shadow-amber-500/20 transition-all active:scale-95 cursor-pointer"
@@ -300,6 +308,9 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
       <div className="flex-1 flex overflow-hidden">
         {/* Left Side: 3D Battle Grid OR Scene Artwork */}
         <div className="flex-1 bg-black flex items-center justify-center relative overflow-hidden">
+          <DmCursorOverlay cursorData={dmCursor} />
+          <PingEffect pings={pings} />
+
           {isCombatMode ? (
             <ThreeErrorBoundary>
               <BattleGrid3D
@@ -488,6 +499,17 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               <ScrollText className="w-3.5 h-3.5" />
               <span>Log ({combatLogs.length})</span>
             </button>
+            <button
+              onClick={() => setRightPanelTab('chat')}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                rightPanelTab === 'chat'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Chat ({chatMessages.length})</span>
+            </button>
           </div>
 
           {/* Tab Content */}
@@ -581,8 +603,14 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 <span className="text-[10px] text-slate-500 font-mono">MASTER'S CODEX • PLAYER DISPLAY</span>
               </div>
             </div>
+          ) : rightPanelTab === 'log' ? (
+            <SharedGameLog
+              combatLogs={combatLogs}
+              chatMessages={chatMessages}
+              currentUserId={user?.id}
+            />
           ) : (
-            <PlayerBattleLogPanel logs={combatLogs} />
+            <LiveChatPanel />
           )}
         </div>
       </div>

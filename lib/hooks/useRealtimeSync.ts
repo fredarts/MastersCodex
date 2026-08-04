@@ -4,11 +4,11 @@ import { useEffect, useRef, useCallback } from 'react';
 import { offlineQueue } from '@/lib/sync/OfflineQueueManager';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { CombatLogEntry, PlayerRollEvent, PartyLootSession, DirectTransferPayload } from '@/lib/types';
+import { ChatMessage, CombatLogEntry, PlayerRollEvent, PartyLootSession, DirectTransferPayload, DmCursorPayload, PingLocationPayload, VoiceSignalPayload, PresencePayload } from '@/lib/types';
 
 export interface RealtimeSyncPayloads {
-  TOKEN_MOVE_3D: { combatantId: string; characterName?: string; newX: number; newZ: number };
-  TOKEN_ROTATE_3D: { combatantId: string; characterName?: string; angle: number };
+  TOKEN_MOVE_3D: { combatantId: string; characterName?: string; newX: number; newZ: number; timestamp?: number };
+  TOKEN_ROTATE_3D: { combatantId: string; characterName?: string; angle: number; timestamp?: number };
   LIVE_PROJECTION_UPDATE: { 
     type?: string;
     payload?: any;
@@ -32,13 +32,18 @@ export interface RealtimeSyncPayloads {
     spellTargetPosition?: { x: number; z: number } | null;
     mapData?: any;
   };
-  DICE_ROLL: { rollerName: string; rollType: string; diceFormula: string; result: number; isCrit?: boolean; isFail?: boolean };
+  DICE_ROLL: { rollerName: string; rollType: string; diceFormula: string; result: number; isCrit?: boolean; isFail?: boolean; details?: any };
   COMBAT_UPDATE: { combatants: any[]; currentTurnIndex: number; roundCount: number };
   COMBAT_LOG_ENTRY: { entry: CombatLogEntry };
   PLAYER_ROLL: { roll: PlayerRollEvent };
   PARTY_LOOT_UPDATE: { session: PartyLootSession };
   PARTY_LOOT_CLOSE: { sessionId: string };
   DIRECT_TRANSFER: { transfer: DirectTransferPayload };
+  CHAT_MESSAGE: { message: ChatMessage };
+  DM_CURSOR: DmCursorPayload;
+  PING_LOCATION: PingLocationPayload;
+  VOICE_SIGNAL: VoiceSignalPayload;
+  PRESENCE_UPDATE: PresencePayload;
 }
 
 export interface UseRealtimeSyncOptions {
@@ -53,6 +58,11 @@ export interface UseRealtimeSyncOptions {
   onPartyLootUpdate?: (payload: RealtimeSyncPayloads['PARTY_LOOT_UPDATE']) => void;
   onPartyLootClose?: (payload: RealtimeSyncPayloads['PARTY_LOOT_CLOSE']) => void;
   onDirectTransfer?: (payload: RealtimeSyncPayloads['DIRECT_TRANSFER']) => void;
+  onChatMessage?: (payload: RealtimeSyncPayloads['CHAT_MESSAGE']) => void;
+  onDmCursor?: (payload: RealtimeSyncPayloads['DM_CURSOR']) => void;
+  onPingLocation?: (payload: RealtimeSyncPayloads['PING_LOCATION']) => void;
+  onVoiceSignal?: (payload: RealtimeSyncPayloads['VOICE_SIGNAL']) => void;
+  onPresenceUpdate?: (payload: RealtimeSyncPayloads['PRESENCE_UPDATE']) => void;
 }
 
 export function useRealtimeSync({
@@ -67,6 +77,11 @@ export function useRealtimeSync({
   onPartyLootUpdate,
   onPartyLootClose,
   onDirectTransfer,
+  onChatMessage,
+  onDmCursor,
+  onPingLocation,
+  onVoiceSignal,
+  onPresenceUpdate,
 }: UseRealtimeSyncOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const isSubscribedRef = useRef<boolean>(false);
@@ -83,6 +98,11 @@ export function useRealtimeSync({
     onPartyLootUpdate,
     onPartyLootClose,
     onDirectTransfer,
+    onChatMessage,
+    onDmCursor,
+    onPingLocation,
+    onVoiceSignal,
+    onPresenceUpdate,
   });
 
   useEffect(() => {
@@ -97,6 +117,11 @@ export function useRealtimeSync({
       onPartyLootUpdate,
       onPartyLootClose,
       onDirectTransfer,
+      onChatMessage,
+      onDmCursor,
+      onPingLocation,
+      onVoiceSignal,
+      onPresenceUpdate,
     };
   }, [
     onTokenMove,
@@ -109,6 +134,11 @@ export function useRealtimeSync({
     onPartyLootUpdate,
     onPartyLootClose,
     onDirectTransfer,
+    onChatMessage,
+    onDmCursor,
+    onPingLocation,
+    onVoiceSignal,
+    onPresenceUpdate,
   ]);
 
   // Cross-tab BroadcastChannel fallback
@@ -130,6 +160,11 @@ export function useRealtimeSync({
         if (type === 'PARTY_LOOT_UPDATE' && cb.onPartyLootUpdate) cb.onPartyLootUpdate(data as any);
         if (type === 'PARTY_LOOT_CLOSE' && cb.onPartyLootClose) cb.onPartyLootClose(data as any);
         if (type === 'DIRECT_TRANSFER' && cb.onDirectTransfer) cb.onDirectTransfer(data as any);
+        if (type === 'CHAT_MESSAGE' && cb.onChatMessage) cb.onChatMessage(data as any);
+        if (type === 'DM_CURSOR' && cb.onDmCursor) cb.onDmCursor(data as any);
+        if (type === 'PING_LOCATION' && cb.onPingLocation) cb.onPingLocation(data as any);
+        if (type === 'VOICE_SIGNAL' && cb.onVoiceSignal) cb.onVoiceSignal(data as any);
+        if (type === 'PRESENCE_UPDATE' && cb.onPresenceUpdate) cb.onPresenceUpdate(data as any);
       };
     } catch (e) {}
 
@@ -192,6 +227,26 @@ export function useRealtimeSync({
       .on('broadcast', { event: 'DIRECT_TRANSFER' }, ({ payload }) => {
         const cb = callbacksRef.current;
         if (cb.onDirectTransfer) cb.onDirectTransfer(payload);
+      })
+      .on('broadcast', { event: 'CHAT_MESSAGE' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onChatMessage) cb.onChatMessage(payload);
+      })
+      .on('broadcast', { event: 'DM_CURSOR' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onDmCursor) cb.onDmCursor(payload);
+      })
+      .on('broadcast', { event: 'PING_LOCATION' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onPingLocation) cb.onPingLocation(payload);
+      })
+      .on('broadcast', { event: 'VOICE_SIGNAL' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onVoiceSignal) cb.onVoiceSignal(payload);
+      })
+      .on('broadcast', { event: 'PRESENCE_UPDATE' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onPresenceUpdate) cb.onPresenceUpdate(payload);
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -298,7 +353,28 @@ export function useRealtimeSync({
     sendBroadcast('DIRECT_TRANSFER', payload);
   }, [sendBroadcast]);
 
+  const broadcastChatMessage = useCallback((payload: RealtimeSyncPayloads['CHAT_MESSAGE']) => {
+    sendBroadcast('CHAT_MESSAGE', payload);
+  }, [sendBroadcast]);
+
+  const broadcastDmCursor = useCallback((payload: RealtimeSyncPayloads['DM_CURSOR']) => {
+    sendBroadcast('DM_CURSOR', payload);
+  }, [sendBroadcast]);
+
+  const broadcastPingLocation = useCallback((payload: RealtimeSyncPayloads['PING_LOCATION']) => {
+    sendBroadcast('PING_LOCATION', payload);
+  }, [sendBroadcast]);
+
+  const broadcastVoiceSignal = useCallback((payload: RealtimeSyncPayloads['VOICE_SIGNAL']) => {
+    sendBroadcast('VOICE_SIGNAL', payload);
+  }, [sendBroadcast]);
+
+  const broadcastPresenceUpdate = useCallback((payload: RealtimeSyncPayloads['PRESENCE_UPDATE']) => {
+    sendBroadcast('PRESENCE_UPDATE', payload);
+  }, [sendBroadcast]);
+
   return {
+    sendBroadcast,
     broadcastTokenMove,
     broadcastTokenRotate,
     broadcastLiveProjection,
@@ -309,5 +385,10 @@ export function useRealtimeSync({
     broadcastPartyLootUpdate,
     broadcastPartyLootClose,
     broadcastDirectTransfer,
+    broadcastChatMessage,
+    broadcastDmCursor,
+    broadcastPingLocation,
+    broadcastVoiceSignal,
+    broadcastPresenceUpdate,
   };
 }
