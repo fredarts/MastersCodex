@@ -16,6 +16,8 @@ interface MultiMapState {
     gridScale: number;
     gridOffsetX: number;
     gridOffsetY: number;
+    vectorWalls?: import('@/lib/types').WallSegment[];
+    lightSources?: import('@/lib/types').LightSource[];
   }>;
   activeMapId: string | null;
 }
@@ -29,6 +31,8 @@ export const CockpitDungeonMap: React.FC = () => {
   const [gridScale, setGridScale] = useState<number>(40);
   const [gridOffsetX, setGridOffsetX] = useState<number>(0);
   const [gridOffsetY, setGridOffsetY] = useState<number>(0);
+  const [vectorWalls, setVectorWalls] = useState<import('@/lib/types').WallSegment[]>([]);
+  const [lightSources, setLightSources] = useState<import('@/lib/types').LightSource[]>([]);
 
   const [selectedTool, setSelectedTool] = useState<'pan' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure'>('token');
   const [measureStart, setMeasureStart] = useState<{ r: number; c: number } | null>(null);
@@ -37,8 +41,6 @@ export const CockpitDungeonMap: React.FC = () => {
 
   const [currentMapId, setCurrentMapId] = useState<string | null>(null);
   const multiMapStateRef = useRef<MultiMapState>({ maps: {}, activeMapId: null });
-
-
 
   // Helper to create empty grid if no template
   const createInitialGrid = (cols = 80, rows = 80): Cell[][] => {
@@ -61,11 +63,19 @@ export const CockpitDungeonMap: React.FC = () => {
       setGridScale(40);
       setGridOffsetX(0);
       setGridOffsetY(0);
+      setVectorWalls([]);
+      setLightSources([]);
       return;
     }
 
     const savedMap = multiState.maps[mapId];
     const associatedMap = campaignMaps.find(m => m.id === mapId);
+
+    const walls = associatedMap?.gridData?.vectorWalls ?? savedMap?.vectorWalls ?? [];
+    const lights = associatedMap?.gridData?.lightSources ?? savedMap?.lightSources ?? [];
+
+    setVectorWalls(walls);
+    setLightSources(lights);
 
     if (savedMap && associatedMap && associatedMap.gridData) {
       // Merge: Update terrain/layout from the campaignMap template while preserving runtime fog and active tokens
@@ -78,11 +88,28 @@ export const CockpitDungeonMap: React.FC = () => {
           return {
             ...cell, // template tile type, doorConfig, trapConfig
             fog: sCell !== undefined ? sCell.fog : true, // preserve explored fog state
-            tokenName: sCell?.tokenName ?? cell.tokenName, // preserve active placed token
-            tokenColor: sCell?.tokenColor ?? cell.tokenColor,
+            tokenName: sCell !== undefined ? sCell.tokenName : cell.tokenName, // preserve active placed token from session
+            tokenColor: sCell !== undefined ? sCell.tokenColor : cell.tokenColor,
           };
         })
       );
+
+      // Deduplicate tokens by name to prevent ghost/cloned tokens
+      const seenTokens = new Set<string>();
+      for (let r = 0; r < mergedGrid.length; r++) {
+        for (let c = 0; c < mergedGrid[r].length; c++) {
+          const tName = mergedGrid[r][c].tokenName;
+          if (tName) {
+            const key = tName.trim().toUpperCase();
+            if (seenTokens.has(key)) {
+              mergedGrid[r][c].tokenName = undefined;
+              mergedGrid[r][c].tokenColor = undefined;
+            } else {
+              seenTokens.add(key);
+            }
+          }
+        }
+      }
 
       // Re-apply LOS for active tokens to ensure no walls are breached
       for (let r = 0; r < mergedGrid.length; r++) {
@@ -106,6 +133,8 @@ export const CockpitDungeonMap: React.FC = () => {
         gridScale: associatedMap.gridData.gridScale ?? savedMap.gridScale ?? 40,
         gridOffsetX: associatedMap.gridData.gridOffsetX ?? savedMap.gridOffsetX ?? 0,
         gridOffsetY: associatedMap.gridData.gridOffsetY ?? savedMap.gridOffsetY ?? 0,
+        vectorWalls: walls,
+        lightSources: lights,
       };
     } else if (savedMap) {
       setGrid(savedMap.grid || []);
@@ -149,6 +178,8 @@ export const CockpitDungeonMap: React.FC = () => {
         gridScale: associatedMap.gridData.gridScale || 40,
         gridOffsetX: associatedMap.gridData.gridOffsetX || 0,
         gridOffsetY: associatedMap.gridData.gridOffsetY || 0,
+        vectorWalls: walls,
+        lightSources: lights,
       };
     } else {
       const bGrid = createInitialGrid();
@@ -164,6 +195,8 @@ export const CockpitDungeonMap: React.FC = () => {
         gridScale: 40,
         gridOffsetX: 0,
         gridOffsetY: 0,
+        vectorWalls: [],
+        lightSources: [],
       };
     }
   }, [campaignMaps, combatants]);
@@ -223,6 +256,8 @@ export const CockpitDungeonMap: React.FC = () => {
           gridScale: m.gridScale,
           gridOffsetX: m.gridOffsetX,
           gridOffsetY: m.gridOffsetY,
+          vectorWalls: m.vectorWalls || [],
+          lightSources: m.lightSources || [],
           activeMapId: activeId,
           sceneId: activeScene.id,
         };
@@ -255,6 +290,8 @@ export const CockpitDungeonMap: React.FC = () => {
           gridScale,
           gridOffsetX,
           gridOffsetY,
+          vectorWalls,
+          lightSources,
         };
         multiMapStateRef.current.activeMapId = currentMapId;
       }
@@ -281,6 +318,8 @@ export const CockpitDungeonMap: React.FC = () => {
         gridScale,
         gridOffsetX,
         gridOffsetY,
+        vectorWalls,
+        lightSources,
         activeMapId: currentMapId,
         sceneId: activeScene.id,
         fogMatrix,
@@ -301,7 +340,7 @@ export const CockpitDungeonMap: React.FC = () => {
     }, 800);
 
     return () => clearTimeout(delayDebounce);
-  }, [grid, bgImageUrl, gridScale, gridOffsetX, gridOffsetY, activeScene, isLoading, currentMapId, saveSceneMap, broadcastToPlayerView]);
+  }, [grid, bgImageUrl, vectorWalls, lightSources, gridScale, gridOffsetX, gridOffsetY, activeScene, isLoading, currentMapId, saveSceneMap, broadcastToPlayerView]);
 
   const handleSwitchMap = (newMapId: string) => {
     if (!currentMapId || !multiMapStateRef.current || !activeScene) return;
@@ -312,7 +351,9 @@ export const CockpitDungeonMap: React.FC = () => {
       bgImageUrl,
       gridScale,
       gridOffsetX,
-      gridOffsetY
+      gridOffsetY,
+      vectorWalls,
+      lightSources,
     };
     multiMapStateRef.current.activeMapId = newMapId;
 
@@ -331,6 +372,8 @@ export const CockpitDungeonMap: React.FC = () => {
         gridScale: switchedMap.gridScale,
         gridOffsetX: switchedMap.gridOffsetX,
         gridOffsetY: switchedMap.gridOffsetY,
+        vectorWalls: switchedMap.vectorWalls || [],
+        lightSources: switchedMap.lightSources || [],
         activeMapId: newMapId,
         sceneId: activeScene.id,
       };
@@ -475,6 +518,8 @@ export const CockpitDungeonMap: React.FC = () => {
         gridOffsetX={gridOffsetX}
         gridOffsetY={gridOffsetY}
         combatants={combatants}
+        vectorWalls={vectorWalls}
+        lightSources={lightSources}
         selectedTool={selectedTool}
         setSelectedTool={(t) => setSelectedTool(t as any)}
         selectedTileType="floor" // Not painting terrains in cockpit

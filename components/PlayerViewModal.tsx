@@ -194,11 +194,28 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               return {
                 ...cell,
                 fog: sCell !== undefined ? sCell.fog : true,
-                tokenName: sCell?.tokenName ?? cell.tokenName,
-                tokenColor: sCell?.tokenColor ?? cell.tokenColor,
+                tokenName: sCell !== undefined ? sCell.tokenName : cell.tokenName,
+                tokenColor: sCell !== undefined ? sCell.tokenColor : cell.tokenColor,
               };
             })
           );
+
+          // Deduplicate tokens by name to prevent ghost/cloned tokens
+          const seenTokens = new Set<string>();
+          for (let r = 0; r < mergedGrid.length; r++) {
+            for (let c = 0; c < mergedGrid[r].length; c++) {
+              const tName = mergedGrid[r][c].tokenName;
+              if (tName) {
+                const key = tName.trim().toUpperCase();
+                if (seenTokens.has(key)) {
+                  mergedGrid[r][c].tokenName = undefined;
+                  mergedGrid[r][c].tokenColor = undefined;
+                } else {
+                  seenTokens.add(key);
+                }
+              }
+            }
+          }
           for (let r = 0; r < mergedGrid.length; r++) {
             for (let c = 0; c < mergedGrid[r].length; c++) {
               if (mergedGrid[r][c].tokenName) {
@@ -213,6 +230,8 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
             gridScale: templateMap.gridData.gridScale ?? gridData.gridScale ?? 40,
             gridOffsetX: templateMap.gridData.gridOffsetX ?? gridData.gridOffsetX ?? 0,
             gridOffsetY: templateMap.gridData.gridOffsetY ?? gridData.gridOffsetY ?? 0,
+            vectorWalls: templateMap.gridData.vectorWalls ?? gridData.vectorWalls ?? [],
+            lightSources: templateMap.gridData.lightSources ?? gridData.lightSources ?? [],
           };
         } else if (!gridData && templateMap && templateMap.gridData) {
           const tempGrid = templateMap.gridData.grid || [];
@@ -250,6 +269,8 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
             gridScale: gridData.gridScale || 40,
             gridOffsetX: gridData.gridOffsetX || 0,
             gridOffsetY: gridData.gridOffsetY || 0,
+            vectorWalls: gridData.vectorWalls || [],
+            lightSources: gridData.lightSources || [],
             activeMapId: activeId,
             sceneId: currentScene.id
           });
@@ -283,6 +304,8 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
     gridScale?: number;
     gridOffsetX?: number;
     gridOffsetY?: number;
+    vectorWalls?: import('@/lib/types').WallSegment[];
+    lightSources?: import('@/lib/types').LightSource[];
     activeMapId?: string;
   } | null;
 
@@ -366,6 +389,8 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 gridOffsetX={typedMapData.gridOffsetX || 0}
                 gridOffsetY={typedMapData.gridOffsetY || 0}
                 combatants={combatants}
+                vectorWalls={typedMapData.vectorWalls || []}
+                lightSources={typedMapData.lightSources || []}
                 selectedTool="pan" // Jogador só move a visualização do canvas
                 selectedTileType="floor"
                 selectedTokenCombatant={null}

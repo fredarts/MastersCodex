@@ -31,6 +31,8 @@ import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { toast } from 'sonner';
 import { storageService } from '@/lib/services/storageService';
 import { DysonCanvas } from './map/DysonCanvas';
+import { DungeonGeneratorModal } from './map/DungeonGeneratorModal';
+import { ParsedDungeonMap } from '@/lib/parsers/dungeonParser';
 import { useCustomDialog } from '@/context/CustomDialogContext';
 
 interface MapMakerProps {
@@ -206,6 +208,37 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
   const [mapTitle, setMapTitle] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
+  // AI Dungeon Generator State
+  const [isAIDungeonModalOpen, setIsAIDungeonModalOpen] = useState(false);
+
+  const handleAIDungeonGenerated = async (generatedFloors: ParsedDungeonMap[]) => {
+    if (generatedFloors.length === 0) return;
+
+    const floor1 = generatedFloors[0];
+    setGrid(floor1.grid);
+    setVectorWalls(floor1.vectorWalls);
+    setLightSources(floor1.lightSources);
+    setGridScale(40);
+    setGridOffsetX(0);
+    setGridOffsetY(0);
+    if (floor1.title) setMapTitle(floor1.title);
+
+    // If multi-floor, create additional maps for floors 2+
+    for (let i = 1; i < generatedFloors.length; i++) {
+      const floor = generatedFloors[i];
+      await createCampaignMap(`${floor.title || 'Masmorra'} - Andar ${i + 1}`, {
+        grid: floor.grid,
+        vectorWalls: floor.vectorWalls,
+        lightSources: floor.lightSources,
+        gridScale: 40,
+        gridOffsetX: 0,
+        gridOffsetY: 0,
+      });
+    }
+
+    toast.success(`Masmorra aplicada ao editor! ${generatedFloors.length} andar(es) gerado(s).`);
+  };
+
   // Handle UVTT / Universal VTT file import (.df2vtt, .uvtt, .json)
   const handleUVTTUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -251,6 +284,8 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
         if (firstMap.gridData) {
           setGrid(firstMap.gridData.grid || createInitialGrid(80, 80));
           setBgImageUrl(firstMap.gridData.bgImageUrl || null);
+          setVectorWalls(firstMap.gridData.vectorWalls || []);
+          setLightSources(firstMap.gridData.lightSources || []);
           setGridScale(firstMap.gridData.gridScale || 40);
           setGridOffsetX(firstMap.gridData.gridOffsetX || 0);
           setGridOffsetY(firstMap.gridData.gridOffsetY || 0);
@@ -266,6 +301,8 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
           if (firstMap.gridData) {
             setGrid(firstMap.gridData.grid || createInitialGrid(80, 80));
             setBgImageUrl(firstMap.gridData.bgImageUrl || null);
+            setVectorWalls(firstMap.gridData.vectorWalls || []);
+            setLightSources(firstMap.gridData.lightSources || []);
             setGridScale(firstMap.gridData.gridScale || 40);
             setGridOffsetX(firstMap.gridData.gridOffsetX || 0);
             setGridOffsetY(firstMap.gridData.gridOffsetY || 0);
@@ -744,6 +781,14 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
                      Importar UVTT (.df2vtt / .uvtt)
                    </button>
 
+                   <button
+                     onClick={() => setIsAIDungeonModalOpen(true)}
+                     className="w-full flex items-center justify-center gap-2 text-xs bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 px-3 py-2.5 rounded-lg font-bold transition-all shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer"
+                   >
+                     <Sparkles className="w-4 h-4 text-slate-950 fill-slate-950" />
+                     Gerar Masmorra com IA
+                   </button>
+
                    {bgImageUrl && (
                      <button
                        onClick={clearMapBg}
@@ -993,6 +1038,12 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
           }}
         />
 
+        {/* Modal do Gerador de Masmorras por IA */}
+        <DungeonGeneratorModal
+          isOpen={isAIDungeonModalOpen}
+          onClose={() => setIsAIDungeonModalOpen(false)}
+          onDungeonGenerated={handleAIDungeonGenerated}
+        />
       </div>
     </div>
   );

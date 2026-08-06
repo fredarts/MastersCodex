@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import { 
   Ruler, 
@@ -45,6 +45,19 @@ import {
 } from './visionCore';
 import { Combatant } from '@/lib/types';
 import { Cell, TileType, ChestConfig, ContainerType, ContainerStatus, ChestLoot } from '../MapMaker';
+
+function hexToRgba(hex: string, alpha: number): string {
+  let c = (hex || '#ff9900').replace('#', '');
+  if (c.length === 3) {
+    c = c.split('').map(x => x + x).join('');
+  }
+  const num = parseInt(c, 16);
+  if (isNaN(num)) return `rgba(255, 153, 0, ${alpha})`;
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 export interface RulerPoint {
   r: number;
@@ -364,27 +377,85 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   // Track centering flag to only center once per load/scene reset
   const centeredRef = useRef(false);
 
+  const fitAndCenterView = useCallback(() => {
+    if (!containerRef.current) return;
+    const containerRect = containerRef.current.getBoundingClientRect();
+    if (containerRect.width <= 0 || containerRect.height <= 0) return;
+
+    if (bgImage) {
+      const canvasWidth = bgImage.width;
+      const canvasHeight = bgImage.height;
+      const zoomX = containerRect.width / canvasWidth;
+      const zoomY = containerRect.height / canvasHeight;
+      const fitZoom = Math.min(1.2, Math.max(0.2, Math.min(zoomX, zoomY) * 0.9));
+
+      setZoom(fitZoom);
+      setPanOffset({
+        x: (containerRect.width - canvasWidth * fitZoom) / 2,
+        y: (containerRect.height - canvasHeight * fitZoom) / 2,
+      });
+      return;
+    }
+
+    // Find bounding box of carved cells (type !== 'wall')
+    let minC = COLS;
+    let maxC = -1;
+    let minR = ROWS;
+    let maxR = -1;
+
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (grid[r]?.[c] && grid[r][c].type !== 'wall') {
+          if (c < minC) minC = c;
+          if (c > maxC) maxC = c;
+          if (r < minR) minR = r;
+          if (r > maxR) maxR = r;
+        }
+      }
+    }
+
+    let dungWidth = COLS * CELL_SIZE;
+    let dungHeight = ROWS * CELL_SIZE;
+    let dungCenterX = dungWidth / 2;
+    let dungCenterY = dungHeight / 2;
+
+    if (maxC >= minC && maxR >= minR) {
+      const padMinC = Math.max(0, minC - 2);
+      const padMaxC = Math.min(COLS - 1, maxC + 2);
+      const padMinR = Math.max(0, minR - 2);
+      const padMaxR = Math.min(ROWS - 1, maxR + 2);
+
+      dungWidth = (padMaxC - padMinC + 1) * CELL_SIZE;
+      dungHeight = (padMaxR - padMinR + 1) * CELL_SIZE;
+      dungCenterX = ((padMinC + padMaxC + 1) / 2) * CELL_SIZE;
+      dungCenterY = ((padMinR + padMaxR + 1) / 2) * CELL_SIZE;
+    }
+
+    const zoomX = containerRect.width / dungWidth;
+    const zoomY = containerRect.height / dungHeight;
+    const idealZoom = Math.min(1.2, Math.max(0.3, Math.min(zoomX, zoomY)));
+
+    const panX = (containerRect.width / 2) - (dungCenterX * idealZoom);
+    const panY = (containerRect.height / 2) - (dungCenterY * idealZoom);
+
+    setZoom(idealZoom);
+    setPanOffset({ x: panX, y: panY });
+  }, [grid, bgImage, COLS, ROWS, CELL_SIZE]);
+
   useEffect(() => {
     if (centeredRef.current) return;
     if (bgImageUrl && !bgImage) return;
 
     if (containerRef.current) {
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const canvasWidth = bgImage ? bgImage.width : COLS * CELL_SIZE;
-      const canvasHeight = bgImage ? bgImage.height : ROWS * CELL_SIZE;
-      
-      setPanOffset({
-        x: (containerRect.width - canvasWidth) / 2,
-        y: (containerRect.height - canvasHeight) / 2,
-      });
+      fitAndCenterView();
       centeredRef.current = true;
     }
-  }, [bgImage, bgImageUrl, COLS, ROWS, CELL_SIZE]);
+  }, [bgImage, bgImageUrl, COLS, ROWS, CELL_SIZE, fitAndCenterView]);
 
-  // Reset centering flag when scene coordinates/background URL changes
+  // Reset centering flag when scene coordinates/grid/background URL changes
   useEffect(() => {
     centeredRef.current = false;
-  }, [bgImageUrl, COLS, ROWS]);
+  }, [bgImageUrl, COLS, ROWS, grid]);
 
   useEffect(() => {
     if (bgImageUrl) {
@@ -716,6 +787,57 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
             ctx.fillText(label, x, y);
           }
         }
+      }
+    }
+
+    // 1.5 Render Light Sources (Glow Halos & Hand-Drawn Icons)
+    if (lightSources && lightSources.length > 0) {
+      const now = Date.now();
+      for (const light of lightSources) {
+        if (light.x === undefined || light.y === undefined) continue;
+
+        // Normalize coordinates: if x/y were passed in grid cell units (e.g. 10.5), convert to pixels
+        const lx = light.x < 150 ? light.x * CELL_SIZE : light.x;
+        const ly = light.y < 150 ? light.y * CELL_SIZE : light.y;
+        const colorHex = light.color || '#ff9900';
+
+        // Calculate dynamic light radius in pixels (5ft = CELL_SIZE)
+        const dimFt = light.dimRadius || 40;
+        let dimRadiusPx = Math.max(20, (dimFt / 5) * CELL_SIZE);
+
+        // Dynamic Flicker / Pulse animation effect
+        let alphaMultiplier = 1.0;
+        if (light.animation === 'torch' || light.animation === 'candle') {
+          const flicker = (Math.sin(now / 150 + lx * 0.05) + Math.cos(now / 200 + ly * 0.05)) * 0.08;
+          dimRadiusPx *= (1 + flicker);
+          alphaMultiplier += flicker;
+        } else if (light.animation === 'pulse') {
+          const pulse = Math.sin(now / 400) * 0.12;
+          dimRadiusPx *= (1 + pulse);
+        }
+
+        // 1. Radial Glowing Light Halo
+        ctx.save();
+        const radGrad = ctx.createRadialGradient(lx, ly, 0, lx, ly, dimRadiusPx);
+        radGrad.addColorStop(0, hexToRgba(colorHex, 0.55 * alphaMultiplier));
+        radGrad.addColorStop(0.35, hexToRgba(colorHex, 0.22 * alphaMultiplier));
+        radGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        ctx.fillStyle = radGrad;
+        ctx.beginPath();
+        ctx.arc(lx, ly, dimRadiusPx, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // 2. Determine Preset Type for hand-drawn icon
+        let preset: 'torch' | 'candle' | 'lantern' | 'spell' | 'dragon' = 'torch';
+        if (light.animation === 'candle' || colorHex.toLowerCase() === '#ffaa33') preset = 'candle';
+        else if (light.animation === 'none' || colorHex.toLowerCase() === '#ffee77') preset = 'lantern';
+        else if (light.animation === 'pulse' || colorHex.toLowerCase() === '#ff4400') preset = 'dragon';
+        else if (light.animation === 'chroma' || colorHex.toLowerCase() === '#00ccff') preset = 'spell';
+
+        // 3. Hand-Drawn Icon on Canvas
+        drawLightSourceIcon(ctx, lx, ly, preset, zoom);
       }
     }
 
@@ -1563,50 +1685,54 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       const gridPos = getGridPos(x, y);
 
       const existing = lightSources?.find((l) => {
-        const lx = bgImage ? gridOffsetX + l.x * CELL_SIZE : l.x * CELL_SIZE;
-        const ly = bgImage ? gridOffsetY + l.y * CELL_SIZE : l.y * CELL_SIZE;
-        const dist = Math.sqrt(Math.pow(x - lx, 2) + Math.pow(y - ly, 2));
+        const lx = l.x < 150 ? (bgImage ? gridOffsetX + l.x * CELL_SIZE : l.x * CELL_SIZE) : l.x;
+        const ly = l.y < 150 ? (bgImage ? gridOffsetY + l.y * CELL_SIZE : l.y * CELL_SIZE) : l.y;
+        const dist = Math.hypot(x - lx, y - ly);
         return dist <= CELL_SIZE * 0.8;
       });
 
       if (existing || e.button === 2) {
         if (existing) {
           onRemoveLightSource?.(existing.id);
+          toast.info('Fonte de luz removida.');
         }
         return;
       }
 
       let brightRadius = 20;
       let dimRadius = 40;
-      let color = '#ffaa33';
+      let color = '#ff9900';
       let animation: any = 'torch';
 
       if (selectedLightPreset === 'candle') {
         brightRadius = 10;
         dimRadius = 20;
-        color = '#ffcc66';
-        animation = 'torch';
+        color = '#ffaa33';
+        animation = 'candle';
       } else if (selectedLightPreset === 'lantern') {
         brightRadius = 30;
         dimRadius = 60;
-        color = '#ffee88';
-        animation = 'torch';
+        color = '#ffee77';
+        animation = 'none';
       } else if (selectedLightPreset === 'spell') {
         brightRadius = 20;
         dimRadius = 40;
-        color = '#38bdf8';
-        animation = 'pulse';
+        color = '#00ccff';
+        animation = 'chroma';
       } else if (selectedLightPreset === 'dragon') {
-        brightRadius = 30;
-        dimRadius = 60;
-        color = '#ef4444';
+        brightRadius = 25;
+        dimRadius = 50;
+        color = '#ff4400';
         animation = 'pulse';
       }
 
+      const pixelX = (gridPos.c + 0.5) * CELL_SIZE;
+      const pixelY = (gridPos.r + 0.5) * CELL_SIZE;
+
       const newLight: import('@/lib/types').LightSource = {
-        id: `light-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        x: gridPos.c + 0.5,
-        y: gridPos.r + 0.5,
+        id: `light-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        x: pixelX,
+        y: pixelY,
         brightRadius,
         dimRadius,
         color,
@@ -3604,6 +3730,16 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           })()}
         </div>
       )}
+      {/* Floating Center / Fit View Button */}
+      <button
+        type="button"
+        onClick={fitAndCenterView}
+        className="absolute bottom-4 right-4 z-30 p-2.5 bg-slate-950/85 hover:bg-slate-900 border border-slate-700/80 hover:border-amber-500/50 text-amber-400 rounded-xl shadow-xl backdrop-blur-md flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 cursor-pointer pointer-events-auto"
+        title="Centralizar e Enquadrar Masmorra na Tela"
+      >
+        <Maximize2 className="w-4 h-4" />
+        <span className="hidden sm:inline">Centralizar Mapa</span>
+      </button>
     </div>
   );
 };
