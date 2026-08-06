@@ -14,6 +14,8 @@ import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
 import { PlayerTurnBanner } from '@/components/player-view/PlayerTurnBanner';
 import { SharedGameLog } from '@/components/live-cockpit/SharedGameLog';
 import { LiveChatPanel } from '@/components/live-cockpit/LiveChatPanel';
+import { MacroBarHUD } from '@/components/live-cockpit/MacroBarHUD';
+import { MacroBarDisplayMode, SecretRollNotificationMode } from '@/lib/types';
 import { PresenceIndicator } from '@/components/live-cockpit/PresenceIndicator';
 import { CharacterSheetModal } from '@/components/character-sheet/CharacterSheetModal';
 import { createEmptyCharacterSheet } from '@/lib/dnd5e-data';
@@ -70,6 +72,8 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
   }, [isOpen, broadcastStateRequest]);
 
   const [rightPanelTab, setRightPanelTab] = useState<'init' | 'log' | 'chat'>('init');
+  const [macroDisplayMode, setMacroDisplayMode] = useState<MacroBarDisplayMode>('both');
+  const [secretRollMode, setSecretRollMode] = useState<SecretRollNotificationMode>('subtle_notice');
   const [isSheetModalOpen, setIsSheetModalOpen] = useState<boolean>(false);
   const [isMapLoading, setIsMapLoading] = useState<boolean>(false);
   const [lastLoadedSceneMapKey, setLastLoadedSceneMapKey] = useState<string | null>(null);
@@ -634,12 +638,38 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               combatLogs={combatLogs}
               chatMessages={chatMessages}
               currentUserId={user?.id}
+              isDm={activeCampaign?.dmId === user?.id}
             />
           ) : (
-            <LiveChatPanel />
+            <LiveChatPanel
+              activeSheet={activeSheet}
+              displayMode={macroDisplayMode}
+              secretMode={secretRollMode}
+            />
           )}
         </div>
       </div>
+
+      {/* Floating Macro Bar HUD */}
+      <MacroBarHUD
+        onExecuteMacro={(command) => {
+          const message = {
+            id: `chat-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            senderId: user?.id || 'anonymous',
+            senderName: playerCharName,
+            channel: 'general' as const,
+            content: command,
+            timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          };
+          const { broadcastChatMessage } = useLiveCockpit();
+          if (broadcastChatMessage) broadcastChatMessage(message);
+        }}
+        activeSheet={activeSheet}
+        displayMode={macroDisplayMode}
+        onUpdateDisplayMode={setMacroDisplayMode}
+        secretMode={secretRollMode}
+        onUpdateSecretMode={setSecretRollMode}
+      />
 
       {/* Modal da Ficha Completa do Personagem */}
       <CharacterSheetModal

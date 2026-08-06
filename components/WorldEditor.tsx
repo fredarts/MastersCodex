@@ -48,6 +48,9 @@ import { ImageLightboxModal } from '@/components/ImageLightboxModal';
 import { LoreGraph } from '@/components/LoreGraph';
 import { WorldTimelineView } from '@/components/WorldTimelineView';
 import { WorldInteractiveMapView } from '@/components/WorldInteractiveMapView';
+import { CreateMonsterModal } from '@/components/modals/CreateMonsterModal';
+import { customMonsterService } from '@/lib/services/customMonsterService';
+import { CustomMonster } from '@/lib/types';
 
 interface WorldEditorProps {
   onOpenCreateCampaignWithWorld: () => void;
@@ -80,6 +83,27 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
   // Lightbox State for Cards
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+
+  // Custom Monsters State for 'beast' tab
+  const [customMonsters, setCustomMonsters] = useState<CustomMonster[]>([]);
+  const [showCreateMonsterModal, setShowCreateMonsterModal] = useState(false);
+  const [editingMonster, setEditingMonster] = useState<CustomMonster | null>(null);
+
+  React.useEffect(() => {
+    if (activeTab === 'beast') {
+      const load = async () => {
+        const data = await customMonsterService.fetchCustomMonsters(activeWorld?.id);
+        setCustomMonsters(data);
+      };
+      load();
+    }
+  }, [activeTab, activeWorld?.id]);
+
+  const refreshCustomMonsters = async () => {
+    if (!activeWorld) return;
+    const data = await customMonsterService.fetchCustomMonsters(activeWorld.id);
+    setCustomMonsters(data);
+  };
 
   // Accordion collapsed state for groups
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
@@ -455,7 +479,14 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
           <div className="flex items-center gap-3">
             {activeTab !== 'graph' && activeTab !== 'timeline' && activeTab !== 'map' && activeTab !== 'ai' && (
               <button
-                onClick={() => openModalForCategory(activeTab as WorldEntityCategory)}
+                onClick={() => {
+                  if (activeTab === 'beast') {
+                    setEditingMonster(null);
+                    setShowCreateMonsterModal(true);
+                  } else {
+                    openModalForCategory(activeTab as WorldEntityCategory);
+                  }
+                }}
                 className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold px-3 py-2 rounded-xl text-xs shadow transition-all active:scale-95"
               >
                 <Plus className="w-4 h-4" />
@@ -532,7 +563,7 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
             </div>
           ) : (
             <div className="space-y-4">
-              {currentCategoryEntities.length === 0 ? (
+              {(activeTab === 'beast' ? customMonsters.length === 0 : currentCategoryEntities.length === 0) ? (
                 <div className="border-2 border-dashed border-[#2a3449] rounded-2xl p-8 text-center text-slate-500 bg-[#0f141d]/40 max-w-xl mx-auto">
                   <p className="font-semibold text-slate-300 text-sm mb-1">
                     Nenhum item cadastrado na categoria <strong>{getCategoryLabel(activeTab)}</strong> em {activeWorld.title}.
@@ -541,7 +572,14 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
                     Comece expandindo este elemento para enriquecer a lore e a profundidade do seu universo.
                   </p>
                   <button
-                    onClick={() => openModalForCategory(activeTab as WorldEntityCategory)}
+                    onClick={() => {
+                      if (activeTab === 'beast') {
+                        setEditingMonster(null);
+                        setShowCreateMonsterModal(true);
+                      } else {
+                        openModalForCategory(activeTab as WorldEntityCategory);
+                      }
+                    }}
                     className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
                   >
                     + Adicionar {getCategoryLabel(activeTab)}
@@ -549,7 +587,87 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 tablet-portrait-grid">
-                  {currentCategoryEntities.map((ent) => (
+                  {activeTab === 'beast'
+                    ? customMonsters
+                        .filter(m => searchQuery === '' || m.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                        .map((ent) => (
+                      <div
+                        key={ent.id}
+                        className="p-4 rounded-2xl bg-[#161c28] border border-[#2a3449] hover:border-amber-500/50 transition-all flex flex-col justify-between overflow-hidden group"
+                      >
+                        <div>
+                          {ent.tokenImageUrl && (
+                            <div
+                              onClick={() => {
+                                setLightboxImages([ent.tokenImageUrl!]);
+                                setIsLightboxOpen(true);
+                              }}
+                              className="relative h-36 -mx-4 -mt-4 mb-3 overflow-hidden bg-[#0a0d14] cursor-pointer group/img"
+                              title="Clique para dar zoom na imagem"
+                            >
+                              <img src={ent.tokenImageUrl} alt={ent.name} className="w-full h-full object-cover group-hover/img:scale-105 transition-transform" />
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-bold uppercase bg-[#0a0d14] text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded">
+                              {ent.type || 'Monstro'}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setEditingMonster(ent);
+                                  setShowCreateMonsterModal(true);
+                                }}
+                                className="p-1 text-slate-400 hover:text-amber-400 rounded transition-colors"
+                                title="Editar Monstro"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (confirm('Tem certeza que deseja excluir este monstro?')) {
+                                    await customMonsterService.deleteCustomMonster(ent.id);
+                                    refreshCustomMonsters();
+                                  }
+                                }}
+                                className="p-1 text-slate-500 hover:text-rose-400 rounded transition-colors"
+                                title="Excluir Monstro"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <h4
+                            onClick={() => {
+                              setEditingMonster(ent);
+                              setShowCreateMonsterModal(true);
+                            }}
+                            className="font-bold text-base text-slate-100 hover:text-amber-300 cursor-pointer transition-colors"
+                          >
+                            {ent.name}
+                          </h4>
+                          <p className="text-xs text-slate-300 mt-1 font-serif leading-relaxed line-clamp-3">{ent.description || 'Nenhuma descrição fornecida.'}</p>
+
+                          <div className="mt-3 p-2 bg-[#0a0d14] rounded-lg border border-[#2a3449] space-y-1 text-[11px]">
+                            <div className="flex justify-between text-slate-400 font-mono">
+                              <span className="capitalize">HP:</span>
+                              <span className="text-slate-200 font-semibold">{ent.hp}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-400 font-mono">
+                              <span className="capitalize">AC:</span>
+                              <span className="text-slate-200 font-semibold">{ent.ac}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-400 font-mono">
+                              <span className="capitalize">CR:</span>
+                              <span className="text-slate-200 font-semibold">{ent.cr}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                    : currentCategoryEntities.map((ent) => (
                     <div
                       key={ent.id}
                       className="p-4 rounded-2xl bg-[#161c28] border border-[#2a3449] hover:border-amber-500/50 transition-all flex flex-col justify-between overflow-hidden group"
@@ -628,6 +746,23 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
           )}
         </div>
       </main>
+
+      {/* Custom Monster Creator Modal */}
+      {showCreateMonsterModal && (
+        <CreateMonsterModal
+          isOpen={showCreateMonsterModal}
+          onClose={() => {
+            setShowCreateMonsterModal(false);
+            setEditingMonster(null);
+          }}
+          onMonsterCreated={async () => {
+            await refreshCustomMonsters();
+            setShowCreateMonsterModal(false);
+            setEditingMonster(null);
+          }}
+          initialMonster={editingMonster || undefined}
+        />
+      )}
 
       {/* World Entity Creator / Editor Modal */}
       <WorldEntityModal

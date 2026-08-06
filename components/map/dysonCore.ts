@@ -518,3 +518,126 @@ export function drawIllusionWallHachure(
   ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
   ctx.setLineDash([]);
 }
+
+/**
+ * Renders a crisp flat black vector map decoration icon for Light Sources (torch, candle, lantern, spell, dragon)
+ */
+export function drawLightSourceIcon(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  preset = 'torch',
+  zoom = 1.0
+) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  const scale = Math.max(0.7, Math.min(1.5, 1.2 / Math.sqrt(zoom)));
+  ctx.scale(scale, scale);
+
+  // 1. Dyson Paper Backing Circle (White Fill + Black Border) for crisp contrast on any map background
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 2.0;
+
+  ctx.beginPath();
+  ctx.arc(0, 0, 15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Outer hand-drawn double ring (Dyson map style)
+  ctx.lineWidth = 1.0;
+  ctx.beginPath();
+  ctx.arc(0, 0, 17, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 2. Flat Black Hand-Drawn Icon Shapes
+  ctx.fillStyle = '#000000';
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 2.0;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if (preset === 'candle') {
+    // Flat Black Candle
+    ctx.fillRect(-3, -2, 6, 10);
+    ctx.beginPath();
+    ctx.moveTo(0, -2);
+    ctx.lineTo(0, -5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -5);
+    ctx.bezierCurveTo(-3, -8, -3, -11, 0, -14);
+    ctx.bezierCurveTo(3, -11, 3, -8, 0, -5);
+    ctx.fill();
+  } else if (preset === 'lantern') {
+    // Flat Black Lantern
+    ctx.beginPath();
+    ctx.arc(0, -9, 3, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillRect(-6, -6, 12, 3);
+    ctx.fillRect(-5, -3, 10, 8);
+    // Glass window lines
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-3, -1, 6, 4);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(-0.5, -1, 1, 4);
+    ctx.fillRect(-3, 0.5, 6, 1);
+    ctx.fillRect(-6, 5, 12, 3);
+  } else if (preset === 'spell') {
+    // Flat Black Arcane Spell Orb Starburst
+    ctx.beginPath();
+    ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = 1.8;
+    for (let i = 0; i < 8; i++) {
+      const angle = (i * Math.PI) / 4;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * 6, Math.sin(angle) * 6);
+      ctx.lineTo(Math.cos(angle) * 11, Math.sin(angle) * 11);
+      ctx.stroke();
+    }
+  } else if (preset === 'dragon') {
+    // Flat Black Dragon Fire Brazier
+    ctx.beginPath();
+    ctx.moveTo(-8, 0);
+    ctx.lineTo(8, 0);
+    ctx.lineTo(5, 6);
+    ctx.lineTo(-5, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-5, 6);
+    ctx.lineTo(-8, 11);
+    ctx.moveTo(5, 6);
+    ctx.lineTo(8, 11);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-6, 0);
+    ctx.bezierCurveTo(-8, -5, -4, -8, -2, -13);
+    ctx.bezierCurveTo(0, -10, 2, -12, 5, -13);
+    ctx.bezierCurveTo(7, -8, 6, -4, 6, 0);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    // Default Flat Black Torch
+    ctx.beginPath();
+    ctx.moveTo(-2.5, 9);
+    ctx.lineTo(-1, -1);
+    ctx.lineTo(2, -1);
+    ctx.lineTo(0.5, 9);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillRect(-4, -3, 9, 3);
+    ctx.beginPath();
+    ctx.moveTo(-3, -3);
+    ctx.bezierCurveTo(-5, -7, -3, -10, 0, -14);
+    ctx.bezierCurveTo(2, -10, 4, -9, 3, -3);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+

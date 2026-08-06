@@ -1,5 +1,6 @@
-import { AdvantageMode, CharacterSheet, DiceRollEvent } from './types';
+import { AdvantageMode, CharacterSheet, DiceRollEvent, RollVisibility, SecretRollNotificationMode, Bg3RollModifierCard } from './types';
 import { getClassLevel } from './dnd5e-calculator';
+import { useLiveCockpitStudioStore } from './stores/useLiveCockpitStudioStore';
 
 // Global broadcaster registry — allows pure TS modules to send events through Supabase Realtime
 let _globalBroadcaster: ((event: string, payload: any) => void) | null = null;
@@ -37,30 +38,39 @@ export function rollD20(advantageMode: AdvantageMode = 'normal'): {
 
 /**
  * Transmite um evento de rolagem para o chat/realtime.
- * Prioridade: Supabase Realtime (global) → BroadcastChannel (cross-tab local)
+ * Sanitiza e aplica as regras de segredo/visibilidade configuradas pelo DM.
  */
-export function broadcastDiceRoll(event: DiceRollEvent) {
+export function broadcastDiceRoll(
+  event: DiceRollEvent,
+  secretMode: SecretRollNotificationMode = 'subtle_notice'
+) {
   if (typeof window === 'undefined') return;
+
+  const isSecret = event.isSecret || event.visibility === 'gm' || event.visibility === 'blind';
 
   const payload = {
     rollerName: event.characterName,
     rollType: event.label,
-    diceFormula: event.advantageMode && event.advantageMode !== 'normal'
-      ? `2d20kh1 (${event.advantageMode === 'advantage' ? 'Vantagem' : 'Desvantagem'}) ${event.modifier >= 0 ? '+' : ''}${event.modifier}`
-      : `1d20 ${event.modifier >= 0 ? '+' : ''}${event.modifier}`,
+    diceFormula:
+      event.advantageMode && event.advantageMode !== 'normal'
+        ? `2d20kh1 (${event.advantageMode === 'advantage' ? 'Vantagem' : 'Desvantagem'}) ${event.modifier >= 0 ? '+' : ''}${event.modifier}`
+        : `1d20 ${event.modifier >= 0 ? '+' : ''}${event.modifier}`,
     result: event.total,
     isCrit: event.isCrit,
     isFail: event.isFail,
+    visibility: event.visibility || 'public',
+    isSecret,
+    secretMode,
     details: event,
   };
 
-  // 1. Try global broadcaster (Supabase Realtime — reaches remote devices)
+  // 1. Try global broadcaster (Supabase Realtime)
   if (_globalBroadcaster) {
     _globalBroadcaster('DICE_ROLL', payload);
-    return; // Supabase broadcaster already handles BroadcastChannel internally
+    return;
   }
 
-  // 2. Fallback: BroadcastChannel only (cross-tab, same machine)
+  // 2. Fallback: BroadcastChannel only
   try {
     const bc = new BroadcastChannel('masters_codex_sync');
     bc.postMessage({ type: 'DICE_ROLL', ...payload });
@@ -68,6 +78,46 @@ export function broadcastDiceRoll(event: DiceRollEvent) {
   } catch (e) {
     // Ignore iframe errors
   }
+}
+
+/**
+ * Constrói o conjunto de cartas de modificadores no estilo Baldur's Gate 3
+ */
+export function buildBg3ModifierCards(
+  sheet: CharacterSheet,
+  label: string,
+  baseModifier: number,
+  rollType: DiceRollEvent['rollType']
+): Bg3RollModifierCard[] {
+  const cards: Bg3RollModifierCard[] = [];
+
+  // Card 1: Modificador de Atributo/Perícia Base
+  cards.push({
+    id: 'mod-base',
+    label: label || 'Modificador Base',
+    value: baseModifier >= 0 ? `+${baseModifier}` : `${baseModifier}`,
+    numericValue: baseModifier,
+    iconType: 'attribute',
+    isEnabled: true,
+  });
+
+  // Card 2: Bônus de Magias/Habilidades ativas da Ficha (ex: Guidance, Inspiração, Fúria)
+  if (sheet.activeClassBuffs) {
+    sheet.activeClassBuffs.forEach((buff) => {
+      cards.push({
+        id: `buff-${buff.id}`,
+        label: buff.name,
+        value: buff.damageBonus || (buff.attackBonus ? `+${buff.attackBonus}` : '+1d4'),
+        numericValue: buff.attackBonus || 2,
+        iconType: 'spell',
+        sourceName: buff.description || 'Efeito Ativo',
+        isOptional: true,
+        isEnabled: true,
+      });
+    });
+  }
+
+  return cards;
 }
 
 /**
@@ -79,23 +129,33 @@ export function executeCheckRoll({
   modifier,
   rollType,
   advantageMode = 'normal',
+  visibility = 'public',
+  isSecret = false,
+  secretMode = 'subtle_notice',
+  difficultyClass,
+  contextNarrative,
 }: {
   sheet: CharacterSheet;
   label: string;
   modifier: number;
   rollType: DiceRollEvent['rollType'];
   advantageMode?: AdvantageMode;
+  visibility?: RollVisibility;
+  isSecret?: boolean;
+  secretMode?: SecretRollNotificationMode;
+  difficultyClass?: number;
+  contextNarrative?: string;
 }): DiceRollEvent {
   const { d20Roll1, d20Roll2, selectedD20 } = rollD20(advantageMode);
   const total = selectedD20 + modifier;
-  
+
   let critThreshold = 20;
   if (rollType === 'attack' && sheet.className === 'Guerreiro' && sheet.subclass === 'Campeão') {
     const level = getClassLevel(sheet, 'Guerreiro');
     if (level >= 15) critThreshold = 18;
     else if (level >= 3) critThreshold = 19;
   }
-  
+
   const isCrit = selectedD20 >= critThreshold;
   const isFail = selectedD20 === 1;
 
@@ -114,10 +174,37 @@ export function executeCheckRoll({
     isCrit,
     isFail,
     advantageMode,
+    visibility,
+    isSecret: isSecret || visibility === 'gm' || visibility === 'blind',
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
   };
 
-  broadcastDiceRoll(rollEvent);
+  const modifierCards = buildBg3ModifierCards(sheet, label, modifier, rollType);
+
+  // Trigger BG3 3D Dice Modal overlay state in store
+  if (typeof window !== 'undefined') {
+    useLiveCockpitStudioStore.getState().setBg3DiceOverlay({
+      title: label,
+      subtitle: `${sheet.characterName || 'Personagem'} • Teste de ${label}`,
+      actorName: sheet.characterName,
+      d20Roll: d20Roll1,
+      secondD20Roll: d20Roll2,
+      selectedD20Roll: selectedD20,
+      modifier,
+      totalRoll: total,
+      difficultyClass: difficultyClass || 15,
+      advantageMode,
+      modifierCards,
+      contextNarrative: contextNarrative || `${sheet.characterName} tenta realizar: ${label}`,
+      isCrit,
+      isFail,
+      isHit: isCrit || (difficultyClass ? total >= difficultyClass : true),
+      isRolling: true,
+      phase: 'd20',
+    });
+  }
+
+  broadcastDiceRoll(rollEvent, secretMode);
   return rollEvent;
 }
 
@@ -131,6 +218,9 @@ export function executeWeaponAttackRoll({
   damageStr,
   damageType,
   advantageMode = 'normal',
+  visibility = 'public',
+  isSecret = false,
+  secretMode = 'subtle_notice',
 }: {
   sheet: CharacterSheet;
   weaponName: string;
@@ -138,6 +228,9 @@ export function executeWeaponAttackRoll({
   damageStr: string;
   damageType?: string;
   advantageMode?: AdvantageMode;
+  visibility?: RollVisibility;
+  isSecret?: boolean;
+  secretMode?: SecretRollNotificationMode;
 }): { attackRoll: DiceRollEvent; damageRoll: DiceRollEvent } {
   const atkModifier = parseInt(atkBonusStr.replace('+', ''), 10) || 0;
   const attackRoll = executeCheckRoll({
@@ -146,12 +239,14 @@ export function executeWeaponAttackRoll({
     modifier: atkModifier,
     rollType: 'attack',
     advantageMode,
+    visibility,
+    isSecret,
+    secretMode,
   });
 
   // Rolagem de Dano
   let damageTotal = 0;
   try {
-    // Ex: "1d8 + 2" ou "2d6+3"
     const match = damageStr.match(/(\d+)d(\d+)(?:\s*([+-])\s*(\d+))?/i);
     if (match) {
       const numDice = parseInt(match[1], 10) || 1;
@@ -182,9 +277,11 @@ export function executeWeaponAttackRoll({
     total: Math.max(1, damageTotal),
     damageDice: damageStr,
     damageType: damageType || 'Físico',
+    visibility,
+    isSecret: isSecret || visibility === 'gm' || visibility === 'blind',
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
   };
 
-  broadcastDiceRoll(damageRoll);
+  broadcastDiceRoll(damageRoll, secretMode);
   return { attackRoll, damageRoll };
 }

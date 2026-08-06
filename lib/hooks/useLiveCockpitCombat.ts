@@ -3,23 +3,9 @@
 import { useState, useEffect } from 'react';
 import { Combatant } from '@/lib/types';
 import { useAudio } from '@/context/AudioContext';
+import { Bg3DiceOverlayState } from '@/lib/stores/useLiveCockpitStudioStore';
 
-export interface Bg3DiceOverlayState {
-  title: string;
-  actorName?: string;
-  targetName?: string;
-  d20Roll: number;
-  modifier: number;
-  totalRoll: number;
-  targetAc?: number;
-  isHit?: boolean;
-  isCrit?: boolean;
-  isFail?: boolean;
-  damageDiceFormula?: string;
-  damageAmount?: number;
-  isRolling: boolean;
-  phase: 'd20' | 'damage';
-}
+export type { Bg3DiceOverlayState };
 
 export function useLiveCockpitCombat(
   combatants: Combatant[],

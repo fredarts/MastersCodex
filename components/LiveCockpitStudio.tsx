@@ -558,137 +558,104 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       return false;
     }
 
-    const roll = Math.floor(Math.random() * 20) + 1;
-    const total = roll + mod;
-    const isCrit = roll === 20;
-    const isFail = roll === 1;
-
-    let numberOfDice = 1;
-    if (actionDesc) {
-      const dmgMatch = actionDesc.match(/(\d+)d\d+(?:\s*[\+\-]\s*\d+)?/i);
-      if (dmgMatch) {
-        numberOfDice += parseInt(dmgMatch[1], 10);
-      }
-    }
-
-    playDiceSound(numberOfDice);
-
-    setDiceResult({
-      title,
-      roll,
-      total,
-      isCrit,
-      isFail,
-    });
-
     const isAttack = title.startsWith('Ataque');
-    const isHit = isAttack && target ? isCrit || total >= target.ac : undefined;
-    let dmgAmount: number | undefined = undefined;
 
-    if (isAttack && target && isHit) {
-      dmgAmount = parseAndRollDamage(actionDesc, mod);
-    }
-
+    // Open BG3 Overlay in unrolled state, passing onRollComplete callback
     setBg3DiceOverlay({
       title,
       actorName: currentActor?.name,
       targetName: target?.name,
-      d20Roll: roll,
       modifier: mod,
-      totalRoll: total,
       targetAc: target?.ac,
-      isHit,
-      isCrit,
-      isFail,
+      difficultyClass: target?.ac,
       damageDiceFormula: actionDesc || '1d8',
-      damageAmount: dmgAmount,
-      isRolling: true,
+      isRolling: false,
       phase: 'd20',
-    });
+      onRollComplete: (finalTotal: number, isHitResult: boolean, roll: number) => {
+        const isCrit = roll === 20;
+        const isFail = roll === 1;
 
-    setTimeout(() => {
-      setBg3DiceOverlay((prev) => (prev ? { ...prev, isRolling: false } : null));
-
-      if (isHit && dmgAmount !== undefined) {
-        setTimeout(() => {
-          setBg3DiceOverlay((prev) => (prev ? { ...prev, phase: 'damage', isRolling: true } : null));
-          setTimeout(() => {
-            setBg3DiceOverlay((prev) => (prev ? { ...prev, isRolling: false } : null));
-          }, 600);
-        }, 1500);
-      }
-    }, 700);
-
-    if (title.startsWith('Ataque') && currentActor) {
-      if (target) {
-        const isHit = isCrit || total >= target.ac;
-        const resultText = isCrit ? '💥 ACERTO CRÍTICO!' : isHit ? '✓ ACERTOU!' : '✕ ERROU!';
-        const desc = `${currentActor.name} executou ${title} contra ${target.name} (d20: ${roll} + ${mod} = ${total} vs CA ${target.ac}) → ${resultText}`;
-
-        addLogEntry({
-          actorId: currentActor.id,
-          actorName: currentActor.name,
-          targetId: target.id,
-          targetName: target.name,
-          eventType: 'attack',
-          actionName: title,
-          d20Roll: roll,
-          totalRoll: total,
-          targetAc: target.ac,
-          isHit,
+        setDiceResult({
+          title,
+          roll,
+          total: finalTotal,
           isCrit,
           isFail,
-          description: desc,
         });
 
-        if (isHit) {
-          const dmg = parseAndRollDamage(actionDesc, mod);
-          const prevHp = target.hp;
-          handleHpChange(target.id, -dmg);
-          const newHp = Math.max(0, target.hp - dmg);
+        if (isAttack && currentActor) {
+          if (target) {
+            const isHit = isCrit || (!isFail && finalTotal >= target.ac);
+            const resultText = isCrit ? '💥 ACERTO CRÍTICO!' : isHit ? '✓ ACERTOU!' : '✕ ERROU!';
+            const desc = `${currentActor.name} executou ${title} contra ${target.name} (d20: ${roll} + mod = ${finalTotal} vs CA ${target.ac}) → ${resultText}`;
 
+            addLogEntry({
+              actorId: currentActor.id,
+              actorName: currentActor.name,
+              targetId: target.id,
+              targetName: target.name,
+              eventType: 'attack',
+              actionName: title,
+              d20Roll: roll,
+              totalRoll: finalTotal,
+              targetAc: target.ac,
+              isHit,
+              isCrit,
+              isFail,
+              description: desc,
+            });
+
+            if (isHit) {
+              const dmg = parseAndRollDamage(actionDesc, mod);
+              const prevHp = target.hp;
+              handleHpChange(target.id, -dmg);
+              const newHp = Math.max(0, target.hp - dmg);
+
+              addLogEntry({
+                actorId: currentActor.id,
+                actorName: currentActor.name,
+                targetId: target.id,
+                targetName: target.name,
+                eventType: 'damage',
+                amount: dmg,
+                description: `💥 ${currentActor.name} causou ${dmg} de dano em ${target.name} (HP: ${prevHp} → ${newHp})`,
+              });
+
+              if (newHp === 0) {
+                addLogEntry({
+                  actorId: target.id,
+                  actorName: target.name,
+                  eventType: 'death',
+                  description: `💀 ${target.name} foi derrotado em combate!`,
+                });
+              }
+            }
+          } else {
+            addLogEntry({
+              actorId: currentActor.id,
+              actorName: currentActor.name,
+              eventType: 'attack',
+              actionName: title,
+              d20Roll: roll,
+              totalRoll: finalTotal,
+              isCrit,
+              isFail,
+              description: `${currentActor.name} rolou ${title}: d20(${roll}) = ${finalTotal}`,
+            });
+          }
+        } else if (currentActor) {
           addLogEntry({
             actorId: currentActor.id,
             actorName: currentActor.name,
-            targetId: target.id,
-            targetName: target.name,
-            eventType: 'damage',
-            amount: dmg,
-            description: `💥 ${currentActor.name} causou ${dmg} de dano em ${target.name} (HP: ${prevHp} → ${newHp})`,
+            eventType: 'save',
+            d20Roll: roll,
+            totalRoll: finalTotal,
+            description: `${currentActor.name} fez teste de ${title}: d20(${roll}) = ${finalTotal}`,
           });
-
-          if (newHp === 0) {
-            addLogEntry({
-              actorId: target.id,
-              actorName: target.name,
-              eventType: 'death',
-              description: `💀 ${target.name} foi derrotado em combate!`,
-            });
-          }
         }
-      } else {
-        addLogEntry({
-          actorId: currentActor.id,
-          actorName: currentActor.name,
-          eventType: 'attack',
-          actionName: title,
-          d20Roll: roll,
-          totalRoll: total,
-          isCrit,
-          isFail,
-          description: `${currentActor.name} rolou ${title}: ${roll} + ${mod} = ${total}`,
-        });
-      }
-    } else if (currentActor) {
-      addLogEntry({
-        actorId: currentActor.id,
-        actorName: currentActor.name,
-        eventType: 'save',
-        d20Roll: roll,
-        totalRoll: total,
-        description: `${currentActor.name} fez teste de ${title}: ${roll} + ${mod} = ${total}`,
-      });
-    }
+      },
+    });
+
     return true;
   };
 

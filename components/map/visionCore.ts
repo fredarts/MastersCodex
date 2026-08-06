@@ -1,5 +1,5 @@
 import { Cell } from '../MapMaker';
-import { Combatant } from '@/lib/types';
+import { Combatant, WallSegment, LightSource, VisionType } from '@/lib/types';
 
 /**
  * Checks if a cell blocks light and vision (walls, closed doors, locked doors, or out of bounds)
@@ -16,24 +16,92 @@ export function isCellBlockingVision(cell: Cell | undefined): boolean {
 }
 
 /**
+ * Checks if a WallSegment blocks vision (taking into account doorState)
+ */
+export function isWallSegmentBlockingVision(wall: WallSegment): boolean {
+  if (!wall.blocksVision) return false;
+  if (wall.type === 'door' || wall.type === 'secret_door') {
+    return wall.doorState !== 'open';
+  }
+  return true;
+}
+
+/**
+ * Checks ray-segment intersection. Returns distance t along ray, or null if no intersection.
+ */
+export function raySegmentIntersection(
+  px: number,
+  py: number,
+  dx: number,
+  dy: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+): number | null {
+  const sx = x2 - x1;
+  const sy = y2 - y1;
+
+  const denom = dx * sy - dy * sx;
+  if (Math.abs(denom) < 1e-6) return null; // Parallel
+
+  const t = ((x1 - px) * sy - (y1 - py) * sx) / denom;
+  const u = ((x1 - px) * dy - (y1 - py) * dx) / denom;
+
+  if (t >= 0 && u >= 0 && u <= 1) {
+    return t;
+  }
+  return null;
+}
+
+/**
  * Checks if there is an unobstructed line of sight between two grid cells (c1, r1) and (c2, r2).
- * The start and end cells are permitted, but any intermediate blocking cell stops vision.
- * Also checks diagonal wall corner joints to prevent light leaking through diagonal wall corners.
  */
 export function hasLineOfSight(
   c1: number,
   r1: number,
   c2: number,
   r2: number,
-  grid: Cell[][]
+  grid: Cell[][],
+  vectorWalls: WallSegment[] = [],
+  cellSize = 60
 ): boolean {
   if (c1 === c2 && r1 === r2) return true;
 
+  // 1. Check vector wall intersections
+  if (vectorWalls.length > 0) {
+    const px = (c1 + 0.5) * cellSize;
+    const py = (r1 + 0.5) * cellSize;
+    const targetX = (c2 + 0.5) * cellSize;
+    const targetY = (r2 + 0.5) * cellSize;
+
+    const dx = targetX - px;
+    const dy = targetY - py;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist > 0.001) {
+      const ndx = dx / dist;
+      const ndy = dy / dist;
+
+      for (const wall of vectorWalls) {
+        if (!isWallSegmentBlockingVision(wall)) continue;
+        const wx1 = wall.x1 * cellSize;
+        const wy1 = wall.y1 * cellSize;
+        const wx2 = wall.x2 * cellSize;
+        const wy2 = wall.y2 * cellSize;
+
+        const t = raySegmentIntersection(px, py, ndx, ndy, wx1, wy1, wx2, wy2);
+        if (t !== null && t < dist - 0.1) {
+          return false;
+        }
+      }
+    }
+  }
+
+  // 2. Check grid cell intersections
   const dx = c2 - c1;
   const dy = r2 - r1;
   const dist = Math.sqrt(dx * dx + dy * dy);
-  
-  // Ample samples along the line to guarantee no missed cells
   const steps = Math.max(10, Math.ceil(dist * 12));
 
   let prevC = c1;
@@ -46,17 +114,9 @@ export function hasLineOfSight(
     const curC = Math.floor(curX);
     const curR = Math.floor(curY);
 
-    // If we've reached the target cell, stop checking intermediates
-    if (curC === c2 && curR === r2) {
-      break;
-    }
+    if (curC === c2 && curR === r2) break;
+    if (curC === c1 && curR === r1) continue;
 
-    // Skip the starting cell
-    if (curC === c1 && curR === r1) {
-      continue;
-    }
-
-    // If stepping to a new cell diagonally, check diagonal wall leak
     if (curC !== prevC && curR !== prevR) {
       const cornerCell1 = grid[prevR]?.[curC];
       const cornerCell2 = grid[curR]?.[prevC];
@@ -65,7 +125,6 @@ export function hasLineOfSight(
       }
     }
 
-    // Check intermediate cell blocking
     const intermediateCell = grid[curR]?.[curC];
     if (isCellBlockingVision(intermediateCell)) {
       return false;
@@ -85,7 +144,9 @@ export function revealVisionWithLOS(
   gridCopy: Cell[][],
   tokenRow: number,
   tokenCol: number,
-  radius: number
+  radius: number,
+  vectorWalls: WallSegment[] = [],
+  cellSize = 60
 ): void {
   const rows = gridCopy.length;
   const cols = gridCopy[0]?.length || 0;
@@ -100,7 +161,7 @@ export function revealVisionWithLOS(
     for (let c = minC; c <= maxC; c++) {
       const dist = Math.sqrt(Math.pow(r - tokenRow, 2) + Math.pow(c - tokenCol, 2));
       if (dist <= radius) {
-        if (hasLineOfSight(tokenCol, tokenRow, c, r, gridCopy)) {
+        if (hasLineOfSight(tokenCol, tokenRow, c, r, gridCopy, vectorWalls, cellSize)) {
           if (gridCopy[r]?.[c]) {
             gridCopy[r][c].fog = false;
           }
@@ -111,8 +172,7 @@ export function revealVisionWithLOS(
 }
 
 /**
- * Computes a 2D visibility polygon (like Godot Light2D) from pixel position (tx, ty) with visionRadius.
- * Casts fine rays in 360 degrees and stops at wall boundaries.
+ * Computes 2D visibility polygon taking into account both cell grid walls and vector WallSegments.
  */
 export function computeVisibilityPolygon(
   tx: number,
@@ -122,54 +182,105 @@ export function computeVisibilityPolygon(
   cellSize: number,
   gridOffsetX = 0,
   gridOffsetY = 0,
-  hasBgImage = false
+  hasBgImage = false,
+  vectorWalls: WallSegment[] = []
 ): { x: number; y: number }[] {
   const points: { x: number; y: number }[] = [];
+  const anglesSet = new Set<number>();
   const numRays = 360;
-  const step = Math.max(1.5, Math.min(cellSize * 0.05, 3.0));
+
+  // Base 360-degree rays
+  for (let i = 0; i < numRays; i++) {
+    anglesSet.add((i * 2 * Math.PI) / numRays);
+  }
+
+  // Add vertex-sweeping angles for vector walls to produce pixel-perfect sharp shadows
+  if (vectorWalls && vectorWalls.length > 0) {
+    const eps = 0.0001;
+    vectorWalls.forEach(wall => {
+      if (!isWallSegmentBlockingVision(wall)) return;
+      const wx1 = wall.x1 * cellSize + (hasBgImage ? gridOffsetX : 0);
+      const wy1 = wall.y1 * cellSize + (hasBgImage ? gridOffsetY : 0);
+      const wx2 = wall.x2 * cellSize + (hasBgImage ? gridOffsetX : 0);
+      const wy2 = wall.y2 * cellSize + (hasBgImage ? gridOffsetY : 0);
+
+      const a1 = Math.atan2(wy1 - ty, wx1 - tx);
+      const a2 = Math.atan2(wy2 - ty, wx2 - tx);
+
+      anglesSet.add(a1 - eps);
+      anglesSet.add(a1);
+      anglesSet.add(a1 + eps);
+
+      anglesSet.add(a2 - eps);
+      anglesSet.add(a2);
+      anglesSet.add(a2 + eps);
+    });
+  }
+
+  const sortedAngles = Array.from(anglesSet).sort((a, b) => a - b);
   const rows = grid.length;
   const cols = grid[0]?.length || 0;
 
-  const isPointBlocking = (px: number, py: number) => {
+  const startC = Math.floor((hasBgImage ? tx - gridOffsetX : tx) / cellSize);
+  const startR = Math.floor((hasBgImage ? ty - gridOffsetY : ty) / cellSize);
+
+  const isPointBlockingGrid = (px: number, py: number) => {
     const adjX = hasBgImage ? px - gridOffsetX : px;
     const adjY = hasBgImage ? py - gridOffsetY : py;
     const c = Math.floor(adjX / cellSize);
     const r = Math.floor(adjY / cellSize);
 
     if (c < 0 || c >= cols || r < 0 || r >= rows) return true;
+    if (c === startC && r === startR) return false; // Origin cell never blocks its own rays
     const cell = grid[r]?.[c];
     return isCellBlockingVision(cell);
   };
 
-  for (let i = 0; i < numRays; i++) {
-    const angle = (i * 2 * Math.PI) / numRays;
+  const step = Math.max(1.5, Math.min(cellSize * 0.05, 3.0));
+
+  for (const angle of sortedAngles) {
     const cosA = Math.cos(angle);
     const sinA = Math.sin(angle);
 
+    let closestDist = visionRadius;
+
+    // Check vector walls ray intersection
+    if (vectorWalls && vectorWalls.length > 0) {
+      for (const wall of vectorWalls) {
+        if (!isWallSegmentBlockingVision(wall)) continue;
+        const wx1 = wall.x1 * cellSize + (hasBgImage ? gridOffsetX : 0);
+        const wy1 = wall.y1 * cellSize + (hasBgImage ? gridOffsetY : 0);
+        const wx2 = wall.x2 * cellSize + (hasBgImage ? gridOffsetX : 0);
+        const wy2 = wall.y2 * cellSize + (hasBgImage ? gridOffsetY : 0);
+
+        const t = raySegmentIntersection(tx, ty, cosA, sinA, wx1, wy1, wx2, wy2);
+        if (t !== null && t > 2.0 && t < closestDist) {
+          closestDist = t;
+        }
+      }
+    }
+
+
+    // Step along ray for grid cell walls
     let currentDist = 0;
     let rx = tx;
     let ry = ty;
-    let hitWall = false;
 
-    while (currentDist < visionRadius) {
+    while (currentDist < closestDist) {
       rx += cosA * step;
       ry += sinA * step;
       currentDist += step;
 
-      if (isPointBlocking(rx, ry)) {
-        hitWall = true;
+      if (isPointBlockingGrid(rx, ry)) {
+        closestDist = currentDist;
         break;
       }
     }
 
-    if (hitWall) {
-      points.push({ x: rx, y: ry });
-    } else {
-      points.push({
-        x: tx + cosA * visionRadius,
-        y: ty + sinA * visionRadius
-      });
-    }
+    points.push({
+      x: tx + cosA * closestDist,
+      y: ty + sinA * closestDist
+    });
   }
 
   return points;
@@ -192,4 +303,20 @@ export function getTokenVisionRadius(
     return Math.max(1, combatant.visionRange / 5);
   }
   return 6.0; // default 30 feet -> 6 cells
+}
+
+/**
+ * Gets vision type of combatant (defaulting to 'normal')
+ */
+export function getCombatantVisionType(
+  tokenName: string | undefined,
+  combatants: Combatant[] = []
+): VisionType {
+  if (!tokenName) return 'normal';
+  const cleanTokenName = tokenName.trim().toUpperCase();
+  const combatant = combatants?.find((c: Combatant) => 
+    c.name.slice(0, 3).toUpperCase() === cleanTokenName || 
+    c.name.toUpperCase().startsWith(cleanTokenName)
+  );
+  return combatant?.visionType || 'normal';
 }

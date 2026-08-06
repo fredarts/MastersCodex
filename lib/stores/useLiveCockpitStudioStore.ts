@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Combatant, CombatLogEntry, CharacterSpell } from '@/lib/types';
+import { Combatant, CombatLogEntry, CharacterSpell, Bg3RollModifierCard, AdvantageMode } from '@/lib/types';
 import { BattleSetupMode } from '@/components/live-cockpit/BattleSetupModal';
 
 // ── Types ──
@@ -14,12 +14,19 @@ export interface DiceResultState {
 
 export interface Bg3DiceOverlayState {
   title: string;
+  subtitle?: string;
   actorName?: string;
   targetName?: string;
-  d20Roll: number;
+  d20Roll?: number;
+  secondD20Roll?: number;
+  selectedD20Roll?: number;
   modifier: number;
-  totalRoll: number;
+  totalRoll?: number;
   targetAc?: number;
+  difficultyClass?: number;
+  advantageMode?: AdvantageMode;
+  modifierCards?: Bg3RollModifierCard[];
+  contextNarrative?: string;
   isHit?: boolean;
   isCrit?: boolean;
   isFail?: boolean;
@@ -27,6 +34,7 @@ export interface Bg3DiceOverlayState {
   damageAmount?: number;
   isRolling: boolean;
   phase: 'd20' | 'damage';
+  onRollComplete?: (finalTotal: number, isHit: boolean, d20Value: number) => void;
 }
 
 export interface PendingAttackState {

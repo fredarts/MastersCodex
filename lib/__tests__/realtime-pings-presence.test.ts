@@ -1,0 +1,47 @@
+import { describe, it, expect } from 'vitest';
+import { PingLocationPayload, PresencePayload } from '../types';
+
+describe('Realtime Pings & Grid Snapping Logic', () => {
+  it('should snap raw world coordinates to 2x2m 3D grid tile centers', () => {
+    const rawX = 4.2;
+    const rawZ = -3.7;
+
+    const snappedX = Math.floor(rawX / 2) * 2 + 1;
+    const snappedZ = Math.floor(rawZ / 2) * 2 + 1;
+
+    expect(snappedX).toBe(5);
+    expect(snappedZ).toBe(-3);
+  });
+
+  it('should create valid 3D ping payload structure with unique ID', () => {
+    const pingId = `ping-${Date.now()}-abc123`;
+    const ping: PingLocationPayload = {
+      id: pingId,
+      x: 50,
+      y: 50,
+      worldX: 3,
+      worldZ: 5,
+      context: 'battle3d',
+      senderName: 'Thorin',
+      color: '#38bdf8',
+    };
+
+    expect(ping.id).toBe(pingId);
+    expect(ping.worldX).toBe(3);
+    expect(ping.worldZ).toBe(5);
+    expect(ping.context).toBe('battle3d');
+  });
+
+  it('should handle presence payload status changes and avatarSettings', () => {
+    const presence: PresencePayload = {
+      userId: 'user-123',
+      displayName: 'Mestre da Masmorra',
+      avatarUrl: 'https://example.com/avatar.jpg',
+      avatarSettings: { zoom: 1.5, offsetX: 10, offsetY: -5 },
+      status: 'online',
+    };
+
+    expect(presence.status).toBe('online');
+    expect(presence.avatarSettings?.zoom).toBe(1.5);
+  });
+});

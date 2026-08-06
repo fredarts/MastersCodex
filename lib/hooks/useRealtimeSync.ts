@@ -32,7 +32,8 @@ export interface RealtimeSyncPayloads {
     spellTargetPosition?: { x: number; z: number } | null;
     mapData?: any;
   };
-  DICE_ROLL: { rollerName: string; rollType: string; diceFormula: string; result: number; isCrit?: boolean; isFail?: boolean; details?: any };
+  DICE_ROLL: { rollerName: string; rollType: string; diceFormula: string; result: number; isCrit?: boolean; isFail?: boolean; visibility?: string; isSecret?: boolean; secretMode?: string; details?: any };
+  DICE_3D_BURST: { rollerName: string; dieType: 'd20' | 'd12' | 'd10' | 'd8' | 'd6' | 'd4'; result: number; isCrit?: boolean; isFail?: boolean; isHit?: boolean; title: string; isSecret?: boolean; subtleNoticeOnly?: boolean };
   COMBAT_UPDATE: { combatants: any[]; currentTurnIndex: number; roundCount: number };
   COMBAT_LOG_ENTRY: { entry: CombatLogEntry };
   PLAYER_ROLL: { roll: PlayerRollEvent };
@@ -61,6 +62,7 @@ export interface UseRealtimeSyncOptions {
   onTokenRotate?: (payload: RealtimeSyncPayloads['TOKEN_ROTATE_3D']) => void;
   onLiveProjectionChange?: (payload: RealtimeSyncPayloads['LIVE_PROJECTION_UPDATE']) => void;
   onDiceRoll?: (payload: RealtimeSyncPayloads['DICE_ROLL']) => void;
+  onDice3DBurst?: (payload: RealtimeSyncPayloads['DICE_3D_BURST']) => void;
   onCombatUpdate?: (payload: RealtimeSyncPayloads['COMBAT_UPDATE']) => void;
   onCombatLogEntry?: (payload: RealtimeSyncPayloads['COMBAT_LOG_ENTRY']) => void;
   onPlayerRoll?: (payload: RealtimeSyncPayloads['PLAYER_ROLL']) => void;
@@ -225,6 +227,10 @@ export function useRealtimeSync({
         const cb = callbacksRef.current;
         if (cb.onDiceRoll) cb.onDiceRoll(payload);
       })
+      .on('broadcast', { event: 'DICE_3D_BURST' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onDice3DBurst) cb.onDice3DBurst(payload);
+      })
       .on('broadcast', { event: 'COMBAT_UPDATE' }, ({ payload }) => {
         const cb = callbacksRef.current;
         if (cb.onCombatUpdate) cb.onCombatUpdate(payload);
@@ -367,6 +373,10 @@ export function useRealtimeSync({
     sendBroadcast('DICE_ROLL', payload);
   }, [sendBroadcast]);
 
+  const broadcastDice3DBurst = useCallback((payload: RealtimeSyncPayloads['DICE_3D_BURST']) => {
+    sendBroadcast('DICE_3D_BURST', payload);
+  }, [sendBroadcast]);
+
   const broadcastCombatUpdate = useCallback((payload: RealtimeSyncPayloads['COMBAT_UPDATE']) => {
     sendBroadcast('COMBAT_UPDATE', payload);
   }, [sendBroadcast]);
@@ -425,6 +435,7 @@ export function useRealtimeSync({
     broadcastTokenRotate,
     broadcastLiveProjection,
     broadcastDiceRoll,
+    broadcastDice3DBurst,
     broadcastCombatUpdate,
     broadcastCombatLogEntry,
     broadcastPlayerRoll,

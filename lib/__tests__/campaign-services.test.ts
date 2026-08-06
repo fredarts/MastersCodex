@@ -22,6 +22,7 @@ vi.mock('../supabase', () => {
     order: vi.fn().mockReturnThis(),
     single: vi.fn().mockReturnThis(),
     maybeSingle: vi.fn().mockReturnThis(),
+    rpc: vi.fn().mockReturnThis(),
   };
 
   return {
@@ -184,15 +185,22 @@ describe('Campaign Service & Repository Persistence Tests', () => {
       };
 
       const fromSpy = vi.spyOn(supabaseModule.supabase, 'from');
+      const rpcSpy = vi.spyOn(supabaseModule.supabase, 'rpc');
+
+      rpcSpy.mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: mockCampRow, error: null })
+      } as any);
 
       // Mock de busca de campanha e inserção de membro
       const mockChainCamp = { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: mockCampRow, error: null }) };
       const mockChainMembers = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockImplementation((col, val) => {
-          // Se for eq de busca de membros existentes
           return {
-            eq: vi.fn().mockResolvedValue({ data: [], error: null })
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
           };
         }),
         insert: vi.fn().mockReturnThis(),
@@ -206,6 +214,7 @@ describe('Campaign Service & Repository Persistence Tests', () => {
       });
 
       const result = await campaignService.joinCampaignByCode('INV-789', mockUserId, 'Drizzt');
+      if (!result.ok) console.log('JOIN ERROR:', result.error);
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value).not.toBeNull();

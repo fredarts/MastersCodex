@@ -609,24 +609,48 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
           </div>
 
           {/* Alcance de Visão Config */}
-          <div className="mb-2.5 mt-2">
-            <h5 className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-              Alcance de Visão (Fog of War)
-            </h5>
-            <div className="flex items-center gap-1.5">
-              <input
-                type="number"
-                value={c.visionRange ?? 30}
+          <div className="mb-2.5 mt-2 flex flex-col gap-2">
+            <div>
+              <h5 className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Alcance de Visão (Fog of War)
+              </h5>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  value={c.visionRange ?? 30}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    const updatedVal = isNaN(val) ? undefined : val;
+                    onUpdateCombatants((prev) =>
+                      prev.map((x) => (x.id === c.id ? { ...x, visionRange: updatedVal } : x))
+                    );
+                  }}
+                  className="w-16 px-1.5 py-0.5 bg-[#0a0d14] border border-[#2a3449] focus:border-cyan-500 outline-none rounded text-[10px] text-slate-300 font-mono"
+                />
+                <span className="text-[9px] text-slate-400">pés (padrão: 30 pés / 6 cel)</span>
+              </div>
+            </div>
+            
+            <div>
+              <h5 className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Tipo de Visão
+              </h5>
+              <select
+                value={c.visionType || 'normal'}
                 onChange={(e) => {
-                  const val = parseInt(e.target.value);
-                  const updatedVal = isNaN(val) ? undefined : val;
+                  const val = e.target.value as any;
                   onUpdateCombatants((prev) =>
-                    prev.map((x) => (x.id === c.id ? { ...x, visionRange: updatedVal } : x))
+                    prev.map((x) => (x.id === c.id ? { ...x, visionType: val } : x))
                   );
                 }}
-                className="w-16 px-1.5 py-0.5 bg-[#0a0d14] border border-[#2a3449] focus:border-cyan-500 outline-none rounded text-[10px] text-slate-300 font-mono"
-              />
-              <span className="text-[9px] text-slate-400">pés (padrão: 30 pés / 6 cel)</span>
+                className="w-full bg-[#0a0d14] text-[10px] font-semibold text-slate-300 border border-[#2a3449] rounded px-1.5 py-1 outline-none focus:border-cyan-500"
+              >
+                <option value="normal">Visão Normal</option>
+                <option value="darkvision">Darkvision (Escala de Cinza)</option>
+                <option value="blindsight">Blindsight</option>
+                <option value="tremorsense">Tremorsense (Sonar)</option>
+                <option value="truesight">Truesight</option>
+              </select>
             </div>
           </div>
 

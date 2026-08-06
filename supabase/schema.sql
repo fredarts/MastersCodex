@@ -610,5 +610,135 @@ EXCEPTION WHEN OTHERS THEN
   NULL;
 END $$;
 
+-- 1.11 TABELA CUSTOM MONSTERS (Monstros Customizados / Pinos Billboard 2D e 3D)
+CREATE TABLE IF NOT EXISTS public.custom_monsters (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  campaign_id UUID REFERENCES public.campaigns(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'Monstro',
+  size TEXT NOT NULL DEFAULT 'Médio',
+  alignment TEXT DEFAULT 'Neutro',
+  ac INT NOT NULL DEFAULT 10,
+  hp INT NOT NULL DEFAULT 10,
+  speed TEXT DEFAULT '9m',
+  cr TEXT DEFAULT '1',
+  xp INT DEFAULT 200,
+  str INT DEFAULT 10,
+  dex INT DEFAULT 10,
+  con INT DEFAULT 10,
+  int INT DEFAULT 10,
+  wis INT DEFAULT 10,
+  cha INT DEFAULT 10,
+  token_image_url TEXT,
+  model_url TEXT,
+  token_type TEXT NOT NULL DEFAULT 'billboard', -- 'billboard' ou '3d'
+  description TEXT,
+  lore TEXT,
+  abilities JSONB DEFAULT '[]'::jsonb,
+  actions JSONB DEFAULT '[]'::jsonb,
+  spells JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
 
+-- Índices de busca e ordenação
+CREATE INDEX IF NOT EXISTS idx_custom_monsters_user_id ON public.custom_monsters (user_id);
+CREATE INDEX IF NOT EXISTS idx_custom_monsters_campaign_id ON public.custom_monsters (campaign_id);
+CREATE INDEX IF NOT EXISTS idx_custom_monsters_name ON public.custom_monsters (name text_pattern_ops);
 
+-- RLS (Row Level Security)
+ALTER TABLE public.custom_monsters ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Custom_Monsters_Select" ON public.custom_monsters
+  FOR SELECT USING (
+    auth.role() = 'authenticated' AND (
+      user_id = auth.uid() OR 
+      campaign_id IS NULL OR
+      EXISTS (
+        SELECT 1 FROM public.campaign_members cm
+        WHERE cm.campaign_id = custom_monsters.campaign_id AND cm.user_id = auth.uid()
+      )
+    )
+  );
+
+CREATE POLICY "Custom_Monsters_Insert" ON public.custom_monsters
+  FOR INSERT WITH CHECK (
+    auth.role() = 'authenticated' AND (user_id = auth.uid() OR user_id IS NULL)
+  );
+
+CREATE POLICY "Custom_Monsters_Update" ON public.custom_monsters
+  FOR UPDATE USING (
+    auth.role() = 'authenticated' AND user_id = auth.uid()
+  );
+
+CREATE POLICY "Custom_Monsters_Delete" ON public.custom_monsters
+  FOR DELETE USING (
+    auth.role() = 'authenticated' AND user_id = auth.uid()
+  );
+
+-- Publicar no Supabase Realtime
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.custom_monsters;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END $$;
+
+-- ==============================================================================
+-- 1.12 TABELA DICE ROLL LOGS (Histórico e Auditoria de Rolagens)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.dice_roll_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id UUID NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
+  session_id UUID REFERENCES public.sessions(id) ON DELETE SET NULL,
+  user_id TEXT NOT NULL,
+  character_name TEXT NOT NULL,
+  avatar_url TEXT,
+  roll_type TEXT NOT NULL,
+  label TEXT NOT NULL,
+  formula TEXT NOT NULL,
+  total INT NOT NULL,
+  is_crit BOOLEAN DEFAULT false,
+  is_fail BOOLEAN DEFAULT false,
+  is_secret BOOLEAN DEFAULT false,
+  visibility TEXT DEFAULT 'public' CHECK (visibility IN ('public', 'gm', 'blind', 'self')),
+  details JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Index for fast campaign roll history lookup and filtering
+CREATE INDEX IF NOT EXISTS idx_dice_roll_logs_campaign ON public.dice_roll_logs(campaign_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dice_roll_logs_user ON public.dice_roll_logs(user_id);
+
+-- Enable RLS
+ALTER TABLE public.dice_roll_logs ENABLE ROW LEVEL SECURITY;
+
+-- DM pode visualizar todas as rolagens da campanha (públicas e secretas)
+CREATE POLICY "DM can view all campaign dice rolls" ON public.dice_roll_logs
+  FOR SELECT
+  USING (
+    auth.uid() IS NOT NULL AND public.is_campaign_dm(campaign_id, auth.uid()::text)
+  );
+
+-- Jogadores podem visualizar rolagens públicas da campanha ou suas próprias rolagens
+CREATE POLICY "Players can view public campaign dice rolls" ON public.dice_roll_logs
+  FOR SELECT
+  USING (
+    auth.uid() IS NOT NULL AND (
+      public.is_campaign_member(campaign_id, auth.uid()::text) AND (
+        visibility = 'public' OR user_id = auth.uid()::text
+      )
+    )
+  );
+
+-- Membros e DMs podem registrar rolagens de dados
+CREATE POLICY "Campaign members can insert dice rolls" ON public.dice_roll_logs
+  FOR INSERT
+  WITH CHECK (
+    auth.uid() IS NOT NULL AND (
+      public.is_campaign_dm_or_member(campaign_id, auth.uid()::text) OR
+      user_id = auth.uid()::text
+    )
+  );

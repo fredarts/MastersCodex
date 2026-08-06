@@ -178,6 +178,17 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
     );
   };
 
+  const handleChangeVisionType = (id: string, vType: 'normal' | 'darkvision' | 'blindsight' | 'tremorsense' | 'truesight') => {
+    setCombatants((prev) =>
+      prev.map((c) => {
+        if (c.id === id) {
+          return { ...c, visionType: vType };
+        }
+        return c;
+      })
+    );
+  };
+
   const handleAddCombatant = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -462,6 +473,19 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
                           WIS ({getMod(c.wis) >= 0 ? '+' : ''}{getMod(c.wis)})
                         </button>
                       </div>
+                      
+                      <h5 className="text-[10px] font-bold text-cyan-500/70 uppercase tracking-wider mt-4 mb-2">Visão</h5>
+                      <select 
+                        value={c.visionType || 'normal'}
+                        onChange={(e) => handleChangeVisionType(c.id, e.target.value as any)}
+                        className="w-full bg-[#1e293b] text-xs font-semibold text-slate-300 border border-slate-700 rounded px-2 py-1 outline-none focus:border-cyan-500/50"
+                      >
+                        <option value="normal">Visão Normal</option>
+                        <option value="darkvision">Darkvision (Escala de Cinza)</option>
+                        <option value="blindsight">Blindsight</option>
+                        <option value="tremorsense">Tremorsense (Sonar)</option>
+                        <option value="truesight">Truesight</option>
+                      </select>
                     </div>
 
                     {/* Attacks */}

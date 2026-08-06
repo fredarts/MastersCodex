@@ -15,8 +15,16 @@ import {
   Hand,
   Menu,
   Plus,
-  X
+  X,
+  Sparkles,
+  Sun,
+  Flame,
+  FlameKindling,
+  Lamp,
+  Zap
 } from 'lucide-react';
+
+
 import { Combatant, CampaignMap } from '@/lib/types';
 import { useSession } from '@/context/SessionContext';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
@@ -161,18 +169,33 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
   const { showConfirm, showPrompt } = useCustomDialog();
 
   const [grid, setGrid] = useState<Cell[][]>(() => createInitialGrid());
-  const [selectedTool, setSelectedTool] = useState<'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan'>('fog-reveal');
+  const [selectedTool, setSelectedTool] = useState<'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan' | 'light'>('fog-reveal');
   const [boxMode, setBoxMode] = useState<'fill' | 'room' | 'hollow' | 'fog-reveal' | 'fog-cover'>('fill');
   const [selectedTileType, setSelectedTileType] = useState<TileType>('floor');
   const [selectedTokenCombatant, setSelectedTokenCombatant] = useState<Combatant | null>(null);
+  const [selectedLightPreset, setSelectedLightPreset] = useState<'torch' | 'candle' | 'lantern' | 'spell' | 'dragon'>('torch');
   
-  // Custom Map Image Upload & Calibration state
+  // Custom Map Image Upload, Vector Walls, Lighting & Calibration state
   const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
+  const [vectorWalls, setVectorWalls] = useState<import('@/lib/types').WallSegment[]>([]);
+  const [lightSources, setLightSources] = useState<import('@/lib/types').LightSource[]>([]);
   const [gridScale, setGridScale] = useState<number>(40); // Cell Size in px
   const [gridOffsetX, setGridOffsetX] = useState<number>(0);
   const [gridOffsetY, setGridOffsetY] = useState<number>(0);
   const [calibrationLine, setCalibrationLine] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uvttFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAddLightSource = (light: import('@/lib/types').LightSource) => {
+    setLightSources((prev) => [...prev, light]);
+    toast.success('Fonte de luz adicionada ao mapa!');
+  };
+
+  const handleRemoveLightSource = (id: string) => {
+    setLightSources((prev) => prev.filter((l) => l.id !== id));
+    toast.info('Fonte de luz removida.');
+  };
+
 
   // Measure Ruler State
   const [measureStart, setMeasureStart] = useState<{ r: number; c: number } | null>(null);
@@ -182,6 +205,39 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
   const [activeMap, setActiveMap] = useState<CampaignMap | null>(null);
   const [mapTitle, setMapTitle] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // Handle UVTT / Universal VTT file import (.df2vtt, .uvtt, .json)
+  const handleUVTTUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploadingImage(true);
+      const text = await file.text();
+      const { parseUVTTData } = await import('@/lib/parsers/uvttParser');
+      const parsed = parseUVTTData(text);
+
+      if (parsed.imageSrc) {
+        setBgImageUrl(parsed.imageSrc);
+      }
+      if (parsed.walls) {
+        setVectorWalls(parsed.walls);
+      }
+      if (parsed.lights) {
+        setLightSources(parsed.lights);
+      }
+      if (parsed.resolution?.pixelsPerGrid) {
+        setGridScale(parsed.resolution.pixelsPerGrid);
+      }
+
+      toast.success(`Mapa UVTT importado! ${parsed.walls.length} paredes e ${parsed.lights.length} tochas detectadas.`);
+    } catch (err) {
+      console.error('Erro ao importar arquivo UVTT:', err);
+      toast.error('Falha ao processar arquivo UVTT/Universal VTT.');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
 
   // Sync first active map when campaignMaps loads
   useEffect(() => {
@@ -245,6 +301,8 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     if (map.gridData) {
       setGrid(map.gridData.grid || createInitialGrid(80, 80));
       setBgImageUrl(map.gridData.bgImageUrl || null);
+      setVectorWalls(map.gridData.vectorWalls || []);
+      setLightSources(map.gridData.lightSources || []);
       setGridScale(map.gridData.gridScale || 40);
       setGridOffsetX(map.gridData.gridOffsetX || 0);
       setGridOffsetY(map.gridData.gridOffsetY || 0);
@@ -259,6 +317,8 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
       const payload = {
         grid,
         bgImageUrl,
+        vectorWalls,
+        lightSources,
         gridScale,
         gridOffsetX,
         gridOffsetY,
@@ -277,7 +337,8 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     }, 1200);
 
     return () => clearTimeout(delayDebounce);
-  }, [grid, bgImageUrl, gridScale, gridOffsetX, gridOffsetY, activeMap, mapTitle, updateCampaignMap, broadcastToPlayerView, activeScene?.id]);
+  }, [grid, bgImageUrl, vectorWalls, lightSources, gridScale, gridOffsetX, gridOffsetY, activeMap, mapTitle, updateCampaignMap, broadcastToPlayerView, activeScene?.id]);
+
 
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
@@ -584,6 +645,17 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
                       Régua
                     </button>
                     <button
+                      onClick={() => setSelectedTool('light')}
+                      className={`col-span-2 flex items-center justify-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
+                        selectedTool === 'light'
+                          ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow'
+                          : 'bg-[#0a0d14] text-amber-400 hover:bg-[#161c28] border-amber-500/30'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      💡 Pintar Fontes de Luz
+                    </button>
+                    <button
                       onClick={() => setSelectedTool('pan')}
                       className={`col-span-2 flex items-center justify-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
                         selectedTool === 'pan'
@@ -610,6 +682,46 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
                  </div>
                </div>
 
+               {/* Section 3.B: Light Preset Selector */}
+               {selectedTool === 'light' && (
+                 <div className="space-y-2 border-t border-amber-500/30 pt-3 bg-amber-950/20 p-2.5 rounded-lg">
+                   <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1">
+                     <Sun className="w-3 h-3 text-amber-400" />
+                     Selecione o Tipo de Luz:
+                   </span>
+                   <div className="grid grid-cols-2 gap-1.5">
+                     {[
+                       { id: 'torch', label: 'Tocha (20/40ft)', color: '#ffaa33', icon: Flame },
+                       { id: 'candle', label: 'Vela (10/20ft)', color: '#ffcc66', icon: FlameKindling },
+                       { id: 'lantern', label: 'Lampião (30/60ft)', color: '#ffee88', icon: Lamp },
+                       { id: 'spell', label: 'Magia Az. (20/40ft)', color: '#38bdf8', icon: Zap },
+                       { id: 'dragon', label: 'Brazeiro (30/60ft)', color: '#ef4444', icon: Flame },
+                     ].map((preset) => {
+                       const IconComponent = preset.icon;
+                       const isSelected = selectedLightPreset === preset.id;
+                       return (
+                         <button
+                           key={preset.id}
+                           onClick={() => setSelectedLightPreset(preset.id as any)}
+                           className={`flex items-center gap-1.5 p-2 rounded-lg text-[10px] font-semibold transition-all border ${
+                             isSelected
+                               ? 'bg-amber-500 text-slate-950 font-bold border-amber-300 shadow'
+                               : 'bg-[#0a0d14] text-slate-300 hover:bg-[#161c28] border-[#2a3449]'
+                           }`}
+                         >
+                           <IconComponent className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? 'text-slate-950' : ''}`} style={{ color: isSelected ? undefined : preset.color }} />
+                           <span className="truncate">{preset.label}</span>
+                         </button>
+                       );
+                     })}
+                   </div>
+                   <p className="text-[9px] text-slate-400 italic">
+                     Clique em qualquer ponto do mapa para posicionar a luz. Clique em uma luz existente para removê-la.
+                   </p>
+                 </div>
+               )}
+
+
                {/* Section 4: Global Actions */}
                <div className="space-y-2 border-t border-[#2a3449]/40 pt-4">
                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Ações Globais</span>
@@ -623,6 +735,15 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
                      {isUploadingImage ? 'Enviando...' : 'Carregar Imagem (Fundo)'}
                    </button>
                    
+                   <button
+                     onClick={() => uvttFileInputRef.current?.click()}
+                     disabled={isUploadingImage}
+                     className="w-full flex items-center justify-center gap-1.5 text-xs bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 border border-amber-500/30 px-3 py-2 rounded-lg font-bold transition-all shadow-md"
+                   >
+                     <Upload className="w-3.5 h-3.5" />
+                     Importar UVTT (.df2vtt / .uvtt)
+                   </button>
+
                    {bgImageUrl && (
                      <button
                        onClick={clearMapBg}
@@ -832,11 +953,25 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
           </div>
         )}
 
+        {/* Hidden UVTT / Universal VTT file input */}
+        <input
+          ref={uvttFileInputRef}
+          type="file"
+          accept=".df2vtt,.uvtt,.json"
+          onChange={handleUVTTUpload}
+          className="hidden"
+        />
+
         {/* Main Canvas Grid Render */}
         <DysonCanvas
           key={activeMap?.id || 'empty'}
           grid={grid}
           bgImageUrl={bgImageUrl}
+          vectorWalls={vectorWalls}
+          lightSources={lightSources}
+          onAddLightSource={handleAddLightSource}
+          onRemoveLightSource={handleRemoveLightSource}
+          selectedLightPreset={selectedLightPreset}
           gridScale={gridScale}
           gridOffsetX={gridOffsetX}
           gridOffsetY={gridOffsetY}
@@ -857,7 +992,9 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
             toast.success(`Grid recalibrado para ${size}px por célula!`);
           }}
         />
+
       </div>
     </div>
   );
 };
+

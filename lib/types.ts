@@ -232,8 +232,11 @@ export interface Combatant {
   actions?: { name: string; desc: string }[];
   cr?: string;
   speed?: string;
+  size?: string;
   avatarUrl?: string;
   modelUrl?: string;
+  tokenImageUrl?: string;
+  tokenType?: 'billboard' | '3d';
   notes?: string;
   isCurrentTurn?: boolean;
   x?: number;
@@ -247,7 +250,55 @@ export interface Combatant {
   turnStartZ?: number;
   hasDashed?: boolean;
   visionRange?: number; // em pés (default: 30)
+  visionType?: VisionType;
+  darkvisionRange?: number;
+  hasTorch?: boolean;
 }
+
+export type WallType = 'wall' | 'door' | 'secret_door' | 'window' | 'terrain' | 'illusion';
+export type WallSense = 'both' | 'left' | 'right';
+
+export interface WallSegment {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  type: WallType;
+  doorState?: 'closed' | 'open' | 'locked';
+  blocksLight: boolean;
+  blocksVision: boolean;
+  blocksMovement: boolean;
+  sense?: WallSense;
+  height?: number;
+}
+
+export type LightAnimationType = 'none' | 'torch' | 'pulse' | 'chroma' | 'candle';
+
+export interface LightSource {
+  id: string;
+  x: number;
+  y: number;
+  brightRadius: number; // em pés (ex: 20ft)
+  dimRadius: number;    // em pés (ex: 40ft)
+  color: string;        // Hex ou HSL
+  intensity: number;    // 0.0 a 1.0
+  animation?: LightAnimationType;
+  attachedToTokenId?: string;
+}
+
+export type VisionType = 'normal' | 'darkvision' | 'blindsight' | 'tremorsense' | 'truesight';
+
+export interface CombatantVisionConfig {
+  visionRange: number;
+  visionType: VisionType;
+  darkvisionRange?: number;
+  hasTorch?: boolean;
+  torchLightId?: string;
+}
+
+export type FogState = 0 | 1 | 2; // 0: Unexplored, 1: Explored/Shrouded, 2: Active LoS
+
 
 export interface CombatLogEntry {
   id: string;
@@ -303,6 +354,51 @@ export interface SRDMonster {
   cha: number;
   abilities: { name: string; desc: string }[];
   actions: { name: string; desc: string }[];
+}
+
+export interface CustomMonsterAction {
+  name: string;
+  attackBonus?: number;
+  damage?: string;
+  desc: string;
+}
+
+export interface CustomMonsterSpell {
+  name: string;
+  level: number;
+  school?: string;
+  desc?: string;
+}
+
+export interface CustomMonster {
+  id: string;
+  userId?: string;
+  campaignId?: string;
+  name: string;
+  type: string;
+  size: 'Miúdo' | 'Pequeno' | 'Médio' | 'Grande' | 'Enorme' | 'Imenso' | string;
+  alignment: string;
+  ac: number;
+  hp: number;
+  maxHp?: number;
+  speed: string;
+  cr: string;
+  xp: number;
+  str: number;
+  dex: number;
+  con: number;
+  int: number;
+  wis: number;
+  cha: number;
+  tokenImageUrl?: string;
+  modelUrl?: string;
+  tokenType: 'billboard' | '3d';
+  description?: string;
+  lore?: string;
+  abilities?: { name: string; desc: string }[];
+  actions?: CustomMonsterAction[];
+  spells?: CustomMonsterSpell[];
+  createdAt?: string;
 }
 
 export interface SRDSpell {
@@ -419,6 +515,21 @@ export interface ActiveClassBuff {
 
 
 export type AdvantageMode = 'normal' | 'advantage' | 'disadvantage';
+export type RollVisibility = 'public' | 'gm' | 'blind' | 'self';
+export type SecretRollNotificationMode = 'subtle_notice' | 'stealth_silent';
+export type MacroBarDisplayMode = 'bottom_bar' | 'chat_tab' | 'both';
+
+export interface Bg3RollModifierCard {
+  id: string;
+  label: string;
+  value: number | string;
+  numericValue?: number;
+  iconType: 'attribute' | 'proficiency' | 'spell' | 'item' | 'advantage' | 'condition';
+  sourceName?: string;
+  isOptional?: boolean;
+  isEnabled?: boolean;
+  reason?: string;
+}
 
 export interface DiceRollEvent {
   id: string;
@@ -435,9 +546,32 @@ export interface DiceRollEvent {
   isCrit?: boolean;
   isFail?: boolean;
   advantageMode?: AdvantageMode;
+  visibility?: RollVisibility;
+  isSecret?: boolean;
   damageDice?: string;
   damageType?: string;
+  diceBreakdown?: {
+    numDice: number;
+    faces: number;
+    keptRolls: number[];
+    droppedRolls?: number[];
+  }[];
   timestamp: string;
+}
+
+export interface MacroItem {
+  id: string;
+  name: string;
+  command: string; // Ex: "/r 1d20+@str (Espada)" ou "/gmroll 2d6+3"
+  color?: string; // Hex ou Tailwind color
+  icon?: string;
+  isGlobal?: boolean; // Criada pelo DM para a campanha toda
+}
+
+export interface DiceRollLogEntry extends DiceRollEvent {
+  campaignId: string;
+  userId: string;
+  createdAt: string;
 }
 
 export type AttributeKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
@@ -722,6 +856,8 @@ export interface ChatDiceResult {
   total: number;
   isCrit?: boolean;
   isFail?: boolean;
+  visibility?: RollVisibility;
+  isSecret?: boolean;
 }
 
 export interface ChatMessage {
@@ -734,6 +870,8 @@ export interface ChatMessage {
   whisperToName?: string;
   content: string;
   rollResult?: ChatDiceResult;
+  isSecret?: boolean;
+  isSubtleNotice?: boolean; // Se true, renderiza "O Mestre rolou os dados em segredo..." para os jogadores
   timestamp: string;
 }
 

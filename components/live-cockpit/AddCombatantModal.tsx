@@ -1,11 +1,11 @@
-'use client';
-
-import React, { useState } from 'react';
-import { X, Search, Plus, Swords, User, Shield, Sparkles } from 'lucide-react';
-import { Combatant, CampaignMember } from '@/lib/types';
+import React, { useState, useEffect } from 'react';
+import { X, Search, Plus, Swords, User, Shield, Sparkles, Boxes, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Combatant, CampaignMember, CustomMonster } from '@/lib/types';
 import { INITIAL_MONSTERS } from '@/lib/srd-data';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { useWorld } from '@/lib/hooks/useWorld';
+import { customMonsterService } from '@/lib/services/customMonsterService';
+import { CreateMonsterModal } from '@/components/modals/CreateMonsterModal';
 
 interface AddCombatantModalProps {
   isOpen: boolean;
@@ -21,8 +21,21 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
   onAddCombatant,
 }) => {
   const { worldEntities } = useWorld();
-  const [activeAddTab, setActiveAddTab] = useState<'monsters' | 'players' | 'custom' | 'npcs'>('monsters');
+  const [activeAddTab, setActiveAddTab] = useState<'monsters' | 'my_monsters' | 'players' | 'custom' | 'npcs'>('monsters');
   const [searchQuery, setSearchQuery] = useState('');
+  const [customMonsters, setCustomMonsters] = useState<CustomMonster[]>([]);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      customMonsterService.fetchCustomMonsters().then(setCustomMonsters);
+    }
+  }, [isOpen]);
+
+  const loadCustomMonsters = async () => {
+    const data = await customMonsterService.fetchCustomMonsters();
+    setCustomMonsters(data);
+  };
 
   // Custom Form State
   const [customName, setCustomName] = useState('');
@@ -30,6 +43,7 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
   const [customAc, setCustomAc] = useState(13);
   const [customInit, setCustomInit] = useState(10);
   const [customType, setCustomType] = useState<'player' | 'monster' | 'npc'>('monster');
+  const [customVisionType, setCustomVisionType] = useState<'normal' | 'darkvision' | 'blindsight' | 'tremorsense' | 'truesight'>('normal');
 
   if (!isOpen) return null;
 
@@ -107,11 +121,13 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
       ac: customAc,
       initiative: customInit,
       type: customType,
+      visionType: customVisionType,
       conditions: [],
       modelUrl: getModelUrlByNameOrPath(customName),
     };
     onAddCombatant(newCombatant);
     setCustomName('');
+    setCustomVisionType('normal');
   };
 
   return (
@@ -139,6 +155,15 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
             }`}
           >
             Monstros SRD (5e)
+          </button>
+          <button
+            onClick={() => setActiveAddTab('my_monsters')}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 ${
+              activeAddTab === 'my_monsters' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            Meus Monstros ({customMonsters.length})
           </button>
           <button
             onClick={() => setActiveAddTab('players')}
@@ -207,6 +232,130 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
                     </button>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {activeAddTab === 'my_monsters' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 absolute left-3 top-3 text-zinc-500" />
+                  <input
+                    type="text"
+                    placeholder="Buscar nos meus monstros customizados..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-200 focus:outline-none focus:border-purple-500/50"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-3.5 py-2 bg-gradient-to-r from-purple-600 to-rose-600 hover:brightness-110 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-lg shadow-purple-600/20 shrink-0 transition-all"
+                >
+                  <Plus className="w-4 h-4" /> + Criar Monstro
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 max-h-72 overflow-y-auto pr-1">
+                {customMonsters.length === 0 ? (
+                  <div className="p-8 text-center bg-zinc-950/40 rounded-xl border border-zinc-800/60">
+                    <Sparkles className="w-8 h-8 text-amber-400/60 mx-auto mb-2" />
+                    <p className="text-xs font-semibold text-zinc-300">Você ainda não criou monstros customizados</p>
+                    <p className="text-[11px] text-zinc-500 mt-1">Crie pinos Billboard 2D PNG ou modelos 3D com a ajuda de IA!</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateModal(true)}
+                      className="mt-3 px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg inline-flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Criar Meu Primeiro Monstro
+                    </button>
+                  </div>
+                ) : (
+                  customMonsters
+                    .filter((m) => m.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                    .map((m) => (
+                      <div
+                        key={m.id}
+                        className="p-3 bg-zinc-950/70 hover:bg-zinc-800/80 border border-zinc-800/80 rounded-xl flex items-center justify-between transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          {m.tokenImageUrl ? (
+                            <div className="w-10 h-10 rounded-lg bg-black/60 border border-purple-500/30 overflow-hidden flex items-center justify-center p-1 shrink-0">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={m.tokenImageUrl} alt={m.name} className="max-h-full max-w-full object-contain" />
+                            </div>
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
+                              <Boxes className="w-5 h-5" />
+                            </div>
+                          )}
+
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-sm text-zinc-100">{m.name}</span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-purple-500/10 text-purple-300 font-mono">
+                                ND {m.cr}
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                m.tokenType === 'billboard' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                              }`}>
+                                {m.tokenType === 'billboard' ? 'Billboard 2D' : 'Modelo 3D'}
+                              </span>
+                            </div>
+                            <div className="text-xs text-zinc-400 mt-0.5 flex items-center gap-3 font-mono">
+                              <span>PV: {m.hp}</span>
+                              <span>CA: {m.ac}</span>
+                              <span>Tam: {m.size}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const rollInit = Math.floor(Math.random() * 20) + 1;
+                              const newCombatant: Combatant = {
+                                id: `mon-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                                name: m.name,
+                                hp: m.hp,
+                                maxHp: m.maxHp || m.hp,
+                                ac: m.ac,
+                                initiative: rollInit,
+                                type: 'monster',
+                                cr: m.cr,
+                                size: m.size,
+                                tokenType: m.tokenType,
+                                tokenImageUrl: m.tokenImageUrl,
+                                modelUrl: m.modelUrl || (m.tokenType === '3d' ? getModelUrlByNameOrPath(m.name) : undefined),
+                                conditions: [],
+                                actions: m.actions?.map((a) => ({ name: a.name, desc: a.desc })),
+                              };
+                              onAddCombatant(newCombatant);
+                            }}
+                            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs rounded-lg flex items-center gap-1 shadow-md shadow-purple-600/20 transition-all"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Adicionar
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await customMonsterService.deleteCustomMonster(m.id);
+                              loadCustomMonsters();
+                            }}
+                            className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition-colors"
+                            title="Deletar Monstro"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                )}
               </div>
             </div>
           )}
@@ -376,6 +525,21 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
                 </select>
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 mb-1">Visão</label>
+                <select
+                  value={customVisionType}
+                  onChange={(e) => setCustomVisionType(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-100"
+                >
+                  <option value="normal">Visão Normal</option>
+                  <option value="darkvision">Darkvision</option>
+                  <option value="blindsight">Blindsight</option>
+                  <option value="tremorsense">Tremorsense</option>
+                  <option value="truesight">Truesight</option>
+                </select>
+              </div>
+
               <button
                 type="submit"
                 className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-sm rounded-xl transition-all shadow-lg shadow-amber-500/10"
@@ -386,6 +550,16 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
           )}
         </div>
       </div>
+
+      <CreateMonsterModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onMonsterCreated={async (newMonster) => {
+          await loadCustomMonsters();
+          setShowCreateModal(false);
+          setActiveAddTab('my_monsters');
+        }}
+      />
     </div>
   );
 };

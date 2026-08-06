@@ -32,8 +32,10 @@ import {
   drawStashHachure,
   drawPortcullisHachure,
   drawTriggerHachure,
-  drawIllusionWallHachure
+  drawIllusionWallHachure,
+  drawLightSourceIcon
 } from './dysonCore';
+
 import { 
   hasLineOfSight, 
   isCellBlockingVision,
@@ -64,8 +66,8 @@ interface DysonCanvasProps {
   gridOffsetX: number;
   gridOffsetY: number;
   combatants: Combatant[];
-  selectedTool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan';
-  setSelectedTool?: (tool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan') => void;
+  selectedTool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan' | 'light';
+  setSelectedTool?: (tool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan' | 'light') => void;
   boxMode?: 'fill' | 'room' | 'hollow' | 'fog-reveal' | 'fog-cover';
   selectedTileType: string;
   selectedTokenCombatant: Combatant | null;
@@ -77,6 +79,11 @@ interface DysonCanvasProps {
   setCalibrationLine?: (line: { x1: number; y1: number; x2: number; y2: number } | null) => void;
   onCalibrateGridSize?: (size: number) => void;
   isPlayerView?: boolean;
+  vectorWalls?: import('@/lib/types').WallSegment[];
+  lightSources?: import('@/lib/types').LightSource[];
+  onAddLightSource?: (light: import('@/lib/types').LightSource) => void;
+  onRemoveLightSource?: (lightId: string) => void;
+  selectedLightPreset?: 'torch' | 'candle' | 'lantern' | 'spell' | 'dragon';
 }
 
 export const DysonCanvas: React.FC<DysonCanvasProps> = ({
@@ -99,7 +106,14 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   onCalibrateGridSize,
   isPlayerView = false,
   combatants,
+  vectorWalls = [],
+  lightSources = [],
+  onAddLightSource,
+  onRemoveLightSource,
+  selectedLightPreset = 'torch',
 }) => {
+
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -804,7 +818,8 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
               CELL_SIZE, 
               gridOffsetX, 
               gridOffsetY, 
-              Boolean(bgImage)
+              Boolean(bgImage),
+              vectorWalls
             );
 
             if (polyPoints.length > 0) {
@@ -830,6 +845,39 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         }
       }
 
+      // Render standalone LightSources on fog mask (carves out dark fog)
+      if (lightSources && lightSources.length > 0) {
+        lightSources.forEach((light) => {
+          const lx = bgImage ? gridOffsetX + light.x * CELL_SIZE : light.x * CELL_SIZE;
+          const ly = bgImage ? gridOffsetY + light.y * CELL_SIZE : light.y * CELL_SIZE;
+          const lRadius = (light.dimRadius / 5) * CELL_SIZE;
+
+          const lightPoly = computeVisibilityPolygon(
+            lx, ly, lRadius, grid, CELL_SIZE, gridOffsetX, gridOffsetY, Boolean(bgImage), vectorWalls
+          );
+
+          if (lightPoly.length > 0) {
+            maskCtx.save();
+            maskCtx.beginPath();
+            maskCtx.moveTo(lightPoly[0].x, lightPoly[0].y);
+            for (let p = 1; p < lightPoly.length; p++) {
+              maskCtx.lineTo(lightPoly[p].x, lightPoly[p].y);
+            }
+            maskCtx.closePath();
+
+            // Carve fog out of mask canvas
+            const fogGrad = maskCtx.createRadialGradient(lx, ly, 5, lx, ly, lRadius);
+            fogGrad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
+            fogGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)');
+            fogGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+
+            maskCtx.fillStyle = fogGrad;
+            maskCtx.fill();
+            maskCtx.restore();
+          }
+        });
+      }
+
       // Reset filter
       maskCtx.filter = 'none';
 
@@ -840,6 +888,42 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     ctx.save();
     ctx.translate(panOffset.x, panOffset.y);
     ctx.scale(zoom, zoom);
+
+    // 3.B. Render Colored Ambient Light Glow on Main Canvas
+    if (lightSources && lightSources.length > 0) {
+      lightSources.forEach((light) => {
+        const lx = bgImage ? gridOffsetX + light.x * CELL_SIZE : light.x * CELL_SIZE;
+        const ly = bgImage ? gridOffsetY + light.y * CELL_SIZE : light.y * CELL_SIZE;
+        const lRadius = (light.dimRadius / 5) * CELL_SIZE;
+
+        const lightPoly = computeVisibilityPolygon(
+          lx, ly, lRadius, grid, CELL_SIZE, gridOffsetX, gridOffsetY, Boolean(bgImage), vectorWalls
+        );
+
+        if (lightPoly.length > 0) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(lightPoly[0].x, lightPoly[0].y);
+          for (let p = 1; p < lightPoly.length; p++) {
+            ctx.lineTo(lightPoly[p].x, lightPoly[p].y);
+          }
+          ctx.closePath();
+
+          const flicker = light.animation === 'torch' ? Math.sin(Date.now() * 0.008) * 0.08 : 0;
+          const lightColor = light.color || '#ffaa33';
+
+          const grad = ctx.createRadialGradient(lx, ly, 5, lx, ly, lRadius);
+          grad.addColorStop(0.0, lightColor);
+          grad.addColorStop(0.5, lightColor.startsWith('#') ? `${lightColor}66` : 'rgba(255, 170, 51, 0.4)');
+          grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+
+          ctx.fillStyle = grad;
+          ctx.globalCompositeOperation = 'screen';
+          ctx.fill();
+          ctx.restore();
+        }
+      });
+    }
 
     // 4. Draw Tokens (Characters)
     for (let r = 0; r < ROWS; r++) {
@@ -885,6 +969,30 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           ctx.textBaseline = 'middle';
           ctx.fillText(cell.tokenName, tx, ty);
 
+          const tokenCombatant = combatants?.find(c => {
+            const cName = c.name.trim().toLowerCase();
+            return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
+          });
+
+          // Tremorsense sonar rings
+          if (tokenCombatant?.visionType === 'tremorsense') {
+            const ringCount = 3;
+            const time = Date.now() * 0.001;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(6, 182, 212, 0.4)';
+            for (let i = 0; i < ringCount; i++) {
+              const phase = (time + i / ringCount) % 1;
+              const radius = CELL_SIZE * 0.5 + (CELL_SIZE * 3 * phase);
+              const alpha = (1 - phase) * 0.5;
+              ctx.beginPath();
+              ctx.arc(tx, ty, radius, 0, Math.PI * 2);
+              ctx.strokeStyle = `rgba(6, 182, 212, ${alpha})`;
+              ctx.lineWidth = 2 * (1 - phase);
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+
           // Active indicator pulse
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
           ctx.lineWidth = 1.5;
@@ -895,7 +1003,69 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       }
     }
 
+    // 4.B. Render Vector Walls and Doors
+    if (vectorWalls && vectorWalls.length > 0) {
+      vectorWalls.forEach((wall) => {
+        const x1 = (bgImage ? gridOffsetX : 0) + wall.x1 * CELL_SIZE;
+        const y1 = (bgImage ? gridOffsetY : 0) + wall.y1 * CELL_SIZE;
+        const x2 = (bgImage ? gridOffsetX : 0) + wall.x2 * CELL_SIZE;
+        const y2 = (bgImage ? gridOffsetY : 0) + wall.y2 * CELL_SIZE;
+
+        if (wall.type === 'secret_door' && isPlayerView && wall.doorState === 'closed') {
+          return; // Secret doors closed are invisible to players
+        }
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+
+        if (wall.type === 'door' || wall.type === 'secret_door') {
+          const isOpen = wall.doorState === 'open';
+          ctx.strokeStyle = isOpen ? '#22c55e' : '#f59e0b';
+          ctx.lineWidth = 4;
+          ctx.setLineDash([6, 4]);
+
+          // Draw door icon / handle in center
+          const mx = (x1 + x2) / 2;
+          const my = (y1 + y2) / 2;
+          ctx.fillStyle = isOpen ? '#22c55e' : '#f59e0b';
+          ctx.fillRect(mx - 4, my - 4, 8, 8);
+        } else if (wall.type === 'window') {
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 3;
+          ctx.setLineDash([3, 3]);
+        } else {
+          // Wall
+          ctx.strokeStyle = isPlayerView ? 'transparent' : '#ef4444'; // Red in DM view, invisible overlay in player view
+          ctx.lineWidth = 3;
+        }
+
+        ctx.stroke();
+        ctx.restore();
+      });
+    }
+
+    // 4.C. Render Flat Black Light Source Map Decoration Icons (Dyson Style)
+    if (lightSources && lightSources.length > 0) {
+      lightSources.forEach((light) => {
+        const lx = bgImage ? gridOffsetX + light.x * CELL_SIZE : light.x * CELL_SIZE;
+        const ly = bgImage ? gridOffsetY + light.y * CELL_SIZE : light.y * CELL_SIZE;
+
+        let preset = 'torch';
+        if (light.color === '#ffcc66' || light.brightRadius === 10) preset = 'candle';
+        else if (light.color === '#ffee88' || light.brightRadius === 30) preset = 'lantern';
+        else if (light.color === '#38bdf8') preset = 'spell';
+        else if (light.color === '#ef4444') preset = 'dragon';
+
+        drawLightSourceIcon(ctx, lx, ly, preset, zoom);
+      });
+    }
+
+
     // 5. Draw Ruler Measurement
+
+
     if (selectedTool === 'measure' && rulerPoints.length > 0) {
       const isMeasuring = rulerStatus === 'measuring';
       const hasLiveCursor = isMeasuring && rulerCursor && (
@@ -1209,7 +1379,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     }
 
     ctx.restore();
-  }, [grid, bgImage, CELL_SIZE, COLS, ROWS, gridOffsetX, gridOffsetY, selectedTool, selectionBox, measureStart, calibrationLine, rulerPoints, rulerCursor, rulerStatus, zoom, panOffset, canvasSize, isPlayerView]);
+  }, [grid, bgImage, CELL_SIZE, COLS, ROWS, gridOffsetX, gridOffsetY, selectedTool, selectionBox, measureStart, calibrationLine, rulerPoints, rulerCursor, rulerStatus, zoom, panOffset, canvasSize, isPlayerView, lightSources, combatants, vectorWalls]);
 
   // Utility to convert client mouse events to Canvas coordinates
   const getCanvasCoords = (e: React.MouseEvent) => {
@@ -1388,6 +1558,79 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       });
       return;
     }
+
+    if (selectedTool === 'light') {
+      const gridPos = getGridPos(x, y);
+
+      const existing = lightSources?.find((l) => {
+        const lx = bgImage ? gridOffsetX + l.x * CELL_SIZE : l.x * CELL_SIZE;
+        const ly = bgImage ? gridOffsetY + l.y * CELL_SIZE : l.y * CELL_SIZE;
+        const dist = Math.sqrt(Math.pow(x - lx, 2) + Math.pow(y - ly, 2));
+        return dist <= CELL_SIZE * 0.8;
+      });
+
+      if (existing || e.button === 2) {
+        if (existing) {
+          onRemoveLightSource?.(existing.id);
+        }
+        return;
+      }
+
+      let brightRadius = 20;
+      let dimRadius = 40;
+      let color = '#ffaa33';
+      let animation: any = 'torch';
+
+      if (selectedLightPreset === 'candle') {
+        brightRadius = 10;
+        dimRadius = 20;
+        color = '#ffcc66';
+        animation = 'torch';
+      } else if (selectedLightPreset === 'lantern') {
+        brightRadius = 30;
+        dimRadius = 60;
+        color = '#ffee88';
+        animation = 'torch';
+      } else if (selectedLightPreset === 'spell') {
+        brightRadius = 20;
+        dimRadius = 40;
+        color = '#38bdf8';
+        animation = 'pulse';
+      } else if (selectedLightPreset === 'dragon') {
+        brightRadius = 30;
+        dimRadius = 60;
+        color = '#ef4444';
+        animation = 'pulse';
+      }
+
+      const newLight: import('@/lib/types').LightSource = {
+        id: `light-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        x: gridPos.c + 0.5,
+        y: gridPos.r + 0.5,
+        brightRadius,
+        dimRadius,
+        color,
+        intensity: 0.9,
+        animation
+      };
+
+      onGridChange((prev) => {
+        const copy = prev.map((row) => row.map((c) => ({ ...c })));
+        if (copy[gridPos.r]?.[gridPos.c]) {
+          copy[gridPos.r][gridPos.c].fog = false;
+          if (copy[gridPos.r][gridPos.c].type === 'wall' && !bgImageUrl) {
+            copy[gridPos.r][gridPos.c].type = 'floor';
+          }
+        }
+        revealVisionWithLOS(copy, gridPos.r, gridPos.c, dimRadius / 5, vectorWalls, CELL_SIZE);
+        return copy;
+      });
+
+      onAddLightSource?.(newLight);
+      return;
+    }
+
+
 
     const clickedCell = grid[pos.r]?.[pos.c];
 
@@ -1944,6 +2187,18 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     return 'cursor-default';
   };
 
+  const hasDarkvision = useMemo(() => {
+    if (selectedTokenCombatant) return selectedTokenCombatant.visionType === 'darkvision';
+    if (isPlayerView) return combatants.some(c => c.type === 'player' && c.visionType === 'darkvision');
+    return false;
+  }, [selectedTokenCombatant, isPlayerView, combatants]);
+
+  const hasTremorsense = useMemo(() => {
+    if (selectedTokenCombatant) return selectedTokenCombatant.visionType === 'tremorsense';
+    if (isPlayerView) return combatants.some(c => c.type === 'player' && c.visionType === 'tremorsense');
+    return false;
+  }, [selectedTokenCombatant, isPlayerView, combatants]);
+
   return (
     <div 
       ref={containerRef}
@@ -1960,7 +2215,13 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       <canvas
         ref={canvasRef}
         className="absolute top-0 left-0 w-full h-full"
+        style={{ filter: hasDarkvision ? 'grayscale(100%) brightness(0.8)' : 'none', transition: 'filter 0.5s ease' }}
       />
+      {hasTremorsense && (
+        <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center">
+          <div className="w-64 h-64 border-2 border-emerald-500/30 rounded-full animate-ping" />
+        </div>
+      )}
       <div 
         onMouseDown={(e) => e.stopPropagation()}
         className="absolute bottom-4 right-4 bg-slate-900/80 backdrop-blur text-[11px] font-mono text-slate-400 px-2.5 py-1.5 rounded-lg border border-slate-800 shadow flex gap-3 z-20"

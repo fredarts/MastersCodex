@@ -16,7 +16,21 @@ export interface TokenMeshOptions {
 }
 
 const gltfLoader = new GLTFLoader();
+const textureLoader = new THREE.TextureLoader();
 const loadedModelCache = new Map<string, THREE.Group>();
+const loadedTextureCache = new Map<string, THREE.Texture>();
+
+function getSpriteHeightBySize(sizeStr?: string): number {
+  if (!sizeStr) return 2.3;
+  const s = sizeStr.toLowerCase();
+  if (s.includes('miú') || s.includes('tiny')) return 1.4;
+  if (s.includes('pequeno') || s.includes('small')) return 1.8;
+  if (s.includes('médio') || s.includes('medio') || s.includes('medium')) return 2.3;
+  if (s.includes('grande') || s.includes('large')) return 3.6;
+  if (s.includes('enorme') || s.includes('huge')) return 5.2;
+  if (s.includes('imenso') || s.includes('gargantuan')) return 7.5;
+  return 2.3;
+}
 
 function normalizeAndPrepareModel(modelScene: THREE.Group): THREE.Group {
   const box = new THREE.Box3().setFromObject(modelScene);
@@ -57,11 +71,8 @@ export function createTokenMesh(
   group.rotation.y = (options.rotationAngleDeg * Math.PI) / 180;
 
   const isPlayer = options.combatant.type === 'player';
-  const colorHex = isPlayer ? 0x38bdf8 : 0xe11d48; // sky-400 or rose-600
 
-  // Removed Base Cylinder Platform
-
-  // 2. Selection Ring
+  // 1. Selection Ring
   const isSelected = options.isCurrentTurn || options.isSelectedForRotation || options.isSelectedTarget || options.isSpellTargeted;
   if (isSelected) {
     const ringGeo = new THREE.RingGeometry(1.275, 1.53, 32);
@@ -84,7 +95,7 @@ export function createTokenMesh(
     group.add(ringMesh);
   }
 
-  // 3. Direction Arrow Cone
+  // 2. Direction Arrow Cone
   const arrowGeo = new THREE.ConeGeometry(0.25, 0.5, 3);
   const arrowMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
   const arrowMesh = new THREE.Mesh(arrowGeo, arrowMat);
@@ -93,9 +104,12 @@ export function createTokenMesh(
   arrowMesh.position.set(0, 0.05, -1.0);
   group.add(arrowMesh);
 
-  // 4. Determine Model GLB URL
+  // 3. Determine Token Mode & URLs
+  const tokenType = options.combatant.tokenType || (options.combatant.tokenImageUrl ? 'billboard' : '3d');
+  const imageUrl = options.combatant.tokenImageUrl || options.combatant.avatarUrl;
+
   let modelUrl = options.combatant.modelUrl;
-  if (!modelUrl) {
+  if (!modelUrl && tokenType === '3d') {
     if (isPlayer) {
       modelUrl = resolvePlayerModelUrl(options.combatant.name);
     } else {
@@ -103,7 +117,66 @@ export function createTokenMesh(
     }
   }
 
-  if (modelUrl) {
+  // Render Mode A: Billboard 2D Sprite (Always Facing Player Camera)
+  if (tokenType === 'billboard' && imageUrl) {
+    const spriteHeight = getSpriteHeightBySize(options.combatant.size);
+
+    // Dark Ground Shadow Ring under Billboard
+    const shadowGeo = new THREE.CircleGeometry(0.9, 32);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.45,
+      depthWrite: false,
+    });
+    const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+    shadowMesh.rotation.x = -Math.PI / 2;
+    shadowMesh.position.y = 0.01;
+    shadowMesh.name = 'tokenShadow';
+    group.add(shadowMesh);
+
+    const applyTextureToSprite = (texture: THREE.Texture) => {
+      const img = texture.image as HTMLImageElement | undefined;
+      const aspect = (img && img.width && img.height)
+        ? img.width / img.height
+        : 1.0;
+      
+      const spriteMat = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        alphaTest: 0.05,
+        depthWrite: false,
+      });
+
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.name = 'billboardSprite';
+      const width = spriteHeight * aspect;
+      sprite.scale.set(width, spriteHeight, 1.0);
+      sprite.position.set(0, spriteHeight / 2, 0);
+      group.add(sprite);
+
+      if (onLoaded) onLoaded();
+    };
+
+    if (loadedTextureCache.has(imageUrl)) {
+      applyTextureToSprite(loadedTextureCache.get(imageUrl)!);
+    } else {
+      textureLoader.load(
+        imageUrl,
+        (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          loadedTextureCache.set(imageUrl, tex);
+          applyTextureToSprite(tex);
+        },
+        undefined,
+        (err) => {
+          console.warn(`Erro ao carregar textura do pino billboard para ${options.combatant.name}:`, err);
+        }
+      );
+    }
+  } 
+  // Render Mode B: 3D Model GLB
+  else if (modelUrl) {
     if (loadedModelCache.has(modelUrl)) {
       const cloned = loadedModelCache.get(modelUrl)!.clone(true);
       group.add(cloned);

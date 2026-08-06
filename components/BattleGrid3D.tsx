@@ -715,7 +715,8 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       };
 
       // Separar Genéricos de Únicos (Usamos instanciamento em massa apenas se houver >= 15 combatentes em tela)
-      const isGeneric = combatants.length >= 15 && c.type === 'monster' && !c.modelUrl;
+      const isBillboard = c.tokenType === 'billboard' || !!c.tokenImageUrl;
+      const isGeneric = combatants.length >= 15 && c.type === 'monster' && !c.modelUrl && !isBillboard;
 
       if (isGeneric) {
         // Remover possível representação única antiga se existir
@@ -732,13 +733,50 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         const existingGroup = tokenMeshMapRef.current.get(key);
         if (existingGroup) {
           updateTokenMeshState(existingGroup, options);
+
+          // Dynamic PointLight for Torches / Token Lighting
+          let torchLight = existingGroup.getObjectByName('tokenTorchLight') as THREE.PointLight;
+          if (c.hasTorch || c.visionType === 'darkvision') {
+            if (!torchLight) {
+              const lightColor = c.hasTorch ? 0xffaa33 : 0x38bdf8;
+              torchLight = new THREE.PointLight(lightColor, c.hasTorch ? 3.0 : 1.5, c.hasTorch ? 15 : 10);
+              torchLight.name = 'tokenTorchLight';
+              torchLight.position.set(0, 1.8, 0);
+              torchLight.castShadow = true;
+              torchLight.shadow.mapSize.width = 512;
+              torchLight.shadow.mapSize.height = 512;
+              torchLight.shadow.bias = -0.002;
+              existingGroup.add(torchLight);
+            } else {
+              if (c.hasTorch) {
+                // Flame flicker effect
+                torchLight.intensity = 2.8 + Math.sin(Date.now() * 0.01) * 0.4 + (Math.random() - 0.5) * 0.3;
+              }
+            }
+          } else if (torchLight) {
+            existingGroup.remove(torchLight);
+          }
         } else {
           const tokenMesh = createTokenMesh(options);
+          
+          if (c.hasTorch || c.visionType === 'darkvision') {
+            const lightColor = c.hasTorch ? 0xffaa33 : 0x38bdf8;
+            const torchLight = new THREE.PointLight(lightColor, c.hasTorch ? 3.0 : 1.5, c.hasTorch ? 15 : 10);
+            torchLight.name = 'tokenTorchLight';
+            torchLight.position.set(0, 1.8, 0);
+            torchLight.castShadow = true;
+            torchLight.shadow.mapSize.width = 512;
+            torchLight.shadow.mapSize.height = 512;
+            torchLight.shadow.bias = -0.002;
+            tokenMesh.add(torchLight);
+          }
+
           tokenGroup.add(tokenMesh);
           tokenMeshMapRef.current.set(key, tokenMesh);
         }
       }
     });
+
 
     // Update InstancedMesh manager
     instancedTokenManagerRef.current.update(genericCombatants, genericOptionsMap);
