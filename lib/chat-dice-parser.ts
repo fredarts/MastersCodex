@@ -39,8 +39,8 @@ export function interpolateMacroVariables(text: string, sheet?: CharacterSheet |
     '@cha': getMod(sheet.attributes?.cha?.score),
     '@pb': pb,
     '@lvl': sheet.level || 1,
-    '@hp': sheet.hp?.current || 0,
-    '@ac': sheet.ac || 10,
+    '@hp': sheet.currentHp ?? (sheet as any).hp?.current ?? 0,
+    '@ac': sheet.armorClass ?? (sheet as any).ac ?? 10,
   };
 
   let interpolated = text;

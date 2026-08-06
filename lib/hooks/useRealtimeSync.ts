@@ -84,6 +84,7 @@ export function useRealtimeSync({
   onTokenRotate,
   onLiveProjectionChange,
   onDiceRoll,
+  onDice3DBurst,
   onCombatUpdate,
   onCombatLogEntry,
   onPlayerRoll,
@@ -107,6 +108,7 @@ export function useRealtimeSync({
     onTokenRotate,
     onLiveProjectionChange,
     onDiceRoll,
+    onDice3DBurst,
     onCombatUpdate,
     onCombatLogEntry,
     onPlayerRoll,
@@ -128,6 +130,7 @@ export function useRealtimeSync({
       onTokenRotate,
       onLiveProjectionChange,
       onDiceRoll,
+      onDice3DBurst,
       onCombatUpdate,
       onCombatLogEntry,
       onPlayerRoll,
@@ -147,6 +150,7 @@ export function useRealtimeSync({
     onTokenRotate,
     onLiveProjectionChange,
     onDiceRoll,
+    onDice3DBurst,
     onCombatUpdate,
     onCombatLogEntry,
     onPlayerRoll,
@@ -175,6 +179,7 @@ export function useRealtimeSync({
         if (type === 'TOKEN_ROTATE_3D' && cb.onTokenRotate) cb.onTokenRotate(data as any);
         if (type === 'LIVE_PROJECTION_UPDATE' && cb.onLiveProjectionChange) cb.onLiveProjectionChange(data as any);
         if (type === 'DICE_ROLL' && cb.onDiceRoll) cb.onDiceRoll(data as any);
+        if (type === 'DICE_3D_BURST' && cb.onDice3DBurst) cb.onDice3DBurst(data as any);
         if (type === 'COMBAT_UPDATE' && cb.onCombatUpdate) cb.onCombatUpdate(data as any);
         if (type === 'COMBAT_LOG_ENTRY' && cb.onCombatLogEntry) cb.onCombatLogEntry(data as any);
         if (type === 'PLAYER_ROLL' && cb.onPlayerRoll) cb.onPlayerRoll(data as any);

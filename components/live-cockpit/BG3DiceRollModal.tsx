@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Lock, Shield, Check, X, Plus, Minus, ArrowUpRight, Award, Zap } from 'lucide-react';
-import { Dice3DCanvas } from '@/components/Dice3DCanvas';
+import { Dice3DCanvas, DieType } from '@/components/Dice3DCanvas';
 import { Bg3DiceOverlayState } from '@/lib/stores/useLiveCockpitStudioStore';
 import { Bg3RollModifierCard } from '@/lib/types';
 import { useAudio } from '@/context/AudioContext';

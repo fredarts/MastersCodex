@@ -197,10 +197,9 @@ describe('Campaign Service & Repository Persistence Tests', () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockImplementation((col, val) => {
           return {
-            eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-            }),
+            eq: vi.fn().mockImplementation(() => Promise.resolve({ data: [], error: null })),
             maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            then: (resolve: any) => resolve({ data: [], error: null }),
           };
         }),
         insert: vi.fn().mockReturnThis(),
