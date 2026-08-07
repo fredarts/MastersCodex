@@ -810,6 +810,8 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         <WorldEntityAiGeneratorModal
           isOpen={isAiModalOpen}
           onClose={() => setIsAiModalOpen(false)}
+          worldEntities={worldEntities}
+          currentEntityId={editingEntity?.id}
           categoryContext={{
             categoryTitle: getCategoryTitle(),
             namePlaceholder: getNamePlaceholder(),

@@ -14,17 +14,23 @@ export async function POST(req: NextRequest) {
       namePlaceholder,
       attr1Label,
       attr2Label,
-      userSettings
+      userSettings,
+      contextText
     } = body;
 
     if (!prompt) {
       return NextResponse.json({ error: 'O prompt do mestre é obrigatório.' }, { status: 400 });
     }
 
+    let contextPart = '';
+    if (contextText) {
+      contextPart = `\nConsidere também o seguinte contexto de outras entidades existentes no mundo como referência:\n${contextText}\n`;
+    }
+
     const systemPrompt = `Você é um assistente especialista em criação de mundos (worldbuilding) para campanhas de RPG de mesa.
 O usuário está preenchendo um formulário para criar a seguinte entidade: **${categoryTitle}**.
 A entidade tem as seguintes instruções de preenchimento de nome: ${namePlaceholder}.
-
+${contextPart}
 Aqui está a descrição livre do que o usuário quer criar:
 "${prompt}"
 

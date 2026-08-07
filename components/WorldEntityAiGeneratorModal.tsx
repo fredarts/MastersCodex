@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X, Sparkles, Wand2, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Sparkles, Wand2, AlertCircle, Search } from 'lucide-react';
 import { useUserSettings } from '@/lib/hooks/useUserSettings';
+import { WorldEntity } from '@/lib/types';
 
 interface WorldEntityAiGeneratorModalProps {
   isOpen: boolean;
@@ -21,20 +22,105 @@ interface WorldEntityAiGeneratorModalProps {
     attr1Label: string;
     attr2Label: string;
   };
+  worldEntities: WorldEntity[];
+  currentEntityId?: string;
 }
+
+const translateCategory = (cat: string): string => {
+  const map: Record<string, string> = {
+    npc: 'NPC / Personagem',
+    location: 'Localização / Geografia',
+    faction: 'Facção ou Guilda',
+    religion: 'Religião ou Deus',
+    lore_event: 'Evento Histórico',
+    species: 'Espécie / Raça',
+    ethnicity: 'Etnia / Cultura',
+    tradition: 'Tradição / Ritual',
+    profession: 'Profissão / Título',
+    natural_law: 'Lei Natural / Fenômeno',
+    spell: 'Feitiço / Magia',
+    disease: 'Doença / Condição',
+    item: 'Item / Artefato',
+    material: 'Recurso / Material',
+    technology: 'Tecnologia / Veículo',
+    document: 'Documento / Registro',
+    language: 'Idioma / Dialeto',
+    military_conflict: 'Conflito Militar',
+    military_unit: 'Unidade Militar',
+    currency: 'Moeda / Monetário',
+    trade_route: 'Rota Comercial',
+    beast: 'Monstro / Criatura',
+    flora: 'Flora / Planta',
+  };
+  return map[cat] || cat;
+};
 
 export const WorldEntityAiGeneratorModal: React.FC<WorldEntityAiGeneratorModalProps> = ({
   isOpen,
   onClose,
   onApply,
   categoryContext,
+  worldEntities = [],
+  currentEntityId,
 }) => {
   const { settings } = useUserSettings();
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // States for context selection
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedEntities, setSelectedEntities] = useState<WorldEntity[]>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Clear state when modal opens/closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchQuery('');
+      setSelectedEntities([]);
+      setIsDropdownOpen(false);
+    }
+  }, [isOpen]);
+
+  // Click outside listener for dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   if (!isOpen) return null;
+
+  // Filter out current and already selected entities
+  const availableEntities = worldEntities.filter(
+    (ent) => ent.id !== currentEntityId && !selectedEntities.some((sel) => sel.id === ent.id)
+  );
+
+  // Filter based on search query
+  const filteredEntities = availableEntities.filter((ent) => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return true;
+    return (
+      ent.name.toLowerCase().includes(query) ||
+      (ent.subType || '').toLowerCase().includes(query) ||
+      translateCategory(ent.category).toLowerCase().includes(query)
+    );
+  });
+
+  const handleSelectEntity = (ent: WorldEntity) => {
+    setSelectedEntities((prev) => [...prev, ent]);
+    setSearchQuery('');
+    setIsDropdownOpen(false);
+  };
+
+  const handleRemoveEntity = (id: string) => {
+    setSelectedEntities((prev) => prev.filter((ent) => ent.id !== id));
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -44,6 +130,20 @@ export const WorldEntityAiGeneratorModal: React.FC<WorldEntityAiGeneratorModalPr
 
     setIsGenerating(true);
     setError(null);
+
+    // Format entity context to markdown format for systemPrompt context injection
+    const contextText = selectedEntities.length > 0
+      ? selectedEntities.map(ent => {
+          let detail = `- **${ent.name}** [${translateCategory(ent.category)}${ent.subType ? ` - ${ent.subType}` : ''}]: ${ent.shortDesc}`;
+          if (ent.fullContent) {
+            const truncated = ent.fullContent.length > 400
+              ? ent.fullContent.slice(0, 400) + '...'
+              : ent.fullContent;
+            detail += `\n  Lore/Detalhes: ${truncated}`;
+          }
+          return detail;
+        }).join('\n\n')
+      : undefined;
 
     try {
       const response = await fetch('/api/ai/generate-entity', {
@@ -58,6 +158,7 @@ export const WorldEntityAiGeneratorModal: React.FC<WorldEntityAiGeneratorModalPr
           attr1Label: categoryContext.attr1Label,
           attr2Label: categoryContext.attr2Label,
           userSettings: settings,
+          contextText,
         }),
       });
 
@@ -77,6 +178,7 @@ export const WorldEntityAiGeneratorModal: React.FC<WorldEntityAiGeneratorModalPr
       });
       
       setPrompt('');
+      setSelectedEntities([]);
       onClose();
     } catch (err: any) {
       console.error(err);
@@ -112,7 +214,7 @@ export const WorldEntityAiGeneratorModal: React.FC<WorldEntityAiGeneratorModalPr
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto scrollbar-thin">
           <p className="text-sm text-slate-300 leading-relaxed font-serif">
             Descreva de forma livre como você imagina esta entidade. A IA vai preencher todo o formulário (nome, resumo, lore detalhada e atributos) baseando-se nas suas ideias.
           </p>
@@ -124,8 +226,93 @@ export const WorldEntityAiGeneratorModal: React.FC<WorldEntityAiGeneratorModalPr
             </div>
           )}
 
+          {/* Contexto do Mundo */}
+          <div className="space-y-2">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Anexar Contexto do Mundo (Opcional)
+            </label>
+            
+            {/* Lista de chips das entidades anexadas */}
+            {selectedEntities.length > 0 && (
+              <div className="flex flex-wrap gap-2 p-3 bg-[#0a0d14] border border-[#2a3449]/50 rounded-xl animate-fade-in">
+                {selectedEntities.map((ent) => (
+                  <div
+                    key={ent.id}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium rounded-full transition-all"
+                  >
+                    <span className="text-[9px] uppercase font-bold text-purple-400 font-mono">
+                      {translateCategory(ent.category)}
+                    </span>
+                    <span className="font-semibold text-slate-100 text-xs">{ent.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveEntity(ent.id)}
+                      className="p-0.5 text-slate-400 hover:text-rose-400 hover:bg-slate-700/50 rounded-full transition-all"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Input e Dropdown de seleção */}
+            <div ref={dropdownRef} className="relative">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Pesquisar entidade por nome ou categoria (ex: Reino, Rei)..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setIsDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  disabled={isGenerating}
+                  className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-purple-500/70 rounded-xl px-4 py-2.5 pl-10 text-xs text-slate-200 focus:outline-none transition-all placeholder:text-slate-500 disabled:opacity-50"
+                />
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500">
+                  <Search className="w-4 h-4" />
+                </div>
+              </div>
+
+              {isDropdownOpen && (
+                <div className="absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-[#0d111b] border border-[#2a3449] rounded-xl shadow-2xl z-50 divide-y divide-[#2a3449]/40 scrollbar-thin">
+                  {filteredEntities.length > 0 ? (
+                    filteredEntities.map((ent) => (
+                      <button
+                        key={ent.id}
+                        type="button"
+                        onClick={() => handleSelectEntity(ent)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-[#161f30] transition-colors flex items-center justify-between group"
+                      >
+                        <div className="flex flex-col min-w-0 pr-4">
+                          <span className="text-xs font-bold text-slate-200 group-hover:text-white transition-colors truncate">
+                            {ent.name}
+                          </span>
+                          {ent.subType && (
+                            <span className="text-[10px] text-slate-400 truncate">
+                              {ent.subType}
+                            </span>
+                          )}
+                        </div>
+                        <span className="flex-shrink-0 text-[9px] uppercase font-mono tracking-wider font-bold bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">
+                          {translateCategory(ent.category)}
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-4 py-3 text-xs text-slate-500 text-center font-serif">
+                      Nenhuma outra entidade encontrada para anexar
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           <textarea
-            rows={6}
+            rows={5}
             value={prompt}
             onChange={(e) => {
               setPrompt(e.target.value);
