@@ -96,4 +96,84 @@ describe('parseAIDungeonToMapData', () => {
     expect(parsed.grid[4][4].type).toBe('wood');
     expect(parsed.grid[6][6].type).toBe('wood');
   });
+
+  it('deve conectar automaticamente duas salas isoladas sem conexão inicial', () => {
+    const mockDisconnected: AIDungeonOutput = {
+      metadata: {
+        title: 'Masmorra Desconectada',
+        description: 'Masmorra com salas isoladas para testar conexao automatica',
+        recommendedLevel: 3,
+        theme: 'gothic',
+        floorIndex: 1,
+        totalFloors: 1,
+      },
+      gridSize: { cols: 40, rows: 40 },
+      rooms: [
+        {
+          id: 'room_1',
+          name: 'Sala Noroeste',
+          type: 'hall',
+          bounds: { startCol: 5, startRow: 5, width: 5, height: 5 },
+          floorTileType: 'stone',
+        },
+        {
+          id: 'room_2',
+          name: 'Sala Sudeste',
+          type: 'hall',
+          bounds: { startCol: 20, startRow: 20, width: 5, height: 5 },
+          floorTileType: 'stone',
+        },
+      ],
+      elements: [],
+      lightSources: [],
+    };
+
+    const parsed = parseAIDungeonToMapData(mockDisconnected);
+
+    // BFS a partir do centro da Sala 1 (7, 7) para ver se alcançamos o centro da Sala 2 (22, 22)
+    const visited = Array.from({ length: 40 }, () => new Array(40).fill(false));
+    const queue: { r: number; c: number }[] = [{ r: 7, c: 7 }];
+    visited[7][7] = true;
+    let reachedRoom2 = false;
+
+    while (queue.length > 0) {
+      const curr = queue.shift()!;
+      if (curr.r === 22 && curr.c === 22) {
+        reachedRoom2 = true;
+        break;
+      }
+
+      const dirs = [
+        { r: -1, c: 0 },
+        { r: 1, c: 0 },
+        { r: 0, c: -1 },
+        { r: 0, c: 1 },
+      ];
+
+      for (const d of dirs) {
+        const nr = curr.r + d.r;
+        const nc = curr.c + d.c;
+        if (nr >= 0 && nr < 40 && nc >= 0 && nc < 40) {
+          if (parsed.grid[nr][nc].type !== 'wall' && !visited[nr][nc]) {
+            visited[nr][nc] = true;
+            queue.push({ r: nr, c: nc });
+          }
+        }
+      }
+    }
+
+    expect(reachedRoom2).toBe(true);
+
+    // Verifica se uma porta foi inserida na transição
+    let hasDoor = false;
+    for (let r = 0; r < 40; r++) {
+      for (let c = 0; c < 40; c++) {
+        if (parsed.grid[r][c].type === 'door') {
+          hasDoor = true;
+          break;
+        }
+      }
+    }
+    expect(hasDoor).toBe(true);
+  });
 });

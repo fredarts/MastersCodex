@@ -320,3 +320,65 @@ export function getCombatantVisionType(
   );
   return combatant?.visionType || 'normal';
 }
+
+/**
+ * Utility: Checks if point (px, py) is inside a polygon
+ */
+export function isPointInPolygon(px: number, py: number, polygon: { x: number; y: number }[]): boolean {
+  if (!polygon || polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y;
+    const xj = polygon[j].x, yj = polygon[j].y;
+
+    const intersect = ((yi > py) !== (yj > py)) &&
+        (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Checks if a LightSource is connected to active player Line of Sight or an explored room.
+ */
+export function isLightVisibleToPlayer(
+  light: LightSource,
+  playerTokens: { r: number; c: number; radius: number }[],
+  grid: Cell[][],
+  vectorWalls: WallSegment[] = [],
+  cellSize = 40,
+  gridOffsetX = 0,
+  gridOffsetY = 0,
+  hasBgImage = false
+): boolean {
+  if (!grid || grid.length === 0) return true;
+
+  // Determine pixel coordinates of light
+  const lx = light.x < 150 ? (hasBgImage ? gridOffsetX + light.x * cellSize : light.x * cellSize) : light.x;
+  const ly = light.y < 150 ? (hasBgImage ? gridOffsetY + light.y * cellSize : light.y * cellSize) : light.y;
+
+  // Find grid cell of the light
+  const actualLx = hasBgImage ? lx - gridOffsetX : lx;
+  const actualLy = hasBgImage ? ly - gridOffsetY : ly;
+  const c = Math.floor(actualLx / cellSize);
+  const r = Math.floor(actualLy / cellSize);
+
+  const targetCell = grid[r]?.[c];
+  
+  // Rule 1: If room cell containing the light is unexplored by fog of war (fog === true), hide light from players
+  if (targetCell && targetCell.fog) {
+    return false;
+  }
+
+  // If no player tokens exist on map, allow explored light sources
+  if (!playerTokens || playerTokens.length === 0) return true;
+
+  // Rule 2: Check if any player token has Line of Sight to the light source
+  for (const pt of playerTokens) {
+    if (hasLineOfSight(pt.c, pt.r, c, r, grid, vectorWalls, cellSize)) {
+      return true;
+    }
+  }
+
+  return false;
+}

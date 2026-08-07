@@ -156,5 +156,6 @@ ESTILO DE ARQUITETURA DE ELITE APLICADO (${selected.name}):
   2. Passagens Secretas em Loop (S): ${selected.architecturalRules.hasSecretPassageLoops ? 'SIM! Posicione de 2 a 4 paredes ilusórias ("illusion_wall") interligando salas adjacentes e corredores para criar caminhos de flanqueamento.' : 'NÃO'}
   3. Entrada Simétrica com Alcovas: ${selected.architecturalRules.hasSymmetricEntry ? 'SIM! A entrada deve se conectar a uma grande galeria/corredor com alcovas laterais.' : 'NÃO'}
   4. Formato das Salas: Crie salas quadradas, retangulares e salões compostos em vez de blocos simples.
+  5. Conectividade Absoluta: Todas as salas devem se conectar fisicamente por meio de corredores e portas. Não gere salas sem comunicação direta ou indireta.
 `;
 }

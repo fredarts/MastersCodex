@@ -41,7 +41,8 @@ import {
   isCellBlockingVision,
   revealVisionWithLOS, 
   computeVisibilityPolygon, 
-  getTokenVisionRadius 
+  getTokenVisionRadius,
+  isLightVisibleToPlayer
 } from './visionCore';
 import { Combatant } from '@/lib/types';
 import { Cell, TileType, ChestConfig, ContainerType, ContainerStatus, ChestLoot } from '../MapMaker';
@@ -129,6 +130,8 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const offscreenMaskRef = useRef<HTMLCanvasElement | null>(null);
+  const lastPaintedCellRef = useRef<{ r: number; c: number; tool: string } | null>(null);
 
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawButton, setDrawButton] = useState(-1);
@@ -143,6 +146,10 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number; cell: Cell } | null>(null);
   const [draggingToken, setDraggingToken] = useState<{ name: string, color: string, startR: number, startC: number, currentR: number, currentC: number } | null>(null);
 
+  const CELL_SIZE = bgImageUrl ? gridScale : 40;
+  const COLS = grid[0]?.length || 12;
+  const ROWS = grid.length || 12;
+
   // Advanced Multi-Point Ruler State
   const [rulerPoints, setRulerPoints] = useState<RulerPoint[]>([]);
   const [rulerCursor, setRulerCursor] = useState<RulerPoint | null>(null);
@@ -152,10 +159,112 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
   const gridDims = useRef({ rows: grid.length, cols: grid[0]?.length || 0 });
   const panOffsetRef = useRef(panOffset);
+  const zoomRef = useRef(zoom);
   const selectedToolRef = useRef(selectedTool);
   const rulerPointsRef = useRef(rulerPoints);
   const rulerCursorRef = useRef(rulerCursor);
   const rulerStatusRef = useRef(rulerStatus);
+
+  // Memoized Dyson Wall Distance Transform (recalculated ONLY when grid changes, not on frame/mousemove)
+  const distMap = useMemo(() => {
+    if (!grid || grid.length === 0) return [];
+    const rows = grid.length;
+    const cols = grid[0]?.length || 0;
+    const map: number[][] = Array(rows).fill(null).map(() => Array(cols).fill(99));
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (grid[r]?.[c] && grid[r][c].type !== 'wall') {
+          map[r][c] = 0;
+        } else {
+          let minDist = 99;
+          for (let i = -3; i <= 3; i++) {
+            for (let j = -3; j <= 3; j++) {
+              const nr = r + i;
+              const nc = c + j;
+              if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+                if (grid[nr]?.[nc] && grid[nr][nc].type !== 'wall') {
+                  const d = Math.hypot(i, j);
+                  if (d < minDist) minDist = d;
+                }
+              }
+            }
+          }
+          map[r][c] = minDist;
+        }
+      }
+    }
+    return map;
+  }, [grid]);
+
+  // Memoized player tokens list
+  const playerTokens = useMemo(() => {
+    const tokens: { r: number; c: number; radius: number; tokenName: string }[] = [];
+    if (!grid || grid.length === 0) return tokens;
+    const rows = grid.length;
+    const cols = grid[0]?.length || 0;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (grid[r]?.[c]?.tokenName) {
+          const tokenNameClean = grid[r][c].tokenName!.trim().toLowerCase();
+          const isPlayerToken = grid[r][c].tokenColor?.includes('cyan') || 
+                                grid[r][c].tokenColor?.includes('emerald') || 
+                                grid[r][c].tokenColor?.includes('green') || 
+                                grid[r][c].tokenColor?.includes('blue') ||
+                                combatants?.some((comb: Combatant) => {
+                                  if (comb.type !== 'player') return false;
+                                  const cName = comb.name.trim().toLowerCase();
+                                  return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
+                                });
+          if (isPlayerToken) {
+            tokens.push({
+              r,
+              c,
+              radius: getTokenVisionRadius(grid[r][c].tokenName, combatants),
+              tokenName: grid[r][c].tokenName!
+            });
+          }
+        }
+      }
+    }
+    return tokens;
+  }, [grid, combatants]);
+
+  // Memoized token active vision polygons (world-space, recomputed ONLY when tokens/geometry change)
+  const tokenVisionPolygons = useMemo(() => {
+    if (!grid || grid.length === 0) return [];
+    return playerTokens.map((pt) => {
+      const tx = bgImageUrl ? gridOffsetX + pt.c * CELL_SIZE + CELL_SIZE / 2 : pt.c * CELL_SIZE + CELL_SIZE / 2;
+      const ty = bgImageUrl ? gridOffsetY + pt.r * CELL_SIZE + CELL_SIZE / 2 : pt.r * CELL_SIZE + CELL_SIZE / 2;
+      const visionRadius = pt.radius * CELL_SIZE;
+
+      const polyPoints = computeVisibilityPolygon(
+        tx, ty, visionRadius, grid, CELL_SIZE, gridOffsetX, gridOffsetY, Boolean(bgImageUrl), vectorWalls
+      );
+
+      return { tx, ty, visionRadius, polyPoints };
+    });
+  }, [playerTokens, grid, vectorWalls, CELL_SIZE, gridOffsetX, gridOffsetY, bgImageUrl]);
+
+  // Memoized light source visibility polygons (world-space, recomputed ONLY when lights/geometry change)
+  const lightPolygons = useMemo(() => {
+    if (!lightSources || lightSources.length === 0 || !grid || grid.length === 0) return [];
+
+    return lightSources.map((light) => {
+      const isVisible = !isPlayerView || isLightVisibleToPlayer(light, playerTokens, grid, vectorWalls, CELL_SIZE, gridOffsetX, gridOffsetY, Boolean(bgImageUrl));
+      
+      const lx = light.x < 150 ? (bgImageUrl ? gridOffsetX + light.x * CELL_SIZE : light.x * CELL_SIZE) : light.x;
+      const ly = light.y < 150 ? (bgImageUrl ? gridOffsetY + light.y * CELL_SIZE : light.y * CELL_SIZE) : light.y;
+      const lRadius = (light.dimRadius / 5) * CELL_SIZE;
+
+      const polyPoints = isVisible ? computeVisibilityPolygon(
+        lx, ly, lRadius, grid, CELL_SIZE, gridOffsetX, gridOffsetY, Boolean(bgImageUrl), vectorWalls
+      ) : [];
+
+      return { light, lx, ly, lRadius, polyPoints, isVisible };
+    });
+  }, [lightSources, isPlayerView, playerTokens, grid, vectorWalls, CELL_SIZE, gridOffsetX, gridOffsetY, bgImageUrl]);
 
   useEffect(() => {
     gridDims.current = { rows: grid.length, cols: grid[0]?.length || 0 };
@@ -164,6 +273,10 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   useEffect(() => {
     panOffsetRef.current = panOffset;
   }, [panOffset]);
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
 
   useEffect(() => {
     selectedToolRef.current = selectedTool;
@@ -370,10 +483,6 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   // Track background image loading
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
 
-  const CELL_SIZE = bgImageUrl ? gridScale : 40; // larger cell size for procedural Dyson lines
-  const COLS = grid[0]?.length || 12;
-  const ROWS = grid.length || 12;
-
   // Track centering flag to only center once per load/scene reset
   const centeredRef = useRef(false);
 
@@ -452,10 +561,10 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     }
   }, [bgImage, bgImageUrl, COLS, ROWS, CELL_SIZE, fitAndCenterView]);
 
-  // Reset centering flag when scene coordinates/grid/background URL changes
+  // Reset centering flag ONLY when background URL or grid dimensions change (NOT on cell edits)
   useEffect(() => {
     centeredRef.current = false;
-  }, [bgImageUrl, COLS, ROWS, grid]);
+  }, [bgImageUrl, COLS, ROWS]);
 
   useEffect(() => {
     if (bgImageUrl) {
@@ -525,35 +634,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       ctx.translate(panOffset.x, panOffset.y);
       ctx.scale(zoom, zoom);
 
-      // Distance transform for walls (optimized for viewport area)
-      const distMap: number[][] = Array(ROWS).fill(null).map(() => Array(COLS).fill(99));
-      const calcStartRow = Math.max(0, startRow - 5);
-      const calcEndRow = Math.min(ROWS - 1, endRow + 5);
-      const calcStartCol = Math.max(0, startCol - 5);
-      const calcEndCol = Math.min(COLS - 1, endCol + 5);
-
-      for (let r = calcStartRow; r <= calcEndRow; r++) {
-        for (let c = calcStartCol; c <= calcEndCol; c++) {
-          if (grid[r]?.[c] && grid[r][c].type !== 'wall') {
-            distMap[r][c] = 0;
-          } else {
-            let minDist = 99;
-            for (let i = -5; i <= 5; i++) {
-              for (let j = -5; j <= 5; j++) {
-                const nr = r + i;
-                const nc = c + j;
-                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
-                  if (grid[nr]?.[nc] && grid[nr][nc].type !== 'wall') {
-                    const d = Math.sqrt(i * i + j * j);
-                    if (d < minDist) minDist = d;
-                  }
-                }
-              }
-            }
-            distMap[r][c] = minDist;
-          }
-        }
-      }
+      // Use memoized distance transform for Dyson wall crosshatch rendering
 
       // Draw Dyson Wall Hachures (Culled)
       for (let r = startRow; r <= endRow; r++) {
@@ -865,10 +946,41 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     ctx.restore(); // Restore to screen space for mask
 
+    // 2.5 Collect Active Player Tokens for LOS and Lighting Checks
+    const playerTokens: { r: number; c: number; radius: number }[] = [];
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (grid[r]?.[c]?.tokenName) {
+          const tokenNameClean = grid[r][c].tokenName!.trim().toLowerCase();
+          const isPlayerToken = grid[r][c].tokenColor?.includes('cyan') || 
+                                grid[r][c].tokenColor?.includes('emerald') || 
+                                grid[r][c].tokenColor?.includes('green') || 
+                                grid[r][c].tokenColor?.includes('blue') ||
+                                combatants?.some((comb: Combatant) => {
+                                  if (comb.type !== 'player') return false;
+                                  const cName = comb.name.trim().toLowerCase();
+                                  return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
+                                });
+          if (isPlayerToken) {
+            playerTokens.push({
+              r,
+              c,
+              radius: getTokenVisionRadius(grid[r][c].tokenName, combatants)
+            });
+          }
+        }
+      }
+    }
+
     // 3. Draw Fog of War & Vision Circles (Destination Out - Culled)
-    const maskCanvas = document.createElement('canvas');
-    maskCanvas.width = width;
-    maskCanvas.height = height;
+    if (!offscreenMaskRef.current) {
+      offscreenMaskRef.current = document.createElement('canvas');
+    }
+    const maskCanvas = offscreenMaskRef.current;
+    if (maskCanvas.width !== width || maskCanvas.height !== height) {
+      maskCanvas.width = width;
+      maskCanvas.height = height;
+    }
     const maskCtx = maskCanvas.getContext('2d');
 
     if (maskCtx) {
@@ -907,98 +1019,49 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         }
       }
 
-      // 3. Current token active vision (Godot-like Light2D spotlight with soft smoky falloff and wall LOS)
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          if (grid[r]?.[c]?.tokenName) {
-            const tokenNameClean = grid[r][c].tokenName!.trim().toLowerCase();
-            const isPlayerToken = grid[r][c].tokenColor?.includes('cyan') || 
-                                  grid[r][c].tokenColor?.includes('emerald') || 
-                                  grid[r][c].tokenColor?.includes('green') || 
-                                  grid[r][c].tokenColor?.includes('blue') ||
-                                  combatants?.some((comb: Combatant) => {
-                                    if (comb.type !== 'player') return false;
-                                    const cName = comb.name.trim().toLowerCase();
-                                    return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
-                                  });
-            
-            // In player view, only player tokens project active line-of-sight vision.
-            if (isPlayerView && !isPlayerToken) {
-              continue;
-            }
-
-            const tx = bgImage ? gridOffsetX + c * CELL_SIZE + CELL_SIZE / 2 : c * CELL_SIZE + CELL_SIZE / 2;
-            const ty = bgImage ? gridOffsetY + r * CELL_SIZE + CELL_SIZE / 2 : r * CELL_SIZE + CELL_SIZE / 2;
-            
-            const visionRadius = getTokenVisionRadius(grid[r][c].tokenName, combatants) * CELL_SIZE;
-
-            const polyPoints = computeVisibilityPolygon(
-              tx, 
-              ty, 
-              visionRadius, 
-              grid, 
-              CELL_SIZE, 
-              gridOffsetX, 
-              gridOffsetY, 
-              Boolean(bgImage),
-              vectorWalls
-            );
-
-            if (polyPoints.length > 0) {
-              maskCtx.save();
-              maskCtx.beginPath();
-              maskCtx.moveTo(polyPoints[0].x, polyPoints[0].y);
-              for (let p = 1; p < polyPoints.length; p++) {
-                maskCtx.lineTo(polyPoints[p].x, polyPoints[p].y);
-              }
-              maskCtx.closePath();
-
-              // Smooth radial light gradient with soft outer falloff
-              const grad = maskCtx.createRadialGradient(tx, ty, CELL_SIZE * 0.5, tx, ty, visionRadius);
-              grad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)'); // full reveal near token
-              grad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)'); // soft falloff
-              grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)'); // smoky outer transition
-
-              maskCtx.fillStyle = grad;
-              maskCtx.fill();
-              maskCtx.restore();
-            }
+      // 3. Current token active vision (uses memoized tokenVisionPolygons)
+      tokenVisionPolygons.forEach(({ tx, ty, visionRadius, polyPoints }) => {
+        if (polyPoints.length > 0) {
+          maskCtx.save();
+          maskCtx.beginPath();
+          maskCtx.moveTo(polyPoints[0].x, polyPoints[0].y);
+          for (let p = 1; p < polyPoints.length; p++) {
+            maskCtx.lineTo(polyPoints[p].x, polyPoints[p].y);
           }
+          maskCtx.closePath();
+
+          const grad = maskCtx.createRadialGradient(tx, ty, CELL_SIZE * 0.5, tx, ty, visionRadius);
+          grad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
+          grad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)');
+          grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+
+          maskCtx.fillStyle = grad;
+          maskCtx.fill();
+          maskCtx.restore();
         }
-      }
+      });
 
-      // Render standalone LightSources on fog mask (carves out dark fog)
-      if (lightSources && lightSources.length > 0) {
-        lightSources.forEach((light) => {
-          const lx = bgImage ? gridOffsetX + light.x * CELL_SIZE : light.x * CELL_SIZE;
-          const ly = bgImage ? gridOffsetY + light.y * CELL_SIZE : light.y * CELL_SIZE;
-          const lRadius = (light.dimRadius / 5) * CELL_SIZE;
+      // Render standalone LightSources on fog mask (uses memoized lightPolygons)
+      lightPolygons.forEach(({ lx, ly, lRadius, polyPoints, isVisible }) => {
+        if (!isVisible || polyPoints.length === 0) return;
 
-          const lightPoly = computeVisibilityPolygon(
-            lx, ly, lRadius, grid, CELL_SIZE, gridOffsetX, gridOffsetY, Boolean(bgImage), vectorWalls
-          );
+        maskCtx.save();
+        maskCtx.beginPath();
+        maskCtx.moveTo(polyPoints[0].x, polyPoints[0].y);
+        for (let p = 1; p < polyPoints.length; p++) {
+          maskCtx.lineTo(polyPoints[p].x, polyPoints[p].y);
+        }
+        maskCtx.closePath();
 
-          if (lightPoly.length > 0) {
-            maskCtx.save();
-            maskCtx.beginPath();
-            maskCtx.moveTo(lightPoly[0].x, lightPoly[0].y);
-            for (let p = 1; p < lightPoly.length; p++) {
-              maskCtx.lineTo(lightPoly[p].x, lightPoly[p].y);
-            }
-            maskCtx.closePath();
+        const fogGrad = maskCtx.createRadialGradient(lx, ly, 5, lx, ly, lRadius);
+        fogGrad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
+        fogGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)');
+        fogGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
 
-            // Carve fog out of mask canvas
-            const fogGrad = maskCtx.createRadialGradient(lx, ly, 5, lx, ly, lRadius);
-            fogGrad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
-            fogGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)');
-            fogGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
-
-            maskCtx.fillStyle = fogGrad;
-            maskCtx.fill();
-            maskCtx.restore();
-          }
-        });
-      }
+        maskCtx.fillStyle = fogGrad;
+        maskCtx.fill();
+        maskCtx.restore();
+      });
 
       // Reset filter
       maskCtx.filter = 'none';
@@ -1011,41 +1074,29 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     ctx.translate(panOffset.x, panOffset.y);
     ctx.scale(zoom, zoom);
 
-    // 3.B. Render Colored Ambient Light Glow on Main Canvas
-    if (lightSources && lightSources.length > 0) {
-      lightSources.forEach((light) => {
-        const lx = bgImage ? gridOffsetX + light.x * CELL_SIZE : light.x * CELL_SIZE;
-        const ly = bgImage ? gridOffsetY + light.y * CELL_SIZE : light.y * CELL_SIZE;
-        const lRadius = (light.dimRadius / 5) * CELL_SIZE;
+    // 3.B. Render Colored Ambient Light Glow on Main Canvas (uses memoized lightPolygons)
+    lightPolygons.forEach(({ light, lx, ly, lRadius, polyPoints, isVisible }) => {
+      if (!isVisible || polyPoints.length === 0) return;
 
-        const lightPoly = computeVisibilityPolygon(
-          lx, ly, lRadius, grid, CELL_SIZE, gridOffsetX, gridOffsetY, Boolean(bgImage), vectorWalls
-        );
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(polyPoints[0].x, polyPoints[0].y);
+      for (let p = 1; p < polyPoints.length; p++) {
+        ctx.lineTo(polyPoints[p].x, polyPoints[p].y);
+      }
+      ctx.closePath();
 
-        if (lightPoly.length > 0) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.moveTo(lightPoly[0].x, lightPoly[0].y);
-          for (let p = 1; p < lightPoly.length; p++) {
-            ctx.lineTo(lightPoly[p].x, lightPoly[p].y);
-          }
-          ctx.closePath();
+      const lightColor = light.color || '#ffaa33';
+      const grad = ctx.createRadialGradient(lx, ly, 5, lx, ly, lRadius);
+      grad.addColorStop(0.0, lightColor);
+      grad.addColorStop(0.5, lightColor.startsWith('#') ? `${lightColor}66` : 'rgba(255, 170, 51, 0.4)');
+      grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
 
-          const flicker = light.animation === 'torch' ? Math.sin(Date.now() * 0.008) * 0.08 : 0;
-          const lightColor = light.color || '#ffaa33';
-
-          const grad = ctx.createRadialGradient(lx, ly, 5, lx, ly, lRadius);
-          grad.addColorStop(0.0, lightColor);
-          grad.addColorStop(0.5, lightColor.startsWith('#') ? `${lightColor}66` : 'rgba(255, 170, 51, 0.4)');
-          grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
-
-          ctx.fillStyle = grad;
-          ctx.globalCompositeOperation = 'screen';
-          ctx.fill();
-          ctx.restore();
-        }
-      });
-    }
+      ctx.fillStyle = grad;
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fill();
+      ctx.restore();
+    });
 
     // 4. Draw Tokens (Characters)
     for (let r = 0; r < ROWS; r++) {
@@ -1524,48 +1575,22 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     };
   };
 
-  const isCellVisibleToPlayers = (col: number, row: number): boolean => {
+  const isCellVisibleToPlayers = useCallback((col: number, row: number): boolean => {
     if (!isPlayerView) return true;
-    
-    const playerTokens: { r: number; c: number; visionRadius: number }[] = [];
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const cell = grid[r]?.[c];
-        if (cell && cell.tokenName) {
-          const tokenNameClean = cell.tokenName.trim().toLowerCase();
-          const isPlayer = cell.tokenColor?.includes('cyan') || 
-                           cell.tokenColor?.includes('emerald') || 
-                           cell.tokenColor?.includes('green') || 
-                           cell.tokenColor?.includes('blue') ||
-                           combatants?.some((comb: Combatant) => {
-                             if (comb.type !== 'player') return false;
-                             const cName = comb.name.trim().toLowerCase();
-                             return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
-                           });
-          if (isPlayer) {
-            playerTokens.push({
-              r,
-              c,
-              visionRadius: getTokenVisionRadius(cell.tokenName, combatants)
-            });
-          }
-        }
-      }
-    }
     
     if (playerTokens.length === 0) {
       return grid[row]?.[col] ? !grid[row][col].fog : false;
     }
     
     for (const pt of playerTokens) {
-      const dist = Math.sqrt(Math.pow(row - pt.r, 2) + Math.pow(col - pt.c, 2));
-      if (dist > pt.visionRadius) continue;
-      if (hasLineOfSight(pt.c, pt.r, col, row, grid)) {
+      const dist = Math.hypot(row - pt.r, col - pt.c);
+      if (dist > pt.radius) continue;
+      if (hasLineOfSight(pt.c, pt.r, col, row, grid, vectorWalls, CELL_SIZE)) {
         return true;
       }
     }
     return false;
-  };
+  }, [isPlayerView, playerTokens, grid, vectorWalls, CELL_SIZE]);
 
   const moveToken = (tokenName: string, tokenColor: string, targetR: number, targetC: number) => {
     const { rows: currentRows, cols: currentCols } = gridDims.current;
@@ -1912,10 +1937,21 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     if (selectedTool === 'paint' && isPOIType(selectedTileType)) {
       return;
     }
+
+    // Spatial Throttling: If mouse is still in the same cell, skip redundant paint updates
+    if (lastPaintedCellRef.current?.r === pos.r && 
+        lastPaintedCellRef.current?.c === pos.c && 
+        lastPaintedCellRef.current?.tool === selectedTool) {
+      return;
+    }
+    lastPaintedCellRef.current = { r: pos.r, c: pos.c, tool: selectedTool };
+
     handleCellAction(pos.r, pos.c, drawButton, false);
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
+    lastPaintedCellRef.current = null;
+
     if (isPanning) {
       setIsPanning(false);
       return;
@@ -2269,32 +2305,46 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     });
   };
 
-  // Zoom handling using wheel event (centered on mouse cursor)
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    if (!containerRef.current) return;
+  // Zoom handling using non-passive native wheel event (centered on mouse cursor)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
-    const rect = containerRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    const handleNativeWheel = (e: WheelEvent) => {
+      e.preventDefault();
 
-    const zoomIntensity = 0.08;
-    const delta = e.deltaY < 0 ? 1 : -1;
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
 
-    const prevZoom = zoom;
-    const nextZoom = Math.max(0.3, Math.min(prevZoom + delta * zoomIntensity, 3.0));
+      // Smooth multiplicative zoom centered on mouse
+      const zoomFactor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
 
-    // Calculate mouse position relative to the unzoomed canvas space before the zoom change
-    const localMouseX = (mouseX - panOffset.x) / prevZoom;
-    const localMouseY = (mouseY - panOffset.y) / prevZoom;
+      const currentZoom = zoomRef.current;
+      const currentPan = panOffsetRef.current;
 
-    // Adjust panOffset so that the point under the mouse pointer stays in place
-    const nextPanOffsetX = mouseX - localMouseX * nextZoom;
-    const nextPanOffsetY = mouseY - localMouseY * nextZoom;
+      const nextZoom = Math.max(0.3, Math.min(currentZoom * zoomFactor, 3.0));
 
-    setPanOffset({ x: nextPanOffsetX, y: nextPanOffsetY });
-    setZoom(nextZoom);
-  };
+      const localMouseX = (mouseX - currentPan.x) / currentZoom;
+      const localMouseY = (mouseY - currentPan.y) / currentZoom;
+
+      const nextPan = {
+        x: mouseX - localMouseX * nextZoom,
+        y: mouseY - localMouseY * nextZoom,
+      };
+
+      zoomRef.current = nextZoom;
+      panOffsetRef.current = nextPan;
+
+      setZoom(nextZoom);
+      setPanOffset(nextPan);
+    };
+
+    container.addEventListener('wheel', handleNativeWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleNativeWheel);
+    };
+  }, []);
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (selectedTool === 'measure') {
@@ -2329,7 +2379,6 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     <div 
       ref={containerRef}
       className={`w-full h-full overflow-hidden relative ${getCursorClass()} bg-slate-950`}
-      onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}

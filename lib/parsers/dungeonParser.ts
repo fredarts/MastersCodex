@@ -231,6 +231,9 @@ export function parseAIDungeonToMapData(aiOutput: AIDungeonOutput): ParsedDungeo
     }
   }
 
+  // 3b. Ensure total grid connectivity (guarantees players can reach any room/corridor)
+  ensureDungeonConnectivity(grid, cols, rows);
+
   // 4. Generate Light Sources
   const lightSources: LightSource[] = [];
   if (aiOutput.lightSources && Array.isArray(aiOutput.lightSources)) {
@@ -370,4 +373,146 @@ export function parseAIDungeonToMapData(aiOutput: AIDungeonOutput): ParsedDungeo
     title: aiOutput.metadata?.title || 'Masmorra Gerada por IA',
     description: aiOutput.metadata?.description || 'Uma misteriosa masmorra criada procedimentalmente por IA.',
   };
+}
+
+function ensureDungeonConnectivity(grid: Cell[][], cols: number, rows: number) {
+  const visited = Array.from({ length: rows }, () => new Array(cols).fill(false));
+  const components: Array<{ r: number; c: number }[]> = [];
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c].type !== 'wall' && !visited[r][c]) {
+        // Start BFS
+        const comp: { r: number; c: number }[] = [];
+        const queue: { r: number; c: number }[] = [{ r, c }];
+        visited[r][c] = true;
+
+        while (queue.length > 0) {
+          const curr = queue.shift()!;
+          comp.push(curr);
+
+          // 4-way neighbors
+          const dirs = [
+            { r: -1, c: 0 },
+            { r: 1, c: 0 },
+            { r: 0, c: -1 },
+            { r: 0, c: 1 },
+          ];
+
+          for (const d of dirs) {
+            const nr = curr.r + d.r;
+            const nc = curr.c + d.c;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+              if (grid[nr][nc].type !== 'wall' && !visited[nr][nc]) {
+                visited[nr][nc] = true;
+                queue.push({ r: nr, c: nc });
+              }
+            }
+          }
+        }
+        components.push(comp);
+      }
+    }
+  }
+
+  if (components.length <= 1) {
+    return; // Already fully connected or empty
+  }
+
+  // Sort components by size descending
+  components.sort((a, b) => b.length - a.length);
+
+  // The first component is our seed connected component
+  const connectedSet = new Set<string>();
+  for (const cell of components[0]) {
+    connectedSet.add(`${cell.r},${cell.c}`);
+  }
+
+  // For each remaining component, connect to the connectedSet
+  for (let i = 1; i < components.length; i++) {
+    const comp = components[i];
+    let minDistance = Infinity;
+    let bestFrom: { r: number; c: number } | null = null;
+    let bestTo: { r: number; c: number } | null = null;
+
+    // Find the closest pair of cells between comp and connectedSet
+    for (const cellA of comp) {
+      for (const cellBStr of connectedSet) {
+        const [br, bc] = cellBStr.split(',').map(Number);
+        const dist = Math.abs(cellA.r - br) + Math.abs(cellA.c - bc);
+        if (dist < minDistance) {
+          minDistance = dist;
+          bestFrom = cellA;
+          bestTo = { r: br, c: bc };
+        }
+      }
+    }
+
+    if (bestFrom && bestTo) {
+      // Carve corridor from bestFrom to bestTo
+      // L-shaped path: horizontal then vertical
+      let currC = bestFrom.c;
+      let currR = bestFrom.r;
+      const targetC = bestTo.c;
+      const targetR = bestTo.r;
+
+      const carvedCells: { r: number; c: number }[] = [];
+      let firstCarvedPos: { r: number; c: number } | null = null;
+
+      // 1. Move horizontally
+      if (currC !== targetC) {
+        const stepC = targetC > currC ? 1 : -1;
+        while (currC !== targetC) {
+          currC += stepC;
+          if (connectedSet.has(`${currR},${currC}`)) {
+            break;
+          }
+          if (grid[currR][currC].type === 'wall') {
+            grid[currR][currC].type = 'floor';
+            if (!firstCarvedPos) {
+              firstCarvedPos = { r: currR, c: currC };
+            }
+          }
+          carvedCells.push({ r: currR, c: currC });
+        }
+      }
+
+      // 2. Move vertically
+      if (currR !== targetR) {
+        const stepR = targetR > currR ? 1 : -1;
+        while (currR !== targetR) {
+          currR += stepR;
+          if (connectedSet.has(`${currR},${currC}`)) {
+            break;
+          }
+          if (grid[currR][currC].type === 'wall') {
+            grid[currR][currC].type = 'floor';
+            if (!firstCarvedPos) {
+              firstCarvedPos = { r: currR, c: currC };
+            }
+          }
+          carvedCells.push({ r: currR, c: currC });
+        }
+      }
+
+      if (firstCarvedPos) {
+        const cell = grid[firstCarvedPos.r][firstCarvedPos.c];
+        cell.type = 'door';
+        cell.doorConfig = {
+          status: 'closed',
+          doorType: 'wooden',
+          breakDC: 15,
+          lockpickDC: 12,
+        };
+      }
+
+      // Merge current component cells and carved cells into connectedSet
+      for (const cell of comp) {
+        connectedSet.add(`${cell.r},${cell.c}`);
+      }
+      for (const cell of carvedCells) {
+        connectedSet.add(`${cell.r},${cell.c}`);
+      }
+    }
+  }
 }

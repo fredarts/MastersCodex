@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Eye, EyeOff, MapPin, Ruler, Hand, Map, Cloud } from 'lucide-react';
+import { Eye, EyeOff, MapPin, Ruler, Hand, Map, Cloud, RefreshCw } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { DysonCanvas } from '@/components/map/DysonCanvas';
@@ -70,6 +70,7 @@ export const CockpitDungeonMap: React.FC = () => {
 
     const savedMap = multiState.maps[mapId];
     const associatedMap = campaignMaps.find(m => m.id === mapId);
+    if (!associatedMap) return;
 
     const walls = associatedMap?.gridData?.vectorWalls ?? savedMap?.vectorWalls ?? [];
     const lights = associatedMap?.gridData?.lightSources ?? savedMap?.lightSources ?? [];
@@ -77,7 +78,10 @@ export const CockpitDungeonMap: React.FC = () => {
     setVectorWalls(walls);
     setLightSources(lights);
 
-    if (savedMap && associatedMap && associatedMap.gridData) {
+    const isOutdated = savedMap && associatedMap && associatedMap.updatedAt && (savedMap as any).lastSyncedTemplateUpdate && (savedMap as any).lastSyncedTemplateUpdate !== associatedMap.updatedAt;
+    const isSizeMismatch = savedMap && associatedMap && associatedMap.gridData?.grid && (associatedMap.gridData.grid.length !== savedMap.grid?.length || (associatedMap.gridData.grid[0] && savedMap.grid?.[0] && associatedMap.gridData.grid[0].length !== savedMap.grid[0].length));
+
+    if (savedMap && associatedMap && associatedMap.gridData && !isOutdated && !isSizeMismatch) {
       // Merge: Update terrain/layout from the campaignMap template while preserving runtime fog and active tokens
       const tGrid = associatedMap.gridData.grid || createInitialGrid();
       const sGrid = savedMap.grid || [];
@@ -88,8 +92,8 @@ export const CockpitDungeonMap: React.FC = () => {
           return {
             ...cell, // template tile type, doorConfig, trapConfig
             fog: sCell !== undefined ? sCell.fog : true, // preserve explored fog state
-            tokenName: sCell !== undefined ? sCell.tokenName : cell.tokenName, // preserve active placed token from session
-            tokenColor: sCell !== undefined ? sCell.tokenColor : cell.tokenColor,
+            tokenName: (sCell && sCell.tokenName) ? sCell.tokenName : cell.tokenName, // preserve active placed token
+            tokenColor: (sCell && sCell.tokenName) ? sCell.tokenColor : cell.tokenColor,
           };
         })
       );
@@ -106,6 +110,29 @@ export const CockpitDungeonMap: React.FC = () => {
               mergedGrid[r][c].tokenColor = undefined;
             } else {
               seenTokens.add(key);
+            }
+          }
+        }
+      }
+
+      // Ensure active player combatants have tokens on the grid
+      if (combatants && combatants.length > 0) {
+        const playerCombatants = combatants.filter((comb) => comb.type === 'player');
+        for (const player of playerCombatants) {
+          const playerKey = player.name.trim().toUpperCase();
+          if (!seenTokens.has(playerKey)) {
+            let placed = false;
+            for (let r = 0; r < mergedGrid.length; r++) {
+              for (let c = 0; c < mergedGrid[r].length; c++) {
+                if (mergedGrid[r][c].type !== 'wall' && !mergedGrid[r][c].tokenName) {
+                  mergedGrid[r][c].tokenName = player.name;
+                  mergedGrid[r][c].tokenColor = '#38bdf8';
+                  seenTokens.add(playerKey);
+                  placed = true;
+                  break;
+                }
+              }
+              if (placed) break;
             }
           }
         }
@@ -135,7 +162,8 @@ export const CockpitDungeonMap: React.FC = () => {
         gridOffsetY: associatedMap.gridData.gridOffsetY ?? savedMap.gridOffsetY ?? 0,
         vectorWalls: walls,
         lightSources: lights,
-      };
+        lastSyncedTemplateUpdate: associatedMap.updatedAt || (savedMap as any).lastSyncedTemplateUpdate,
+      } as any;
     } else if (savedMap) {
       setGrid(savedMap.grid || []);
       setBgImageUrl(savedMap.bgImageUrl || null);
@@ -180,6 +208,7 @@ export const CockpitDungeonMap: React.FC = () => {
         gridOffsetY: associatedMap.gridData.gridOffsetY || 0,
         vectorWalls: walls,
         lightSources: lights,
+        lastSyncedTemplateUpdate: associatedMap.updatedAt,
       };
     } else {
       const bGrid = createInitialGrid();
@@ -236,11 +265,13 @@ export const CockpitDungeonMap: React.FC = () => {
 
       multiMapStateRef.current = multiState;
 
-      // Determine active map ID from scene's associated maps
-      const associatedIds = activeScene.associatedMapIds || (activeScene.associatedMapId ? [activeScene.associatedMapId] : []);
+      // Determine active map ID from scene's associated maps (only existing campaignMaps)
+      const associatedIds = (activeScene.associatedMapIds || (activeScene.associatedMapId ? [activeScene.associatedMapId] : []))
+        .filter(id => campaignMaps.some(m => m.id === id));
       let activeId = multiState.activeMapId;
       if (!activeId || !associatedIds.includes(activeId)) {
         activeId = associatedIds[0] || null;
+        multiState.activeMapId = activeId;
       }
 
       setCurrentMapId(activeId);
@@ -408,6 +439,19 @@ export const CockpitDungeonMap: React.FC = () => {
       return coveredGrid;
     });
   };
+  const handleReloadFromTemplate = () => {
+    if (!currentMapId || !multiMapStateRef.current || !activeScene) return;
+    const associatedMap = campaignMaps.find(m => m.id === currentMapId);
+    if (!associatedMap || !associatedMap.gridData) {
+      toast.error('Modelo de mapa não encontrado.');
+      return;
+    }
+
+    // Force delete saved state to trigger full reload
+    delete multiMapStateRef.current.maps[currentMapId];
+    loadMapFromMultiState(multiMapStateRef.current, currentMapId);
+    toast.success('Mapa tático recarregado com sucesso a partir do modelo original!');
+  };
 
   const associatedMapIds = activeScene?.associatedMapIds || (activeScene?.associatedMapId ? [activeScene.associatedMapId] : []);
   const associatedMaps = campaignMaps.filter(m => associatedMapIds.includes(m.id));
@@ -481,6 +525,14 @@ export const CockpitDungeonMap: React.FC = () => {
         >
           <Cloud className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Cobrir Tudo</span>
+        </button>
+        <button
+          onClick={handleReloadFromTemplate}
+          className="p-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 text-amber-400 hover:bg-amber-950/30 border border-amber-500/20 ml-1 cursor-pointer"
+          title="Recarregar do Modelo (Reinicia o mapa com o layout original do editor)"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Recarregar</span>
         </button>
         <button
           onClick={() => {

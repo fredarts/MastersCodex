@@ -28,6 +28,8 @@ import {
 import { Combatant, CampaignMap } from '@/lib/types';
 import { useSession } from '@/context/SessionContext';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
+import { useCampaign } from '@/context/CampaignContext';
+import { INITIAL_MONSTERS } from '@/lib/srd-data';
 import { toast } from 'sonner';
 import { storageService } from '@/lib/services/storageService';
 import { DysonCanvas } from './map/DysonCanvas';
@@ -141,6 +143,15 @@ export interface Cell {
   illusionWallConfig?: IllusionWallConfig;
 }
 
+const NPC_TEMPLATES: Combatant[] = [
+  { id: 'npc-guard', name: 'Guarda', type: 'npc', hp: 11, maxHp: 11, ac: 16, initiative: 0, conditions: [] },
+  { id: 'npc-mage', name: 'Mago', type: 'npc', hp: 40, maxHp: 40, ac: 12, initiative: 0, conditions: [] },
+  { id: 'npc-bandit', name: 'Bandido', type: 'npc', hp: 11, maxHp: 11, ac: 12, initiative: 0, conditions: [] },
+  { id: 'npc-commoner', name: 'Plebeu', type: 'npc', hp: 4, maxHp: 4, ac: 10, initiative: 0, conditions: [] },
+  { id: 'npc-priest', name: 'Sacerdote', type: 'npc', hp: 27, maxHp: 27, ac: 13, initiative: 0, conditions: [] },
+  { id: 'npc-knight', name: 'Cavaleiro', type: 'npc', hp: 52, maxHp: 52, ac: 18, initiative: 0, conditions: [] },
+];
+
 export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
 
   const createInitialGrid = (cols = 80, rows = 80): Cell[][] => {
@@ -167,6 +178,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     deleteCampaignMap,
     activeScene
   } = useSession();
+  const { activeCampaign, campaignMembers } = useCampaign();
   const { broadcastToPlayerView } = useLiveCockpit();
   const { showConfirm, showPrompt } = useCustomDialog();
 
@@ -176,6 +188,120 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
   const [selectedTileType, setSelectedTileType] = useState<TileType>('floor');
   const [selectedTokenCombatant, setSelectedTokenCombatant] = useState<Combatant | null>(null);
   const [selectedLightPreset, setSelectedLightPreset] = useState<'torch' | 'candle' | 'lantern' | 'spell' | 'dragon'>('torch');
+
+  const [tokenSearchQuery, setTokenSearchQuery] = useState('');
+  const [tokenCategoryTab, setTokenCategoryTab] = useState<'party' | 'monsters' | 'npcs'>('party');
+
+  const getPartyTokens = (): Combatant[] => {
+    const list: Combatant[] = [];
+    const namesSeen = new Set<string>();
+
+    // 1. Add active online combatants of type 'player'
+    if (combatants) {
+      combatants.forEach((c) => {
+        if (c.type === 'player') {
+          list.push(c);
+          namesSeen.add(c.name.trim().toLowerCase());
+        }
+      });
+    }
+
+    // 2. Add campaign members of role 'player' if not already added
+    if (campaignMembers) {
+      campaignMembers.forEach((m) => {
+        if (m.role === 'player' && m.characterName) {
+          const nameClean = m.characterName.trim().toLowerCase();
+          if (!namesSeen.has(nameClean)) {
+            list.push({
+              id: `pc-member-${m.id}`,
+              name: m.characterName,
+              type: 'player',
+              hp: 20,
+              maxHp: 20,
+              ac: 10,
+              initiative: 0,
+              conditions: [],
+              modelUrl: m.modelUrl || '',
+            });
+            namesSeen.add(nameClean);
+          }
+        }
+      });
+    }
+
+    // 3. Fallback generic players if list is empty
+    if (list.length === 0) {
+      list.push(
+        { id: 'gen-p1', name: 'P1', type: 'player', hp: 10, maxHp: 10, ac: 10, initiative: 0, conditions: [] },
+        { id: 'gen-p2', name: 'P2', type: 'player', hp: 10, maxHp: 10, ac: 10, initiative: 0, conditions: [] }
+      );
+    }
+
+    return list;
+  };
+
+  const getMonsterTokens = (): Combatant[] => {
+    const list: Combatant[] = INITIAL_MONSTERS.map((m) => ({
+      id: `mon-template-${m.id}`,
+      name: m.name,
+      type: 'monster' as const,
+      hp: m.hp,
+      maxHp: m.hp,
+      ac: m.ac,
+      initiative: 0,
+      conditions: [],
+    }));
+
+    // Add active online combatants of type 'monster' if they aren't templates
+    if (combatants) {
+      combatants.forEach((c) => {
+        if (c.type === 'monster') {
+          const exists = list.some((l) => l.name.toLowerCase() === c.name.toLowerCase());
+          if (!exists) {
+            list.unshift(c);
+          }
+        }
+      });
+    }
+
+    return list;
+  };
+
+  const getNPCTokens = (): Combatant[] => {
+    const list: Combatant[] = [...NPC_TEMPLATES];
+
+    // Add active online NPCs
+    if (combatants) {
+      combatants.forEach((c) => {
+        if (c.type === 'npc') {
+          const exists = list.some((l) => l.name.toLowerCase() === c.name.toLowerCase());
+          if (!exists) {
+            list.unshift(c);
+          }
+        }
+      });
+    }
+
+    return list;
+  };
+
+  const getFilteredTokens = (): Combatant[] => {
+    let tokens: Combatant[] = [];
+    if (tokenCategoryTab === 'party') {
+      tokens = getPartyTokens();
+    } else if (tokenCategoryTab === 'monsters') {
+      tokens = getMonsterTokens();
+    } else {
+      tokens = getNPCTokens();
+    }
+
+    if (tokenSearchQuery.trim()) {
+      const q = tokenSearchQuery.toLowerCase();
+      tokens = tokens.filter((t) => t.name.toLowerCase().includes(q));
+    }
+
+    return tokens;
+  };
   
   // Custom Map Image Upload, Vector Walls, Lighting & Calibration state
   const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
@@ -187,6 +313,17 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
   const [calibrationLine, setCalibrationLine] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uvttFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-select first token when switching to the token tool
+  useEffect(() => {
+    if (selectedTool === 'token') {
+      const displayTokens = getFilteredTokens();
+      const currentExists = displayTokens.some((t) => t.id === selectedTokenCombatant?.id);
+      if (!currentExists && displayTokens.length > 0) {
+        setSelectedTokenCombatant(displayTokens[0]);
+      }
+    }
+  }, [selectedTool, tokenCategoryTab, tokenSearchQuery]);
 
   const handleAddLightSource = (light: import('@/lib/types').LightSource) => {
     setLightSources((prev) => [...prev, light]);
@@ -926,21 +1063,64 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
         )}
 
         {selectedTool === 'token' && activeMap && (
-          <div className="absolute top-4 left-16 z-30 px-3 py-2 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl flex items-center gap-1.5 shadow-2xl max-w-[60vw] overflow-x-auto scrollbar-none">
-            <span className="text-[10px] uppercase font-bold text-slate-400 flex-shrink-0">Tokens:</span>
-            {combatants.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setSelectedTokenCombatant(c)}
-                className={`px-2.5 py-1 rounded text-xs font-semibold flex-shrink-0 transition-all ${
-                  selectedTokenCombatant?.id === c.id
-                    ? 'bg-cyan-500 text-slate-950 font-bold'
-                    : 'bg-[#161c28] text-slate-300 border border-[#2a3449]'
-                }`}
-              >
-                {c.name}
-              </button>
-            ))}
+          <div className="absolute top-4 left-16 z-30 px-4 py-3 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl flex flex-col gap-3.5 shadow-2xl max-w-[80vw] w-[450px] animate-in fade-in slide-in-from-top-2 duration-200">
+            {/* Header / Tabs */}
+            <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-2">
+              <span className="text-[10px] uppercase font-bold text-slate-400 flex-shrink-0">Tokens:</span>
+              <div className="flex bg-slate-950/60 p-0.5 rounded-lg border border-slate-800">
+                {(['party', 'monsters', 'npcs'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => {
+                      setTokenCategoryTab(tab);
+                      setTokenSearchQuery('');
+                    }}
+                    className={`px-2.5 py-1 rounded-md text-[10px] uppercase font-bold transition-all cursor-pointer ${
+                      tokenCategoryTab === tab
+                        ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {tab === 'party' ? 'Party/Jogadores' : tab === 'monsters' ? 'Monstros' : 'NPCs'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Search Input */}
+            <div className="relative">
+              <input
+                type="text"
+                value={tokenSearchQuery}
+                onChange={(e) => setTokenSearchQuery(e.target.value)}
+                placeholder="Buscar token por nome..."
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            {/* Grid of Tokens */}
+            <div className="grid grid-cols-3 gap-2 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+              {getFilteredTokens().length === 0 ? (
+                <div className="col-span-3 text-[10px] text-slate-500 text-center py-4">Nenhum token encontrado.</div>
+              ) : (
+                getFilteredTokens().map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedTokenCombatant(c)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold truncate transition-all cursor-pointer border flex flex-col gap-1 items-center justify-center ${
+                      selectedTokenCombatant?.id === c.id
+                        ? 'bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow-md shadow-cyan-500/20 scale-105'
+                        : 'bg-[#161c28] text-slate-300 border-[#2a3449] hover:bg-[#20293d] hover:text-slate-100'
+                    }`}
+                  >
+                    <span className="truncate max-w-full text-[11px] font-bold">{c.name}</span>
+                    <span className="text-[8px] uppercase tracking-wider opacity-60">
+                      {c.type === 'player' ? 'Player' : c.type === 'monster' ? 'Monster' : 'NPC'}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         )}
 

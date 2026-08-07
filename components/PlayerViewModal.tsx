@@ -155,7 +155,8 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
 
     const typedMap = mapData as { activeMapId?: string; sceneId?: string; grid?: any[] } | null;
     const currentMapId = typedMap?.activeMapId || null;
-    const sceneAssociatedIds = currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []);
+    const sceneAssociatedIds = (currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []))
+      .filter(id => campaignMaps.some(m => m.id === id));
 
     const needsFetch = !typedMap || 
                        !typedMap.grid ||
@@ -169,7 +170,8 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
         let activeId = savedData?.activeMapId;
         let gridData = null;
         
-        const associatedIds = currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []);
+        const associatedIds = (currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []))
+          .filter(id => campaignMaps.some(m => m.id === id));
         if (!activeId || !associatedIds.includes(activeId)) {
           activeId = associatedIds[0] || null;
         }
@@ -194,8 +196,8 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               return {
                 ...cell,
                 fog: sCell !== undefined ? sCell.fog : true,
-                tokenName: sCell !== undefined ? sCell.tokenName : cell.tokenName,
-                tokenColor: sCell !== undefined ? sCell.tokenColor : cell.tokenColor,
+                tokenName: (sCell && sCell.tokenName) ? sCell.tokenName : cell.tokenName,
+                tokenColor: (sCell && sCell.tokenName) ? sCell.tokenColor : cell.tokenColor,
               };
             })
           );
@@ -212,6 +214,29 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                   mergedGrid[r][c].tokenColor = undefined;
                 } else {
                   seenTokens.add(key);
+                }
+              }
+            }
+          }
+
+          // Ensure active player combatants have tokens on the grid
+          if (combatants && combatants.length > 0) {
+            const playerCombatants = combatants.filter((comb: any) => comb.type === 'player');
+            for (const player of playerCombatants) {
+              const playerKey = player.name.trim().toUpperCase();
+              if (!seenTokens.has(playerKey)) {
+                let placed = false;
+                for (let r = 0; r < mergedGrid.length; r++) {
+                  for (let c = 0; c < mergedGrid[r].length; c++) {
+                    if (mergedGrid[r][c].type !== 'wall' && !mergedGrid[r][c].tokenName) {
+                      mergedGrid[r][c].tokenName = player.name;
+                      mergedGrid[r][c].tokenColor = '#38bdf8';
+                      seenTokens.add(playerKey);
+                      placed = true;
+                      break;
+                    }
+                  }
+                  if (placed) break;
                 }
               }
             }

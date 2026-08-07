@@ -94,7 +94,8 @@ REGRA ABSOLUTA DE TAMANHO DO GRID:
 REGRAS DE LAYOUT E CÔMODOS (MUITO IMPORTANTE):
 - Defina entre 5 e 10 salas/cômodos de tamanhos variados (ex: largura 6 a 14, altura 6 a 12).
 - Crie um salão principal ("hasPillars": true) para o chefe ou altar com pilares internos de sustentação.
-- Crie corredores ('type': 'corridor') conectando salas em loops de flanqueamento.
+- CONECTIVIDADE TOTAL OBRIGATÓRIA: Crie corredores ('type': 'corridor') interligando fisicamente todas as salas. NENHUMA sala pode ficar isolada/ilhada no mapa.
+- Todo corredor deve ter suas coordenadas ('bounds') sobrepostas ou encostadas em pelo menos uma sala ou outro corredor para garantir o tráfego contínuo dos jogadores.
 - CADA SALA E CORREDOR DEVE TER UM OBJETO 'bounds' COM: {"startCol": número, "startRow": número, "width": número, "height": número}.
 - Utilize uma VARIEDADE RICA de pisos/terrenos ('floorTileType'): 'floor', 'stone', 'wood', 'carpet', 'water' (poços/esgotos), 'lava', 'dirt', 'grass' (pátios/entradas).
 
