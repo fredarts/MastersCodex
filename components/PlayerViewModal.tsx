@@ -156,7 +156,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
     const typedMap = mapData as { activeMapId?: string; sceneId?: string; grid?: any[] } | null;
     const currentMapId = typedMap?.activeMapId || null;
     const sceneAssociatedIds = (currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []))
-      .filter(id => campaignMaps.some(m => m.id === id));
+      .filter((id: string) => campaignMaps.some(m => m.id === id));
 
     const needsFetch = !typedMap || 
                        !typedMap.grid ||
@@ -171,7 +171,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
         let gridData = null;
         
         const associatedIds = (currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []))
-          .filter(id => campaignMaps.some(m => m.id === id));
+          .filter((id: string) => campaignMaps.some(m => m.id === id));
         if (!activeId || !associatedIds.includes(activeId)) {
           activeId = associatedIds[0] || null;
         }

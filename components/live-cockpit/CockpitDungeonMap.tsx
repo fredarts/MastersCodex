@@ -18,6 +18,7 @@ interface MultiMapState {
     gridOffsetY: number;
     vectorWalls?: import('@/lib/types').WallSegment[];
     lightSources?: import('@/lib/types').LightSource[];
+    lastSyncedTemplateUpdate?: string;
   }>;
   activeMapId: string | null;
 }

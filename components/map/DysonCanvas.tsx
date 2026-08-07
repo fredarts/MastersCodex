@@ -984,20 +984,22 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     const maskCtx = maskCanvas.getContext('2d');
 
     if (maskCtx) {
+      // Reset transform before clearing to avoid cumulative scaling/translating issues on reuse
+      maskCtx.setTransform(1, 0, 0, 1, 0, 0);
+      
+      // Reset composite operation to default drawing mode (essential since destination-out persists)
+      maskCtx.globalCompositeOperation = 'source-over';
+      
       // Clear mask canvas (starts fully transparent)
       maskCtx.clearRect(0, 0, width, height);
+
+      // 1. Fill entire viewport with dark fog (Opaque for players, semi-transparent for DM) in screen space
+      maskCtx.fillStyle = isPlayerView ? 'rgba(8, 8, 12, 0.98)' : 'rgba(8, 8, 12, 0.45)';
+      maskCtx.fillRect(0, 0, width, height);
+
+      // Now translate and scale to world coordinates for carving visibility
       maskCtx.translate(panOffset.x, panOffset.y);
       maskCtx.scale(zoom, zoom);
-
-      // 1. Fill entire viewport with dark fog (Opaque for players, semi-transparent for DM)
-      maskCtx.fillStyle = isPlayerView ? 'rgba(8, 8, 12, 0.98)' : 'rgba(8, 8, 12, 0.45)';
-      const fogMargin = CELL_SIZE * 2;
-      maskCtx.fillRect(
-        localLeft - fogMargin, 
-        localTop - fogMargin, 
-        (localRight - localLeft) + fogMargin * 2, 
-        (localBottom - localTop) + fogMargin * 2
-      );
 
       // Use destination-out to carve visibility out of the dark fog
       maskCtx.globalCompositeOperation = 'destination-out';
