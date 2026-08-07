@@ -278,8 +278,7 @@ CREATE POLICY "Campaigns_Modify" ON public.campaigns FOR ALL USING (auth.uid()::
 -- CAMPAIGN_MEMBERS: Integrantes e DM da mesa leem, usuários inserem a si mesmos, DM ou usuário deleta.
 ALTER TABLE public.campaign_members ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Members_Select" ON public.campaign_members FOR SELECT USING (
-  auth.uid()::text = user_id::text OR 
-  public.is_campaign_dm(campaign_id, auth.uid()::text)
+  public.is_campaign_dm_or_member(campaign_id, auth.uid()::text)
 );
 CREATE POLICY "Members_Insert" ON public.campaign_members FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
 CREATE POLICY "Members_UpdateDelete" ON public.campaign_members FOR ALL USING (

@@ -121,7 +121,11 @@ export const partyLootService = {
           .single();
 
         if (error) {
-          console.warn('Erro ao salvar loot no Supabase:', error.message);
+          console.error('Erro ao salvar loot no Supabase:', error.message);
+          return {
+            ok: false,
+            error: new Error(`Falha no banco de dados: ${error.message}`),
+          };
         }
       }
 
@@ -160,7 +164,7 @@ export const partyLootService = {
       session.updatedAt = new Date().toISOString();
 
       if (isSupabaseConfigured()) {
-        await supabase
+        const { error } = await supabase
           .from('party_loot_sessions')
           .update({
             currency: session.currency,
@@ -169,6 +173,14 @@ export const partyLootService = {
             updated_at: session.updatedAt,
           })
           .eq('id', session.id);
+
+        if (error) {
+          console.error('Erro ao atualizar sessão de loot no Supabase:', error.message);
+          return {
+            ok: false,
+            error: new Error(`Falha no banco de dados: ${error.message}`),
+          };
+        }
       }
 
       if (typeof window !== 'undefined') {

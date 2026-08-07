@@ -63,20 +63,83 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Abre o modal de loot quando o jogador entra na tela de campanha e há loot ativo
   useEffect(() => {
     if (isOnPlayerCampaignView && activeLootSession?.status === 'active') {
-      setIsPartyLootModalOpen(true);
+      // Checagem defensiva: só abrir o modal se realmente houver algum recurso a ser coletado
+      const allItemsClaimed = activeLootSession.items.length === 0 || activeLootSession.items.every((i) => i.claimedBy !== null);
+      const isCurrencyZero =
+        (activeLootSession.currency.po || 0) <= 0 &&
+        (activeLootSession.currency.pl || 0) <= 0 &&
+        (activeLootSession.currency.pp || 0) <= 0 &&
+        (activeLootSession.currency.pc || 0) <= 0 &&
+        (activeLootSession.currency.pe || 0) <= 0;
+
+      if (!allItemsClaimed || !isCurrencyZero) {
+        setIsPartyLootModalOpen(true);
+      }
     }
   }, [isOnPlayerCampaignView, activeLootSession]);
 
   // Escutar eventos em tempo real
-  const handleRealtimeLootUpdate = useCallback(({ session }: { session: PartyLootSession }) => {
+  const handleRealtimeLootUpdate = useCallback(({ 
+    session, 
+    splitDetails 
+  }: { 
+    session: PartyLootSession; 
+    splitDetails?: { characterNames: string[]; share: CharacterCurrency } 
+  }) => {
     // Apenas armazena a sessão — o modal só abre quando o jogador entrar na view de campanha.
     // Isso evita que o modal apareça para quem está na tela de mestre ou em outra tela.
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('masters_codex_character_sheets_v1');
+        if (saved) {
+          const sheets = JSON.parse(saved);
+          const localCharNames: string[] = sheets.map((s: any) => s.characterName.toLowerCase());
+
+          // 1. Processar itens reivindicados/distribuídos
+          session.items.forEach((item) => {
+            if (item.claimedBy) {
+              const isLocalChar = localCharNames.includes(item.claimedBy.characterName.toLowerCase());
+              if (isLocalChar) {
+                // Verifica se já estava marcado como pego por este personagem no estado anterior
+                const prevItem = activeLootSession?.items.find((i) => i.id === item.id);
+                const wasAlreadyClaimedByLocal = prevItem && prevItem.claimedBy && 
+                  prevItem.claimedBy.characterName.toLowerCase() === item.claimedBy.characterName.toLowerCase();
+
+                if (!wasAlreadyClaimedByLocal) {
+                  window.dispatchEvent(
+                    new CustomEvent('masters_codex_loot_received', {
+                      detail: { characterName: item.claimedBy.characterName, item },
+                    })
+                  );
+                }
+              }
+            }
+          });
+
+          // 2. Processar divisão de moedas (se houver splitDetails e este cliente for participante)
+          if (splitDetails) {
+            splitDetails.characterNames.forEach((charName) => {
+              if (localCharNames.includes(charName.toLowerCase())) {
+                window.dispatchEvent(
+                  new CustomEvent('masters_codex_loot_received', {
+                    detail: { characterName: charName, currency: splitDetails.share },
+                  })
+                );
+              }
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao processar atualização de loot em tempo real:', e);
+      }
+    }
+
     setActiveLootSession(session);
     if (session.status !== 'active') {
       toast.success('🎉 Recompensas totalmente distribuídas! Baú de Loot encerrado.');
       setIsPartyLootModalOpen(false);
     }
-  }, []);
+  }, [activeLootSession]);
 
   const handleRealtimeLootClose = useCallback(({ sessionId }: { sessionId: string }) => {
     setActiveLootSession((prev) => {
@@ -270,7 +333,13 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const res = await partyLootService.updateLootSession(updatedSession);
     if (res.ok) {
       setActiveLootSession(res.value);
-      broadcastPartyLootUpdate({ session: res.value });
+      broadcastPartyLootUpdate({ 
+        session: res.value,
+        splitDetails: {
+          characterNames,
+          share,
+        }
+      });
 
       if (typeof window !== 'undefined') {
         characterNames.forEach((charName) => {

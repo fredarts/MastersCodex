@@ -4,7 +4,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { offlineQueue } from '@/lib/sync/OfflineQueueManager';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { ChatMessage, CombatLogEntry, PlayerRollEvent, PartyLootSession, DirectTransferPayload, DmCursorPayload, PingLocationPayload, VoiceSignalPayload, PresencePayload } from '@/lib/types';
+import { ChatMessage, CombatLogEntry, PlayerRollEvent, PartyLootSession, DirectTransferPayload, DmCursorPayload, PingLocationPayload, VoiceSignalPayload, PresencePayload, CharacterCurrency } from '@/lib/types';
 
 export interface RealtimeSyncPayloads {
   TOKEN_MOVE_3D: { combatantId: string; characterName?: string; newX: number; newZ: number; timestamp?: number };
@@ -37,7 +37,13 @@ export interface RealtimeSyncPayloads {
   COMBAT_UPDATE: { combatants: any[]; currentTurnIndex: number; roundCount: number };
   COMBAT_LOG_ENTRY: { entry: CombatLogEntry };
   PLAYER_ROLL: { roll: PlayerRollEvent };
-  PARTY_LOOT_UPDATE: { session: PartyLootSession };
+  PARTY_LOOT_UPDATE: { 
+    session: PartyLootSession; 
+    splitDetails?: { 
+      characterNames: string[]; 
+      share: CharacterCurrency 
+    } 
+  };
   PARTY_LOOT_CLOSE: { sessionId: string };
   DIRECT_TRANSFER: { transfer: DirectTransferPayload };
   CHAT_MESSAGE: { message: ChatMessage };
