@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/purity */
 import React, { useState } from 'react';
 import { AdvantageMode, AttributeKey, CharacterSheet, CharacterWeaponAttack, DiceRollEvent } from '@/lib/types';
-import { formatModifier, getAttributeModifier, recalculateSheetDerivedStats, ARMOR_TABLE, calculateArmorClass, hasClass, getJackOfAllTradesBonus, getClassLevel, WEAPON_TABLE } from '@/lib/dnd5e-calculator';
+import { formatModifier, getAttributeModifier, getEffectiveAttributeScore, recalculateSheetDerivedStats, ARMOR_TABLE, calculateArmorClass, hasClass, getJackOfAllTradesBonus, getClassLevel, WEAPON_TABLE } from '@/lib/dnd5e-calculator';
 import { executeCheckRoll, executeWeaponAttackRoll, broadcastDiceRoll, executeSneakAttackRoll, getSneakAttackDice } from '@/lib/dnd5e-dice';
 import { Shield, Heart, Zap, Crosshair, Plus, Minus, Trash2, Skull, Dices, Lock, Unlock, RotateCcw, CheckCircle2, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { WeaponCompendiumModal } from '../Modals/WeaponCompendiumModal';
@@ -771,7 +771,7 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
                   <div className="flex items-center gap-1.5 bg-slate-900/80 border border-slate-800 rounded-lg px-2.5 py-0.5">
                     <Lock className="w-3 h-3 text-slate-500" />
                     <span className="text-[10px] text-slate-400 font-semibold">Valor:</span>
-                    <span className="text-xs font-black text-white font-mono">{score}</span>
+                    <span className="text-xs font-black text-white font-mono">{getEffectiveAttributeScore(sheet, attrKey)}</span>
                   </div>
                 ) : (
                   /* CONTROLES + / - DURANTE A DISTRIBUIÇÃO */

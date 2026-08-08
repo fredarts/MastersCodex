@@ -20,6 +20,8 @@ import {
   calculateTotalWeight,
   isHeavilyEncumbered,
   calculateDynamicSpeed,
+  getAttributeModifier,
+  getEffectiveAttributeScore,
 } from '../dnd5e-calculator';
 import { CharacterSheet } from '../types';
 
@@ -1515,5 +1517,50 @@ describe('D&D 5e Weight and Encumbrance', () => {
       ],
     });
     expect(calculateDynamicSpeed(sheet)).toBe('6m (20ft)');
+  });
+});
+
+describe('Mecânicas do Bárbaro Lvl 20 (Campeão Primitivo)', () => {
+  const makeBarbarianSheet = (level: number, strScore: number, conScore: number) => ({
+    race: 'Humano',
+    level,
+    className: 'Bárbaro',
+    attributes: {
+      str: { score: strScore, baseScore: strScore },
+      dex: { score: 10, baseScore: 10 },
+      con: { score: conScore, baseScore: conScore },
+      int: { score: 10, baseScore: 10 },
+      wis: { score: 10, baseScore: 10 },
+      cha: { score: 10, baseScore: 10 },
+    },
+    equipment: [],
+    equippedArmor: 'Nenhuma',
+    hasShield: false,
+    feats: [],
+    attacks: [],
+    speed: '9m (30ft)',
+  });
+
+  it('deve aplicar bônus de +4 em Força e Constituição e limitar a 24 para Bárbaro Lvl 20', () => {
+    const sheet = makeBarbarianSheet(20, 18, 16) as any;
+    
+    // Testa getEffectiveAttributeScore
+    expect(getEffectiveAttributeScore(sheet, 'str')).toBe(22); // 18 + 4
+    expect(getEffectiveAttributeScore(sheet, 'con')).toBe(20); // 16 + 4
+    
+    // Testa modificadores
+    expect(getAttributeModifier(sheet, 'str')).toBe(6);  // Modificador de 22 é +6
+    expect(getAttributeModifier(sheet, 'con')).toBe(5);  // Modificador de 20 é +5
+    
+    // Testa cap em 24
+    const strongSheet = makeBarbarianSheet(20, 22, 21) as any;
+    expect(getEffectiveAttributeScore(strongSheet, 'str')).toBe(24); // 22 + 4 = 26 -> cap em 24
+    expect(getEffectiveAttributeScore(strongSheet, 'con')).toBe(24); // 21 + 4 = 25 -> cap em 24
+  });
+
+  it('não deve aplicar o bônus de Campeão Primitivo se o nível de Bárbaro for menor que 20', () => {
+    const sheet = makeBarbarianSheet(19, 18, 16) as any;
+    expect(getEffectiveAttributeScore(sheet, 'str')).toBe(18);
+    expect(getEffectiveAttributeScore(sheet, 'con')).toBe(16);
   });
 });

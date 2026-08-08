@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AdvantageMode, AttributeKey, CharacterSheet, DiceRollEvent, DndSkillKey, SkillProficiencyLevel } from '@/lib/types';
 import { SKILL_DEFINITIONS, DND_CLASSES, DND_RACES } from '@/lib/dnd5e-data';
 import {
@@ -10,7 +10,7 @@ import {
   getClassLevel,
 } from '@/lib/dnd5e-calculator';
 import { executeCheckRoll } from '@/lib/dnd5e-dice';
-import { Target, Eye, ShieldAlert, Award, Dices, Lock, Unlock } from 'lucide-react';
+import { Target, Eye, ShieldAlert, Award, Dices, Lock, Unlock, Sparkles } from 'lucide-react';
 
 interface SkillsSectionProps {
   sheet: CharacterSheet;
@@ -34,6 +34,7 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
   advantageMode = 'normal',
   onRoll,
 }) => {
+  const [favoredContext, setFavoredContext] = useState(false);
   const profBonus = calculateProficiencyBonus(sheet.level);
   const passivePerception = calculatePassivePerception(sheet);
 
@@ -143,14 +144,21 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
     const def = SKILL_DEFINITIONS[skillKey];
     const total = calculateSkillTotal(sheet, skillKey);
     const profLevel = sheet.skills[skillKey] || 'none';
+    
     // Talento Confiável (Ladino Nv 11+): piso de 10 no d20 se tiver proficiência ou especialização
     const hasReliableTalent = getClassLevel(sheet, 'Ladino') >= 11 && (profLevel === 'proficient' || profLevel === 'expertise');
+    
+    // Automação de Patrulheiro: Vantagem contextual em testes de Sabedoria ou Inteligência aplicáveis
+    const isRanger = getClassLevel(sheet, 'Patrulheiro') > 0;
+    const isApplicableSkill = def && (def.attr === 'wis' || def.attr === 'int');
+    const applyRangerAdvantage = isRanger && favoredContext && isApplicableSkill;
+
     const result = executeCheckRoll({
       sheet,
-      label: `Perícia: ${def ? def.name : skillKey}`,
+      label: `Perícia: ${def ? def.name : skillKey}${applyRangerAdvantage ? ' (Inimigo/Terreno Favorito)' : ''}`,
       modifier: total,
       rollType: 'skill',
-      advantageMode,
+      advantageMode: applyRangerAdvantage ? 'advantage' : advantageMode,
       reliableTalent: hasReliableTalent,
     });
     if (onRoll) onRoll(result);
@@ -295,6 +303,27 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
             )}
           </div>
         </div>
+
+        {getClassLevel(sheet, 'Patrulheiro') > 0 && (
+          <div className="flex items-center justify-between bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-3 mb-2 animate-fade-in">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+              <div>
+                <span className="text-[11px] font-bold text-emerald-400 block uppercase leading-tight">Inimigo / Terreno Favorito</span>
+                <span className="text-[9px] text-slate-400 block leading-tight">Concede vantagem em testes aplicáveis de Inteligência e Sabedoria.</span>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={favoredContext}
+                onChange={(e) => setFavoredContext(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500 peer-checked:after:bg-white peer-checked:after:border-white"></div>
+            </label>
+          </div>
+        )}
 
         <div className="space-y-1.5">
           {(Object.keys(SKILL_DEFINITIONS) as DndSkillKey[]).map((skillKey) => {

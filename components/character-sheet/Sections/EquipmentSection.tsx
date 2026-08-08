@@ -3,6 +3,7 @@ import { CharacterSheet, CharacterEquipmentItem } from '@/lib/types';
 import { Coins, Package, Plus, Trash2, Gem, Weight, Scale, Sparkles } from 'lucide-react';
 import { ItemCompendiumModal } from '../Modals/ItemCompendiumModal';
 import { toast } from 'sonner';
+import { getEffectiveAttributeScore } from '@/lib/dnd5e-calculator';
 
 interface EquipmentSectionProps {
   sheet: CharacterSheet;
@@ -92,7 +93,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
   };
 
   // CÁLCULO DA CAPACIDADE DE CARGA (D&D 5e: FORÇA * 15 lb)
-  const strScore = sheet.attributes.str.score || 10;
+  const strScore = getEffectiveAttributeScore(sheet, 'str');
   const maxCarryingCapacity = strScore * 15;
 
   const totalWeight = items.reduce((sum, item) => {

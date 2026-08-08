@@ -29,14 +29,38 @@ export function calculateProficiencyBonus(level: number): number {
 }
 
 /**
+ * Retorna a pontuação efetiva do atributo, aplicando modificações dinâmicas de classe
+ * (como o Campeão Primitivo do Bárbaro lvl 20 que aumenta Força e Constituição em +4 com limite de 24).
+ */
+export function getEffectiveAttributeScore(sheet: CharacterSheet, attrKey: AttributeKey): number {
+  if (!sheet || !sheet.attributes) return 10;
+  const attr = sheet.attributes[attrKey];
+  if (!attr) return 10;
+  
+  let score = attr.score;
+  
+  // Bárbaro 20 (Campeão Primitivo): +4 em Força (str) e Constituição (con)
+  if (attrKey === 'str' || attrKey === 'con') {
+    const barbarianLvl = getClassLevel(sheet, 'Bárbaro');
+    if (barbarianLvl === 20) {
+      score = Math.min(24, score + 4);
+    }
+  }
+  
+  return score;
+}
+
+/**
  * Obtém o valor final do modificador do atributo (respeitando override se houver)
  */
 export function getAttributeModifier(sheet: CharacterSheet, attrKey: AttributeKey): number {
+  if (!sheet || !sheet.attributes) return 0;
   const attr = sheet.attributes[attrKey];
+  if (!attr) return 0;
   if (attr.overrideMod !== undefined && attr.overrideMod !== null) {
     return attr.overrideMod;
   }
-  return calculateModifier(attr.score);
+  return calculateModifier(getEffectiveAttributeScore(sheet, attrKey));
 }
 
 export function calculateSavingThrowTotal(sheet: CharacterSheet, attrKey: AttributeKey): number {
@@ -1189,7 +1213,7 @@ export function calculateTotalWeight(sheet: CharacterSheet): number {
  */
 export function isHeavilyEncumbered(sheet: CharacterSheet): boolean {
   const totalWeight = calculateTotalWeight(sheet);
-  const strScore = sheet.attributes?.str?.score || 10;
+  const strScore = getEffectiveAttributeScore(sheet, 'str');
   return totalWeight > strScore * 10;
 }
 
@@ -1255,7 +1279,7 @@ export function calculateDynamicSpeed(sheet: CharacterSheet): string {
 
   // 4. Regra Variante de Carga Pesada (Variant Encumbrance)
   const totalWeight = calculateTotalWeight(sheet);
-  const strScore = sheet.attributes.str.score || 10;
+  const strScore = getEffectiveAttributeScore(sheet, 'str');
   if (totalWeight > strScore * 15) {
     return '0m (0ft)';
   } else if (totalWeight > strScore * 10) {
