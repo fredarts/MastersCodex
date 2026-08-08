@@ -753,7 +753,8 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
         description: 'Você ganha a habilidade de canalizar energia divina para alimentar efeitos mágicos fornecidos pelo seu Juramento Sagrado.',
         activation: 'action',
         resourceCost: { type: 'class_resource', name: 'canalizar_divindade', amount: 1 },
-        choices: ['Juramento da Devoção', 'Juramento dos Anciões', 'Juramento da Vingança']
+        choices: ['Juramento da Devoção', 'Juramento dos Anciões', 'Juramento da Vingança'],
+        isSubclassChoice: true
       },
       {
         name: 'Arma Sagrada / Expulsar o Profano',
@@ -952,7 +953,8 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
         level: 2,
         description: 'Você escolhe uma Tradição Arcana (como Abjuração ou Evocação). A sua escolha lhe concede características no 2º nível e novamente no 6º, 10º e 14º níveis.',
         activation: 'none',
-        choices: ['Escola de Abjuração', 'Escola de Adivinhação', 'Escola de Conjuração', 'Escola de Encantamento', 'Escola de Evocação', 'Escola de Ilusão', 'Escola de Necromancia', 'Escola de Transmutação']
+        choices: ['Escola de Abjuração', 'Escola de Adivinhação', 'Escola de Conjuração', 'Escola de Encantamento', 'Escola de Evocação', 'Escola de Ilusão', 'Escola de Necromancia', 'Escola de Transmutação'],
+        isSubclassChoice: true
       },
       {
         name: 'Sabedoria da Abjuração',

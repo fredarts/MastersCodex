@@ -1013,8 +1013,28 @@ export function calculateWeaponAttack(
     abilityMod = strMod;
   }
 
-  const totalAtk = abilityMod + profBonus + magic;
-  const totalDamageMod = abilityMod + magic;
+  const hasStyle = (styleName: string) => {
+    const query = styleName.toLowerCase();
+    return !!(
+      sheet.otherFeatures?.toLowerCase().includes(query) || 
+      sheet.featuresAndTraits?.toLowerCase().includes(query)
+    );
+  };
+
+  let totalAtk = abilityMod + profBonus + magic;
+  let totalDamageMod = abilityMod + magic;
+
+  // Estilo de Luta: Arquearia
+  if ((hasStyle('arquearia') || hasStyle('archery')) && weapon.isRanged) {
+    totalAtk += 2;
+  }
+
+  // Estilo de Luta: Duelismo
+  const isTwoHanded = weapon.properties?.some(p => p.toLowerCase().includes('duas mãos') || p.toLowerCase().includes('two-handed'));
+  if ((hasStyle('duelismo') || hasStyle('dueling')) && !weapon.isRanged && !isTwoHanded) {
+    totalDamageMod += 2;
+  }
+
   const damageStr = `${weapon.damage} ${totalDamageMod >= 0 ? '+' : ''}${totalDamageMod}`;
 
   return {
@@ -1057,6 +1077,20 @@ export function applyShortRest(
   for (let i = 0; i < actualSpend; i++) {
     const roll = Math.floor(Math.random() * hitDieVal) + 1;
     hpRecovered += Math.max(1, roll + conMod);
+  }
+
+  // Canção de Descanso (Bardo Nível >= 2)
+  if (actualSpend > 0 && hasClass(sheet, 'Bardo')) {
+    const bardLevel = getClassLevel(sheet, 'Bardo');
+    if (bardLevel >= 2) {
+      let songDie = 6;
+      if (bardLevel >= 17) songDie = 12;
+      else if (bardLevel >= 13) songDie = 10;
+      else if (bardLevel >= 9) songDie = 8;
+
+      const songRoll = Math.floor(Math.random() * songDie) + 1;
+      hpRecovered += songRoll;
+    }
   }
 
   usedCount += actualSpend;
@@ -1140,7 +1174,27 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
 }
 
 /**
- * Calcula dinamicamente o deslocamento do personagem, aplicando bônus como Movimento Sem Armadura do Monge ou Bárbaro
+ * Retorna o peso total carregado (soma do peso de cada item x quantidade)
+ */
+export function calculateTotalWeight(sheet: CharacterSheet): number {
+  const equipWeight = (sheet.equipment || []).reduce((acc, item) => {
+    const itemW = parseFloat(item.weight || '0') || 0;
+    return acc + (itemW * (item.quantity || 1));
+  }, 0);
+  return parseFloat(equipWeight.toFixed(2));
+}
+
+/**
+ * Retorna se o personagem está pesadamente sobrecarregado (peso > FOR x 10)
+ */
+export function isHeavilyEncumbered(sheet: CharacterSheet): boolean {
+  const totalWeight = calculateTotalWeight(sheet);
+  const strScore = sheet.attributes?.str?.score || 10;
+  return totalWeight > strScore * 10;
+}
+
+/**
+ * Calcula dinamicamente o deslocamento do personagem, aplicando bônus e penalidades de carga
  */
 export function calculateDynamicSpeed(sheet: CharacterSheet): string {
   const raceData = DND_RACES[sheet.race];
@@ -1161,7 +1215,6 @@ export function calculateDynamicSpeed(sheet: CharacterSheet): string {
   const classes = getCharacterClasses(sheet);
   const armor = ARMOR_TABLE[sheet.equippedArmor || 'Nenhuma'] || { category: 'none' };
   const hasNoArmor = armor.category === 'none';
-  const hasNoHeavyArmor = armor.category !== 'heavy';
 
   // 1. Monge: Movimento Sem Armadura (Apenas sem armadura nem escudo)
   const isMonk = classes.find(c => c.name === 'Monge');
@@ -1184,6 +1237,14 @@ export function calculateDynamicSpeed(sheet: CharacterSheet): string {
     }
   }
 
+  // 2. Bárbaro: Movimento Rápido (nível 5+, apenas sem armadura pesada)
+  const isBarbarian = classes.find(c => c.name === 'Bárbaro');
+  const hasNoHeavyArmor = armor.category !== 'heavy';
+  if (isBarbarian && isBarbarian.level >= 5 && hasNoHeavyArmor) {
+    bonusMeters += 3;
+    bonusFeet += 10;
+  }
+
   // 3. Talento Móvel (Mobile): +10ft (+3m) de deslocamento
   const mobileFeat = (sheet.feats || []).find(f => f.name === 'Mobile' || f.namePt === 'Móvel' || f.benefits?.speedBonus);
   if (mobileFeat) {
@@ -1192,9 +1253,23 @@ export function calculateDynamicSpeed(sheet: CharacterSheet): string {
     bonusMeters += (featBonusFeet / 10) * 3;
   }
 
-  if (bonusMeters === 0) return baseSpeedStr;
+  // 4. Regra Variante de Carga Pesada (Variant Encumbrance)
+  const totalWeight = calculateTotalWeight(sheet);
+  const strScore = sheet.attributes.str.score || 10;
+  if (totalWeight > strScore * 15) {
+    return '0m (0ft)';
+  } else if (totalWeight > strScore * 10) {
+    bonusFeet -= 20;
+    bonusMeters -= 6;
+  } else if (totalWeight > strScore * 5) {
+    bonusFeet -= 10;
+    bonusMeters -= 3;
+  }
 
-  return `${baseMeters + bonusMeters}m (${baseFeet + bonusFeet}ft)`;
+  const finalFeet = Math.max(0, baseFeet + bonusFeet);
+  const finalMeters = Math.max(0, baseMeters + bonusMeters);
+
+  return `${finalMeters}m (${finalFeet}ft)`;
 }
 
 /**

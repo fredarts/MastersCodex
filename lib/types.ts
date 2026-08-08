@@ -789,6 +789,7 @@ export interface CharacterSheet {
   activeClassBuffs?: ActiveClassBuff[];
   classFeatures?: ClassFeature[];
   feats?: CharacterFeat[];
+  conditions?: ConditionType[];
 
   updatedAt?: string;
 }

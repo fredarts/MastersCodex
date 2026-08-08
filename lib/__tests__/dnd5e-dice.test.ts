@@ -316,5 +316,161 @@ describe('D&D 5e Dice Rules Unit Tests', () => {
       const event = executeSneakAttackRoll({ sheet: lvl1Sheet });
       expect(event.total).toBeGreaterThanOrEqual(1);
     });
+
+    it('deve dobrar os dados de ataque furtivo se for acerto crítico', () => {
+      // Nível 5: base 3d6. Crítico: 6d6.
+      mathRandomSpy
+        .mockReturnValueOnce(0.5)  // 4
+        .mockReturnValueOnce(0.5)  // 4
+        .mockReturnValueOnce(0.5)  // 4
+        .mockReturnValueOnce(0.5)  // 4
+        .mockReturnValueOnce(0.5)  // 4
+        .mockReturnValueOnce(0.5); // 4
+
+      const event = executeSneakAttackRoll({ sheet: rogueSheet, isCrit: true });
+
+      expect(event.damageDice).toBe('6d6');
+      expect(event.total).toBe(24);
+    });
+  });
+
+  describe('Estilo de Luta: Combate com Armas Grandes (GWF)', () => {
+    const gwfSheet = {
+      id: 'gwf-1',
+      characterName: 'Grog',
+      className: 'Guerreiro',
+      level: 2,
+      otherFeatures: 'Estilo de Luta: Combate com Armas Grandes',
+    } as unknown as CharacterSheet;
+
+    it('deve rerrolar dados de dano 1 ou 2 uma vez com arma de duas mãos', () => {
+      // Espada Grande usa 2d6.
+      mathRandomSpy
+        .mockReturnValueOnce(0.7)  // d20 = 15
+        .mockReturnValueOnce(0.01) // d6 = 1 -> rerrola
+        .mockReturnValueOnce(0.5)  // novo d6 = 4
+        .mockReturnValueOnce(0.2)  // d6 = 2 -> rerrola
+        .mockReturnValueOnce(0.8); // novo d6 = 5
+
+      const result = executeWeaponAttackRoll({
+        sheet: gwfSheet,
+        weaponName: 'Espada Grande',
+        atkBonusStr: '+5',
+        damageStr: '2d6 + 3',
+        damageType: 'Cortante',
+      });
+
+      expect(result.damageRoll.total).toBe(12);
+    });
+  });
+});
+
+describe('D&D 5e Condition Automation', () => {
+  let mathRandomSpy: any;
+
+  beforeEach(() => {
+    mathRandomSpy = vi.spyOn(Math, 'random');
+  });
+
+  afterEach(() => {
+    mathRandomSpy.mockRestore();
+  });
+
+  const makeCondSheet = (conditions: string[] = [], overrides: any = {}) => ({
+    id: 'test-1',
+    characterName: 'Test Hero',
+    className: 'Guerreiro',
+    level: 5,
+    race: 'Humano',
+    attributes: {
+      str: { score: 14 }, dex: { score: 12 }, con: { score: 14 },
+      int: { score: 10 }, wis: { score: 10 }, cha: { score: 10 },
+    },
+    savingThrows: {} as any,
+    skills: {} as any,
+    conditions,
+    equipment: [],
+    feats: [],
+    ...overrides,
+  } as any);
+
+  it('deve lançar erro quando Incapacitado', () => {
+    const sheet = makeCondSheet(['Incapacitado']);
+    mathRandomSpy.mockReturnValue(0.5);
+
+    expect(() => executeCheckRoll({
+      sheet,
+      label: 'Ataque: Espada',
+      modifier: 5,
+      rollType: 'attack',
+    })).toThrow('Impedido!');
+  });
+
+  it('deve lançar erro quando Paralisado', () => {
+    const sheet = makeCondSheet(['Paralisado']);
+    mathRandomSpy.mockReturnValue(0.5);
+
+    expect(() => executeCheckRoll({
+      sheet,
+      label: 'Teste de Força',
+      modifier: 2,
+      rollType: 'ability_check',
+    })).toThrow('Impedido!');
+  });
+
+  it('deve forçar desvantagem quando Envenenado em ataque', () => {
+    const sheet = makeCondSheet(['Envenenado']);
+    // Primeiro d20 = 15, segundo d20 = 5 -> com desvantagem pega o menor (5)
+    mathRandomSpy
+      .mockReturnValueOnce(0.7)   // d20 #1 = 15
+      .mockReturnValueOnce(0.2);  // d20 #2 = 5
+
+    const result = executeCheckRoll({
+      sheet,
+      label: 'Ataque: Espada',
+      modifier: 5,
+      rollType: 'attack',
+      advantageMode: 'normal',
+    });
+
+    expect(result.d20Roll2).toBeDefined();
+    expect(result.total).toBe(10); // 5 + 5 = 10
+  });
+
+  it('NÃO deve forçar desvantagem quando Envenenado em saving throw', () => {
+    const sheet = makeCondSheet(['Envenenado']);
+    mathRandomSpy.mockReturnValue(0.5); // d20 = 11
+
+    const result = executeCheckRoll({
+      sheet,
+      label: 'Salvaguarda de Constituição',
+      modifier: 4,
+      rollType: 'saving_throw',
+      advantageMode: 'normal',
+    });
+
+    expect(result.d20Roll2).toBeUndefined();
+    expect(result.total).toBe(15); // 11 + 4
+  });
+
+  it('War Caster deve conceder vantagem em salvaguarda de concentração', () => {
+    const sheet = makeCondSheet([], {
+      feats: [{ id: 'wc', name: 'War Caster', namePt: 'Conjurador de Combate', description: '' }],
+    });
+    // d20 #1 = 5, d20 #2 = 15 -> com vantagem pega o maior (15)
+    mathRandomSpy
+      .mockReturnValueOnce(0.2)   // d20 #1 = 5
+      .mockReturnValueOnce(0.7);  // d20 #2 = 15
+
+    const result = executeCheckRoll({
+      sheet,
+      label: 'Salvaguarda de Concentração (CD 10)',
+      modifier: 2,
+      rollType: 'saving_throw',
+      advantageMode: 'normal',
+    });
+
+    expect(result.d20Roll2).toBeDefined();
+    expect(result.total).toBe(17); // 15 + 2
   });
 });

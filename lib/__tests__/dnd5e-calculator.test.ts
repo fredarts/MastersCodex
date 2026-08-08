@@ -16,6 +16,10 @@ import {
   recalculateSheetDerivedStats,
   calculateSavingThrowTotal,
   calculateTotalInitiativeBonus,
+  calculateWeaponAttack,
+  calculateTotalWeight,
+  isHeavilyEncumbered,
+  calculateDynamicSpeed,
 } from '../dnd5e-calculator';
 import { CharacterSheet } from '../types';
 
@@ -1375,7 +1379,141 @@ describe('D&D 5e Rules Calculator Unit Tests', () => {
       expect(recalculatedMulti.spellSlots[1]?.total).toBe(4);
       expect(recalculatedMulti.spellSlots[2]?.total).toBe(3);
     });
+
+    it('deve adicionar cura bônus da Canção de Descanso no descanso curto do Bardo', () => {
+      const bardoSheet: CharacterSheet = {
+        className: 'Bardo',
+        level: 2,
+        maxHp: 20,
+        currentHp: 5,
+        hitDiceUsed: '0d8',
+        attributes: {
+          str: { score: 10 }, dex: { score: 10 }, con: { score: 10 },
+          int: { score: 10 }, wis: { score: 10 }, cha: { score: 10 }
+        } as any,
+        classResources: {},
+        spellSlots: {},
+        feats: [],
+        skills: {} as any,
+      } as any;
+
+      const { updatedSheet, hpRecovered } = applyShortRest(bardoSheet, 1);
+      expect(hpRecovered).toBeGreaterThanOrEqual(2);
+      expect(updatedSheet.currentHp).toBeGreaterThan(5);
+    });
+
+    it('deve aplicar bônus de Estilo de Luta: Arquearia nas jogadas de ataque com armas à distância', () => {
+      const charSheet: CharacterSheet = {
+        className: 'Guerreiro',
+        level: 2,
+        otherFeatures: 'Estilo de Luta: Arquearia',
+        attributes: {
+          str: { score: 10 }, dex: { score: 16 }, con: { score: 10 },
+          int: { score: 10 }, wis: { score: 10 }, cha: { score: 10 }
+        } as any,
+      } as any;
+
+      const attackInfo = calculateWeaponAttack(charSheet, 'Arco Longo');
+      expect(attackInfo.atkBonus).toBe('+7');
+    });
+
+    it('deve aplicar bônus de Estilo de Luta: Duelismo nas jogadas de dano com armas de uma mão', () => {
+      const charSheet: CharacterSheet = {
+        className: 'Guerreiro',
+        level: 2,
+        featuresAndTraits: 'Estilo de Luta: Duelismo',
+        attributes: {
+          str: { score: 16 }, dex: { score: 10 }, con: { score: 10 },
+          int: { score: 10 }, wis: { score: 10 }, cha: { score: 10 }
+        } as any,
+      } as any;
+
+      const attackInfo = calculateWeaponAttack(charSheet, 'Espada Longa');
+      expect(attackInfo.damage).toBe('1d8 +5');
+    });
   });
 });
 
 
+describe('D&D 5e Weight and Encumbrance', () => {
+
+  const makeSheet = (overrides: any = {}) => ({
+    race: 'Humano',
+    level: 5,
+    className: 'Guerreiro',
+    attributes: {
+      str: { score: 10 }, dex: { score: 10 }, con: { score: 10 },
+      int: { score: 10 }, wis: { score: 10 }, cha: { score: 10 },
+    },
+    equipment: [],
+    equippedArmor: 'Nenhuma',
+    hasShield: false,
+    feats: [],
+    speed: '9m (30ft)',
+    ...overrides,
+  });
+
+  it('deve retornar 0 se não houver equipamentos', () => {
+    expect(calculateTotalWeight(makeSheet())).toBe(0);
+  });
+
+  it('deve somar o peso de equipamentos com quantidade', () => {
+    const sheet = makeSheet({
+      equipment: [
+        { id: '1', name: 'Espada', quantity: 1, weight: '3' },
+        { id: '2', name: 'Ração', quantity: 5, weight: '1' },
+      ],
+    });
+    expect(calculateTotalWeight(sheet)).toBe(8);
+  });
+
+  it('isHeavilyEncumbered deve retornar true quando peso > FOR * 10', () => {
+    const sheet = makeSheet({
+      attributes: { str: { score: 10 }, dex: { score: 10 }, con: { score: 10 }, int: { score: 10 }, wis: { score: 10 }, cha: { score: 10 } },
+      equipment: [
+        { id: '1', name: 'Pilha de Ouro', quantity: 1, weight: '101' },
+      ],
+    });
+    expect(isHeavilyEncumbered(sheet)).toBe(true);
+  });
+
+  it('isHeavilyEncumbered deve retornar false quando peso <= FOR * 10', () => {
+    const sheet = makeSheet({
+      attributes: { str: { score: 10 }, dex: { score: 10 }, con: { score: 10 }, int: { score: 10 }, wis: { score: 10 }, cha: { score: 10 } },
+      equipment: [
+        { id: '1', name: 'Kit Leve', quantity: 1, weight: '50' },
+      ],
+    });
+    expect(isHeavilyEncumbered(sheet)).toBe(false);
+  });
+
+  it('velocidade deve cair para 0 se peso > FOR * 15', () => {
+    const sheet = makeSheet({
+      attributes: { str: { score: 10 }, dex: { score: 10 }, con: { score: 10 }, int: { score: 10 }, wis: { score: 10 }, cha: { score: 10 } },
+      equipment: [
+        { id: '1', name: 'Bloco de Ferro', quantity: 1, weight: '200' },
+      ],
+    });
+    expect(calculateDynamicSpeed(sheet)).toBe('0m (0ft)');
+  });
+
+  it('velocidade deve reduzir 20ft se peso > FOR * 10 (Carga Pesada)', () => {
+    const sheet = makeSheet({
+      attributes: { str: { score: 10 }, dex: { score: 10 }, con: { score: 10 }, int: { score: 10 }, wis: { score: 10 }, cha: { score: 10 } },
+      equipment: [
+        { id: '1', name: 'Carga Pesada', quantity: 1, weight: '101' },
+      ],
+    });
+    expect(calculateDynamicSpeed(sheet)).toBe('3m (10ft)');
+  });
+
+  it('velocidade deve reduzir 10ft se peso > FOR * 5 (Sobrecarga)', () => {
+    const sheet = makeSheet({
+      attributes: { str: { score: 10 }, dex: { score: 10 }, con: { score: 10 }, int: { score: 10 }, wis: { score: 10 }, cha: { score: 10 } },
+      equipment: [
+        { id: '1', name: 'Carga Moderada', quantity: 1, weight: '51' },
+      ],
+    });
+    expect(calculateDynamicSpeed(sheet)).toBe('6m (20ft)');
+  });
+});

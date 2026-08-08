@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { AdvantageMode, CharacterSheet, DiceRollEvent, RollVisibility, SecretRollNotificationMode, Bg3RollModifierCard } from './types';
-import { getClassLevel } from './dnd5e-calculator';
+import { getClassLevel, WEAPON_TABLE, isHeavilyEncumbered } from './dnd5e-calculator';
 import { useLiveCockpitStudioStore } from './stores/useLiveCockpitStudioStore';
 
 // Global broadcaster registry — allows pure TS modules to send events through Supabase Realtime
@@ -148,8 +149,51 @@ export function executeCheckRoll({
   contextNarrative?: string;
   reliableTalent?: boolean;
 }): DiceRollEvent {
-  const { d20Roll1, d20Roll2, selectedD20: rawSelectedD20 } = rollD20(advantageMode);
-  // Talento Confiável (Ladino Nv 11+): se o d20 for < 10 em perícias com proficiência, trata como 10
+  let finalAdvantage = advantageMode;
+  let forceAdvantage = false;
+  let forceDisadvantage = false;
+
+  // 1. Bloqueio por Condições incapacitantes
+  const incapacitatingCond = (sheet.conditions || []).find(c => 
+    ['Incapacitado', 'Paralisado', 'Petrificado', 'Inconsciente'].includes(c)
+  );
+  if (incapacitatingCond) {
+    throw new Error(`Impedido! O personagem está sob a condição ${incapacitatingCond} e não pode realizar jogadas.`);
+  }
+
+  // 2. Condições de Desvantagem (Envenenado, Atemorizado)
+  const isDisadvantagedCond = (sheet.conditions || []).some(c => 
+    ['Envenenado', 'Atemorizado'].includes(c)
+  );
+  if (isDisadvantagedCond && rollType !== 'saving_throw') {
+    forceDisadvantage = true;
+  }
+
+  // 3. Sobrecarga Pesada (Heavy Encumbrance)
+  const labelLower = label.toLowerCase();
+  const isStrDexCon = labelLower.includes('força') || labelLower.includes('destreza') || labelLower.includes('constituição') ||
+                      labelLower.includes('for') || labelLower.includes('des') || labelLower.includes('con') ||
+                      ['atletismo', 'acrobacia', 'furtividade', 'prestidigitacao', 'prestidigitação'].some(s => labelLower.includes(s)) ||
+                      rollType === 'attack';
+  if (isHeavilyEncumbered(sheet) && isStrDexCon) {
+    forceDisadvantage = true;
+  }
+
+  // 4. Talento War Caster (Conjurador de Combate)
+  const hasWarCaster = sheet.feats?.some(f => f.name === 'War Caster' || f.namePt === 'Conjurador de Combate');
+  if (hasWarCaster && rollType === 'saving_throw' && labelLower.includes('concentração')) {
+    forceAdvantage = true;
+  }
+
+  if (forceAdvantage && forceDisadvantage) {
+    finalAdvantage = 'normal';
+  } else if (forceAdvantage) {
+    finalAdvantage = 'advantage';
+  } else if (forceDisadvantage) {
+    finalAdvantage = 'disadvantage';
+  }
+
+  const { d20Roll1, d20Roll2, selectedD20: rawSelectedD20 } = rollD20(finalAdvantage);
   const selectedD20 = reliableTalent ? Math.max(rawSelectedD20, 10) : rawSelectedD20;
   const total = selectedD20 + modifier;
 
@@ -258,9 +302,29 @@ export function executeWeaponAttackRoll({
       const sign = match[3] === '-' ? -1 : 1;
       const bonus = parseInt(match[4] || '0', 10);
 
+      // Combate com Armas Grandes (GWF)
+      const hasGWF = !!(
+        sheet.otherFeatures?.toLowerCase().includes('armas grandes') ||
+        sheet.featuresAndTraits?.toLowerCase().includes('armas grandes') ||
+        sheet.otherFeatures?.toLowerCase().includes('great weapon') ||
+        sheet.featuresAndTraits?.toLowerCase().includes('great weapon')
+      );
+      const weapon = WEAPON_TABLE[weaponName];
+      const isTwoHandedOrVersatile = weapon?.properties?.some(p => 
+        p.toLowerCase().includes('duas mãos') || 
+        p.toLowerCase().includes('two-handed') || 
+        p.toLowerCase().includes('versátil') || 
+        p.toLowerCase().includes('versatile')
+      );
+      const shouldApplyGWF = hasGWF && (!weapon || !weapon.isRanged) && isTwoHandedOrVersatile;
+
       let diceSum = 0;
       for (let i = 0; i < numDice; i++) {
-        diceSum += Math.floor(Math.random() * diceFaces) + 1;
+        let roll = Math.floor(Math.random() * diceFaces) + 1;
+        if (shouldApplyGWF && (roll === 1 || roll === 2)) {
+          roll = Math.floor(Math.random() * diceFaces) + 1;
+        }
+        diceSum += roll;
       }
       damageTotal = diceSum + sign * bonus;
     } else {
@@ -307,13 +371,16 @@ export function executeSneakAttackRoll({
   sheet,
   visibility = 'public',
   secretMode = 'subtle_notice',
+  isCrit = false,
 }: {
   sheet: CharacterSheet;
   visibility?: RollVisibility;
   secretMode?: SecretRollNotificationMode;
+  isCrit?: boolean;
 }): DiceRollEvent {
   const rogueLevel = getClassLevel(sheet, 'Ladino');
-  const numDice = Math.ceil(rogueLevel / 2);
+  const baseDice = Math.ceil(rogueLevel / 2);
+  const numDice = isCrit ? baseDice * 2 : baseDice;
   const diceStr = `${numDice}d6`;
 
   let damageTotal = 0;

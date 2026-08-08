@@ -1,6 +1,7 @@
+/* eslint-disable react-hooks/purity */
 import React, { useState } from 'react';
 import { AdvantageMode, AttributeKey, CharacterSheet, CharacterWeaponAttack, DiceRollEvent } from '@/lib/types';
-import { formatModifier, getAttributeModifier, recalculateSheetDerivedStats, ARMOR_TABLE, calculateArmorClass, hasClass, getJackOfAllTradesBonus, getClassLevel } from '@/lib/dnd5e-calculator';
+import { formatModifier, getAttributeModifier, recalculateSheetDerivedStats, ARMOR_TABLE, calculateArmorClass, hasClass, getJackOfAllTradesBonus, getClassLevel, WEAPON_TABLE } from '@/lib/dnd5e-calculator';
 import { executeCheckRoll, executeWeaponAttackRoll, broadcastDiceRoll, executeSneakAttackRoll, getSneakAttackDice } from '@/lib/dnd5e-dice';
 import { Shield, Heart, Zap, Crosshair, Plus, Minus, Trash2, Skull, Dices, Lock, Unlock, RotateCcw, CheckCircle2, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { WeaponCompendiumModal } from '../Modals/WeaponCompendiumModal';
@@ -42,6 +43,8 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
   const [pendingSmiteAtk, setPendingSmiteAtk] = useState<CharacterWeaponAttack | null>(null);
   const [pendingAttackRoll, setPendingAttackRoll] = useState<DiceRollEvent | null>(null);
   const [showSmitePrompt, setShowSmitePrompt] = useState(false);
+  const [sneakAttackCrit, setSneakAttackCrit] = useState(false);
+  const [powerAttackActive, setPowerAttackActive] = useState(false);
 
   // Estado da sessão baseline para possibilitar o botão de Resetar
   const [sessionBaseline, setSessionBaseline] = useState<{
@@ -308,12 +311,40 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
         sign = match[3] === '-' ? -1 : 1;
         bonus = parseInt(match[4] || '0', 10);
 
-        // Se for crítico, dobra o número de dados
-        const finalNumDice = isCrit ? numDice * 2 : numDice;
+        // Se for crítico, dobra o número de dados + Crítico Brutal do Bárbaro
+        let barbarianExtraDice = 0;
+        if (isCrit && hasClass(sheet, 'Bárbaro')) {
+          const barbLvl = getClassLevel(sheet, 'Bárbaro');
+          if (barbLvl >= 17) barbarianExtraDice = 3;
+          else if (barbLvl >= 13) barbarianExtraDice = 2;
+          else if (barbLvl >= 9) barbarianExtraDice = 1;
+        }
+
+        const finalNumDice = isCrit ? numDice * 2 + barbarianExtraDice : numDice;
+
+        // Combate com Armas Grandes (GWF)
+        const hasGWF = !!(
+          sheet.otherFeatures?.toLowerCase().includes('armas grandes') ||
+          sheet.featuresAndTraits?.toLowerCase().includes('armas grandes') ||
+          sheet.otherFeatures?.toLowerCase().includes('great weapon') ||
+          sheet.featuresAndTraits?.toLowerCase().includes('great weapon')
+        );
+        const weapon = WEAPON_TABLE[atk.name];
+        const isTwoHandedOrVersatile = weapon?.properties?.some(p => 
+          p.toLowerCase().includes('duas mãos') || 
+          p.toLowerCase().includes('two-handed') || 
+          p.toLowerCase().includes('versátil') || 
+          p.toLowerCase().includes('versatile')
+        );
+        const shouldApplyGWF = hasGWF && (!weapon || !weapon.isRanged) && isTwoHandedOrVersatile;
 
         let diceSum = 0;
         for (let i = 0; i < finalNumDice; i++) {
-          diceSum += Math.floor(Math.random() * diceFaces) + 1;
+          let roll = Math.floor(Math.random() * diceFaces) + 1;
+          if (shouldApplyGWF && (roll === 1 || roll === 2)) {
+            roll = Math.floor(Math.random() * diceFaces) + 1;
+          }
+          diceSum += roll;
         }
         
         // Adiciona bônus de dano + bônus de Fúria
@@ -415,11 +446,37 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
   };
 
   const handleRollWeapon = (atk: CharacterWeaponAttack) => {
+    // Se "Power Attack" estiver ativo, aplica -5 no acerto e +10 no dano
+    let atkBonus = atk.atkBonus;
+    let damage = atk.damage;
+    if (powerAttackActive) {
+      const baseAtk = parseInt(atkBonus.replace('+', ''), 10) || 0;
+      const newAtk = baseAtk - 5;
+      atkBonus = newAtk >= 0 ? `+${newAtk}` : `${newAtk}`;
+
+      // Adiciona +10 no dano
+      if (damage.includes('+')) {
+        const parts = damage.split('+');
+        const baseDmg = parts[0].trim();
+        const baseBonus = parseInt(parts[1].trim(), 10) || 0;
+        damage = `${baseDmg} + ${baseBonus + 10}`;
+      } else if (damage.includes('-')) {
+        const parts = damage.split('-');
+        const baseDmg = parts[0].trim();
+        const baseBonus = parseInt(parts[1].trim(), 10) || 0;
+        damage = `${baseDmg} + ${10 - baseBonus}`;
+      } else {
+        damage = `${damage} + 10`;
+      }
+    }
+
+    const finalAtk = powerAttackActive ? { ...atk, atkBonus, damage } : atk;
+
     // 1. Rola o ataque normalmente
-    const atkModifier = parseInt(atk.atkBonus.replace('+', ''), 10) || 0;
+    const atkModifier = parseInt(finalAtk.atkBonus.replace('+', ''), 10) || 0;
     const attackRoll = executeCheckRoll({
       sheet,
-      label: `Ataque: ${atk.name}`,
+      label: `Ataque: ${finalAtk.name}${powerAttackActive ? ' (Ataque Poderoso)' : ''}`,
       modifier: atkModifier,
       rollType: 'attack',
       advantageMode,
@@ -431,10 +488,10 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
 
     // 2. Verifica se tem Smite preparado na aba de habilidades
     const smiteBuff = sheet.activeClassBuffs?.find(b => b.type === 'smite');
-    const isMelee = !atk.name.toLowerCase().includes('arco') && 
-                    !atk.name.toLowerCase().includes('besta') && 
-                    !atk.name.toLowerCase().includes('dardo') &&
-                    !(atk.type || '').toLowerCase().includes('distância');
+    const isMelee = !finalAtk.name.toLowerCase().includes('arco') && 
+                    !finalAtk.name.toLowerCase().includes('besta') && 
+                    !finalAtk.name.toLowerCase().includes('dardo') &&
+                    !(finalAtk.type || '').toLowerCase().includes('distância');
 
     if (smiteBuff && isMelee) {
       const updatedBuffs = (sheet.activeClassBuffs || []).filter(b => b.id !== smiteBuff.id);
@@ -448,7 +505,7 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
         smiteDmgTotal += Math.floor(Math.random() * 8) + 1;
       }
 
-      const normalDmgRoll = rollWeaponDamage(atk, !!attackRoll.isCrit);
+      const normalDmgRoll = rollWeaponDamage(finalAtk, !!attackRoll.isCrit);
       
       const smiteDmgRoll: DiceRollEvent = {
         id: (Date.now() + 2).toString(),
@@ -484,16 +541,53 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
     );
 
     if (hasClass(sheet, 'Paladino') && hasAvailableSpellSlots && isMelee) {
-      setPendingSmiteAtk(atk);
+      setPendingSmiteAtk(finalAtk);
       setPendingAttackRoll(attackRoll);
       setShowSmitePrompt(true);
     } else {
       // Rola dano normal
-      const damageRoll = rollWeaponDamage(atk, !!attackRoll.isCrit);
+      const damageRoll = rollWeaponDamage(finalAtk, !!attackRoll.isCrit);
       if (onRoll) {
         setTimeout(() => onRoll(damageRoll), 500);
       }
     }
+  };
+
+  const handleHpChange = (newHp: number) => {
+    const damageTaken = sheet.currentHp - newHp;
+    const isConcentrating = (sheet.conditions || []).includes('Concentração');
+
+    if (damageTaken > 0 && isConcentrating) {
+      const cd = Math.max(10, Math.floor(damageTaken / 2));
+      const confirmRoll = window.confirm(
+        `Você sofreu ${damageTaken} de dano enquanto concentrado! Deseja realizar a Salvaguarda de Constituição CD ${cd} para manter a concentração?`
+      );
+      if (confirmRoll) {
+        const conMod = getAttributeModifier(sheet, 'con');
+        const saveRoll = executeCheckRoll({
+          sheet,
+          label: `Salvaguarda de Concentração (CD ${cd})`,
+          modifier: conMod,
+          rollType: 'saving_throw',
+        });
+        if (onRoll) {
+          onRoll(saveRoll);
+        }
+        
+        if (saveRoll.total < cd) {
+          const updatedConds = (sheet.conditions || []).filter(c => c !== 'Concentração');
+          onChange({ ...sheet, currentHp: newHp, conditions: updatedConds });
+          alert("Concentração quebrada! A condição foi removida da sua ficha.");
+          return;
+        }
+      } else {
+        const updatedConds = (sheet.conditions || []).filter(c => c !== 'Concentração');
+        onChange({ ...sheet, currentHp: newHp, conditions: updatedConds });
+        return;
+      }
+    }
+
+    onChange({ ...sheet, currentHp: newHp });
   };
 
   const handleAddAttack = () => {
@@ -841,6 +935,38 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
         </div>
       </div>
 
+      {/* PAINEL DE CONDIÇÕES DO PERSONAGEM */}
+      <div className="bg-[#141b2d] border border-cyan-500/20 rounded-2xl p-4 shadow-lg space-y-2">
+        <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block">
+          Condições Ativas na Ficha
+        </span>
+        <div className="flex flex-wrap gap-1.5">
+          {(['Cego', 'Encantado', 'Surdo', 'Atemorizado', 'Agarrado', 'Incapacitado', 'Invisível', 'Paralisado', 'Petrificado', 'Envenenado', 'Caído', 'Restrito', 'Inconsciente', 'Concentração'] as const).map(cond => {
+            const isActive = (sheet.conditions || []).includes(cond);
+            return (
+              <button
+                key={cond}
+                type="button"
+                onClick={() => {
+                  const currentConds = sheet.conditions || [];
+                  const updated = currentConds.includes(cond)
+                    ? currentConds.filter(c => c !== cond)
+                    : [...currentConds, cond];
+                  onChange({ ...sheet, conditions: updated });
+                }}
+                className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold transition-all border cursor-pointer ${
+                  isActive
+                    ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-sm shadow-cyan-500/30'
+                    : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700 hover:text-slate-400'
+                }`}
+              >
+                {cond}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* VITALIDADE & DANO (PONTOS DE VIDA) */}
       <div className="bg-[#141b2d] border border-rose-500/30 rounded-2xl p-4 shadow-lg space-y-3">
         <div className="flex items-center justify-between">
@@ -873,7 +999,7 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
             <input
               type="number"
               value={sheet.currentHp}
-              onChange={(e) => onChange({ ...sheet, currentHp: parseInt(e.target.value, 10) || 0 })}
+              onChange={(e) => handleHpChange(parseInt(e.target.value, 10) || 0)}
               className="w-full bg-[#0b0f19] border border-rose-500/40 rounded-xl py-2 text-center text-sm font-bold text-white focus:outline-none"
             />
           </div>
@@ -1000,21 +1126,36 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
         </div>
       </div>
 
-      {/* ATAQUES E MAGIAS DA FICHA (PÁGINA 1) */}
       <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
             <Crosshair className="w-4 h-4 text-amber-400" />
             Ataques & Armas Rápidas
           </h3>
-          <button
-            type="button"
-            onClick={handleAddAttack}
-            className="flex items-center gap-1 text-[11px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-3 py-1 rounded-xl border border-amber-500/30 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Adicionar
-          </button>
+          <div className="flex items-center gap-3">
+            {sheet.feats?.some(f => 
+              ['Great Weapon Master', 'Sharpshooter', 'Mestre de Armas Grandes', 'Atirador de Elite'].includes(f.name) ||
+              ['Great Weapon Master', 'Sharpshooter', 'Mestre de Armas Grandes', 'Atirador de Elite'].includes(f.namePt)
+            ) && (
+              <label className="flex items-center gap-1.5 text-[10px] font-bold text-amber-400 cursor-pointer bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-xl">
+                <input
+                  type="checkbox"
+                  checked={powerAttackActive}
+                  onChange={(e) => setPowerAttackActive(e.target.checked)}
+                  className="rounded border-amber-500/40 bg-slate-900 text-amber-500 focus:ring-amber-500"
+                />
+                Ataque Poderoso (-5/+10) ⚔️
+              </label>
+            )}
+            <button
+              type="button"
+              onClick={handleAddAttack}
+              className="flex items-center gap-1 text-[11px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-3 py-1 rounded-xl border border-amber-500/30 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Adicionar
+            </button>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -1085,18 +1226,30 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                const result = executeSneakAttackRoll({ sheet });
-                if (onRoll) onRoll(result);
-              }}
-              className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 py-1.5 rounded-xl text-xs font-black transition-transform active:scale-95 shadow-md shadow-emerald-500/20 cursor-pointer"
-              title="Rolar dano de Ataque Furtivo"
-            >
-              <Dices className="w-4 h-4" />
-              Rolar Furtivo
-            </button>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sneakAttackCrit}
+                  onChange={(e) => setSneakAttackCrit(e.target.checked)}
+                  className="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                />
+                Acerto Crítico 🎯
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const result = executeSneakAttackRoll({ sheet, isCrit: sneakAttackCrit });
+                  if (onRoll) onRoll(result);
+                  setSneakAttackCrit(false);
+                }}
+                className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 py-1.5 rounded-xl text-xs font-black transition-transform active:scale-95 shadow-md shadow-emerald-500/20 cursor-pointer"
+                title="Rolar dano de Ataque Furtivo"
+              >
+                <Dices className="w-4 h-4" />
+                Rolar Furtivo
+              </button>
+            </div>
           </div>
         </div>
       )}
