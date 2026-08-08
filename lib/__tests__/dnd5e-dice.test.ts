@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { rollD20, executeCheckRoll, executeWeaponAttackRoll } from '../dnd5e-dice';
+import { rollD20, executeCheckRoll, executeWeaponAttackRoll, executeSneakAttackRoll, getSneakAttackDice } from '../dnd5e-dice';
 import { CharacterSheet } from '../types';
 
 describe('D&D 5e Dice Rules Unit Tests', () => {
@@ -198,6 +198,123 @@ describe('D&D 5e Dice Rules Unit Tests', () => {
 
       // 1 - 5 = -4, mas deve ter um fallback para Math.max(1, total)
       expect(result.damageRoll.total).toBe(1);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // LADINO (ROGUE) — RELIABLE TALENT & SNEAK ATTACK
+  // ─────────────────────────────────────────────────────────────
+
+  describe('executeCheckRoll — Talento Confiável (Reliable Talent)', () => {
+    const rogueSheet = {
+      id: 'rogue-1',
+      characterName: 'Vax',
+      className: 'Ladino',
+      level: 11,
+    } as unknown as CharacterSheet;
+
+    it('deve elevar o d20 para 10 quando rolar abaixo de 10 com reliableTalent ativo', () => {
+      mathRandomSpy.mockReturnValue(0.1); // d20 = 3
+      const event = executeCheckRoll({
+        sheet: rogueSheet,
+        label: 'Furtividade',
+        modifier: 9,
+        rollType: 'skill',
+        reliableTalent: true,
+      });
+
+      // d20 deveria ser 3, mas Reliable Talent eleva para 10
+      expect(event.selectedD20).toBe(10);
+      expect(event.total).toBe(19); // 10 + 9
+    });
+
+    it('não deve alterar o d20 se já for >= 10 com reliableTalent ativo', () => {
+      mathRandomSpy.mockReturnValue(0.7); // d20 = 15
+      const event = executeCheckRoll({
+        sheet: rogueSheet,
+        label: 'Furtividade',
+        modifier: 9,
+        rollType: 'skill',
+        reliableTalent: true,
+      });
+
+      expect(event.selectedD20).toBe(15);
+      expect(event.total).toBe(24); // 15 + 9
+    });
+
+    it('não deve alterar o d20 quando reliableTalent está desativado', () => {
+      mathRandomSpy.mockReturnValue(0.1); // d20 = 3
+      const event = executeCheckRoll({
+        sheet: rogueSheet,
+        label: 'Furtividade',
+        modifier: 9,
+        rollType: 'skill',
+        reliableTalent: false,
+      });
+
+      expect(event.selectedD20).toBe(3);
+      expect(event.total).toBe(12); // 3 + 9
+    });
+  });
+
+  describe('getSneakAttackDice', () => {
+    it('deve retornar 1d6 no nível 1-2', () => {
+      expect(getSneakAttackDice(1)).toBe('1d6');
+      expect(getSneakAttackDice(2)).toBe('1d6');
+    });
+
+    it('deve retornar 2d6 no nível 3-4', () => {
+      expect(getSneakAttackDice(3)).toBe('2d6');
+      expect(getSneakAttackDice(4)).toBe('2d6');
+    });
+
+    it('deve retornar 5d6 no nível 9-10', () => {
+      expect(getSneakAttackDice(9)).toBe('5d6');
+      expect(getSneakAttackDice(10)).toBe('5d6');
+    });
+
+    it('deve retornar 10d6 no nível 19-20', () => {
+      expect(getSneakAttackDice(19)).toBe('10d6');
+      expect(getSneakAttackDice(20)).toBe('10d6');
+    });
+
+    it('deve retornar 0d6 para nível inválido', () => {
+      expect(getSneakAttackDice(0)).toBe('0d6');
+      expect(getSneakAttackDice(-1)).toBe('0d6');
+    });
+  });
+
+  describe('executeSneakAttackRoll', () => {
+    const rogueSheet = {
+      id: 'rogue-1',
+      characterName: 'Vax',
+      className: 'Ladino',
+      level: 5,
+    } as unknown as CharacterSheet;
+
+    it('deve rolar o número correto de dados d6 para o nível 5 (3d6)', () => {
+      // 3 dados d6 para nível 5: ceil(5/2) = 3
+      mathRandomSpy
+        .mockReturnValueOnce(0.5)  // d6 = Math.floor(0.5*6)+1 = 4
+        .mockReturnValueOnce(0.83) // d6 = Math.floor(0.83*6)+1 = 5
+        .mockReturnValueOnce(0.16); // d6 = Math.floor(0.16*6)+1 = 1
+
+      const event = executeSneakAttackRoll({ sheet: rogueSheet });
+
+      expect(event.rollType).toBe('damage');
+      expect(event.label).toContain('Ataque Furtivo');
+      expect(event.label).toContain('3d6');
+      expect(event.total).toBe(10); // 4 + 5 + 1
+      expect(event.characterName).toBe('Vax');
+    });
+
+    it('deve garantir dano mínimo de 1', () => {
+      // Nível 1: 1 dado d6 com valor 1
+      const lvl1Sheet = { ...rogueSheet, level: 1 } as CharacterSheet;
+      mathRandomSpy.mockReturnValueOnce(0.0); // d6 = 1
+
+      const event = executeSneakAttackRoll({ sheet: lvl1Sheet });
+      expect(event.total).toBeGreaterThanOrEqual(1);
     });
   });
 });

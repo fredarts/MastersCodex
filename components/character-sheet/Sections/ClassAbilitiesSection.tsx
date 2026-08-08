@@ -185,6 +185,113 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
     setShowSmiteModal(false);
   };
 
+  const handleUsePactSlot = () => {
+    const pactSlots = resources['pact_slots'];
+    if (!pactSlots || pactSlots.current <= 0) {
+      showAlert({
+        title: 'Sem Slots Disponíveis',
+        message: 'Você não possui espaços do pacto restantes!',
+        variant: 'warning',
+      });
+      return;
+    }
+
+    const pactSlotLevel = resources['pact_slot_level']?.current || 1;
+
+    try {
+      const bc = new BroadcastChannel('masters_codex_sync');
+      bc.postMessage({
+        type: 'SYSTEM_MESSAGE',
+        content: `${sheet.characterName} gasta um espaço de magia do pacto de nível ${pactSlotLevel}! 🔮⚡`,
+      });
+      bc.close();
+    } catch (e) {}
+
+    onChange({
+      ...sheet,
+      classResources: {
+        ...resources,
+        pact_slots: {
+          ...pactSlots,
+          current: pactSlots.current - 1
+        }
+      }
+    });
+  };
+
+  const handleFortunaSubmundo = () => {
+    const fortunaRes = resources['fortuna_submundo'];
+    if (!fortunaRes || fortunaRes.current <= 0) {
+      showAlert({
+        title: 'Recurso Esgotado',
+        message: 'Você já usou Fortuna do Submundo! Requer descanso curto ou longo para recarregar.',
+        variant: 'warning',
+      });
+      return;
+    }
+
+    // Roll 1d10
+    const roll = Math.floor(Math.random() * 10) + 1;
+
+    try {
+      const bc = new BroadcastChannel('masters_codex_sync');
+      bc.postMessage({
+        type: 'SYSTEM_MESSAGE',
+        content: `🍀 ${sheet.characterName} usa Fortuna do Submundo e adiciona +${roll} em um teste ou salvaguarda!`,
+      });
+      bc.close();
+    } catch (e) {}
+
+    onChange({
+      ...sheet,
+      classResources: {
+        ...resources,
+        fortuna_submundo: {
+          ...fortunaRes,
+          current: 0
+        }
+      }
+    });
+  };
+
+  const handleLancarInferno = () => {
+    const lancarRes = resources['lancar_inferno'];
+    if (!lancarRes || lancarRes.current <= 0) {
+      showAlert({
+        title: 'Recurso Esgotado',
+        message: 'Você já usou Lançar no Inferno! Requer descanso longo para recarregar.',
+        variant: 'warning',
+      });
+      return;
+    }
+
+    // Roll 10d10
+    let damage = 0;
+    for (let i = 0; i < 10; i++) {
+      damage += Math.floor(Math.random() * 10) + 1;
+    }
+
+    try {
+      const bc = new BroadcastChannel('masters_codex_sync');
+      bc.postMessage({
+        type: 'SYSTEM_MESSAGE',
+        content: `🔥 ${sheet.characterName} LANÇA o alvo NO INFERNO! Causa ${damage} de dano psíquico extra e o alvo desaparece até o final do próximo turno!`,
+      });
+      bc.close();
+    } catch (e) {}
+
+    onChange({
+      ...sheet,
+      classResources: {
+        ...resources,
+        lancar_inferno: {
+          ...lancarRes,
+          current: 0
+        }
+      }
+    });
+  };
+
   // Adjust resource values manually
   const adjustResource = (key: string, amount: number) => {
     const res = resources[key];
@@ -339,7 +446,91 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
             </>
           )}
 
-          {!hasClass(sheet, 'Bárbaro') && !hasClass(sheet, 'Paladino') && (
+          {/* Bruxo - Habilidades Ativas */}
+          {hasClass(sheet, 'Bruxo') && (
+            <>
+              {resources['pact_slots'] && (
+                <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-purple-400" />
+                      <span className="text-xs font-black text-white">Conjurar usando Pact Slot</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 max-w-xl">
+                      Gaste um espaço de magia do pacto de {resources['pact_slot_level']?.current || 1}º círculo. Seus slots se recuperam em descansos curtos.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleUsePactSlot}
+                    disabled={(resources['pact_slots']?.current || 0) <= 0}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl text-xs font-black transition-all shrink-0 cursor-pointer"
+                  >
+                    Gastar Slot
+                  </button>
+                </div>
+              )}
+
+              {resources['fortuna_submundo'] && (
+                <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Flame className="w-4 h-4 text-amber-500 animate-pulse" />
+                      <span className="text-xs font-black text-white">Fortuna do Submundo</span>
+                      {resources['fortuna_submundo']?.current === 0 && (
+                        <span className="text-[9px] bg-red-950 text-red-400 px-2 py-0.5 rounded-full border border-red-900">
+                          USADO
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 max-w-xl">
+                      Adicione 1d10 a um teste de atributo ou salvaguarda após rolar, mas antes de saber o resultado. Recupera em descanso curto ou longo.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleFortunaSubmundo}
+                    disabled={(resources['fortuna_submundo']?.current || 0) <= 0}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 rounded-xl text-xs font-black transition-all shrink-0 cursor-pointer"
+                  >
+                    Usar Habilidade
+                  </button>
+                </div>
+              )}
+
+              {resources['lancar_inferno'] && (
+                <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Flame className="w-4 h-4 text-red-500" />
+                      <span className="text-xs font-black text-white">Lançar no Inferno</span>
+                      {resources['lancar_inferno']?.current === 0 && (
+                        <span className="text-[9px] bg-red-950 text-red-400 px-2 py-0.5 rounded-full border border-red-900">
+                          USADO
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 max-w-xl">
+                      Ao acertar uma criatura, transporte-a instantaneamente pelos planos inferiores. Causa 10d10 de dano psíquico no retorno. 1x por descanso longo.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleLancarInferno}
+                    disabled={(resources['lancar_inferno']?.current || 0) <= 0}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl text-xs font-black transition-all shrink-0 cursor-pointer"
+                  >
+                    Lançar no Inferno
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {!hasClass(sheet, 'Bárbaro') && !hasClass(sheet, 'Paladino') && !hasClass(sheet, 'Bruxo') && (
             <div className="text-center py-6 text-xs text-slate-500 italic">
               Esta classe não possui habilidades de combate ativas integradas neste teste. Veja a lista de Habilidades Passivas abaixo.
             </div>

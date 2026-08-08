@@ -15,6 +15,7 @@ import {
   calculateArmorClass,
   recalculateSheetDerivedStats,
   calculateSavingThrowTotal,
+  calculateTotalInitiativeBonus,
 } from '../dnd5e-calculator';
 import { CharacterSheet } from '../types';
 
@@ -832,5 +833,549 @@ describe('D&D 5e Rules Calculator Unit Tests', () => {
       expect(features).not.toContain('Fúria Bestial');
     });
   });
+
+  // ─────────────────────────────────────────────────────────────
+  // LADINO (ROGUE) SPECIFIC TESTS
+  // ─────────────────────────────────────────────────────────────
+
+  describe('Ladino - getClassResourcesForLevel', () => {
+    it('deve retornar recurso de Ataque Furtivo com os dados corretos para nível 1', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Ladino',
+        level: 1,
+        attributes: { dex: { score: 16 } } as any,
+      };
+      const res = getClassResourcesForLevel(mockSheet as CharacterSheet, 1);
+      expect(res.ataque_furtivo).toBeDefined();
+      expect(res.ataque_furtivo.label).toBe('Ataque Furtivo (1d6)');
+      expect(res.ataque_furtivo.max).toBe(1);
+    });
+
+    it('deve escalar o Ataque Furtivo para 5d6 no nível 9', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Ladino',
+        level: 9,
+        attributes: { dex: { score: 16 } } as any,
+      };
+      const res = getClassResourcesForLevel(mockSheet as CharacterSheet, 9);
+      expect(res.ataque_furtivo.label).toBe('Ataque Furtivo (5d6)');
+    });
+
+    it('deve escalar o Ataque Furtivo para 10d6 no nível 19-20', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Ladino',
+        level: 19,
+        attributes: { dex: { score: 16 } } as any,
+      };
+      const res = getClassResourcesForLevel(mockSheet as CharacterSheet, 19);
+      expect(res.ataque_furtivo.label).toBe('Ataque Furtivo (10d6)');
+    });
+
+    it('não deve ter Golpe de Sorte antes do nível 20', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Ladino',
+        level: 19,
+        attributes: { dex: { score: 16 } } as any,
+      };
+      const res = getClassResourcesForLevel(mockSheet as CharacterSheet, 19);
+      expect(res.golpe_de_sorte).toBeUndefined();
+    });
+
+    it('deve ter Golpe de Sorte no nível 20', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Ladino',
+        level: 20,
+        attributes: { dex: { score: 16 } } as any,
+      };
+      const res = getClassResourcesForLevel(mockSheet as CharacterSheet, 20);
+      expect(res.golpe_de_sorte).toBeDefined();
+      expect(res.golpe_de_sorte.max).toBe(1);
+    });
+  });
+
+  describe('Ladino - Mente Escorregadia (Slippery Mind)', () => {
+    it('deve conceder proficiência em Sabedoria no nível 15+', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Ladino',
+        level: 15,
+        attributes: { wis: { score: 12 } } as any,
+        savingThrows: { str: false, dex: true, con: false, int: true, wis: false, cha: false },
+      };
+      const total = calculateSavingThrowTotal(mockSheet as CharacterSheet, 'wis');
+      const profBonus = calculateProficiencyBonus(15); // +5
+      const wisMod = 1; // (12 - 10) / 2
+      expect(total).toBe(wisMod + profBonus);
+    });
+
+    it('não deve conceder proficiência em Sabedoria antes do nível 15', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Ladino',
+        level: 14,
+        attributes: { wis: { score: 12 } } as any,
+        savingThrows: { str: false, dex: true, con: false, int: true, wis: false, cha: false },
+      };
+      const total = calculateSavingThrowTotal(mockSheet as CharacterSheet, 'wis');
+      const wisMod = 1;
+      expect(total).toBe(wisMod); // Sem proficiência
+    });
+
+    it('não deve afetar outros testes de resistência', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Ladino',
+        level: 15,
+        attributes: { str: { score: 10 } } as any,
+        savingThrows: { str: false, dex: true, con: false, int: true, wis: false, cha: false },
+      };
+      const total = calculateSavingThrowTotal(mockSheet as CharacterSheet, 'str');
+      expect(total).toBe(0); // Sem proficiência em STR
+    });
+  });
+
+  describe('Feiticeiro - Recursos e Características', () => {
+    it('deve ter 0 Pontos de Feitiçaria no nível 1', () => {
+      const mockSheet: Partial<CharacterSheet> = {
+        className: 'Feiticeiro',
+        level: 1,
+        attributes: { cha: { score: 14 } } as any,
+      };
+      const res = getClassResourcesForLevel(mockSheet as CharacterSheet, 1);
+      expect(res.pontos_feiticaria).toBeUndefined();
+    });
+
+    it('deve ter Pontos de Feitiçaria escalando com o nível a partir do nível 2', () => {
+      const mockSheetLvl2: Partial<CharacterSheet> = {
+        className: 'Feiticeiro',
+        level: 2,
+        attributes: { cha: { score: 14 } } as any,
+      };
+      const resLvl2 = getClassResourcesForLevel(mockSheetLvl2 as CharacterSheet, 2);
+      expect(resLvl2.pontos_feiticaria).toBeDefined();
+      expect(resLvl2.pontos_feiticaria.max).toBe(2);
+
+      const mockSheetLvl10: Partial<CharacterSheet> = {
+        className: 'Feiticeiro',
+        level: 10,
+        attributes: { cha: { score: 14 } } as any,
+      };
+      const resLvl10 = getClassResourcesForLevel(mockSheetLvl10 as CharacterSheet, 10);
+      expect(resLvl10.pontos_feiticaria.max).toBe(10);
+    });
+
+    it('deve ter Marés do Caos apenas para a subclasse Magia Selvagem', () => {
+      const wildMagicSheet: Partial<CharacterSheet> = {
+        className: 'Feiticeiro',
+        level: 1,
+        subclass: 'Magia Selvagem',
+        attributes: { cha: { score: 14 } } as any,
+      };
+      const resWild = getClassResourcesForLevel(wildMagicSheet as CharacterSheet, 1);
+      expect(resWild.mares_do_caos).toBeDefined();
+      expect(resWild.mares_do_caos.max).toBe(1);
+
+      const draconicSheet: Partial<CharacterSheet> = {
+        className: 'Feiticeiro',
+        level: 1,
+        subclass: 'Linhagem Dracônica',
+        attributes: { cha: { score: 14 } } as any,
+      };
+      const resDraconic = getClassResourcesForLevel(draconicSheet as CharacterSheet, 1);
+      expect(resDraconic.mares_do_caos).toBeUndefined();
+    });
+
+    it('deve calcular CA de Resiliência Dracônica (13 + DES) para Linhagem Dracônica sem armadura', () => {
+      const draconicSheet: Partial<CharacterSheet> = {
+        className: 'Feiticeiro',
+        level: 3,
+        subclass: 'Linhagem Dracônica',
+        attributes: { dex: { score: 14 } } as any, // Mod +2
+      };
+      const ac = calculateArmorClass(draconicSheet as CharacterSheet, 'Nenhuma', false);
+      expect(ac).toBe(15); // 13 + 2 = 15
+    });
+
+    it('deve somar escudo na CA de Resiliência Dracônica', () => {
+      const draconicSheet: Partial<CharacterSheet> = {
+        className: 'Feiticeiro',
+        level: 3,
+        subclass: 'Linhagem Dracônica',
+        attributes: { dex: { score: 14 } } as any, // Mod +2
+      };
+      const ac = calculateArmorClass(draconicSheet as CharacterSheet, 'Nenhuma', true);
+      expect(ac).toBe(17); // 13 + 2 + 2 = 17
+    });
+
+    it('deve conceder bônus de HP (+1 por nível de Feiticeiro) para Linhagem Dracônica', () => {
+      const draconicSheet: CharacterSheet = {
+        id: 'test-sorc',
+        characterName: 'Feiticeiro Teste',
+        className: 'Feiticeiro',
+        level: 5,
+        subclass: 'Linhagem Dracônica',
+        attributes: {
+          con: { score: 14, baseScore: 14 }, // Mod +2
+          str: { score: 10, baseScore: 10 },
+          dex: { score: 10, baseScore: 10 },
+          int: { score: 10, baseScore: 10 },
+          wis: { score: 10, baseScore: 10 },
+          cha: { score: 10, baseScore: 10 },
+        } as any,
+        maxHp: 10,
+        currentHp: 10,
+        attacks: [],
+        feats: [],
+        spellSlots: {},
+        classResources: {},
+        skills: {} as any,
+      } as any;
+      
+      const recalculated = recalculateSheetDerivedStats(draconicSheet);
+      // HitDie = 1d6. Lvl 5.
+      // Base HP = 6 + 2 (con) + 4 * (3 + 1 + 2) = 8 + 24 = 32.
+      // Draconic Bonus = +5 (1 * level)
+      // Total = 37
+      expect(recalculated.maxHp).toBe(37);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // BRUXO (WARLOCK) SPECIFIC TESTS
+  // ─────────────────────────────────────────────────────────────
+
+  describe('Bruxo (Warlock) - Mechanics and Calculations', () => {
+    it('deve carregar recursos corretos por nivel do Bruxo', () => {
+      const mockSheet1: Partial<CharacterSheet> = {
+        className: 'Bruxo',
+        level: 1,
+        attributes: { cha: { score: 16 } } as any,
+      };
+      const res1 = getClassResourcesForLevel(mockSheet1 as CharacterSheet, 1);
+      expect(res1.pact_slots).toBeDefined();
+      expect(res1.pact_slots.max).toBe(1);
+      expect(res1.pact_slot_level.current).toBe(1);
+
+      const mockSheet5: Partial<CharacterSheet> = {
+        className: 'Bruxo',
+        level: 5,
+        attributes: { cha: { score: 16 } } as any,
+      };
+      const res5 = getClassResourcesForLevel(mockSheet5 as CharacterSheet, 5);
+      expect(res5.pact_slots.max).toBe(2);
+      expect(res5.pact_slot_level.current).toBe(3);
+      expect(res5.invocacoes_misticas.max).toBe(3);
+
+      const mockSheet17: Partial<CharacterSheet> = {
+        className: 'Bruxo',
+        level: 17,
+        attributes: { cha: { score: 16 } } as any,
+      };
+      const res17 = getClassResourcesForLevel(mockSheet17 as CharacterSheet, 17);
+      expect(res17.pact_slots.max).toBe(4);
+      expect(res17.pact_slot_level.current).toBe(5);
+      expect(res17.invocacoes_misticas.max).toBe(7);
+      expect(res17.arcanum_6).toBeDefined();
+      expect(res17.arcanum_9).toBeDefined();
+    });
+
+    it('deve carregar recursos especificos da subclasse O Corruptor para Bruxo', () => {
+      const corruptorSheet: Partial<CharacterSheet> = {
+        className: 'Bruxo',
+        subclass: 'O Corruptor',
+        level: 14,
+        attributes: { cha: { score: 16 } } as any,
+      };
+      const res = getClassResourcesForLevel(corruptorSheet as CharacterSheet, 14);
+      expect(res.fortuna_submundo).toBeDefined();
+      expect(res.lancar_inferno).toBeDefined();
+    });
+
+    it('deve zerar slots de magia normais (1-9) para Bruxo puro', () => {
+      const mockWarlock: CharacterSheet = {
+        id: 'test-warlock',
+        characterName: 'Bruxo Puro',
+        className: 'Bruxo',
+        level: 5,
+        attributes: {
+          str: { score: 10 }, dex: { score: 10 }, con: { score: 10 },
+          int: { score: 10 }, wis: { score: 10 }, cha: { score: 16 }
+        } as any,
+        savingThrows: {} as any,
+        attacks: [],
+        feats: [],
+        spellSlots: {
+          1: { total: 4, used: 2 },
+          2: { total: 3, used: 1 }
+        },
+        classResources: {},
+        skills: {} as any,
+        maxHp: 10,
+        currentHp: 10,
+      } as any;
+
+      const recalculated = recalculateSheetDerivedStats(mockWarlock);
+      // Todos os slots padrão de conjurador devem estar zerados
+      for (let l = 1; l <= 9; l++) {
+        expect(recalculated.spellSlots[l]?.total).toBe(0);
+      }
+      // Mas deve possuir os pact slots gerados
+      expect(recalculated.classResources.pact_slots).toBeDefined();
+      expect(recalculated.classResources.pact_slots.max).toBe(2);
+    });
+
+    it('deve manter slots normais de multiclasse separados de pact slots para Bruxo/Mago', () => {
+      const multiclassSheet: CharacterSheet = {
+        id: 'multiclass-warlock-wizard',
+        characterName: 'Bruxo 3 / Mago 5',
+        className: 'Mago', // Classe ativa na ficha principal
+        level: 8,
+        classes: [
+          { name: 'Mago', level: 5, isPrimary: true },
+          { name: 'Bruxo', level: 3, isPrimary: false }
+        ],
+        attributes: {
+          str: { score: 10 }, dex: { score: 10 }, con: { score: 10 },
+          int: { score: 16 }, wis: { score: 10 }, cha: { score: 14 }
+        } as any,
+        savingThrows: {} as any,
+        attacks: [],
+        feats: [],
+        spellSlots: {},
+        classResources: {},
+        skills: {} as any,
+        maxHp: 10,
+        currentHp: 10,
+      } as any;
+
+      const recalculated = recalculateSheetDerivedStats(multiclassSheet);
+      // Slots de Mago Nv 5: 4 de 1º, 3 de 2º, 2 de 3º
+      expect(recalculated.spellSlots[1]?.total).toBe(4);
+      expect(recalculated.spellSlots[2]?.total).toBe(3);
+      expect(recalculated.spellSlots[3]?.total).toBe(2);
+      expect(recalculated.spellSlots[4]?.total).toBe(0); // Mago 5 não tem 4º círculo
+
+      // Pact slots do Bruxo Nv 3: 2 slots de 2º círculo
+      expect(recalculated.classResources.pact_slots).toBeDefined();
+      expect(recalculated.classResources.pact_slots.max).toBe(2);
+      expect(recalculated.classResources.pact_slot_level.current).toBe(2);
+    });
+
+    it('deve restaurar pact slots do Bruxo ao realizar descanso curto', () => {
+      const mockWarlock: CharacterSheet = {
+        className: 'Bruxo',
+        level: 5,
+        hitDiceUsed: '0d8',
+        attributes: { con: { score: 14 } } as any,
+        currentHp: 5,
+        maxHp: 20,
+        classResources: {
+          pact_slots: { name: 'pact_slots', label: 'Slots do Pacto', current: 0, max: 2 }
+        }
+      } as any;
+
+      const { updatedSheet } = applyShortRest(mockWarlock, 1);
+      expect(updatedSheet.classResources.pact_slots.current).toBe(2);
+    });
+  });
+
+  describe('Novas Correções de Classes (Auditoria)', () => {
+    it('deve somar o bônus de Faz-Tudo na Iniciativa do Bardo nível >= 2', () => {
+      const mockBard: CharacterSheet = {
+        className: 'Bardo',
+        level: 2, // Prof = +2, Faz-Tudo = +1
+        initiativeBonus: 0,
+        attributes: {
+          dex: { score: 14 }, // Mod = +2
+        } as any,
+        feats: [],
+        skills: {} as any,
+      } as any;
+
+      // Iniciativa = Dex Mod (+2) + Faz-Tudo (+1) = 3
+      expect(calculateTotalInitiativeBonus(mockBard)).toBe(3);
+    });
+
+    it('deve adicionar o bônus de Aura de Proteção de Paladin level >= 6 a todas as salvaguardas', () => {
+      const paladinSheet: CharacterSheet = {
+        className: 'Paladino',
+        level: 6,
+        attributes: {
+          con: { score: 10 }, // Mod = +0
+          cha: { score: 16 }, // Mod = +3 (Aura = +3)
+        } as any,
+        savingThrows: { con: false } as any,
+        feats: [],
+      } as any;
+
+      // Salvaguarda CON = Con Mod (0) + Aura (+3) = +3
+      expect(calculateSavingThrowTotal(paladinSheet, 'con')).toBe(3);
+
+      // Com Proficiência: Con Mod (0) + Prof Lvl 6 (+3) + Aura (+3) = +6
+      const proficientPaladin = {
+        ...paladinSheet,
+        savingThrows: { con: true } as any,
+      };
+      expect(calculateSavingThrowTotal(proficientPaladin, 'con')).toBe(6);
+    });
+
+    it('deve conceder pontos de atributos extras (ASI) para Guerreiro nos níveis 6 e 14', () => {
+      const gSheet: CharacterSheet = {
+        className: 'Guerreiro',
+        level: 5,
+        attributePointsAvailable: 0,
+        attributesLocked: true,
+        attributes: {
+          str: { score: 10 },
+          dex: { score: 10 },
+          con: { score: 10 },
+          int: { score: 10 },
+          wis: { score: 10 },
+          cha: { score: 10 },
+        } as any,
+        spellSlots: {},
+        classResources: {},
+        classFeatures: [],
+      } as any;
+
+      // Level 5 para 6: Guerreiro ganha ASI (+2 pontos)
+      const lvl6 = applyLevelChange(gSheet, 6);
+      expect(lvl6.attributePointsAvailable).toBe(2);
+      expect(lvl6.attributesLocked).toBe(false);
+
+      // Level 13 para 14: Guerreiro ganha ASI (+2 pontos)
+      const gSheet13: CharacterSheet = {
+        ...gSheet,
+        level: 13,
+      };
+      const lvl14 = applyLevelChange(gSheet13, 14);
+      expect(lvl14.attributePointsAvailable).toBe(2);
+    });
+
+    it('deve conceder pontos de atributos extras (ASI) para Ladino no nível 10', () => {
+      const lSheet: CharacterSheet = {
+        className: 'Ladino',
+        level: 9,
+        attributePointsAvailable: 0,
+        attributesLocked: true,
+        attributes: {
+          str: { score: 10 },
+          dex: { score: 10 },
+          con: { score: 10 },
+          int: { score: 10 },
+          wis: { score: 10 },
+          cha: { score: 10 },
+        } as any,
+        spellSlots: {},
+        classResources: {},
+        classFeatures: [],
+      } as any;
+
+      // Level 9 para 10: Ladino ganha ASI (+2 pontos)
+      const lvl10 = applyLevelChange(lSheet, 10);
+      expect(lvl10.attributePointsAvailable).toBe(2);
+      expect(lvl10.attributesLocked).toBe(false);
+    });
+
+    it('deve registrar Recuperação Arcana para Mago', () => {
+      const wizardSheet: CharacterSheet = {
+        className: 'Mago',
+        level: 1,
+        attributes: {
+          str: { score: 10 },
+          dex: { score: 10 },
+          con: { score: 10 },
+          int: { score: 10 },
+          wis: { score: 10 },
+          cha: { score: 10 },
+        } as any,
+      } as any;
+
+      const res = getClassResourcesForLevel(wizardSheet, 1);
+      expect(res.recuperacao_arcana).toBeDefined();
+      expect(res.recuperacao_arcana.max).toBe(1);
+    });
+
+    it('deve registrar e escalar Dados de Superioridade para Mestre de Batalha', () => {
+      const bmSheet3: CharacterSheet = {
+        className: 'Guerreiro',
+        subclass: 'Mestre de Batalha',
+        level: 3,
+        attributes: {} as any,
+      } as any;
+
+      const res3 = getClassResourcesForLevel(bmSheet3, 3);
+      expect(res3.dados_superioridade).toBeDefined();
+      expect(res3.dados_superioridade.max).toBe(4);
+      expect(res3.dados_superioridade.label).toBe('Dados de Superioridade (d8)');
+
+      const bmSheet10: CharacterSheet = {
+        ...bmSheet3,
+        level: 10,
+      };
+      const res10 = getClassResourcesForLevel(bmSheet10, 10);
+      expect(res10.dados_superioridade.max).toBe(5);
+      expect(res10.dados_superioridade.label).toBe('Dados de Superioridade (d10)');
+    });
+
+    it('deve registrar Poder do Gigante e Escudo Rúnico para Guerreiro Rúnico', () => {
+      const rSheet7: CharacterSheet = {
+        className: 'Guerreiro',
+        subclass: 'Guerreiro Rúnico',
+        level: 7, // Prof = +3
+        attributes: {} as any,
+      } as any;
+
+      const res = getClassResourcesForLevel(rSheet7, 7);
+      expect(res.poder_gigante).toBeDefined();
+      expect(res.poder_gigante.max).toBe(3); // Igual a prof
+      expect(res.escudo_runico).toBeDefined();
+      expect(res.escudo_runico.max).toBe(3);
+    });
+
+    it('deve calcular slots de magia e cantrips conhecidas corretamente para Artífice puro e multiclasse', () => {
+      const artificerSheet3: CharacterSheet = {
+        id: 'artificer-3',
+        characterName: 'Artífice 3',
+        className: 'Artífice',
+        level: 3,
+        classes: [
+          { name: 'Artífice', level: 3, isPrimary: true }
+        ],
+        attributes: {
+          str: { score: 10 }, dex: { score: 10 }, con: { score: 10 },
+          int: { score: 16 }, wis: { score: 10 }, cha: { score: 10 }
+        } as any,
+        savingThrows: {} as any,
+        attacks: [],
+        feats: [],
+        spellSlots: {},
+        classResources: {},
+        skills: {} as any,
+        maxHp: 10,
+        currentHp: 10,
+      } as any;
+
+      const recalculated3 = recalculateSheetDerivedStats(artificerSheet3);
+      // Artífice 3 puro tem slots de um conjurador nível ceil(3/2) = 2.
+      // Full caster Lvl 2: 3 slots de 1º círculo.
+      expect(recalculated3.spellSlots[1]?.total).toBe(3);
+      expect(recalculated3.spellSlots[2]?.total).toBe(0);
+
+      // Multiclasse Artífice 3 / Mago 2.
+      // Caster Level = ceil(3/2) + 2 = 2 + 2 = 4.
+      // Full caster Lvl 4: 4 slots de 1º círculo, 3 slots de 2º círculo.
+      const multiclassSheet: CharacterSheet = {
+        ...artificerSheet3,
+        level: 5,
+        classes: [
+          { name: 'Artífice', level: 3, isPrimary: true },
+          { name: 'Mago', level: 2, isPrimary: false }
+        ],
+      };
+
+      const recalculatedMulti = recalculateSheetDerivedStats(multiclassSheet);
+      expect(recalculatedMulti.spellSlots[1]?.total).toBe(4);
+      expect(recalculatedMulti.spellSlots[2]?.total).toBe(3);
+    });
+  });
 });
+
 

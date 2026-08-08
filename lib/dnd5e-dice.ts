@@ -134,6 +134,7 @@ export function executeCheckRoll({
   secretMode = 'subtle_notice',
   difficultyClass,
   contextNarrative,
+  reliableTalent = false,
 }: {
   sheet: CharacterSheet;
   label: string;
@@ -145,8 +146,11 @@ export function executeCheckRoll({
   secretMode?: SecretRollNotificationMode;
   difficultyClass?: number;
   contextNarrative?: string;
+  reliableTalent?: boolean;
 }): DiceRollEvent {
-  const { d20Roll1, d20Roll2, selectedD20 } = rollD20(advantageMode);
+  const { d20Roll1, d20Roll2, selectedD20: rawSelectedD20 } = rollD20(advantageMode);
+  // Talento Confiável (Ladino Nv 11+): se o d20 for < 10 em perícias com proficiência, trata como 10
+  const selectedD20 = reliableTalent ? Math.max(rawSelectedD20, 10) : rawSelectedD20;
   const total = selectedD20 + modifier;
 
   let critThreshold = 20;
@@ -284,4 +288,55 @@ export function executeWeaponAttackRoll({
 
   broadcastDiceRoll(damageRoll, secretMode);
   return { attackRoll, damageRoll };
+}
+
+/**
+ * Calcula o número de dados d6 do Ataque Furtivo (Sneak Attack) baseado no nível de Ladino.
+ * Fórmula: ceil(nível / 2) dados d6
+ */
+export function getSneakAttackDice(rogueLevel: number): string {
+  if (rogueLevel < 1) return '0d6';
+  const numDice = Math.ceil(rogueLevel / 2);
+  return `${numDice}d6`;
+}
+
+/**
+ * Rola o dano do Ataque Furtivo (Sneak Attack) e transmite como evento de dano no chat.
+ */
+export function executeSneakAttackRoll({
+  sheet,
+  visibility = 'public',
+  secretMode = 'subtle_notice',
+}: {
+  sheet: CharacterSheet;
+  visibility?: RollVisibility;
+  secretMode?: SecretRollNotificationMode;
+}): DiceRollEvent {
+  const rogueLevel = getClassLevel(sheet, 'Ladino');
+  const numDice = Math.ceil(rogueLevel / 2);
+  const diceStr = `${numDice}d6`;
+
+  let damageTotal = 0;
+  for (let i = 0; i < numDice; i++) {
+    damageTotal += Math.floor(Math.random() * 6) + 1;
+  }
+
+  const damageRoll: DiceRollEvent = {
+    id: Date.now().toString(),
+    characterId: sheet.id,
+    characterName: sheet.characterName || 'Personagem',
+    avatarUrl: sheet.avatarUrl,
+    rollType: 'damage',
+    label: `Ataque Furtivo (${diceStr})`,
+    modifier: 0,
+    total: Math.max(1, damageTotal),
+    damageDice: diceStr,
+    damageType: 'Físico',
+    visibility,
+    isSecret: visibility === 'gm' || visibility === 'blind',
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+  };
+
+  broadcastDiceRoll(damageRoll, secretMode);
+  return damageRoll;
 }

@@ -48,10 +48,17 @@ export function calculateSavingThrowTotal(sheet: CharacterSheet, attrKey: Attrib
     f.benefits?.savingThrowProficiency === attrKey || 
     (f.chosenAttribute === attrKey && (f.name.toLowerCase().includes('resilien') || f.namePt.toLowerCase().includes('resilien')))
   );
-  const isProficient = sheet.savingThrows[attrKey] || hasDiamondSoul || hasResilientFeat;
+  // Mente Escorregadia (Ladino Nível 15+) concede proficiência em salvaguardas de Sabedoria (wis)
+  const hasSlipperyMind = attrKey === 'wis' && getCharacterClasses(sheet).some(c => c.name === 'Ladino' && c.level >= 15);
+  const isProficient = sheet.savingThrows[attrKey] || hasDiamondSoul || hasResilientFeat || hasSlipperyMind;
   
   const profBonus = calculateProficiencyBonus(sheet.level);
-  return attrMod + (isProficient ? profBonus : 0);
+  
+  // Aura de Proteção (Paladino Nível 6+)
+  const paladinLvl = getClassLevel(sheet, 'Paladino');
+  const auraBonus = paladinLvl >= 6 ? Math.max(1, getAttributeModifier(sheet, 'cha')) : 0;
+  
+  return attrMod + (isProficient ? profBonus : 0) + auraBonus;
 }
 
 /**
@@ -61,7 +68,7 @@ export function calculateTotalInitiativeBonus(sheet: CharacterSheet): number {
   const dexMod = getAttributeModifier(sheet, 'dex');
   const manualBonus = sheet.initiativeBonus || 0;
   const featsBonus = (sheet.feats || []).reduce((acc, f) => acc + (f.benefits?.initiativeBonus || 0), 0);
-  return dexMod + manualBonus + featsBonus;
+  return dexMod + manualBonus + featsBonus + getJackOfAllTradesBonus(sheet);
 }
 
 export function getJackOfAllTradesBonus(sheet: CharacterSheet): number {
@@ -298,6 +305,201 @@ export function getClassResourcesForLevel(
           max: indomavelMax
         };
       }
+
+      if (c.subclass === 'Mestre de Batalha' && c.level >= 3) {
+        let maxDice = 4;
+        if (c.level >= 15) maxDice = 6;
+        else if (c.level >= 7) maxDice = 5;
+
+        let dieType = 'd8';
+        if (c.level >= 18) dieType = 'd12';
+        else if (c.level >= 10) dieType = 'd10';
+
+        resources['dados_superioridade'] = {
+          name: 'dados_superioridade',
+          label: `Dados de Superioridade (${dieType})`,
+          current: maxDice,
+          max: maxDice
+        };
+      }
+
+      if (c.subclass === 'Guerreiro Rúnico') {
+        if (c.level >= 3) {
+          const profBonus = calculateProficiencyBonus(sheet.level);
+          resources['poder_gigante'] = {
+            name: 'poder_gigante',
+            label: 'Poder do Gigante',
+            current: profBonus,
+            max: profBonus
+          };
+        }
+        if (c.level >= 7) {
+          const profBonus = calculateProficiencyBonus(sheet.level);
+          resources['escudo_runico'] = {
+            name: 'escudo_runico',
+            label: 'Escudo Rúnico',
+            current: profBonus,
+            max: profBonus
+          };
+        }
+      }
+    } else if (c.name === 'Ladino') {
+      // Ataque Furtivo — recurso informativo (dado de dano escala com nível)
+      const sneakDice = Math.ceil(c.level / 2);
+      resources['ataque_furtivo'] = {
+        name: 'ataque_furtivo',
+        label: `Ataque Furtivo (${sneakDice}d6)`,
+        current: 1, // 1x por turno
+        max: 1
+      };
+
+      // Golpe de Sorte (Nv 20): 1x por descanso curto
+      if (c.level >= 20) {
+        resources['golpe_de_sorte'] = {
+          name: 'golpe_de_sorte',
+          label: 'Golpe de Sorte',
+          current: 1,
+          max: 1
+        };
+      }
+    } else if (c.name === 'Feiticeiro') {
+      // Pontos de Feitiçaria (Sorcery Points): Ganhos no nível 2, iguais ao nível da classe (2 a 20)
+      if (c.level >= 2) {
+        resources['pontos_feiticaria'] = {
+          name: 'pontos_feiticaria',
+          label: 'Pontos de Feitiçaria',
+          current: c.level,
+          max: c.level
+        };
+      }
+      
+      // Marés do Caos (Tides of Chaos) - Magia Selvagem (1 uso por descanso longo)
+      if (c.level >= 1 && c.subclass === 'Magia Selvagem') {
+        resources['mares_do_caos'] = {
+          name: 'mares_do_caos',
+          label: 'Marés do Caos',
+          current: 1,
+          max: 1
+        };
+      }
+    } else if (c.name === 'Bruxo') {
+      // Slots do Pacto (Pact Slots)
+      let pactSlotsMax = 1;
+      if (c.level >= 17) pactSlotsMax = 4;
+      else if (c.level >= 11) pactSlotsMax = 3;
+      else if (c.level >= 2) pactSlotsMax = 2;
+
+      resources['pact_slots'] = {
+        name: 'pact_slots',
+        label: 'Slots do Pacto',
+        current: pactSlotsMax,
+        max: pactSlotsMax
+      };
+
+      // Círculo do Pacto (Pact Slot Level)
+      const pactSlotLvl = Math.min(5, Math.ceil(c.level / 2));
+      resources['pact_slot_level'] = {
+        name: 'pact_slot_level',
+        label: 'Círculo do Pacto',
+        current: pactSlotLvl,
+        max: pactSlotLvl
+      };
+
+      // Invocações Místicas (Eldritch Invocations)
+      if (c.level >= 2) {
+        let invocacoesMax = 2;
+        if (c.level >= 18) invocacoesMax = 8;
+        else if (c.level >= 15) invocacoesMax = 7;
+        else if (c.level >= 12) invocacoesMax = 6;
+        else if (c.level >= 9) invocacoesMax = 5;
+        else if (c.level >= 7) invocacoesMax = 4;
+        else if (c.level >= 5) invocacoesMax = 3;
+
+        resources['invocacoes_misticas'] = {
+          name: 'invocacoes_misticas',
+          label: 'Invocações Místicas',
+          current: invocacoesMax,
+          max: invocacoesMax
+        };
+      }
+
+      // Habilidades do Patrono Corruptor
+      if (c.level >= 10 && c.subclass === 'O Corruptor') {
+        resources['fortuna_submundo'] = {
+          name: 'fortuna_submundo',
+          label: 'Fortuna do Submundo',
+          current: 1,
+          max: 1
+        };
+      }
+      if (c.level >= 14 && c.subclass === 'O Corruptor') {
+        resources['lancar_inferno'] = {
+          name: 'lancar_inferno',
+          label: 'Lançar no Inferno',
+          current: 1,
+          max: 1
+        };
+      }
+
+      // Arcanum Místicos (Mystic Arcanum)
+      if (c.level >= 11) {
+        resources['arcanum_6'] = {
+          name: 'arcanum_6',
+          label: 'Arcanum Místico (6º Nível)',
+          current: 1,
+          max: 1
+        };
+      }
+      if (c.level >= 13) {
+        resources['arcanum_7'] = {
+          name: 'arcanum_7',
+          label: 'Arcanum Místico (7º Nível)',
+          current: 1,
+          max: 1
+        };
+      }
+      if (c.level >= 15) {
+        resources['arcanum_8'] = {
+          name: 'arcanum_8',
+          label: 'Arcanum Místico (8º Nível)',
+          current: 1,
+          max: 1
+        };
+      }
+      if (c.level >= 17) {
+        resources['arcanum_9'] = {
+          name: 'arcanum_9',
+          label: 'Arcanum Místico (9º Nível)',
+          current: 1,
+          max: 1
+        };
+      }
+
+      // Senhor Místico (Eldritch Master)
+      if (c.level >= 20) {
+        resources['senhor_mistico'] = {
+          name: 'senhor_mistico',
+          label: 'Senhor Místico',
+          current: 1,
+          max: 1
+        };
+      }
+    } else if (c.name === 'Mago') {
+      resources['recuperacao_arcana'] = {
+        name: 'recuperacao_arcana',
+        label: 'Recuperação Arcana',
+        current: 1,
+        max: 1
+      };
+    } else if (c.name === 'Artífice') {
+      if (c.subclass === 'Alquimista' && c.level >= 3) {
+        resources['elixir_experimental'] = {
+          name: 'elixir_experimental',
+          label: 'Elixir Experimental',
+          current: 1,
+          max: 1
+        };
+      }
     }
   });
   
@@ -424,7 +626,7 @@ export function applyLevelChange(sheet: CharacterSheet, level: number, leveledCl
   const classData = DND_CLASSES[sheet.className]; // mantem primária pra hitDie inicial se necessário
   
   // Calcula array atualizado de classes
-  let classes = getCharacterClasses(sheet);
+  const classes = getCharacterClasses(sheet);
   
   // Atualiza ou adiciona a classe no array
   const classIndex = classes.findIndex(c => c.name === targetClass);
@@ -457,6 +659,13 @@ export function applyLevelChange(sheet: CharacterSheet, level: number, leveledCl
     const conMod = getAttributeModifier(sheet, 'con');
     const hitDieVal = parseInt((DND_CLASSES[sheet.className]?.hitDie || '1d8').replace('1d', ''), 10);
     newMaxHp = Math.max(1, hitDieVal + conMod + Math.max(0, safeLevel - 1) * (Math.floor(hitDieVal / 2) + 1 + conMod));
+    
+    // Resiliência Dracônica HP bonus: +1 HP por nível de feiticeiro
+    const sorcererClass = currentClasses.find(c => c.name === 'Feiticeiro');
+    const isDraconicSorcerer = sorcererClass && (sorcererClass.subclass === 'Linhagem Dracônica' || sheet.subclass === 'Linhagem Dracônica');
+    if (isDraconicSorcerer) {
+      newMaxHp += sorcererClass.level;
+    }
   }
 
   // Ajusta Slots de Magia (Lógica de Multiclasse)
@@ -478,6 +687,10 @@ export function applyLevelChange(sheet: CharacterSheet, level: number, leveledCl
       casterLevel += Math.ceil(c.level / 2);
       spellcastingClassCount++;
       singleCasterClass = c.name;
+    } else if ((c.name === 'Ladino' && c.subclass === 'Trapaceiro Arcano') || (c.name === 'Guerreiro' && c.subclass === 'Cavaleiro Arcano')) {
+      casterLevel += Math.floor(c.level / 3);
+      spellcastingClassCount++;
+      singleCasterClass = c.name;
     }
   });
 
@@ -493,14 +706,25 @@ export function applyLevelChange(sheet: CharacterSheet, level: number, leveledCl
         else if (l === 5) newSlots[l] = { total: cLevel >= 17 ? (cLevel >= 19 ? 2 : 1) : 0, used: 0 };
         else newSlots[l] = { total: 0, used: 0 };
       }
+    } else if (singleCasterClass === 'Ladino' || singleCasterClass === 'Guerreiro') {
+      // Trapaceiro Arcano / Cavaleiro Arcano (1/3 conjurador)
+      for (let l = 1; l <= 9; l++) {
+        if (l === 1) newSlots[l] = { total: cLevel >= 3 ? (cLevel >= 7 ? 4 : (cLevel >= 4 ? 3 : 2)) : 0, used: 0 };
+        else if (l === 2) newSlots[l] = { total: cLevel >= 7 ? (cLevel >= 10 ? 3 : 2) : 0, used: 0 };
+        else if (l === 3) newSlots[l] = { total: cLevel >= 13 ? (cLevel >= 16 ? 3 : 2) : 0, used: 0 };
+        else if (l === 4) newSlots[l] = { total: cLevel >= 19 ? 1 : 0, used: 0 };
+        else newSlots[l] = { total: 0, used: 0 };
+      }
+    } else if (singleCasterClass === 'Artífice') {
+      casterLevel = Math.ceil(cLevel / 2);
     } else {
       // Conjurador total
       casterLevel = cLevel;
     }
   }
 
-  // Tabela Única de Conjurador (Multiclasse ou Conjurador Total Único)
-  if (spellcastingClassCount > 1 || (spellcastingClassCount === 1 && casterLevel === currentClasses.find(c => c.name === singleCasterClass)?.level)) {
+  // Tabela Única de Conjurador (Multiclasse ou Conjurador Total/Artífice Único)
+  if (spellcastingClassCount > 1 || (spellcastingClassCount === 1 && (singleCasterClass !== 'Paladino' && singleCasterClass !== 'Patrulheiro' && singleCasterClass !== 'Ladino' && singleCasterClass !== 'Guerreiro'))) {
     for (let l = 1; l <= 9; l++) {
       if (l === 1) newSlots[l] = { total: casterLevel >= 1 ? (casterLevel >= 3 ? 4 : (casterLevel >= 2 ? 3 : 2)) : 0, used: 0 };
       else if (l === 2) newSlots[l] = { total: casterLevel >= 3 ? (casterLevel >= 4 ? 3 : 2) : 0, used: 0 };
@@ -512,16 +736,30 @@ export function applyLevelChange(sheet: CharacterSheet, level: number, leveledCl
       else if (l === 8) newSlots[l] = { total: casterLevel >= 15 ? 1 : 0, used: 0 };
       else if (l === 9) newSlots[l] = { total: casterLevel >= 17 ? 1 : 0, used: 0 };
     }
+  } else if (spellcastingClassCount === 0) {
+    // Se não há classe conjuradora padrão (ex: Bruxo puro ou Guerreiro puro), zera os slots
+    for (let l = 1; l <= 9; l++) {
+      newSlots[l] = { total: 0, used: 0 };
+    }
   }
 
-  // Concede +2 pontos de atributo (ASI D&D 5e) nos níveis 4, 8, 12, 16 e 19 se o nível tiver subido
-  const asiLevels = [4, 8, 12, 16, 19];
+  // Concede +2 pontos de atributo (ASI D&D 5e) se a classe que subiu atingiu um nível de ASI
   let extraPoints = sheet.attributePointsAvailable || 0;
   let isUnlocked = sheet.attributesLocked ?? true;
 
-  if (safeLevel > sheet.level && asiLevels.includes(safeLevel)) {
-    extraPoints += 2;
-    isUnlocked = false;
+  if (safeLevel > sheet.level) {
+    const classLvl = currentClasses.find(c => c.name === targetClass)?.level || safeLevel;
+    let classAsiLevels = [4, 8, 12, 16, 19];
+    if (targetClass === 'Guerreiro') {
+      classAsiLevels = [4, 6, 8, 12, 14, 16, 19];
+    } else if (targetClass === 'Ladino') {
+      classAsiLevels = [4, 8, 10, 12, 16, 19];
+    }
+    
+    if (classAsiLevels.includes(classLvl)) {
+      extraPoints += 2;
+      isUnlocked = false;
+    }
   }
 
   // Carrega as habilidades da classe para o novo nível
@@ -633,8 +871,13 @@ export function calculateArmorClass(
       break;
     case 'none':
     default:
+      // Resiliência Dracônica — Feiticeiro (Linhagem Dracônica): 13 + DES
+      const hasDraconicResilience = getCharacterClasses(sheet).some(c => c.name === 'Feiticeiro' && c.subclass === 'Linhagem Dracônica');
+      if (hasDraconicResilience) {
+        ac = 13 + dexMod;
+      }
       // Defesa sem Armadura — Bárbaro: 10 + DES + CON
-      if (sheet.className === 'Bárbaro') {
+      else if (sheet.className === 'Bárbaro') {
         const conMod = getAttributeModifier(sheet, 'con');
         ac = 10 + dexMod + conMod;
       }
@@ -819,12 +1062,24 @@ export function applyShortRest(
   usedCount += actualSpend;
   const newCurrentHp = Math.min(sheet.maxHp, sheet.currentHp + hpRecovered);
 
-  // Recupera recursos que restauram em descanso curto (ex: Canalizar Divindade)
+  // Recupera recursos que restauram em descanso curto (ex: Canalizar Divindade, Slots do Pacto, Pontos de Ki)
   const newResources = { ...sheet.classResources };
   if (newResources['canalizar_divindade']) {
     newResources['canalizar_divindade'] = {
       ...newResources['canalizar_divindade'],
       current: newResources['canalizar_divindade'].max
+    };
+  }
+  if (newResources['pact_slots']) {
+    newResources['pact_slots'] = {
+      ...newResources['pact_slots'],
+      current: newResources['pact_slots'].max
+    };
+  }
+  if (newResources['pontos_ki']) {
+    newResources['pontos_ki'] = {
+      ...newResources['pontos_ki'],
+      current: newResources['pontos_ki'].max
     };
   }
 
@@ -969,11 +1224,16 @@ export function recalculateSheetDerivedStats(sheet: CharacterSheet): CharacterSh
   const toughFeat = (sheet.feats || []).find(f => f.name === 'Tough' || f.namePt === 'Robusto' || f.benefits?.hpPerLevelBonus);
   const toughHpBonus = toughFeat ? sheet.level * (toughFeat.benefits?.hpPerLevelBonus || 2) : 0;
 
+  // Resiliência Dracônica HP bonus: +1 HP por nível de feiticeiro
+  const sorcererClass = getCharacterClasses(sheet).find(c => c.name === 'Feiticeiro');
+  const isDraconicSorcerer = sorcererClass && (sorcererClass.subclass === 'Linhagem Dracônica' || sheet.subclass === 'Linhagem Dracônica');
+  const draconicHpBonus = isDraconicSorcerer ? sorcererClass.level : 0;
+
   const baseHp = Math.max(
     1,
     hitDieVal + conMod + Math.max(0, sheet.level - 1) * (Math.floor(hitDieVal / 2) + 1 + conMod)
   );
-  const newMaxHp = baseHp + toughHpBonus;
+  const newMaxHp = baseHp + toughHpBonus + draconicHpBonus;
 
   // Ajusta o HP Atual para manter a mesma proporção ou respeitar o novo teto
   const hpDiff = newMaxHp - sheet.maxHp;
@@ -1081,6 +1341,90 @@ export function recalculateSheetDerivedStats(sheet: CharacterSheet): CharacterSh
     }
   }
 
+  // Recalcula Slots de Magia (sem resetar "used")
+  const newSlots = { ...sheet.spellSlots };
+  let casterLevel = 0;
+  let spellcastingClassCount = 0;
+  let singleCasterClass = '';
+
+  const activeClassesForSlots = getCharacterClasses(sheet);
+  activeClassesForSlots.forEach(c => {
+    if (c.name === 'Mago' || c.name === 'Clérigo' || c.name === 'Bardo' || c.name === 'Druida' || c.name === 'Feiticeiro') {
+      casterLevel += c.level;
+      spellcastingClassCount++;
+      singleCasterClass = c.name;
+    } else if (c.name === 'Paladino' || c.name === 'Patrulheiro') {
+      casterLevel += Math.floor(c.level / 2);
+      spellcastingClassCount++;
+      singleCasterClass = c.name;
+    } else if (c.name === 'Artífice') {
+      casterLevel += Math.ceil(c.level / 2);
+      spellcastingClassCount++;
+      singleCasterClass = c.name;
+    } else if ((c.name === 'Ladino' && c.subclass === 'Trapaceiro Arcano') || (c.name === 'Guerreiro' && c.subclass === 'Cavaleiro Arcano')) {
+      casterLevel += Math.floor(c.level / 3);
+      spellcastingClassCount++;
+      singleCasterClass = c.name;
+    }
+  });
+
+  if (spellcastingClassCount === 1) {
+    const cLevel = activeClassesForSlots.find(c => c.name === singleCasterClass)?.level || 0;
+    if (singleCasterClass === 'Paladino' || singleCasterClass === 'Patrulheiro') {
+      for (let l = 1; l <= 9; l++) {
+        const currentUsed = newSlots[l]?.used || 0;
+        if (l === 1) newSlots[l] = { total: cLevel >= 2 ? (cLevel >= 5 ? 4 : (cLevel >= 3 ? 3 : 2)) : 0, used: currentUsed };
+        else if (l === 2) newSlots[l] = { total: cLevel >= 5 ? (cLevel >= 9 ? 3 : 2) : 0, used: currentUsed };
+        else if (l === 3) newSlots[l] = { total: cLevel >= 9 ? (cLevel >= 13 ? 3 : 2) : 0, used: currentUsed };
+        else if (l === 4) newSlots[l] = { total: cLevel >= 13 ? (cLevel >= 17 ? 3 : 2) : 0, used: currentUsed };
+        else if (l === 5) newSlots[l] = { total: cLevel >= 17 ? (cLevel >= 19 ? 2 : 1) : 0, used: currentUsed };
+        else newSlots[l] = { total: 0, used: 0 };
+      }
+    } else if (singleCasterClass === 'Ladino' || singleCasterClass === 'Guerreiro') {
+      // Trapaceiro Arcano / Cavaleiro Arcano (1/3 conjurador)
+      for (let l = 1; l <= 9; l++) {
+        const currentUsed = newSlots[l]?.used || 0;
+        if (l === 1) newSlots[l] = { total: cLevel >= 3 ? (cLevel >= 7 ? 4 : (cLevel >= 4 ? 3 : 2)) : 0, used: currentUsed };
+        else if (l === 2) newSlots[l] = { total: cLevel >= 7 ? (cLevel >= 10 ? 3 : 2) : 0, used: currentUsed };
+        else if (l === 3) newSlots[l] = { total: cLevel >= 13 ? (cLevel >= 16 ? 3 : 2) : 0, used: currentUsed };
+        else if (l === 4) newSlots[l] = { total: cLevel >= 19 ? 1 : 0, used: currentUsed };
+        else newSlots[l] = { total: 0, used: 0 };
+      }
+    } else if (singleCasterClass === 'Artífice') {
+      casterLevel = Math.ceil(cLevel / 2);
+    } else {
+      // Conjurador total
+      casterLevel = cLevel;
+    }
+  }
+
+  // Tabela Única de Conjurador (Multiclasse ou Conjurador Total/Artífice Único)
+  if (spellcastingClassCount > 1 || (spellcastingClassCount === 1 && (singleCasterClass !== 'Paladino' && singleCasterClass !== 'Patrulheiro' && singleCasterClass !== 'Ladino' && singleCasterClass !== 'Guerreiro'))) {
+    for (let l = 1; l <= 9; l++) {
+      const currentUsed = newSlots[l]?.used || 0;
+      if (l === 1) newSlots[l] = { total: casterLevel >= 1 ? (casterLevel >= 3 ? 4 : (casterLevel >= 2 ? 3 : 2)) : 0, used: currentUsed };
+      else if (l === 2) newSlots[l] = { total: casterLevel >= 3 ? (casterLevel >= 4 ? 3 : 2) : 0, used: currentUsed };
+      else if (l === 3) newSlots[l] = { total: casterLevel >= 5 ? (casterLevel >= 6 ? 3 : 2) : 0, used: currentUsed };
+      else if (l === 4) newSlots[l] = { total: casterLevel >= 7 ? (casterLevel >= 8 ? 3 : 2) : 0, used: currentUsed };
+      else if (l === 5) newSlots[l] = { total: casterLevel >= 9 ? (casterLevel >= 10 ? 3 : 2) : 0, used: currentUsed };
+      else if (l === 6) newSlots[l] = { total: casterLevel >= 11 ? (casterLevel >= 19 ? 2 : 1) : 0, used: currentUsed };
+      else if (l === 7) newSlots[l] = { total: casterLevel >= 13 ? (casterLevel >= 20 ? 2 : 1) : 0, used: currentUsed };
+      else if (l === 8) newSlots[l] = { total: casterLevel >= 15 ? 1 : 0, used: currentUsed };
+      else if (l === 9) newSlots[l] = { total: casterLevel >= 17 ? 1 : 0, used: currentUsed };
+    }
+  } else if (spellcastingClassCount === 0) {
+    for (let l = 1; l <= 9; l++) {
+      newSlots[l] = { total: 0, used: 0 };
+    }
+  }
+
+  // Garante que o gasto não supere o novo máximo total
+  for (let l = 1; l <= 9; l++) {
+    if (newSlots[l]) {
+      newSlots[l].used = Math.min(newSlots[l].total, newSlots[l].used);
+    }
+  }
+
   return {
     ...sheet,
     armorClass: newAC,
@@ -1090,6 +1434,7 @@ export function recalculateSheetDerivedStats(sheet: CharacterSheet): CharacterSh
     hitDiceTotal: correctHitDiceTotal,
     hitDiceUsed: safeHitDiceUsed,
     attacks: updatedAttacks,
+    spellSlots: newSlots,
     classFeatures: classFeaturesList,
     classResources: updatedResources,
   };
@@ -1128,7 +1473,7 @@ export function calculateSpellLimits(sheet: CharacterSheet): { maxCantrips: numb
     if (c.name === 'Clérigo' || c.name === 'Druida' || c.name === 'Mago' || c.name === 'Artífice') {
       // Magias Preparadas = Nível da Classe + Modificador (Artífice é metade)
       const prepLevel = c.name === 'Artífice' ? Math.floor(level / 2) : level;
-      maxSpells += safeAbilityMod + Math.max(1, prepLevel);
+      maxSpells += safeAbilityMod + (c.name === 'Artífice' ? prepLevel : Math.max(1, prepLevel));
     } else if (c.name === 'Paladino') {
       // Magias Preparadas = Modificador + Metade do Nível
       maxSpells += safeAbilityMod + Math.floor(level / 2);

@@ -7,6 +7,7 @@ import {
   calculateSavingThrowTotal,
   calculateSkillTotal,
   formatModifier,
+  getClassLevel,
 } from '@/lib/dnd5e-calculator';
 import { executeCheckRoll } from '@/lib/dnd5e-dice';
 import { Target, Eye, ShieldAlert, Award, Dices, Lock, Unlock } from 'lucide-react';
@@ -141,12 +142,16 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
     e.stopPropagation();
     const def = SKILL_DEFINITIONS[skillKey];
     const total = calculateSkillTotal(sheet, skillKey);
+    const profLevel = sheet.skills[skillKey] || 'none';
+    // Talento Confiável (Ladino Nv 11+): piso de 10 no d20 se tiver proficiência ou especialização
+    const hasReliableTalent = getClassLevel(sheet, 'Ladino') >= 11 && (profLevel === 'proficient' || profLevel === 'expertise');
     const result = executeCheckRoll({
       sheet,
       label: `Perícia: ${def ? def.name : skillKey}`,
       modifier: total,
       rollType: 'skill',
       advantageMode,
+      reliableTalent: hasReliableTalent,
     });
     if (onRoll) onRoll(result);
   };

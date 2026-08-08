@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AttributeKey, CharacterSheet, CharacterSpell } from '@/lib/types';
-import { calculateSpellAttackBonus, calculateSpellDC, formatModifier, calculateSpellLimits } from '@/lib/dnd5e-calculator';
+import { calculateSpellAttackBonus, calculateSpellDC, formatModifier, calculateSpellLimits, hasClass } from '@/lib/dnd5e-calculator';
 import { Sparkles, BookOpen, Flame, Plus, Trash2, CheckCircle2, Wand2, Dices, Lock, Unlock } from 'lucide-react';
 import { SpellCompendiumModal } from '../Modals/SpellCompendiumModal';
 import { executeCheckRoll } from '@/lib/dnd5e-dice';
@@ -26,6 +26,9 @@ export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange })
   const isAtSpellLimit = maxSpells > 0 && currentSpells >= maxSpells;
   const isAtLimit = selectedSpellLevel === 0 ? isAtCantripLimit : isAtSpellLimit;
   const isAddLocked = isAtLimit && !isUnlockedByDM;
+
+  const pactSlots = sheet.classResources?.['pact_slots'];
+  const pactSlotLevel = sheet.classResources?.['pact_slot_level']?.current || 1;
 
   const handleAddSpell = (level: number, isBonus: boolean = false) => {
     const newSpell: CharacterSpell = {
@@ -65,10 +68,41 @@ export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange })
     });
   };
 
+  const handleUpdatePactSlot = (delta: number) => {
+    if (!pactSlots) return;
+    const newCurrent = Math.max(0, Math.min(pactSlots.max, pactSlots.current + delta));
+    onChange({
+      ...sheet,
+      classResources: {
+        ...sheet.classResources,
+        pact_slots: {
+          ...pactSlots,
+          current: newCurrent
+        }
+      }
+    });
+  };
+
   const handleCastSpell = (spell: CharacterSpell) => {
     // Gastar 1 slot de magia se não for truque (nível 0)
     if (spell.level > 0) {
-      handleUpdateSpellSlot(spell.level, 1);
+      if (hasClass(sheet, 'Bruxo') && pactSlots && pactSlots.current > 0 && (sheet.spellSlots[spell.level]?.total || 0) === 0) {
+        // Gasta slot do pacto
+        const newCurrent = Math.max(0, pactSlots.current - 1);
+        onChange({
+          ...sheet,
+          classResources: {
+            ...sheet.classResources,
+            pact_slots: {
+              ...pactSlots,
+              current: newCurrent
+            }
+          }
+        });
+      } else {
+        // Gasta slot normal
+        handleUpdateSpellSlot(spell.level, 1);
+      }
     }
 
     executeCheckRoll({
@@ -134,6 +168,52 @@ export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange })
           </div>
         </div>
       </div>
+
+      {/* MAGIA DO PACTO (BRUXO) */}
+      {hasClass(sheet, 'Bruxo') && pactSlots && (
+        <div className="bg-[#141b2d] border border-purple-500/40 rounded-2xl p-4 shadow-lg space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-800/85 pb-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-400 animate-pulse" />
+              <span className="text-xs font-bold uppercase tracking-wider text-purple-300">Magia do Pacto (Warlock)</span>
+            </div>
+            <span className="text-[10px] font-bold bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/30">
+              Recupera em Descanso Curto 🩹
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between bg-[#0b0f19] border border-purple-500/20 rounded-xl p-3">
+            <div className="space-y-1">
+              <span className="text-xs font-extrabold text-slate-300 block">Slots do Pacto (Círculo Atual: {pactSlotLevel}º)</span>
+              <p className="text-[10px] text-slate-400">
+                Seus espaços de magia do pacto são todos de {pactSlotLevel}º círculo e recarregam com descanso curto.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => handleUpdatePactSlot(-1)}
+                className="w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 font-bold border border-rose-500/40 flex items-center justify-center text-sm cursor-pointer"
+                title="Gastar slot do pacto"
+              >
+                -1
+              </button>
+              <span className="text-base font-black text-purple-400 font-mono w-12 text-center">
+                {pactSlots.current} / {pactSlots.max}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleUpdatePactSlot(1)}
+                className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/40 flex items-center justify-center text-sm cursor-pointer"
+                title="Recuperar slot do pacto"
+              >
+                +1
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SELETOR DE NÍVEIS DE MAGIA (TRUQUES ATÉ NIVEL 9) */}
       <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-4">
@@ -209,7 +289,7 @@ export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange })
         </div>
 
         {/* CONTROLE DE ESPAÇOS DE MAGIA (SLOTS USADOS / TOTAIS DO NÍVEL ATUAL) */}
-        {selectedSpellLevel > 0 && (
+        {selectedSpellLevel > 0 && (sheet.spellSlots[selectedSpellLevel]?.total || 0) > 0 && (
           <div className="bg-[#0b0f19] border border-purple-500/30 rounded-xl p-3 flex items-center justify-between">
             <div className="space-y-0.5">
               <span className="text-xs font-bold text-purple-300">
@@ -243,6 +323,15 @@ export const SpellsSection: React.FC<SpellsSectionProps> = ({ sheet, onChange })
                 +1
               </button>
             </div>
+          </div>
+        )}
+
+        {/* MENSAGEM DO PACT SLOTS (BRUXO) */}
+        {selectedSpellLevel > 0 && (sheet.spellSlots[selectedSpellLevel]?.total || 0) === 0 && hasClass(sheet, 'Bruxo') && (
+          <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-3 text-center text-xs text-slate-400 italic">
+            {selectedSpellLevel <= 5 
+              ? `Esta magia será conjurada usando um Espaço do Pacto (de ${pactSlotLevel}º círculo).`
+              : `Esta magia será conjurada usando a característica Arcanum Místico (Nível ${selectedSpellLevel}).`}
           </div>
         )}
 

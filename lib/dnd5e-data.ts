@@ -197,7 +197,10 @@ export const MULTICLASS_REQUIREMENTS: Record<string, Partial<Record<AttributeKey
   'Paladino': { str: 13, cha: 13 },
   'Mago': { int: 13 },
   'Bardo': { cha: 13 },
-  'Patrulheiro': { dex: 13, wis: 13 }
+  'Ladino': { dex: 13 },
+  'Patrulheiro': { dex: 13, wis: 13 },
+  'Feiticeiro': { cha: 13 },
+  'Artífice': { int: 13 }
 };
 
 export const MULTICLASS_PROFICIENCIES: Record<string, { armor: string; weapons: string; tools?: string; skillChoices?: number }> = {
@@ -205,7 +208,10 @@ export const MULTICLASS_PROFICIENCIES: Record<string, { armor: string; weapons: 
   'Paladino': { armor: 'Armaduras leves, armaduras médias, escudos', weapons: 'Armas simples, armas marciais' },
   'Mago': { armor: 'Nenhuma', weapons: 'Adagas, dardos, fundas, cajados, bestas leves' },
   'Bardo': { armor: 'Armaduras leves', weapons: 'Nenhuma', skillChoices: 1, tools: 'Um instrumento musical' },
-  'Patrulheiro': { armor: 'Armaduras leves, armaduras médias, escudos', weapons: 'Armas simples, armas marciais', skillChoices: 1 }
+  'Patrulheiro': { armor: 'Armaduras leves, armaduras médias, escudos', weapons: 'Armas simples, armas marciais', skillChoices: 1 },
+  'Ladino': { armor: 'Armaduras leves', weapons: 'Nenhuma', skillChoices: 1, tools: 'Ferramentas de Ladino' },
+  'Feiticeiro': { armor: 'Nenhuma', weapons: 'Nenhuma' },
+  'Artífice': { armor: 'Armaduras leves, armaduras médias, escudos', weapons: 'Nenhuma', tools: 'Ferramentas de Ladrão, ferramentas de funileiro' }
 };
 export const DND_CLASSES: Record<string, ClassPreset> = {
   Bárbaro: {
@@ -292,6 +298,7 @@ export const DND_CLASSES: Record<string, ClassPreset> = {
     savingThrows: ['dex', 'int'],
     armorProficiencies: 'Armaduras leves',
     weaponProficiencies: 'Armas simples, ballestras de mão, espadas curtas, espadas longas, rapieiras',
+    toolProficiencies: 'Ferramentas de Ladino',
     skillChoices: 4,
     skillOptions: ['acrobacia', 'atletismo', 'blefar', 'intuicao', 'intimidacao', 'investigacao', 'percepcao', 'atuacao', 'persuasao', 'prestidigitacao', 'furtividade']
   },
@@ -324,6 +331,16 @@ export const DND_CLASSES: Record<string, ClassPreset> = {
     weaponProficiencies: 'Adagas, dardos, fundas, bordões, ballestras leves',
     skillChoices: 2,
     skillOptions: ['arcanismo', 'historia', 'intuicao', 'investigacao', 'medicina', 'religiao']
+  },
+  Artífice: {
+    name: 'Artífice',
+    hitDie: '1d8',
+    savingThrows: ['con', 'int'],
+    spellcastingAbility: 'int',
+    armorProficiencies: 'Armaduras leves, armaduras médias, escudos',
+    weaponProficiencies: 'Armas simples, ferramentas de ladrão, ferramentas de artesão (uma à escolha)',
+    skillChoices: 2,
+    skillOptions: ['arcanismo', 'historia', 'investigacao', 'medicina', 'natureza', 'percepcao', 'prestidigitacao']
   },
 };
 
@@ -1334,6 +1351,20 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
         activation: 'reaction',
         resourceCost: { type: 'class_resource', name: 'inspiracao_bardica', amount: 1 },
         requiresSubclass: 'Colégio do Conhecimento'
+      },
+      {
+        name: 'Proficiências Extras (Bravura)',
+        level: 3,
+        description: 'Você ganha proficiência com armaduras médias, escudos e armas marciais.',
+        activation: 'none',
+        requiresSubclass: 'Colégio da Bravura'
+      },
+      {
+        name: 'Inspiração de Combate',
+        level: 3,
+        description: 'Uma criatura que tenha um dado de Inspiração Bárdica seu pode rolar esse dado e adicionar o resultado à jogada de dano da arma que acabou de realizar. Alternativamente, quando uma jogada de ataque for feita contra a criatura, ela pode usar sua reação para rolar o dado e adicionar o resultado à sua CA contra aquele ataque.',
+        activation: 'none',
+        requiresSubclass: 'Colégio da Bravura'
       }
     ],
     4: [
@@ -1365,6 +1396,13 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
         description: 'Aprenda 2 magias de qualquer classe.',
         activation: 'none',
         requiresSubclass: 'Colégio do Conhecimento'
+      },
+      {
+        name: 'Ataque Extra (Bravura)',
+        level: 6,
+        description: 'Você pode atacar duas vezes, ao invés de uma, sempre que usar a ação de Ataque no seu turno.',
+        activation: 'none',
+        requiresSubclass: 'Colégio da Bravura'
       }
     ],
     8: [
@@ -1432,6 +1470,13 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
         description: 'Gaste um uso de Inspiração Bárdica para adicionar ao seu próprio teste de habilidade.',
         activation: 'none',
         requiresSubclass: 'Colégio do Conhecimento'
+      },
+      {
+        name: 'Magia de Combate (Bravura)',
+        level: 14,
+        description: 'Quando você usa sua ação para conjurar uma magia de bardo, você pode fazer um ataque com arma como uma ação bônus.',
+        activation: 'bonus_action',
+        requiresSubclass: 'Colégio da Bravura'
       }
     ],
     15: [
@@ -2680,5 +2725,985 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
         activation: 'special'
       }
     ]
+  },
+  Ladino: {
+    1: [
+      {
+        name: 'Ataque Furtivo (1d6)',
+        level: 1,
+        description: 'Uma vez por turno, você pode causar 1d6 de dano extra a uma criatura que atingir com um ataque se tiver vantagem na jogada. O ataque deve usar uma arma de acuidade (finesse) ou à distância. Você não precisa de vantagem se outro inimigo do alvo estiver a até 1,5m dele, o inimigo não estiver incapacitado e você não tiver desvantagem na jogada.',
+        activation: 'special'
+      },
+      {
+        name: 'Especialização',
+        level: 1,
+        description: 'Escolha duas de suas perícias proficientes, ou uma perícia e sua proficiência com ferramentas de ladrão. Seu bônus de proficiência é duplicado para qualquer teste de habilidade que você fizer usando qualquer uma das proficiências escolhidas.',
+        activation: 'none'
+      },
+      {
+        name: 'Gíria de Ladrão',
+        level: 1,
+        description: 'Você aprendeu a gíria de ladrão, uma mistura secreta de dialetos, jargões e códigos que permite ocultar mensagens em conversas aparentemente normais.',
+        activation: 'none'
+      }
+    ],
+    2: [
+      {
+        name: 'Ação Astuta',
+        level: 2,
+        description: 'Você pode realizar uma ação bônus em cada um de seus turnos em combate. Esta ação pode ser usada apenas para Correr, Desengajar ou Esconder-se.',
+        activation: 'bonus_action'
+      }
+    ],
+    3: [
+      {
+        name: 'Arquétipo de Ladino',
+        level: 3,
+        description: 'Você escolhe um arquétipo que se assemelha ao seu estilo de ladinagem.',
+        activation: 'none',
+        choices: ['Ladrão', 'Assassino', 'Trapaceiro Arcano'],
+        isSubclassChoice: true
+      },
+      {
+        name: 'Ataque Furtivo (2d6)',
+        level: 3,
+        description: 'Seu dano de Ataque Furtivo aumenta para 2d6.',
+        activation: 'special'
+      },
+      {
+        name: 'Mãos Rápidas',
+        level: 3,
+        description: 'Você pode usar a ação bônus concedida pela sua Ação Astuta para fazer um teste de Destreza (Prestidigitação), usar suas ferramentas de ladrão para desarmar uma armadilha ou abrir uma fechadura, ou realizar a ação de Usar um Objeto.',
+        activation: 'none',
+        requiresSubclass: 'Ladrão'
+      },
+      {
+        name: 'Trabalho no Segundo Andar',
+        level: 3,
+        description: 'Escalar não custa mais movimento extra. Além disso, quando você fizer um salto em distância correndo, a distância que você pode saltar aumenta em um número de metros igual a 30cm vezes o seu modificador de Destreza.',
+        activation: 'none',
+        requiresSubclass: 'Ladrão'
+      },
+      {
+        name: 'Proficiências Bônus (Assassino)',
+        level: 3,
+        description: 'Você ganha proficiência com o kit de disfarce e o kit de venenos.',
+        activation: 'none',
+        requiresSubclass: 'Assassino'
+      },
+      {
+        name: 'Assassinar',
+        level: 3,
+        description: 'Você tem vantagem em jogadas de ataque contra qualquer criatura que ainda não tenha realizado um turno no combate. Além disso, qualquer ataque que você atingir em uma criatura surpresa é um acerto crítico.',
+        activation: 'special',
+        requiresSubclass: 'Assassino'
+      },
+      {
+        name: 'Mãos Mágicas Trapaceiras',
+        level: 3,
+        description: 'Quando conjura Mãos Mágicas, você pode tornar a mão espectral invisível e realizar tarefas adicionais (guardar/retirar item de outro personagem, usar ferramentas de ladrão à distância).',
+        activation: 'special',
+        requiresSubclass: 'Trapaceiro Arcano'
+      },
+      {
+        name: 'Conjuração (Trapaceiro Arcano)',
+        level: 3,
+        description: 'Você ganha a habilidade de conjurar magias baseadas em Inteligência de Mago.',
+        activation: 'none',
+        requiresSubclass: 'Trapaceiro Arcano'
+      }
+    ],
+    4: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 4,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    5: [
+      {
+        name: 'Ataque Furtivo (3d6)',
+        level: 5,
+        description: 'Seu dano de Ataque Furtivo aumenta para 3d6.',
+        activation: 'special'
+      },
+      {
+        name: 'Esquiva Sobrenatural',
+        level: 5,
+        description: 'Quando um atacante que você pode ver atinge você com um ataque, você pode usar sua reação para reduzir o dano do ataque pela metade.',
+        activation: 'reaction'
+      }
+    ],
+    6: [
+      {
+        name: 'Especialização Adicional',
+        level: 6,
+        description: 'Escolha mais duas de suas proficiências (perícias ou ferramentas de ladrão) para ganhar Especialização.',
+        activation: 'none'
+      }
+    ],
+    7: [
+      {
+        name: 'Ataque Furtivo (4d6)',
+        level: 7,
+        description: 'Seu dano de Ataque Furtivo aumenta para 4d6.',
+        activation: 'special'
+      },
+      {
+        name: 'Evasão',
+        level: 7,
+        description: 'Quando você for alvo de um efeito que exige uma salvaguarda de Destreza para sofrer apenas metade do dano, você não sofre dano se passar, e apenas metade se falhar.',
+        activation: 'none'
+      }
+    ],
+    8: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 8,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    9: [
+      {
+        name: 'Ataque Furtivo (5d6)',
+        level: 9,
+        description: 'Seu dano de Ataque Furtivo aumenta para 5d6.',
+        activation: 'special'
+      },
+      {
+        name: 'Furtividade Suprema',
+        level: 9,
+        description: 'Você tem vantagem em testes de Destreza (Furtividade) se não se mover mais do que a metade do seu deslocamento em seu turno.',
+        activation: 'none',
+        requiresSubclass: 'Ladrão'
+      },
+      {
+        name: 'Especialista em Infiltração',
+        level: 9,
+        description: 'Você pode criar falsas identidades para si mesmo. Você deve gastar 7 dias e 25 po para estabelecer a história, roupas e disfarces da identidade.',
+        activation: 'special',
+        requiresSubclass: 'Assassino'
+      },
+      {
+        name: 'Emboscada Mágica',
+        level: 9,
+        description: 'Se você estiver escondido de uma criatura ao conjurar uma magia nela, a criatura tem desvantagem em qualquer salvaguarda contra essa magia neste turno.',
+        activation: 'special',
+        requiresSubclass: 'Trapaceiro Arcano'
+      }
+    ],
+    10: [
+      {
+        name: 'Incremento no Valor de Habilidade Extra',
+        level: 10,
+        description: 'Como ladino, você ganha um incremento no valor de habilidade extra no 10º nível (Aumente um atributo em 2, ou dois atributos em 1).',
+        activation: 'none'
+      }
+    ],
+    11: [
+      {
+        name: 'Ataque Furtivo (6d6)',
+        level: 11,
+        description: 'Seu dano de Ataque Furtivo aumenta para 6d6.',
+        activation: 'special'
+      },
+      {
+        name: 'Talento Confiável',
+        level: 11,
+        description: 'Sempre que fizer um teste de habilidade que permita adicionar seu bônus de proficiência (incluindo perícias com Especialização), trate qualquer resultado de d20 menor que 10 como um 10.',
+        activation: 'none'
+      }
+    ],
+    12: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 12,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    13: [
+      {
+        name: 'Ataque Furtivo (7d6)',
+        level: 13,
+        description: 'Seu dano de Ataque Furtivo aumenta para 7d6.',
+        activation: 'special'
+      },
+      {
+        name: 'Usar Dispositivo Mágico',
+        level: 13,
+        description: 'Você ignora todas as exigências de classe, raça e nível para o uso de itens mágicos.',
+        activation: 'none',
+        requiresSubclass: 'Ladrão'
+      },
+      {
+        name: 'Impostor',
+        level: 13,
+        description: 'Você ganha a habilidade de mimetizar a escrita, voz e comportamento de outra pessoa após observá-la por 3 horas.',
+        activation: 'special',
+        requiresSubclass: 'Assassino'
+      },
+      {
+        name: 'Trapaça Versátil',
+        level: 13,
+        description: 'Você ganha a habilidade de usar sua Ação Astuta para distrair alvos usando sua Mão Mágica, ganhando vantagem em jogadas de ataque contra o alvo distraído.',
+        activation: 'bonus_action',
+        requiresSubclass: 'Trapaceiro Arcano'
+      }
+    ],
+    14: [
+      {
+        name: 'Sensibilidade Cega',
+        level: 14,
+        description: 'Se você puder ouvir, você sabe a localização de qualquer criatura oculta ou invisível a até 3 metros de você.',
+        activation: 'none'
+      }
+    ],
+    15: [
+      {
+        name: 'Ataque Furtivo (8d6)',
+        level: 15,
+        description: 'Seu dano de Ataque Furtivo aumenta para 8d6.',
+        activation: 'special'
+      },
+      {
+        name: 'Mente Escorregadia',
+        level: 15,
+        description: 'Você ganha proficiência em testes de resistência de Sabedoria.',
+        activation: 'none'
+      }
+    ],
+    16: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 16,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    17: [
+      {
+        name: 'Ataque Furtivo (9d6)',
+        level: 17,
+        description: 'Seu dano de Ataque Furtivo aumenta para 9d6.',
+        activation: 'special'
+      },
+      {
+        name: 'Reflexos de Ladrão',
+        level: 17,
+        description: 'Você pode realizar dois turnos no primeiro ciclo de qualquer combate. Você faz seu primeiro turno com sua iniciativa normal e seu segundo turno com sua iniciativa -10. Você não ganha esse benefício se estiver surpreso.',
+        activation: 'none',
+        requiresSubclass: 'Ladrão'
+      },
+      {
+        name: 'Golpe da Morte',
+        level: 17,
+        description: 'Quando você atinge e causa dano a uma criatura que está surpresa, ela deve passar em um teste de resistência de Constituição (CD 8 + mod de DES + Prof). Se falhar, o dano do ataque é dobrado.',
+        activation: 'special',
+        requiresSubclass: 'Assassino'
+      },
+      {
+        name: 'Ladrão de Magia',
+        level: 17,
+        description: 'Ao ser alvo de uma magia, você pode usar sua reação para forçar o conjurador a fazer um teste de salvaguarda. Se falhar, você anula o efeito e rouba o conhecimento da magia por 8 horas.',
+        activation: 'reaction',
+        requiresSubclass: 'Trapaceiro Arcano'
+      }
+    ],
+    18: [
+      {
+        name: 'Elusivo',
+        level: 18,
+        description: 'Você se torna tão evasivo que nenhuma jogada de ataque tem vantagem contra você enquanto você não estiver incapacitado.',
+        activation: 'none'
+      }
+    ],
+    19: [
+      {
+        name: 'Ataque Furtivo (10d6)',
+        level: 19,
+        description: 'Seu dano de Ataque Furtivo aumenta para 10d6.',
+        activation: 'special'
+      },
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 19,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    20: [
+      {
+        name: 'Golpe de Sorte',
+        level: 20,
+        description: 'Se você errar um ataque no seu turno, ou falhar em um teste de habilidade, você pode transformar o erro em acerto ou a falha em sucesso automático. Você recupera o uso desta habilidade após um descanso curto ou longo.',
+        activation: 'special'
+      }
+    ]
+  },
+  Feiticeiro: {
+    1: [
+      {
+        name: 'Origem Feiticeira',
+        level: 1,
+        description: 'Sua origem feiticeira descreve a fonte do seu poder mágico inato. Ela concede características no 1º nível, e novamente no 6º, 14º e 18º níveis.',
+        activation: 'none',
+        choices: ['Linhagem Dracônica', 'Magia Selvagem'],
+        isSubclassChoice: true
+      },
+      {
+        name: 'Conjuração (Feiticeiro)',
+        level: 1,
+        description: 'Você pode conjurar magias de feiticeiro. Seu atributo de conjuração é Carisma.',
+        activation: 'none'
+      },
+      {
+        name: 'Ancestral Dragão',
+        level: 1,
+        description: 'Você escolhe um tipo de dragão como seu ancestral. O tipo de dano associado a ele é usado por outras características de classe.',
+        activation: 'none',
+        requiresSubclass: 'Linhagem Dracônica'
+      },
+      {
+        name: 'Resiliência Dracônica',
+        level: 1,
+        description: 'Seus pontos de vida máximos aumentam em 1 no 1º nível e em 1 para cada nível de feiticeiro subsequente. Além disso, quando não estiver usando armadura, sua CA é igual a 13 + seu modificador de Destreza.',
+        activation: 'none',
+        requiresSubclass: 'Linhagem Dracônica'
+      },
+      {
+        name: 'Surto de Magia Selvagem',
+        level: 1,
+        description: 'Suas magias podem liberar surtos caóticos de magia selvagem. Imediatamente após conjurar uma magia de feiticeiro de 1º nível ou superior, o Mestre pode exigir que você role um d20. Se rolar um 1, role na tabela de Surtos de Magia Selvagem.',
+        activation: 'none',
+        requiresSubclass: 'Magia Selvagem'
+      },
+      {
+        name: 'Marés do Caos',
+        level: 1,
+        description: 'Você pode manipular as forças do acaso para ganhar vantagem em uma jogada de ataque, teste de atributo ou salvaguarda. Você deve terminar um descanso longo para usar essa característica novamente.',
+        activation: 'special',
+        resourceCost: { type: 'class_resource', name: 'mares_do_caos', amount: 1 },
+        requiresSubclass: 'Magia Selvagem'
+      }
+    ],
+    2: [
+      {
+        name: 'Fonte de Magia',
+        level: 2,
+        description: 'Você ganha acesso a uma fonte de energia mágica representada por Pontos de Feitiçaria. Você pode usá-los para criar espaços de magia ou converter espaços de magia em Pontos de Feitiçaria.',
+        activation: 'none',
+        resourceCost: { type: 'class_resource', name: 'pontos_feiticaria', amount: 0 }
+      }
+    ],
+    3: [
+      {
+        name: 'Metamagia',
+        level: 3,
+        description: 'Você adquire a habilidade de moldar suas magias de acordo com suas necessidades. Você escolhe duas opções de Metamagia (ex: Magia Acelerada, Magia Duplicada, Magia Sutil). Você ganha opções adicionais nos níveis 10 e 17.',
+        activation: 'none'
+      }
+    ],
+    4: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 4,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    6: [
+      {
+        name: 'Afinidade Elemental',
+        level: 6,
+        description: 'Quando você conjura uma magia que causa o tipo de dano associado ao seu ancestral dragão, você adiciona seu modificador de Carisma ao dano. Além disso, você pode gastar 1 ponto de feitiçaria para ganhar resistência a esse tipo de dano por 1 hora.',
+        activation: 'special',
+        requiresSubclass: 'Linhagem Dracônica'
+      },
+      {
+        name: 'Dobrar a Sorte',
+        level: 6,
+        description: 'Você ganha a habilidade de torcer o destino. Quando outra criatura fizer uma jogada de ataque, teste de habilidade ou salvaguarda, você pode gastar 2 pontos de feitiçaria como reação para rolar 1d4 e aplicar o resultado como bônus ou penalidade na jogada.',
+        activation: 'reaction',
+        requiresSubclass: 'Magia Selvagem'
+      }
+    ],
+    8: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 8,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    10: [
+      {
+        name: 'Metamagia Adicional',
+        level: 10,
+        description: 'Você escolhe uma opção adicional de Metamagia.',
+        activation: 'none'
+      }
+    ],
+    12: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 12,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    14: [
+      {
+        name: 'Asas Dracônicas',
+        level: 14,
+        description: 'Você ganha a habilidade de manifestar um par de asas de dragão em suas costas, ganhando velocidade de voo igual ao seu deslocamento terrestre.',
+        activation: 'none',
+        requiresSubclass: 'Linhagem Dracônica'
+      },
+      {
+        name: 'Caos Controlado',
+        level: 14,
+        description: 'Você ganha um controle parcial sobre seus surtos de magia selvagem. Sempre que você rolar na tabela de Surtos de Magia Selvagem, você pode rolar duas vezes e usar qualquer um dos resultados.',
+        activation: 'none',
+        requiresSubclass: 'Magia Selvagem'
+      }
+    ],
+    16: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 16,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    17: [
+      {
+        name: 'Metamagia Adicional',
+        level: 17,
+        description: 'Você escolhe uma opção adicional de Metamagia.',
+        activation: 'none'
+      }
+    ],
+    18: [
+      {
+        name: 'Presença Dracônica',
+        level: 18,
+        description: 'Você pode gastar 5 pontos de feitiçaria como uma ação para canalizar a presença do seu ancestral dragão, forçando criaturas a até 18 metros a ficarem amedrontadas ou enfeitadas (CD salvaguarda de Carisma).',
+        activation: 'action',
+        requiresSubclass: 'Linhagem Dracônica'
+      },
+      {
+        name: 'Bombardeio de Magias',
+        level: 18,
+        description: 'Quando você rola o dano de uma magia e obtém o valor máximo em um dos dados, você pode rolar aquele dado novamente e adicioná-lo ao dano total (limite de um dado adicional por magia).',
+        activation: 'special',
+        requiresSubclass: 'Magia Selvagem'
+      }
+    ],
+    19: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 19,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    20: [
+      {
+        name: 'Restauração de Feiticeiro',
+        level: 20,
+        description: 'Você recupera 4 pontos de feitiçaria gastos sempre que terminar um descanso curto.',
+        activation: 'none'
+      }
+    ]
+  },
+  Bruxo: {
+    1: [
+      {
+        name: 'Patrono Transcendental',
+        level: 1,
+        description: 'Você escolhe um patrono transcendental que define a natureza do seu pacto: O Corruptor, O Arquifada ou O Grande Antigo.',
+        activation: 'none',
+        choices: ['O Corruptor', 'O Arquifada', 'O Grande Antigo'],
+        isSubclassChoice: true
+      },
+      {
+        name: 'Magia do Pacto',
+        level: 1,
+        description: 'Sua pesquisa arcana e magia concedida por seu patrono dão a você a habilidade de conjurar magias. Suas magias usam Carisma como habilidade de conjuração. Seus espaços de magia são recuperados com um descanso curto e são sempre conjurados no maior nível de círculo possível para seu nível.',
+        activation: 'none'
+      },
+      {
+        name: 'Bênção do Submundo',
+        level: 1,
+        description: 'Ao reduzir uma criatura hostil a 0 pontos de vida, você ganha pontos de vida temporários iguais ao seu modificador de Carisma + seu nível de bruxo (mínimo de 1).',
+        activation: 'none',
+        requiresSubclass: 'O Corruptor'
+      },
+      {
+        name: 'Presença Feérica',
+        level: 1,
+        description: 'Como uma ação, você pode forçar cada criatura em um cubo de 3 metros a partir de você a realizar uma salvaguarda de Sabedoria contra a CD da sua magia. Se falharem, ficam encantadas ou amedrontadas por você até o final do seu próximo turno. Recuperável com descanso curto ou longo.',
+        activation: 'action',
+        requiresSubclass: 'O Arquifada'
+      },
+      {
+        name: 'Despertar da Mente',
+        level: 1,
+        description: 'Você pode se comunicar telepaticamente com qualquer criatura que possa ver a até 9 metros de você. Você não precisa compartilhar um idioma, mas a criatura deve ser capaz de compreender pelo menos um idioma.',
+        activation: 'none',
+        requiresSubclass: 'O Grande Antigo'
+      }
+    ],
+    2: [
+      {
+        name: 'Invocações Místicas',
+        level: 2,
+        description: 'Você descobre invocações místicas, fragmentos de conhecimento proibido que concedem a você capacidades mágicas permanentes. Você conhece duas invocações místicas à sua escolha.',
+        activation: 'none'
+      }
+    ],
+    3: [
+      {
+        name: 'Dádiva do Pacto',
+        level: 3,
+        description: 'Seu patrono concede a você um prêmio por seus serviços leais. Escolha uma das dádivas: Pacto da Corrente (invocar familiar especial), Pacto da Lâmina (criar arma de pacto mágica) ou Pacto do Tomo (livro de sombras com 3 truques adicionais).',
+        activation: 'none',
+        choices: ['Pacto da Corrente', 'Pacto da Lâmina', 'Pacto do Tomo']
+      }
+    ],
+    4: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 4,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    5: [
+      {
+        name: 'Invocação Mística Adicional',
+        level: 5,
+        description: 'Você aprende uma nova invocação mística (3 no total).',
+        activation: 'none'
+      }
+    ],
+    6: [
+      {
+        name: 'Resiliência do Submundo',
+        level: 6,
+        description: 'Você pode escolher um tipo de dano ao finalizar um descanso curto ou longo. Você ganha resistência a esse tipo de dano até escolher outro com esta habilidade.',
+        activation: 'none',
+        requiresSubclass: 'O Corruptor'
+      },
+      {
+        name: 'Defesa Feérica',
+        level: 6,
+        description: 'Quando você sofrer dano, você pode usar sua reação para ficar invisível e se teleportar até 18 metros para um espaço desocupado que possa ver. Fica invisível até o início do seu próximo turno. 1 uso por descanso curto/longo.',
+        activation: 'reaction',
+        requiresSubclass: 'O Arquifada'
+      },
+      {
+        name: 'Salvaguarda Entrópica',
+        level: 6,
+        description: 'Quando uma criatura fizer uma jogada de ataque contra você, você pode usar sua reação para impor desvantagem nessa jogada. Se o ataque errar, sua próxima jogada de ataque contra essa criatura tem vantagem. 1 uso por descanso curto/longo.',
+        activation: 'reaction',
+        requiresSubclass: 'O Grande Antigo'
+      }
+    ],
+    7: [
+      {
+        name: 'Invocação Mística Adicional',
+        level: 7,
+        description: 'Você aprende uma nova invocação mística (4 no total).',
+        activation: 'none'
+      }
+    ],
+    8: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 8,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    9: [
+      {
+        name: 'Invocação Mística Adicional',
+        level: 9,
+        description: 'Você aprende uma nova invocação mística (5 no total).',
+        activation: 'none'
+      }
+    ],
+    10: [
+      {
+        name: 'Fortuna do Submundo',
+        level: 10,
+        description: 'Ao fazer um teste de habilidade ou salvaguarda, você pode adicionar 1d10 ao resultado. Você pode usar esta característica depois de ver a rolagem inicial, mas antes de saber se passou ou falhou. 1 uso por descanso curto ou longo.',
+        activation: 'special',
+        requiresSubclass: 'O Corruptor',
+        resourceCost: { type: 'class_resource', name: 'fortuna_submundo', amount: 1 }
+      },
+      {
+        name: 'Mente Feérica',
+        level: 10,
+        description: 'Você é imune a ser encantado, e quando outra criatura tenta encantar você, você pode usar sua reação para tentar voltar o efeito contra ela.',
+        activation: 'reaction',
+        requiresSubclass: 'O Arquifada'
+      },
+      {
+        name: 'Escudo de Pensamentos',
+        level: 10,
+        description: 'Sua mente não pode ser lida por meios mágicos a menos que você permita. Você ganha resistência a dano psíquico, e quando sofrer dano psíquico, quem causou o dano sofre a mesma quantidade.',
+        activation: 'none',
+        requiresSubclass: 'O Grande Antigo'
+      }
+    ],
+    11: [
+      {
+        name: 'Arcanum Místico (6º Nível)',
+        level: 11,
+        description: 'Seu patrono concede a você um segredo mágico chamado arcanum. Escolha uma magia de 6º nível da lista de bruxo. Você pode conjurar essa magia uma vez sem gastar espaços de magia. Recuperável com descanso longo.',
+        activation: 'special',
+        resourceCost: { type: 'class_resource', name: 'arcanum_6', amount: 1 }
+      }
+    ],
+    12: [
+      {
+        name: 'Invocação Mística Adicional',
+        level: 12,
+        description: 'Você aprende uma nova invocação mística (6 no total).',
+        activation: 'none'
+      },
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 12,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    13: [
+      {
+        name: 'Arcanum Místico (7º Nível)',
+        level: 13,
+        description: 'Escolha uma magia de 7º nível da lista de bruxo como arcanum. Você pode conjurar essa magia uma vez sem gastar espaços de magia. Recuperável com descanso longo.',
+        activation: 'special',
+        resourceCost: { type: 'class_resource', name: 'arcanum_7', amount: 1 }
+      }
+    ],
+    14: [
+      {
+        name: 'Lançar no Inferno',
+        level: 14,
+        description: 'Ao acertar uma criatura com um ataque, você pode transportar instantaneamente o alvo através dos planos inferiores. O alvo desaparece até o final do seu próximo turno. Quando ele retorna, sofre 10d10 de dano psíquico (a menos que seja um corruptor). 1 uso por descanso longo.',
+        activation: 'special',
+        requiresSubclass: 'O Corruptor',
+        resourceCost: { type: 'class_resource', name: 'lancar_inferno', amount: 1 }
+      },
+      {
+        name: 'Espiral Nebulosa',
+        level: 14,
+        description: 'Você ganha a habilidade de entrar no plano feérico temporariamente. Como uma ação, você pode conjurar a magia Passo Nebuloso à vontade, sem gastar espaços de magia, e sempre que fizer isso você pode desferir um efeito de enfeitiçar/amedrontar nos inimigos ao redor.',
+        activation: 'action',
+        requiresSubclass: 'O Arquifada'
+      },
+      {
+        name: 'Criar Cria',
+        level: 14,
+        description: 'Você pode usar sua ação para tocar um humanoide incapacitado. Essa criatura fica encantada por você até ser alvo de uma magia Remover Maldição, ou até você usar essa habilidade de novo. Você pode se comunicar telepaticamente com ela.',
+        activation: 'action',
+        requiresSubclass: 'O Grande Antigo'
+      }
+    ],
+    15: [
+      {
+        name: 'Invocação Mística Adicional',
+        level: 15,
+        description: 'Você aprende uma nova invocação mística (7 no total).',
+        activation: 'none'
+      },
+      {
+        name: 'Arcanum Místico (8º Nível)',
+        level: 15,
+        description: 'Escolha uma magia de 8º nível da lista de bruxo como arcanum. Você pode conjurar essa magia uma vez sem gastar espaços de magia. Recuperável com descanso longo.',
+        activation: 'special',
+        resourceCost: { type: 'class_resource', name: 'arcanum_8', amount: 1 }
+      }
+    ],
+    16: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 16,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    17: [
+      {
+        name: 'Arcanum Místico (9º Nível)',
+        level: 17,
+        description: 'Escolha uma magia de 9º nível da lista de bruxo como arcanum. Você pode conjurar essa magia uma vez sem gastar espaços de magia. Recuperável com descanso longo.',
+        activation: 'special',
+        resourceCost: { type: 'class_resource', name: 'arcanum_9', amount: 1 }
+      }
+    ],
+    18: [
+      {
+        name: 'Invocação Mística Adicional',
+        level: 18,
+        description: 'Você aprende uma nova invocação mística (8 no total).',
+        activation: 'none'
+      }
+    ],
+    19: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 19,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    20: [
+      {
+        name: 'Senhor Místico',
+        level: 20,
+        description: 'Você pode gastar 1 minuto implorando ao seu patrono para recuperar todos os seus espaços de magia gastos da sua característica Magia do Pacto. 1 uso por descanso longo.',
+        activation: 'special',
+        resourceCost: { type: 'class_resource', name: 'senhor_mistico', amount: 1 }
+      }
+    ]
+  },
+  Artífice: {
+    1: [
+      {
+        name: 'Conjuração (Artífice)',
+        level: 1,
+        description: 'Você sabe como conjurar magias usando ferramentas como foco de conjuração. Seu atributo de conjuração é Inteligência.',
+        activation: 'none'
+      },
+      {
+        name: 'Engenhoqueiro',
+        level: 1,
+        description: 'Você pode imbuir uma propriedade mágica em um objeto miúdo não mágico tocando-o (emitir luz, tocar som gravado, emitir odor ou exibir efeito visual).',
+        activation: 'action'
+      }
+    ],
+    2: [
+      {
+        name: 'Infundir Itens',
+        level: 2,
+        description: 'Você ganha a habilidade de transformar itens mundanos em itens mágicos. Você conhece 4 infusões e pode infundir até 2 itens por dia.',
+        activation: 'none'
+      }
+    ],
+    3: [
+      {
+        name: 'Especialista em Artilharia',
+        level: 3,
+        description: 'Escolha uma especialidade de artífice: Alquimista ou Armeiro.',
+        activation: 'none',
+        choices: ['Alquimista', 'Armeiro'],
+        isSubclassChoice: true
+      },
+      {
+        name: 'Especialista em Ferramentas',
+        level: 3,
+        description: 'Seu bônus de proficiência é dobrado para qualquer teste de habilidade usando ferramentas com as quais possua proficiência.',
+        activation: 'none'
+      },
+      {
+        name: 'Elixir Experimental',
+        level: 3,
+        description: 'Ao fim de um descanso longo, você pode criar elixires experimentais em frascos vazios. 1 elixir gratuito por dia (gaste espaço de magia para criar adicionais). Cada elixir concede um efeito benéfico aleatório ou escolhido (Cura, Rapidez, Resiliência, etc).',
+        activation: 'action',
+        requiresSubclass: 'Alquimista',
+        resourceCost: { type: 'class_resource', name: 'elixir_experimental', amount: 1 }
+      },
+      {
+        name: 'Armadura Arcana',
+        level: 3,
+        description: 'Você pode transformar um conjunto de armadura pesada ou média em uma Armadura Arcana, que se acopla a você, ignora requisitos de Força, serve como foco de conjuração e não pode ser removida contra sua vontade.',
+        activation: 'action',
+        requiresSubclass: 'Armeiro'
+      },
+      {
+        name: 'Modelo de Armadura',
+        level: 3,
+        description: 'Escolha um modelo para sua Armadura Arcana: Guardião (foco em combate corpo-a-corpo e defesa) ou Infiltrador (foco em velocidade e ataques à distância). Pode mudar o modelo ao fim de descansos.',
+        activation: 'none',
+        requiresSubclass: 'Armeiro'
+      }
+    ],
+    4: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 4,
+        description: 'Aumente um atributo em 2, ou dois em 1.',
+        activation: 'none'
+      }
+    ],
+    5: [
+      {
+        name: 'Sábio Alquímico',
+        level: 5,
+        description: 'Adicione seu modificador de Inteligência a rolagens de cura ou rolagens de dano de fogo, ácido, necrótico ou veneno de suas magias.',
+        activation: 'special',
+        requiresSubclass: 'Alquimista'
+      },
+      {
+        name: 'Ataque Extra (Armeiro)',
+        level: 5,
+        description: 'Você pode atacar duas vezes, ao invés de uma, sempre que usar a ação de Ataque no seu turno.',
+        activation: 'none',
+        requiresSubclass: 'Armeiro'
+      }
+    ],
+    6: [
+      {
+        name: 'Ferramentas de Qualquer Coisa',
+        level: 6,
+        description: 'Você pode criar magicamente um conjunto de ferramentas de artesão necessárias em um espaço desocupado a até 1,5m. Requer 1 hora de trabalho.',
+        activation: 'special'
+      },
+      {
+        name: 'Infundir Itens Adicional (6/3)',
+        level: 6,
+        description: 'Você agora conhece 6 infusões e pode manter até 3 itens infundidos ativos simultaneamente.',
+        activation: 'none'
+      }
+    ],
+    7: [
+      {
+        name: 'Lampejo de Genialidade',
+        level: 7,
+        description: 'Quando você ou outra criatura que você possa ver a até 9 metros fizer um teste de habilidade ou salvaguarda, você pode usar sua reação para adicionar seu modificador de Inteligência ao teste.',
+        activation: 'reaction'
+      }
+    ],
+    8: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 8,
+        description: 'Aumente um atributo em 2, ou dois em 1.',
+        activation: 'none'
+      }
+    ],
+    9: [
+      {
+        name: 'Restaurativo Corretivo',
+        level: 9,
+        description: 'Criaturas que beberem seu Elixir Experimental ganham PV temporários igual a 2d6 + mod. INT. Você também pode conjurar Restauração Menor sem gastar slots de magia.',
+        activation: 'special',
+        requiresSubclass: 'Alquimista'
+      },
+      {
+        name: 'Modificações de Armadura',
+        level: 9,
+        description: 'Sua Armadura Arcana agora conta como peças separadas para infusão (peitoral, botas, elmo, arma especial). Seu limite de itens infundidos aumenta em +2 (apenas na Armadura).',
+        activation: 'none',
+        requiresSubclass: 'Armeiro'
+      }
+    ],
+    10: [
+      {
+        name: 'Adepto em Itens Mágicos',
+        level: 10,
+        description: 'Você pode sintonizar até 4 itens mágicos ao mesmo tempo. Fabricar itens mágicos comuns ou incomuns custa 1/4 do tempo e metade do ouro.',
+        activation: 'none'
+      },
+      {
+        name: 'Infundir Itens Adicional (8/4)',
+        level: 10,
+        description: 'Você agora conhece 8 infusões e pode manter até 4 itens infundidos ativos simultaneamente.',
+        activation: 'none'
+      }
+    ],
+    11: [
+      {
+        name: 'Item Estocado com Magia',
+        level: 11,
+        description: 'Você pode armazenar uma magia de 1º ou 2º nível (tempo de conjuração 1 ação) em uma arma ou foco de conjuração. Uma criatura pode usar uma ação para conjurar essa magia usando sua Inteligência. Usos = 2x mod. INT.',
+        activation: 'special'
+      }
+    ],
+    12: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 12,
+        description: 'Aumente um atributo em 2, ou dois em 1.',
+        activation: 'none'
+      }
+    ],
+    14: [
+      {
+        name: 'Sábio em Itens Mágicos',
+        level: 14,
+        description: 'Você pode sintonizar até 5 itens mágicos. Você ignora todos os requisitos de classe, raça, tendência e nível para usar e sintonizar itens mágicos.',
+        activation: 'none'
+      },
+      {
+        name: 'Infundir Itens Adicional (10/5)',
+        level: 14,
+        description: 'Você agora conhece 10 infusões e pode manter até 5 itens infundidos ativos simultaneamente.',
+        activation: 'none'
+      }
+    ],
+    15: [
+      {
+        name: 'Maestria Química',
+        level: 15,
+        description: 'Você ganha resistência a dano de ácido e veneno, e imunidade à condição envenenado. Você pode conjurar Restauração Maior e curar doenças 1 vez por descanso longo sem gastar slots.',
+        activation: 'special',
+        requiresSubclass: 'Alquimista'
+      },
+      {
+        name: 'Segurança Perfeita',
+        level: 15,
+        description: 'Sua Armadura Arcana ganha melhorias massivas: Guardião causa desvantagem em ataques do inimigo e permite puxar criatura; Infiltrador causa dano elétrico extra e concede vantagem contra o alvo.',
+        activation: 'special',
+        requiresSubclass: 'Armeiro'
+      }
+    ],
+    16: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 16,
+        description: 'Aumente um atributo em 2, ou dois em 1.',
+        activation: 'none'
+      }
+    ],
+    18: [
+      {
+        name: 'Mestre em Itens Mágicos',
+        level: 18,
+        description: 'Você pode sintonizar até 6 itens mágicos ao mesmo tempo.',
+        activation: 'none'
+      },
+      {
+        name: 'Infundir Itens Adicional (12/6)',
+        level: 18,
+        description: 'Você agora conhece 12 infusões e pode manter até 6 itens infundidos ativos simultaneamente.',
+        activation: 'none'
+      }
+    ],
+    19: [
+      {
+        name: 'Incremento no Valor de Habilidade',
+        level: 19,
+        description: 'Aumente um atributo em 2, ou dois atributos em 1.',
+        activation: 'none'
+      }
+    ],
+    20: [
+      {
+        name: 'Alma do Artifício',
+        level: 20,
+        description: 'Você recebe +1 em todos os testes de salvaguarda para cada item mágico que possuir sintonizado (máx +6). Se cair a 0 PV mas não morrer, pode usar sua reação para encerrar uma infusão e voltar a 1 PV.',
+        activation: 'reaction'
+      }
+    ]
   }
 };
+

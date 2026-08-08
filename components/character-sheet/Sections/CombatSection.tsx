@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AdvantageMode, AttributeKey, CharacterSheet, CharacterWeaponAttack, DiceRollEvent } from '@/lib/types';
-import { formatModifier, getAttributeModifier, recalculateSheetDerivedStats, ARMOR_TABLE, calculateArmorClass, hasClass, getJackOfAllTradesBonus } from '@/lib/dnd5e-calculator';
-import { executeCheckRoll, executeWeaponAttackRoll, broadcastDiceRoll } from '@/lib/dnd5e-dice';
+import { formatModifier, getAttributeModifier, recalculateSheetDerivedStats, ARMOR_TABLE, calculateArmorClass, hasClass, getJackOfAllTradesBonus, getClassLevel } from '@/lib/dnd5e-calculator';
+import { executeCheckRoll, executeWeaponAttackRoll, broadcastDiceRoll, executeSneakAttackRoll, getSneakAttackDice } from '@/lib/dnd5e-dice';
 import { Shield, Heart, Zap, Crosshair, Plus, Minus, Trash2, Skull, Dices, Lock, Unlock, RotateCcw, CheckCircle2, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { WeaponCompendiumModal } from '../Modals/WeaponCompendiumModal';
 
@@ -1069,6 +1069,37 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
           ))}
         </div>
       </div>
+
+      {/* ATAQUE FURTIVO — Ladinos */}
+      {getClassLevel(sheet, 'Ladino') >= 1 && (
+        <div className="bg-[#141b2d] border border-emerald-500/20 rounded-2xl p-4 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Skull className="w-4 h-4 text-emerald-400" />
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                  Ataque Furtivo
+                </h3>
+                <p className="text-[10px] text-slate-500 leading-tight">
+                  Dano extra: <span className="text-emerald-300 font-bold">{getSneakAttackDice(getClassLevel(sheet, 'Ladino'))}</span>
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const result = executeSneakAttackRoll({ sheet });
+                if (onRoll) onRoll(result);
+              }}
+              className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 py-1.5 rounded-xl text-xs font-black transition-transform active:scale-95 shadow-md shadow-emerald-500/20 cursor-pointer"
+              title="Rolar dano de Ataque Furtivo"
+            >
+              <Dices className="w-4 h-4" />
+              Rolar Furtivo
+            </button>
+          </div>
+        </div>
+      )}
 
       <WeaponCompendiumModal
         isOpen={showWeaponCompendium}
