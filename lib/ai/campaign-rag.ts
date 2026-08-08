@@ -6,6 +6,7 @@ export interface CampaignRAGInput {
   scene?: GameScene | null;
   entities?: WorldEntity[];
   combatants?: Combatant[];
+  chatLogs?: string[];
   actionType: 'narrate' | 'loot' | 'copilot' | 'npc_dialogue';
   userPrompt: string;
 }
@@ -14,6 +15,18 @@ export interface VectorSearchResult {
   id: string;
   content: string;
   similarity: number;
+}
+
+/**
+ *Indexa um resumo/recap de sessão no banco de vetores de lore
+ */
+export async function indexSessionRecap(
+  worldId: string,
+  sessionTitle: string,
+  recapText: string
+): Promise<boolean> {
+  const content = `[RECAP DA SESSÃO: ${sessionTitle}]\n${recapText}`;
+  return indexLoreDocument(worldId, content, undefined, { type: 'session_recap' });
 }
 
 /**
@@ -123,7 +136,7 @@ export async function fetchVectorLoreSimilarity(
 }
 
 export function buildCampaignPromptContext(input: CampaignRAGInput, vectorContext: VectorSearchResult[] = []): string {
-  const { world, scene, entities = [], combatants = [], actionType, userPrompt } = input;
+  const { world, scene, entities = [], combatants = [], chatLogs = [], actionType, userPrompt } = input;
 
   let ragContext = `=== CONTEXTO RAG DA MESA DE RPG (MASTERS CODEX) ===\n`;
 
@@ -162,7 +175,15 @@ export function buildCampaignPromptContext(input: CampaignRAGInput, vectorContex
     });
   }
 
-  // 5. Combatentes / Personagens em Mesa
+  // 5. Histórico Recente de Diálogos / Chat da Sessão
+  if (chatLogs.length > 0) {
+    ragContext += `\nHISTÓRICO RECENTE DE DIÁLOGOS E AÇÕES DA MESA:\n`;
+    chatLogs.slice(-8).forEach((log) => {
+      ragContext += `- ${log}\n`;
+    });
+  }
+
+  // 6. Combatentes / Personagens em Mesa
   if (combatants.length > 0) {
     ragContext += `\nPERSONAGENS E CRIATURAS NO COMBATE AVALIADO:\n`;
     combatants.forEach((c) => {

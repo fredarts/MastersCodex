@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { CharacterSheet } from '@/lib/types';
 import { DND_ALIGNMENTS, DND_BACKGROUNDS, DND_CLASSES, DND_RACES } from '@/lib/dnd5e-data';
-import { applyClassPreset, applyLevelChange, applyRacePreset, calculateLevelFromXP } from '@/lib/dnd5e-calculator';
-import { User, Shield, Sparkles, Award, Image as ImageIcon, Box, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { applyClassPreset, applyLevelChange, applyRacePreset, calculateLevelFromXP, resetSheetToLevel1 } from '@/lib/dnd5e-calculator';
+import { User, Shield, Sparkles, Award, Image as ImageIcon, Box, Check, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { CHARACTER_MODELS_3D, getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { storageService } from '@/lib/services/storageService';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -19,10 +19,30 @@ interface GeneralSectionProps {
 }
 
 export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange }) => {
-  const { showAlert } = useCustomDialog();
+  const { showAlert, showConfirm } = useCustomDialog();
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isCropperModalOpen, setIsCropperModalOpen] = useState(false);
   const [avatarAspect, setAvatarAspect] = useState(1);
+
+  const handleResetSheet = async () => {
+    const confirmed = await showConfirm({
+      title: 'Resetar Ficha para Nível 1?',
+      message: `Tem certeza que deseja resetar a ficha de "${sheet.characterName || 'Personagem'}" para o Nível 1?\n\nEsta ação redefinirá todos os atributos, pontos de vida, perícias, armas, equipamentos, moedas, magias e talentos para o padrão inicial.\n\nNome, raça, classe, avatar e descrições de história/aparencia (página 2) serão preservados.`,
+      confirmText: 'Sim, Resetar Nível 1',
+      cancelText: 'Cancelar',
+      variant: 'danger',
+    });
+
+    if (confirmed) {
+      const reset = resetSheetToLevel1(sheet);
+      onChange(reset);
+      showAlert({
+        title: 'Ficha Resetada',
+        message: 'A ficha foi resetada para o Nível 1 com sucesso.',
+        variant: 'success',
+      });
+    }
+  };
 
   const handleRaceChange = (newRace: string) => {
     const raceData = DND_RACES[newRace];
@@ -468,6 +488,27 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
                 sheet.inspiration ? 'translate-x-6' : 'translate-x-0'
               }`}
             />
+          </button>
+        </div>
+
+        {/* CARD: RESETAR FICHA PARA NÍVEL 1 */}
+        <div className="bg-[#141b2d] border border-rose-500/30 rounded-2xl p-4 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4">
+          <div className="space-y-0.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-rose-400 flex items-center gap-2">
+              <RotateCcw className="w-4 h-4 text-rose-400" />
+              Resetar Ficha para Nível 1
+            </h3>
+            <p className="text-[11px] text-slate-400">
+              Redefine atributos, perícias, armas, moedas, magias e talentos para o Nível 1. Mantém nome, raça, classe e história.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleResetSheet}
+            className="px-4 py-2 bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white border border-rose-500/40 rounded-xl text-xs font-bold transition-all shrink-0 active:scale-95 cursor-pointer flex items-center gap-1.5"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Resetar Nível 1
           </button>
         </div>
       </div>

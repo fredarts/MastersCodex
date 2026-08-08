@@ -183,7 +183,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
   const { showConfirm, showPrompt } = useCustomDialog();
 
   const [grid, setGrid] = useState<Cell[][]>(() => createInitialGrid());
-  const [selectedTool, setSelectedTool] = useState<'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan' | 'light'>('fog-reveal');
+  const [selectedTool, setSelectedTool] = useState<'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan' | 'light' | 'draw-pencil' | 'draw-circle' | 'draw-rect' | 'draw-eraser' | 'draw-text'>('fog-reveal');
   const [boxMode, setBoxMode] = useState<'fill' | 'room' | 'hollow' | 'fog-reveal' | 'fog-cover'>('fill');
   const [selectedTileType, setSelectedTileType] = useState<TileType>('floor');
   const [selectedTokenCombatant, setSelectedTokenCombatant] = useState<Combatant | null>(null);
@@ -840,6 +840,8 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
                       <Hand className="w-3.5 h-3.5" />
                       Mover
                     </button>
+
+
                    {bgImageUrl && (
                      <button
                        onClick={() => setSelectedTool('calibrate')}

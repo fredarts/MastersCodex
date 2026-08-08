@@ -42,9 +42,10 @@ import {
   revealVisionWithLOS, 
   computeVisibilityPolygon, 
   getTokenVisionRadius,
+  getCombatantVisionType,
   isLightVisibleToPlayer
 } from './visionCore';
-import { Combatant } from '@/lib/types';
+import { Combatant, VisionType } from '@/lib/types';
 import { Cell, TileType, ChestConfig, ContainerType, ContainerStatus, ChestLoot } from '../MapMaker';
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -80,8 +81,8 @@ interface DysonCanvasProps {
   gridOffsetX: number;
   gridOffsetY: number;
   combatants: Combatant[];
-  selectedTool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan' | 'light';
-  setSelectedTool?: (tool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan' | 'light') => void;
+  selectedTool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan' | 'light' | 'draw-pencil' | 'draw-circle' | 'draw-rect' | 'draw-eraser' | 'draw-text';
+  setSelectedTool?: (tool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan' | 'light' | 'draw-pencil' | 'draw-circle' | 'draw-rect' | 'draw-eraser' | 'draw-text') => void;
   boxMode?: 'fill' | 'room' | 'hollow' | 'fog-reveal' | 'fog-cover';
   selectedTileType: string;
   selectedTokenCombatant: Combatant | null;
@@ -98,6 +99,8 @@ interface DysonCanvasProps {
   onAddLightSource?: (light: import('@/lib/types').LightSource) => void;
   onRemoveLightSource?: (lightId: string) => void;
   selectedLightPreset?: 'torch' | 'candle' | 'lantern' | 'spell' | 'dragon';
+  drawings?: any[];
+  onDrawingAction?: (payload: any) => void;
 }
 
 export const DysonCanvas: React.FC<DysonCanvasProps> = ({
@@ -125,6 +128,8 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   onAddLightSource,
   onRemoveLightSource,
   selectedLightPreset = 'torch',
+  drawings = [],
+  onDrawingAction,
 }) => {
 
 
@@ -145,6 +150,8 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   const [editingCell, setEditingCell] = useState<{ r: number; c: number; cell: Cell } | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number; cell: Cell } | null>(null);
   const [draggingToken, setDraggingToken] = useState<{ name: string, color: string, startR: number, startC: number, currentR: number, currentC: number } | null>(null);
+  const [currentStroke, setCurrentStroke] = useState<any | null>(null);
+  const activeStrokeRef = useRef<any | null>(null);
 
   const CELL_SIZE = bgImageUrl ? gridScale : 40;
   const COLS = grid[0]?.length || 12;
@@ -199,7 +206,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
   // Memoized player tokens list
   const playerTokens = useMemo(() => {
-    const tokens: { r: number; c: number; radius: number; tokenName: string }[] = [];
+    const tokens: { r: number; c: number; radius: number; visionType: VisionType; tokenName: string }[] = [];
     if (!grid || grid.length === 0) return tokens;
     const rows = grid.length;
     const cols = grid[0]?.length || 0;
@@ -222,6 +229,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
               r,
               c,
               radius: getTokenVisionRadius(grid[r][c].tokenName, combatants),
+              visionType: getCombatantVisionType(grid[r][c].tokenName, combatants),
               tokenName: grid[r][c].tokenName!
             });
           }
@@ -240,10 +248,10 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       const visionRadius = pt.radius * CELL_SIZE;
 
       const polyPoints = computeVisibilityPolygon(
-        tx, ty, visionRadius, grid, CELL_SIZE, gridOffsetX, gridOffsetY, Boolean(bgImageUrl), vectorWalls
+        tx, ty, visionRadius, grid, CELL_SIZE, gridOffsetX, gridOffsetY, Boolean(bgImageUrl), vectorWalls, pt.visionType
       );
 
-      return { tx, ty, visionRadius, polyPoints };
+      return { tx, ty, visionRadius, polyPoints, visionType: pt.visionType };
     });
   }, [playerTokens, grid, vectorWalls, CELL_SIZE, gridOffsetX, gridOffsetY, bgImageUrl]);
 
@@ -1022,7 +1030,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       }
 
       // 3. Current token active vision (uses memoized tokenVisionPolygons)
-      tokenVisionPolygons.forEach(({ tx, ty, visionRadius, polyPoints }) => {
+      tokenVisionPolygons.forEach(({ tx, ty, visionRadius, polyPoints, visionType }) => {
         if (polyPoints.length > 0) {
           maskCtx.save();
           maskCtx.beginPath();
@@ -1033,9 +1041,16 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           maskCtx.closePath();
 
           const grad = maskCtx.createRadialGradient(tx, ty, CELL_SIZE * 0.5, tx, ty, visionRadius);
-          grad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
-          grad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)');
-          grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+          if (visionType === 'darkvision') {
+            // Greyscale / Desaturated spotlight for Darkvision
+            grad.addColorStop(0.0, 'rgba(0, 0, 0, 0.95)');
+            grad.addColorStop(0.65, 'rgba(0, 0, 0, 0.75)');
+            grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+          } else {
+            grad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
+            grad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)');
+            grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+          }
 
           maskCtx.fillStyle = grad;
           maskCtx.fill();
@@ -1384,6 +1399,56 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         }
       }
 
+      // --- Draw Freehand / Shapes Layer ---
+      const renderStroke = (stroke: any) => {
+        if (!stroke || !stroke.points || stroke.points.length === 0) return;
+        ctx.save();
+        ctx.beginPath();
+        ctx.strokeStyle = stroke.color || '#f59e0b';
+        ctx.lineWidth = (stroke.lineWidth || 4) / zoom;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.fillStyle = stroke.color || '#f59e0b';
+
+        const pts = stroke.points;
+
+        if (stroke.tool === 'pencil') {
+          if (pts.length === 1) {
+            ctx.arc(pts[0].x, pts[0].y, Math.max(2, (stroke.lineWidth || 4) / 2 / zoom), 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++) {
+              ctx.lineTo(pts[i].x, pts[i].y);
+            }
+            ctx.stroke();
+          }
+        } else if (stroke.tool === 'circle') {
+          const endPt = pts[1] || pts[0];
+          const dx = endPt.x - pts[0].x;
+          const dy = endPt.y - pts[0].y;
+          const radius = Math.sqrt(dx * dx + dy * dy);
+          ctx.arc(pts[0].x, pts[0].y, radius > 0 ? radius : (stroke.lineWidth || 4) / zoom, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (stroke.tool === 'rect') {
+          const endPt = pts[1] || pts[0];
+          const w = endPt.x - pts[0].x;
+          const h = endPt.y - pts[0].y;
+          ctx.strokeRect(pts[0].x, pts[0].y, w, h);
+        } else if (stroke.tool === 'text') {
+          ctx.font = `bold ${Math.max(12, 16 / zoom)}px Inter, sans-serif`;
+          ctx.fillText(stroke.text || '', pts[0].x, pts[0].y);
+        }
+        ctx.restore();
+      };
+
+      if (drawings && drawings.length > 0) {
+        drawings.forEach(renderStroke);
+      }
+      if (currentStroke) {
+        renderStroke(currentStroke);
+      }
+
       // 5.C. Draw Waypoint Nodes
       rulerPoints.forEach((pt, idx) => {
         const coord = getPointCoords(pt);
@@ -1554,7 +1619,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     }
 
     ctx.restore();
-  }, [grid, bgImage, CELL_SIZE, COLS, ROWS, gridOffsetX, gridOffsetY, selectedTool, selectionBox, measureStart, calibrationLine, rulerPoints, rulerCursor, rulerStatus, zoom, panOffset, canvasSize, isPlayerView, lightSources, combatants, vectorWalls]);
+  }, [grid, bgImage, CELL_SIZE, COLS, ROWS, gridOffsetX, gridOffsetY, selectedTool, selectionBox, measureStart, calibrationLine, rulerPoints, rulerCursor, rulerStatus, zoom, panOffset, canvasSize, isPlayerView, lightSources, combatants, vectorWalls, drawings, currentStroke]);
 
   // Utility to convert client mouse events to Canvas coordinates
   const getCanvasCoords = (e: React.MouseEvent) => {
@@ -1693,6 +1758,53 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     if (selectedTool === 'calibrate') {
       setIsDrawing(true);
       setCalibrationLine?.({ x1: x, y1: y, x2: x, y2: y });
+      return;
+    }
+
+    if (selectedTool.startsWith('draw-')) {
+      const toolType = selectedTool.replace('draw-', '');
+      if (toolType === 'eraser') {
+        if (drawings && drawings.length > 0) {
+          let closestId = null;
+          let minDist = Infinity;
+          drawings.forEach((d: any) => {
+            if (!d.points || d.points.length === 0) return;
+            const p = d.points[0];
+            const dist = Math.hypot(p.x - x, p.y - y);
+            if (dist < minDist) {
+              minDist = dist;
+              closestId = d.id;
+            }
+          });
+          if (closestId && minDist < 100 / zoom) {
+            onDrawingAction?.({ action: 'remove', strokeId: closestId });
+          }
+        }
+      } else if (toolType === 'text') {
+        const text = window.prompt('Digite o texto:');
+        if (text) {
+          const newStroke = {
+            id: Math.random().toString(36).substring(7),
+            tool: 'text',
+            color: '#f59e0b', // amber-500
+            lineWidth: 2,
+            points: [{ x, y }],
+            text
+          };
+          onDrawingAction?.({ action: 'add', stroke: newStroke });
+        }
+      } else {
+        setIsDrawing(true);
+        const strokeData = {
+          id: Math.random().toString(36).substring(7),
+          tool: toolType,
+          color: '#f59e0b', // amber-500
+          lineWidth: 4,
+          points: [{ x, y }]
+        };
+        activeStrokeRef.current = strokeData;
+        setCurrentStroke(strokeData);
+      }
       return;
     }
 
@@ -1881,6 +1993,17 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     const { x, y } = getCanvasCoords(e);
 
+    if (activeStrokeRef.current && selectedTool.startsWith('draw-')) {
+      const toolType = selectedTool.replace('draw-', '');
+      if (toolType === 'pencil') {
+        activeStrokeRef.current.points.push({ x, y });
+      } else if (toolType === 'circle' || toolType === 'rect') {
+        activeStrokeRef.current.points[1] = { x, y };
+      }
+      setCurrentStroke({ ...activeStrokeRef.current });
+      return;
+    }
+
     if (selectedTool === 'calibrate' && isDrawing && calibrationLine) {
       setCalibrationLine?.({ ...calibrationLine, x2: x, y2: y });
       return;
@@ -1995,6 +2118,14 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           rulerDragStartCell.current = null;
         }
       }
+      return;
+    }
+
+    if (activeStrokeRef.current && selectedTool.startsWith('draw-')) {
+      onDrawingAction?.({ action: 'add', stroke: activeStrokeRef.current });
+      activeStrokeRef.current = null;
+      setCurrentStroke(null);
+      setIsDrawing(false);
       return;
     }
 
@@ -2361,7 +2492,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     }
     if (draggingToken) return 'cursor-grabbing';
     if (selectedTool === 'measure') return 'cursor-crosshair';
-    if (selectedTool === 'paint' || selectedTool === 'box') return 'cursor-crosshair';
+    if (selectedTool === 'paint' || selectedTool === 'box' || selectedTool.startsWith('draw-')) return 'cursor-crosshair';
     return 'cursor-default';
   };
 
@@ -2377,6 +2508,37 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     return false;
   }, [selectedTokenCombatant, isPlayerView, combatants]);
 
+  // Touch Pinch-to-Zoom & Pan Handlers for Tablet Support
+  const touchDistRef = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      touchDistRef.current = dist;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 2 && touchDistRef.current !== null) {
+      const newDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const delta = newDist - touchDistRef.current;
+      if (Math.abs(delta) > 5) {
+        setZoom((prev) => Math.max(0.3, Math.min(3.0, prev + (delta > 0 ? 0.03 : -0.03))));
+        touchDistRef.current = newDist;
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchDistRef.current = null;
+  };
+
   return (
     <div 
       ref={containerRef}
@@ -2384,10 +2546,13 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       onDoubleClick={handleDoubleClick}
       onMouseLeave={() => setHoveredCell(null)}
       onContextMenu={(e) => e.preventDefault()}
-      style={{ userSelect: 'none' }}
+      style={{ userSelect: 'none', touchAction: 'none' }}
     >
       <canvas
         ref={canvasRef}

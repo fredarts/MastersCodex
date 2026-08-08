@@ -60,6 +60,18 @@ export interface RealtimeSyncPayloads {
     roundCount?: number;
     mapData?: any;
   };
+  DRAWING_ACTION: {
+    action: 'add' | 'clear' | 'undo' | 'remove';
+    stroke?: {
+      id: string;
+      tool: 'pencil' | 'circle' | 'rect' | 'eraser' | 'text';
+      color: string;
+      lineWidth: number;
+      points: { x: number; y: number }[];
+      text?: string;
+    };
+    strokeId?: string;
+  };
 }
 
 export interface UseRealtimeSyncOptions {
@@ -82,6 +94,7 @@ export interface UseRealtimeSyncOptions {
   onPresenceUpdate?: (payload: RealtimeSyncPayloads['PRESENCE_UPDATE']) => void;
   onStateRequest?: (payload: RealtimeSyncPayloads['STATE_REQUEST']) => void;
   onStateSnapshot?: (payload: RealtimeSyncPayloads['STATE_SNAPSHOT']) => void;
+  onDrawingAction?: (payload: RealtimeSyncPayloads['DRAWING_ACTION']) => void;
 }
 
 export function useRealtimeSync({
@@ -104,6 +117,7 @@ export function useRealtimeSync({
   onPresenceUpdate,
   onStateRequest,
   onStateSnapshot,
+  onDrawingAction,
 }: UseRealtimeSyncOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const isSubscribedRef = useRef<boolean>(false);
@@ -128,6 +142,7 @@ export function useRealtimeSync({
     onPresenceUpdate,
     onStateRequest,
     onStateSnapshot,
+    onDrawingAction,
   });
 
   useEffect(() => {
@@ -150,6 +165,7 @@ export function useRealtimeSync({
       onPresenceUpdate,
       onStateRequest,
       onStateSnapshot,
+      onDrawingAction,
     };
   }, [
     onTokenMove,
@@ -170,6 +186,7 @@ export function useRealtimeSync({
     onPresenceUpdate,
     onStateRequest,
     onStateSnapshot,
+    onDrawingAction,
   ]);
 
   // Cross-tab BroadcastChannel fallback
@@ -199,6 +216,7 @@ export function useRealtimeSync({
         if (type === 'PRESENCE_UPDATE' && cb.onPresenceUpdate) cb.onPresenceUpdate(data as any);
         if (type === 'STATE_REQUEST' && cb.onStateRequest) cb.onStateRequest(data as any);
         if (type === 'STATE_SNAPSHOT' && cb.onStateSnapshot) cb.onStateSnapshot(data as any);
+        if (type === 'DRAWING_ACTION' && cb.onDrawingAction) cb.onDrawingAction(data as any);
       };
     } catch (e) {}
 
@@ -293,6 +311,10 @@ export function useRealtimeSync({
       .on('broadcast', { event: 'STATE_SNAPSHOT' }, ({ payload }) => {
         const cb = callbacksRef.current;
         if (cb.onStateSnapshot) cb.onStateSnapshot(payload);
+      })
+      .on('broadcast', { event: 'DRAWING_ACTION' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onDrawingAction) cb.onDrawingAction(payload);
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -440,6 +462,10 @@ export function useRealtimeSync({
     sendBroadcast('STATE_SNAPSHOT', payload);
   }, [sendBroadcast]);
 
+  const broadcastDrawingAction = useCallback((payload: RealtimeSyncPayloads['DRAWING_ACTION']) => {
+    sendBroadcast('DRAWING_ACTION', payload);
+  }, [sendBroadcast]);
+
   return {
     sendBroadcast,
     broadcastTokenMove,
@@ -460,5 +486,6 @@ export function useRealtimeSync({
     broadcastPresenceUpdate,
     broadcastStateRequest,
     broadcastStateSnapshot,
+    broadcastDrawingAction,
   };
 }

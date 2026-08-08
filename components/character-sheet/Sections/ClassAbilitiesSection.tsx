@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { CharacterSheet, ClassFeature, CharacterResource, ActiveClassBuff } from '@/lib/types';
 import { getAttributeModifier, recalculateSheetDerivedStats, hasClass } from '@/lib/dnd5e-calculator';
 import { executeCheckRoll, broadcastDiceRoll } from '@/lib/dnd5e-dice';
-import { Zap, Flame, Shield, Plus, Minus, Heart, Swords, ShieldAlert, Sparkles, Wand2 } from 'lucide-react';
+import { Zap, Flame, Shield, Plus, Minus, Heart, Swords, ShieldAlert, Sparkles, Wand2, Award } from 'lucide-react';
 import { useCustomDialog } from '@/context/CustomDialogContext';
 
 interface ClassAbilitiesSectionProps {
@@ -379,6 +379,37 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
           )}
         </div>
       </div>
+
+      {/* SEÇÃO 4: TALENTOS ADQUIRIDOS (FEATS) */}
+      {sheet.feats && sheet.feats.length > 0 && (
+        <div className="bg-[#141b2d] border border-cyan-500/30 rounded-2xl p-4 shadow-lg space-y-4">
+          <div className="flex items-center gap-2 border-b border-slate-800/80 pb-3">
+            <Award className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400">Talentos (Feats) Adquiridos</h3>
+          </div>
+
+          <div className="space-y-3">
+            {sheet.feats.map((feat) => (
+              <div key={feat.id} className="bg-[#0b0f19]/80 border border-slate-800 rounded-xl p-3.5 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-cyan-300 flex items-center gap-2">
+                    {feat.namePt} <span className="text-[10px] text-slate-500 font-normal">({feat.name})</span>
+                  </span>
+                  <span className="text-[9px] font-bold bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-800 uppercase">
+                    {feat.category || 'Talento'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">{feat.description}</p>
+                {feat.chosenAttribute && (
+                  <span className="inline-block text-[10px] font-bold text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-500/20">
+                    Bônus +1: {feat.chosenAttribute.toUpperCase()}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* MODAL DE SELEÇÃO DE SLOTS DO SMITE */}
       {showSmiteModal && (

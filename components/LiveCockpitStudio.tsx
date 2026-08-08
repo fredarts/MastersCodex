@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
@@ -17,6 +17,7 @@ import { LiveVisualMirror } from '@/components/live-cockpit/LiveVisualMirror';
 import { CombatInitiativePanel } from '@/components/live-cockpit/CombatInitiativePanel';
 import { FloatingDiceRollerHUD } from '@/components/live-cockpit/FloatingDiceRollerHUD';
 import { LiveCockpitModalManager } from '@/components/live-cockpit/LiveCockpitModalManager';
+import { DMNotebookDrawer } from '@/components/live-cockpit/DMNotebookDrawer';
 import { AudioMaestro } from '@/components/AudioMaestro';
 
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
@@ -74,6 +75,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   } = useLiveCockpit();
 
   const { user } = useAuth();
+  const [isNotebookOpen, setIsNotebookOpen] = useState(false);
   const { characterSheets } = useCharacterSync({
     userId: user?.id || '',
     campaignId: activeCampaign?.id,
@@ -1142,6 +1144,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
           setLiveDisplayMode={setLiveDisplayMode}
           onOpenCreateScene={() => setShowCreateSceneModal(true)}
           onOpenPlayerView={onOpenPlayerView}
+          onToggleNotebook={() => setIsNotebookOpen((prev: boolean) => !prev)}
         />
 
         <div className="flex-1 flex min-h-0 relative">
@@ -1173,6 +1176,13 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
 
       {/* 4. Overlay: Floating d20 Results / BG3 roller canvas */}
       <FloatingDiceRollerHUD />
+
+      {/* DM Notebook Persistent Drawer */}
+      <DMNotebookDrawer
+        isOpen={isNotebookOpen}
+        onClose={() => setIsNotebookOpen(false)}
+        campaignId={activeCampaign?.id}
+      />
 
       {/* 5. Modals Controller */}
       <LiveCockpitModalManager

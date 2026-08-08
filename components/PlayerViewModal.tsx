@@ -57,6 +57,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
     currentTurnIndex: liveCurrentTurnIndex,
     roundCount: liveRoundCount,
     broadcastStateRequest,
+    drawings,
   } = useLiveCockpit();
   const { user } = useAuth();
 
@@ -421,6 +422,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 selectedTokenCombatant={null}
                 onGridChange={() => {}} // Sem alteração de grid para jogador
                 isPlayerView={true}
+                drawings={drawings}
               />
             ) : isMapLoading ? (
               <div className="flex flex-col items-center justify-center gap-3 text-slate-400 font-mono animate-pulse">

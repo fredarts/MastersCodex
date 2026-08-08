@@ -35,6 +35,8 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   const [images, setImages] = useState<string[]>([]);
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [connections, setConnections] = useState<EntityConnection[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
   
   // Lista de todas as outras entidades no mundo atual
   const { worldEntities } = useWorld();
@@ -61,6 +63,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       setFullContent(editingEntity.fullContent || '');
       setImages(editingEntity.images || []);
       setConnections(editingEntity.connections || []);
+      setTags(editingEntity.tags || []);
       
       const attrs = editingEntity.attributes || {};
       const keys = Object.keys(attrs);
@@ -76,6 +79,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       setExtraAttr2('');
       setImages([]);
       setConnections([]);
+      setTags([]);
     }
   }, [editingEntity, defaultCategory, isOpen]);
 
@@ -182,6 +186,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         images: images.length > 0 ? images : undefined,
         connections: connections,
         attributes,
+        tags: tags.length > 0 ? tags : undefined,
       });
     } else {
       await createWorldEntity({
@@ -195,6 +200,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         images: images.length > 0 ? images : undefined,
         connections: connections,
         attributes,
+        tags: tags.length > 0 ? tags : undefined,
       });
     }
 
@@ -207,6 +213,8 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
     setExtraAttr2('');
     setImages([]);
     setConnections([]);
+    setTags([]);
+    setTagInput('');
     setExtraPrompt('');
     setAiWarningMessage(null);
     onClose();
@@ -547,7 +555,47 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
             </div>
           </div>
 
-          {/* Row 2: Short Description Textbox */}
+          {/* Tags Chips Input */}
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span>Etiquetas & Tags Personalizadas:</span>
+              <span className="text-[10px] text-slate-500 font-normal">Pressione Enter ou vírgula para adicionar</span>
+            </label>
+            <div className="flex flex-wrap items-center gap-1.5 p-2.5 bg-[#0a0d14] border border-[#2a3449] focus-within:border-amber-500 rounded-xl min-h-[44px]">
+              {tags.map((tag, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                >
+                  #{tag}
+                  <button
+                    type="button"
+                    onClick={() => setTags((prev) => prev.filter((_, i) => i !== idx))}
+                    className="hover:text-rose-400 font-bold ml-1 text-xs"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault();
+                    const trimmed = tagInput.trim().replace(/^#/, '');
+                    if (trimmed && !tags.includes(trimmed)) {
+                      setTags((prev) => [...prev, trimmed]);
+                      setTagInput('');
+                    }
+                  }
+                }}
+                placeholder={tags.length === 0 ? "Ex: nobreza, dragao, perigoso, quest..." : "Nova tag..."}
+                className="bg-transparent text-xs text-slate-200 focus:outline-none flex-1 min-w-[120px]"
+              />
+            </div>
+          </div>
           <div>
             <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
               Descrição Curta / Resumo Rápido:

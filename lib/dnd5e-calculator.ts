@@ -1,4 +1,4 @@
-import { AttributeKey, CharacterSheet, DndSkillKey, SkillProficiencyLevel, ClassFeature, CharacterResource, CharacterClassProgress } from './types';
+import { AttributeKey, CharacterSheet, DndSkillKey, SkillProficiencyLevel, ClassFeature, CharacterResource, CharacterClassProgress, CharacterAttributes, CharacterCurrency } from './types';
 import { DND_CLASSES, DND_RACES, SKILL_DEFINITIONS, CLASS_FEATURES_DB } from './dnd5e-data';
 
 /**
@@ -39,18 +39,29 @@ export function getAttributeModifier(sheet: CharacterSheet, attrKey: AttributeKe
   return calculateModifier(attr.score);
 }
 
-/**
- * Calcula o bônus de Teste de Resistência (Salvaguarda) para um atributo
- */
 export function calculateSavingThrowTotal(sheet: CharacterSheet, attrKey: AttributeKey): number {
   const attrMod = getAttributeModifier(sheet, attrKey);
   
   // Alma de Diamante (Monge Nível 14+) concede proficiência em todas as salvaguardas
   const hasDiamondSoul = getCharacterClasses(sheet).some(c => c.name === 'Monge' && c.level >= 14);
-  const isProficient = sheet.savingThrows[attrKey] || hasDiamondSoul;
+  const hasResilientFeat = (sheet.feats || []).some(f => 
+    f.benefits?.savingThrowProficiency === attrKey || 
+    (f.chosenAttribute === attrKey && (f.name.toLowerCase().includes('resilien') || f.namePt.toLowerCase().includes('resilien')))
+  );
+  const isProficient = sheet.savingThrows[attrKey] || hasDiamondSoul || hasResilientFeat;
   
   const profBonus = calculateProficiencyBonus(sheet.level);
   return attrMod + (isProficient ? profBonus : 0);
+}
+
+/**
+ * Calcula o bônus total de Iniciativa (Mod. Destreza + Override Manual + Talentos como Alerta)
+ */
+export function calculateTotalInitiativeBonus(sheet: CharacterSheet): number {
+  const dexMod = getAttributeModifier(sheet, 'dex');
+  const manualBonus = sheet.initiativeBonus || 0;
+  const featsBonus = (sheet.feats || []).reduce((acc, f) => acc + (f.benefits?.initiativeBonus || 0), 0);
+  return dexMod + manualBonus + featsBonus;
 }
 
 export function getJackOfAllTradesBonus(sheet: CharacterSheet): number {
@@ -918,11 +929,12 @@ export function calculateDynamicSpeed(sheet: CharacterSheet): string {
     }
   }
 
-  // 2. Bárbaro: Movimento Rápido (Apenas sem armadura pesada)
-  const isBarbarian = classes.find(c => c.name === 'Bárbaro');
-  if (isBarbarian && isBarbarian.level >= 5 && hasNoHeavyArmor) {
-    bonusMeters += 3;
-    bonusFeet += 10;
+  // 3. Talento Móvel (Mobile): +10ft (+3m) de deslocamento
+  const mobileFeat = (sheet.feats || []).find(f => f.name === 'Mobile' || f.namePt === 'Móvel' || f.benefits?.speedBonus);
+  if (mobileFeat) {
+    const featBonusFeet = mobileFeat.benefits?.speedBonus || 10;
+    bonusFeet += featBonusFeet;
+    bonusMeters += (featBonusFeet / 10) * 3;
   }
 
   if (bonusMeters === 0) return baseSpeedStr;
@@ -933,7 +945,7 @@ export function calculateDynamicSpeed(sheet: CharacterSheet): string {
 /**
  * Recalcula AUTOMATICAMENTE todos os valores derivados da ficha D&D 5e:
  * 1. CA (Classe de Armadura) = Armadura equipada + Mod DES (respeitando limites) + Escudo + Defesa Sem Armadura
- * 2. HP Máximo = Dado de Vida + Mod CON * Nível
+ * 2. HP Máximo = Dado de Vida + Mod CON * Nível + Talentos (Robusto/Tough)
  * 3. Ataques = Atualiza os bônus de acerto (Proficiência + Força/Destreza) de todas as armas
  */
 export function recalculateSheetDerivedStats(sheet: CharacterSheet): CharacterSheet {
@@ -952,10 +964,16 @@ export function recalculateSheetDerivedStats(sheet: CharacterSheet): CharacterSh
   const classData = DND_CLASSES[sheet.className];
   const hitDie = classData ? classData.hitDie : '1d8';
   const hitDieVal = parseInt(hitDie.replace('1d', ''), 10) || 8;
-  const newMaxHp = Math.max(
+
+  // Bônus do Talento Robusto (Tough): +2 HP por nível
+  const toughFeat = (sheet.feats || []).find(f => f.name === 'Tough' || f.namePt === 'Robusto' || f.benefits?.hpPerLevelBonus);
+  const toughHpBonus = toughFeat ? sheet.level * (toughFeat.benefits?.hpPerLevelBonus || 2) : 0;
+
+  const baseHp = Math.max(
     1,
     hitDieVal + conMod + Math.max(0, sheet.level - 1) * (Math.floor(hitDieVal / 2) + 1 + conMod)
   );
+  const newMaxHp = baseHp + toughHpBonus;
 
   // Ajusta o HP Atual para manter a mesma proporção ou respeitar o novo teto
   const hpDiff = newMaxHp - sheet.maxHp;
@@ -1160,4 +1178,87 @@ export function calculateLevelFromXP(xp: number): number {
   if (xp >= 900) return 3;
   if (xp >= 300) return 2;
   return 1;
+}
+
+/**
+ * Reseta completamente a ficha do personagem para o Nível 1,
+ * limpando atributos, perícias, armas, equipamentos, moedas, magias e talentos,
+ * mas preservando nome, raça, classe, jogador, avatar e descrições de lore/personalidade.
+ */
+export function resetSheetToLevel1(sheet: CharacterSheet): CharacterSheet {
+  const emptySkills: Record<DndSkillKey, SkillProficiencyLevel> = {
+    acrobacia: 'none',
+    arcanismo: 'none',
+    atletismo: 'none',
+    atuacao: 'none',
+    blefar: 'none',
+    furtividade: 'none',
+    historia: 'none',
+    intimidacao: 'none',
+    intuicao: 'none',
+    investigacao: 'none',
+    lidarComAnimais: 'none',
+    medicina: 'none',
+    natureza: 'none',
+    percepcao: 'none',
+    persuasao: 'none',
+    prestidigitacao: 'none',
+    religiao: 'none',
+    sobrevivencia: 'none',
+  };
+
+  const defaultAttributes: CharacterAttributes = {
+    str: { score: 8, baseScore: 8 },
+    dex: { score: 8, baseScore: 8 },
+    con: { score: 8, baseScore: 8 },
+    int: { score: 8, baseScore: 8 },
+    wis: { score: 8, baseScore: 8 },
+    cha: { score: 8, baseScore: 8 }
+  };
+
+  let resetSheet: CharacterSheet = {
+    ...sheet,
+    level: 1,
+    xp: 0,
+    subclass: undefined,
+    classes: [{
+      name: sheet.className,
+      level: 1,
+      subclass: undefined,
+      isPrimary: true
+    }],
+    attributes: defaultAttributes,
+    attributePointsAvailable: 27,
+    attributesLocked: false,
+    skillsLocked: false,
+    skills: emptySkills,
+    initiativeBonus: 0,
+    deathSaves: { successes: 0, failures: 0 },
+    attacks: [],
+    equipment: [],
+    currency: { pc: 0, pp: 0, pe: 0, po: 0, pl: 0 },
+    spells: [],
+    spellSlots: {},
+    feats: [],
+    activeClassBuffs: [],
+    classResources: {}
+  };
+
+  // Re-aplica preset de raça e classe para o Nível 1
+  resetSheet = applyRacePreset(resetSheet, resetSheet.race, resetSheet.subrace);
+  resetSheet = applyClassPreset(resetSheet, resetSheet.className);
+
+  // Recalcula PVs máximos e estatísticas derivadas para o Nível 1
+  const classData = DND_CLASSES[resetSheet.className];
+  const hitDieVal = classData ? parseInt(classData.hitDie.replace('1d', ''), 10) || 8 : 8;
+  const conMod = getAttributeModifier(resetSheet, 'con');
+  const level1Hp = Math.max(1, hitDieVal + conMod);
+
+  resetSheet.maxHp = level1Hp;
+  resetSheet.currentHp = level1Hp;
+  resetSheet.tempHp = 0;
+  resetSheet.hitDiceTotal = `1d${hitDieVal}`;
+  resetSheet.hitDiceUsed = `0d${hitDieVal}`;
+
+  return recalculateSheetDerivedStats(resetSheet);
 }

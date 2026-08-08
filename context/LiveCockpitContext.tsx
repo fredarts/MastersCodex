@@ -66,6 +66,8 @@ interface LiveCockpitContextType {
   broadcastVoiceSignal: (payload: VoiceSignalPayload) => void;
   broadcastPresenceUpdate: (payload: PresencePayload) => void;
   broadcastStateRequest: (payload?: { requesterId?: string }) => void;
+  drawings: any[];
+  broadcastDrawingAction: (payload: any) => void;
 }
 
 const LiveCockpitContext = createContext<LiveCockpitContextType | undefined>(undefined);
@@ -95,6 +97,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [dmCursor, setDmCursor] = useState<DmCursorPayload | null>(null);
   const [pings, setPings] = useState<PingLocationPayload[]>([]);
   const [voiceSignal, setVoiceSignal] = useState<VoiceSignalPayload | null>(null);
+  const [drawings, setDrawings] = useState<any[]>([]);
 
   // Ref to track the last synchronized combat state to avoid feedback loops
   const lastSyncStateRef = useRef<{
@@ -248,6 +251,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     broadcastPresenceUpdate: syncBroadcastPresenceUpdate,
     broadcastStateRequest,
     broadcastStateSnapshot,
+    broadcastDrawingAction: syncBroadcastDrawingAction,
   } = useRealtimeSync({
     campaignId,
     onTokenMove: (payload) => {
@@ -299,6 +303,17 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
           if (prev.some((l) => l.id === payload.entry.id)) return prev;
           return [...prev, payload.entry];
         });
+      }
+    },
+    onDrawingAction: (payload) => {
+      if (payload.action === 'add' && payload.stroke) {
+        setDrawings(prev => [...prev, payload.stroke]);
+      } else if (payload.action === 'clear') {
+        setDrawings([]);
+      } else if (payload.action === 'undo') {
+        setDrawings(prev => prev.slice(0, -1));
+      } else if (payload.action === 'remove' && payload.strokeId) {
+        setDrawings(prev => prev.filter(s => s.id !== payload.strokeId));
       }
     },
     onPlayerRoll: (payload) => {
@@ -650,6 +665,19 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     syncBroadcastPresenceUpdate(payload);
   }, [syncBroadcastPresenceUpdate]);
 
+  const handleDrawingAction = useCallback((payload: any) => {
+    if (payload.action === 'add' && payload.stroke) {
+      setDrawings(prev => [...prev, payload.stroke]);
+    } else if (payload.action === 'clear') {
+      setDrawings([]);
+    } else if (payload.action === 'undo') {
+      setDrawings(prev => prev.slice(0, -1));
+    } else if (payload.action === 'remove' && payload.strokeId) {
+      setDrawings(prev => prev.filter(s => s.id !== payload.strokeId));
+    }
+    syncBroadcastDrawingAction(payload);
+  }, [syncBroadcastDrawingAction]);
+
   return (
     <LiveCockpitContext.Provider
       value={{
@@ -699,6 +727,8 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         broadcastVoiceSignal,
         broadcastPresenceUpdate,
         broadcastStateRequest,
+        drawings,
+        broadcastDrawingAction: handleDrawingAction,
       }}
     >
       {children}

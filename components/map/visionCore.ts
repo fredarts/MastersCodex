@@ -64,9 +64,15 @@ export function hasLineOfSight(
   r2: number,
   grid: Cell[][],
   vectorWalls: WallSegment[] = [],
-  cellSize = 60
+  cellSize = 60,
+  visionType: VisionType = 'normal'
 ): boolean {
   if (c1 === c2 && r1 === r2) return true;
+
+  // Blindsight and Tremorsense bypass physical walls and Line of Sight obstacles
+  if (visionType === 'blindsight' || visionType === 'tremorsense') {
+    return true;
+  }
 
   // 1. Check vector wall intersections
   if (vectorWalls.length > 0) {
@@ -146,7 +152,8 @@ export function revealVisionWithLOS(
   tokenCol: number,
   radius: number,
   vectorWalls: WallSegment[] = [],
-  cellSize = 60
+  cellSize = 60,
+  visionType: VisionType = 'normal'
 ): void {
   const rows = gridCopy.length;
   const cols = gridCopy[0]?.length || 0;
@@ -161,7 +168,7 @@ export function revealVisionWithLOS(
     for (let c = minC; c <= maxC; c++) {
       const dist = Math.sqrt(Math.pow(r - tokenRow, 2) + Math.pow(c - tokenCol, 2));
       if (dist <= radius) {
-        if (hasLineOfSight(tokenCol, tokenRow, c, r, gridCopy, vectorWalls, cellSize)) {
+        if (hasLineOfSight(tokenCol, tokenRow, c, r, gridCopy, vectorWalls, cellSize, visionType)) {
           if (gridCopy[r]?.[c]) {
             gridCopy[r][c].fog = false;
           }
@@ -183,8 +190,22 @@ export function computeVisibilityPolygon(
   gridOffsetX = 0,
   gridOffsetY = 0,
   hasBgImage = false,
-  vectorWalls: WallSegment[] = []
+  vectorWalls: WallSegment[] = [],
+  visionType: VisionType = 'normal'
 ): { x: number; y: number }[] {
+  // Blindsight and Tremorsense perceive 360 degrees ignoring walls
+  if (visionType === 'blindsight' || visionType === 'tremorsense') {
+    const pts: { x: number; y: number }[] = [];
+    const numCircleRays = 36;
+    for (let i = 0; i < numCircleRays; i++) {
+      const angle = (i * 2 * Math.PI) / numCircleRays;
+      pts.push({
+        x: tx + Math.cos(angle) * visionRadius,
+        y: ty + Math.sin(angle) * visionRadius,
+      });
+    }
+    return pts;
+  }
   const points: { x: number; y: number }[] = [];
   const anglesSet = new Set<number>();
   const numRays = 360;

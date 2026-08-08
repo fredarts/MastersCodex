@@ -107,6 +107,7 @@ export interface WorldEntity {
   images?: string[]; // Galeria de imagens (upload ou IA Nano Banana)
   attributes?: Record<string, any>;
   connections?: EntityConnection[]; // IDs de outras entidades conectadas e tipo da relação
+  tags?: string[]; // Custom tags/etiquetas de organização e busca livre
   createdAt?: string;
 }
 
@@ -787,8 +788,26 @@ export interface CharacterSheet {
   classResources?: Record<string, CharacterResource>;
   activeClassBuffs?: ActiveClassBuff[];
   classFeatures?: ClassFeature[];
+  feats?: CharacterFeat[];
 
   updatedAt?: string;
+}
+
+export interface CharacterFeat {
+  id: string;
+  name: string;
+  namePt: string;
+  description: string;
+  prerequisite?: string;
+  category: 'combat' | 'magic' | 'utility' | 'general';
+  chosenAttribute?: AttributeKey;
+  benefits: {
+    attributeBonus?: Partial<Record<AttributeKey, number>>;
+    initiativeBonus?: number;
+    speedBonus?: number;
+    hpPerLevelBonus?: number;
+    savingThrowProficiency?: AttributeKey;
+  };
 }
 
 export type Result<T, E = Error> = 

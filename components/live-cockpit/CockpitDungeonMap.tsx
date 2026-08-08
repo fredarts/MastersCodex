@@ -25,7 +25,7 @@ interface MultiMapState {
 
 export const CockpitDungeonMap: React.FC = () => {
   const { activeScene, fetchSceneMap, saveSceneMap, campaignMaps } = useSession();
-  const { combatants, broadcastToPlayerView } = useLiveCockpit();
+  const { combatants, broadcastToPlayerView, drawings, broadcastDrawingAction } = useLiveCockpit();
 
   const [grid, setGrid] = useState<Cell[][]>([]);
   const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
@@ -35,7 +35,7 @@ export const CockpitDungeonMap: React.FC = () => {
   const [vectorWalls, setVectorWalls] = useState<import('@/lib/types').WallSegment[]>([]);
   const [lightSources, setLightSources] = useState<import('@/lib/types').LightSource[]>([]);
 
-  const [selectedTool, setSelectedTool] = useState<'pan' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure'>('token');
+  const [selectedTool, setSelectedTool] = useState<'pan' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'draw-pencil' | 'draw-circle' | 'draw-rect' | 'draw-eraser' | 'draw-text'>('token');
   const [measureStart, setMeasureStart] = useState<{ r: number; c: number } | null>(null);
   const [measuredDistance, setMeasuredDistance] = useState<{ feet: number; meters: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -561,6 +561,75 @@ export const CockpitDungeonMap: React.FC = () => {
         </button>
       </div>
 
+      {/* Floating Drawing Tools (Left side) */}
+      <div className="absolute top-1/2 -translate-y-1/2 left-4 z-30 p-2 bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-2xl flex flex-col gap-2 shadow-2xl w-14 items-center">
+        <span className="text-[9px] uppercase font-bold text-slate-500 tracking-wider text-center leading-tight mb-1">Anotar</span>
+        <button
+          onClick={() => setSelectedTool('draw-pencil')}
+          className={`w-10 h-10 flex items-center justify-center rounded-xl text-lg transition-all ${
+            selectedTool === 'draw-pencil' ? 'bg-amber-500 shadow-md scale-110' : 'hover:bg-slate-800 grayscale hover:grayscale-0'
+          }`}
+          title="Lápis Livre"
+        >
+          ✏️
+        </button>
+        <button
+          onClick={() => setSelectedTool('draw-circle')}
+          className={`w-10 h-10 flex items-center justify-center rounded-xl text-lg transition-all ${
+            selectedTool === 'draw-circle' ? 'bg-amber-500 shadow-md scale-110' : 'hover:bg-slate-800 grayscale hover:grayscale-0'
+          }`}
+          title="Desenhar Círculo"
+        >
+          ⭕
+        </button>
+        <button
+          onClick={() => setSelectedTool('draw-rect')}
+          className={`w-10 h-10 flex items-center justify-center rounded-xl text-lg transition-all ${
+            selectedTool === 'draw-rect' ? 'bg-amber-500 shadow-md scale-110' : 'hover:bg-slate-800 grayscale hover:grayscale-0'
+          }`}
+          title="Desenhar Retângulo"
+        >
+          🔲
+        </button>
+        <button
+          onClick={() => setSelectedTool('draw-text')}
+          className={`w-10 h-10 flex items-center justify-center rounded-xl text-lg transition-all ${
+            selectedTool === 'draw-text' ? 'bg-amber-500 shadow-md scale-110' : 'hover:bg-slate-800 grayscale hover:grayscale-0'
+          }`}
+          title="Anotação de Texto"
+        >
+          📝
+        </button>
+        <div className="w-8 h-[1px] bg-slate-800 my-1"></div>
+        <button
+          onClick={() => setSelectedTool('draw-eraser')}
+          className={`w-10 h-10 flex items-center justify-center rounded-xl text-lg transition-all ${
+            selectedTool === 'draw-eraser' ? 'bg-rose-500 shadow-md scale-110' : 'hover:bg-slate-800 grayscale hover:grayscale-0'
+          }`}
+          title="Borracha"
+        >
+          🧹
+        </button>
+        <button
+          onClick={() => broadcastDrawingAction?.({ action: 'undo' })}
+          className="w-10 h-10 flex items-center justify-center rounded-xl text-lg hover:bg-slate-800 transition-all text-slate-300 hover:text-slate-100"
+          title="Desfazer (Ctrl+Z)"
+        >
+          ↩️
+        </button>
+        <button
+          onClick={() => {
+            if (window.confirm('Tem certeza que deseja apagar todos os desenhos?')) {
+              broadcastDrawingAction?.({ action: 'clear' });
+            }
+          }}
+          className="w-10 h-10 flex items-center justify-center rounded-xl text-lg hover:bg-rose-900/50 transition-all text-rose-500 hover:text-rose-400"
+          title="Limpar Tudo"
+        >
+          🗑️
+        </button>
+      </div>
+
 
       {/* Main DysonCanvas inside Aspect Box */}
       <DysonCanvas
@@ -581,6 +650,8 @@ export const CockpitDungeonMap: React.FC = () => {
         setMeasureStart={setMeasureStart}
         setMeasuredDistance={setMeasuredDistance}
         onGridChange={setGrid}
+        drawings={drawings}
+        onDrawingAction={broadcastDrawingAction}
       />
     </div>
   );

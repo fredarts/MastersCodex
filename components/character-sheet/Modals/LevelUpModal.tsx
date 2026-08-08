@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { CharacterSheet, AttributeKey } from '@/lib/types';
+import { CharacterSheet, AttributeKey, CharacterFeat } from '@/lib/types';
 import { DND_CLASSES, CLASS_FEATURES_DB, MULTICLASS_REQUIREMENTS, MULTICLASS_PROFICIENCIES } from '@/lib/dnd5e-data';
-import { getAttributeModifier, applyLevelChange, getCharacterClasses, getClassLevel } from '@/lib/dnd5e-calculator';
-import { Sparkles, Dices, Shield, Zap, CheckCircle2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { DND5E_FEATS_DB, checkFeatPrerequisites } from '@/lib/dnd5e-feats-db';
+import { getAttributeModifier, applyLevelChange, getCharacterClasses, getClassLevel, recalculateSheetDerivedStats } from '@/lib/dnd5e-calculator';
+import { Sparkles, Dices, Shield, Zap, CheckCircle2, ChevronRight, ChevronLeft, Award, Search, AlertCircle } from 'lucide-react';
 
 interface LevelUpModalProps {
   isOpen: boolean;
@@ -27,6 +28,12 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
   const [asiPoints, setAsiPoints] = useState(2);
   const [asiAllocated, setAsiAllocated] = useState<Partial<Record<AttributeKey, number>>>({});
 
+  // Feats State
+  const [asiChoiceMode, setAsiChoiceMode] = useState<'attributes' | 'feat'>('attributes');
+  const [selectedFeat, setSelectedFeat] = useState<Omit<CharacterFeat, 'id'> | null>(null);
+  const [halfFeatAttr, setHalfFeatAttr] = useState<AttributeKey>('str');
+  const [featSearch, setFeatSearch] = useState('');
+
   const classData = DND_CLASSES[selectedClass];
   const hitDieVal = classData ? parseInt(classData.hitDie.replace('1d', ''), 10) || 8 : 8;
   const conMod = getAttributeModifier(sheet, 'con');
@@ -35,7 +42,13 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
   const targetClassLevel = getClassLevel(sheet, selectedClass) + 1;
   const newFeatures = (CLASS_FEATURES_DB[selectedClass] || {})[targetClassLevel] || [];
   const subclassFeature = newFeatures.find(f => f.isSubclassChoice);
-  const isAsiLevel = [4, 8, 12, 16, 19].includes(targetClassLevel);
+  
+  // Classe-específica de ASI (Guerreiro ganha em 4, 6, 8, 12, 14, 16, 19 | Ladino 4, 8, 10, 12, 16, 19)
+  const isAsiLevel = (() => {
+    if (selectedClass === 'Guerreiro') return [4, 6, 8, 12, 14, 16, 19].includes(targetClassLevel);
+    if (selectedClass === 'Ladino') return [4, 8, 10, 12, 16, 19].includes(targetClassLevel);
+    return [4, 8, 12, 16, 19].includes(targetClassLevel);
+  })();
 
   useEffect(() => {
     if (isOpen) {
@@ -46,6 +59,10 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
       setPendingSubclass(sheet.subclass || '');
       setAsiPoints(2);
       setAsiAllocated({});
+      setAsiChoiceMode('attributes');
+      setSelectedFeat(null);
+      setHalfFeatAttr('str');
+      setFeatSearch('');
     }
   }, [isOpen, targetLevel, sheet.className, sheet.subclass]);
 
@@ -64,7 +81,6 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
 
   const handleNextStep = () => {
     if (step === 0) {
-      // Check if trying to add a new class, reset pending subclass just in case
       if (selectedClass !== sheet.className) setPendingSubclass('');
       setStep(1);
     }
@@ -89,7 +105,6 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
       currentClasses[existingClassIndex].level += 1;
       if (pendingSubclass && currentClasses[existingClassIndex].name === selectedClass) {
         currentClasses[existingClassIndex].subclass = pendingSubclass;
-        // Se for a primária, atualiza tbm na raiz
         if (currentClasses[existingClassIndex].isPrimary) finalSheet.subclass = pendingSubclass;
       }
     } else {
@@ -106,20 +121,41 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
     // 1. Aplica HP
     if (hpGained !== null) {
       finalSheet.maxHp = finalSheet.maxHp + hpGained;
-      finalSheet.currentHp = finalSheet.currentHp + hpGained; // Cura o valor ganho
+      finalSheet.currentHp = finalSheet.currentHp + hpGained;
     }
 
-    // 2. Aplica ASI
+    // 2. Aplica ASI ou Talento (Feat)
     if (isAsiLevel) {
-      finalSheet.attributes = { ...finalSheet.attributes };
-      for (const [key, val] of Object.entries(asiAllocated)) {
-        if (val) {
-          const attr = key as AttributeKey;
-          finalSheet.attributes[attr] = {
-            ...finalSheet.attributes[attr],
-            score: finalSheet.attributes[attr].score + val
+      if (asiChoiceMode === 'attributes') {
+        finalSheet.attributes = { ...finalSheet.attributes };
+        for (const [key, val] of Object.entries(asiAllocated)) {
+          if (val) {
+            const attr = key as AttributeKey;
+            finalSheet.attributes[attr] = {
+              ...finalSheet.attributes[attr],
+              score: finalSheet.attributes[attr].score + val
+            };
+          }
+        }
+      } else if (asiChoiceMode === 'feat' && selectedFeat) {
+        const isHalfFeat = !!selectedFeat.benefits?.attributeBonus || selectedFeat.namePt.includes('Resiliente');
+        const newFeat: CharacterFeat = {
+          ...selectedFeat,
+          id: `feat-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          chosenAttribute: isHalfFeat ? halfFeatAttr : undefined
+        };
+
+        // Aplica o +1 do Half-Feat no atributo se selecionado
+        if (isHalfFeat && halfFeatAttr) {
+          finalSheet.attributes = { ...finalSheet.attributes };
+          finalSheet.attributes[halfFeatAttr] = {
+            ...finalSheet.attributes[halfFeatAttr],
+            score: finalSheet.attributes[halfFeatAttr].score + 1
           };
         }
+
+        finalSheet.feats = [...(finalSheet.feats || []), newFeat];
+        finalSheet.featuresAndTraits = `${finalSheet.featuresAndTraits || ''}\n\n[Talento] ${newFeat.namePt} (${newFeat.name}): ${newFeat.description}`.trim();
       }
       finalSheet.attributesLocked = false;
     }
@@ -135,8 +171,9 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
       }
     }
 
-    // 4. Executa a lógica padrão de nível (que agora usa a array classes atualizada)
+    // 4. Executa a lógica padrão de nível
     finalSheet = applyLevelChange(finalSheet, targetLevel, selectedClass);
+    finalSheet = recalculateSheetDerivedStats(finalSheet);
 
     finalSheet.attributePointsAvailable = sheet.attributePointsAvailable || 0;
 
@@ -154,9 +191,19 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
     }
   };
 
+  const isNextDisabled = () => {
+    if (step === 1 && hpGained === null) return true;
+    if (step === 2 && subclassFeature && !pendingSubclass) return true;
+    if (step === 3) {
+      if (asiChoiceMode === 'attributes') return asiPoints > 0;
+      if (asiChoiceMode === 'feat') return !selectedFeat;
+    }
+    return false;
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in p-4">
-      <div className="bg-[#0d1117] border border-cyan-500/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="bg-[#0d1117] border border-cyan-500/30 rounded-2xl max-w-xl w-full p-6 shadow-2xl flex flex-col max-h-[90vh]">
         
         {/* Cabeçalho */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
@@ -180,7 +227,7 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
         </div>
 
         {/* Corpo (Scrollable) */}
-        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-6 min-h-[300px]">
+        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-6 min-h-[320px]">
           
           {/* PASSO 0: ESCOLHA DE CLASSE */}
           {step === 0 && (
@@ -192,7 +239,6 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
                   const isCurrent = !!currentClassObj;
                   const currentLevel = currentClassObj ? currentClassObj.level : 0;
                   
-                  // Verificar Requisitos de Multiclasse se for classe nova
                   let isEligible = true;
                   let reqText = '';
                   if (!isCurrent) {
@@ -323,11 +369,10 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
                 ) : (
                   <div className="space-y-3">
                     {newFeatures.map((feat) => {
-                      // Se requer subclasse e não é a que o jogador escolheu, pula
                       if (feat.requiresSubclass && feat.requiresSubclass !== pendingSubclass && feat.requiresSubclass !== sheet.subclass) {
                         return null;
                       }
-                      if (feat.isSubclassChoice) return null; // Já renderizamos no painel especial acima
+                      if (feat.isSubclassChoice) return null;
 
                       return (
                         <div key={feat.name} className="bg-slate-900/60 border border-slate-800 p-3 rounded-lg">
@@ -348,57 +393,185 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
             </div>
           )}
 
-          {/* PASSO 3: ASI (ATRIBUTOS) */}
+          {/* PASSO 3: ASI vs TALENTOS (FEATS) */}
           {step === 3 && (
-            <div className="animate-fade-in space-y-4">
-              <div className="bg-amber-950/30 border border-amber-500/30 p-4 rounded-xl">
-                <h3 className="font-bold text-amber-400 mb-1">Incremento no Valor de Habilidade</h3>
-                <p className="text-xs text-slate-300">Distribua os pontos abaixo entre seus atributos para aumentá-los.</p>
+            <div className="animate-fade-in space-y-5">
+              
+              {/* Seletor de Modo: Atributos ou Talento */}
+              <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setAsiChoiceMode('attributes')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                    asiChoiceMode === 'attributes' 
+                      ? 'bg-amber-500 text-slate-950 shadow-md' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Atributos (+2)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAsiChoiceMode('feat')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                    asiChoiceMode === 'feat' 
+                      ? 'bg-cyan-500 text-slate-950 shadow-md' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Award className="w-3.5 h-3.5" />
+                  Selecionar Talento (Feat)
+                </button>
               </div>
 
-              <div className="flex items-center justify-between bg-slate-900 p-3 rounded-xl border border-slate-800">
-                <span className="text-sm font-bold text-slate-300">Pontos Disponíveis:</span>
-                <span className="text-xl font-black text-amber-400">{asiPoints}</span>
-              </div>
+              {/* MODO ATRIBUTOS (ASI PADRÃO) */}
+              {asiChoiceMode === 'attributes' && (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="bg-amber-950/30 border border-amber-500/30 p-3.5 rounded-xl">
+                    <h3 className="font-bold text-amber-400 text-xs mb-0.5">Incremento no Valor de Habilidade</h3>
+                    <p className="text-[11px] text-slate-300">Distribua 2 pontos entre seus atributos (+2 em um ou +1 em dois).</p>
+                  </div>
 
-              <div className="space-y-2">
-                {Object.entries(sheet.attributes).map(([key, attr]) => {
-                  const alloc = asiAllocated[key as AttributeKey] || 0;
-                  const total = attr.score + alloc;
-                  
-                  return (
-                    <div key={key} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50">
-                      <span className="text-sm font-bold text-white uppercase w-12">{key}</span>
+                  <div className="flex items-center justify-between bg-slate-900 p-3 rounded-xl border border-slate-800">
+                    <span className="text-xs font-bold text-slate-300">Pontos Disponíveis:</span>
+                    <span className="text-lg font-black text-amber-400">{asiPoints}</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {Object.entries(sheet.attributes).map(([key, attr]) => {
+                      const alloc = asiAllocated[key as AttributeKey] || 0;
+                      const total = attr.score + alloc;
                       
-                      <div className="flex items-center gap-4">
-                        <span className={`text-lg font-mono font-black ${alloc > 0 ? 'text-amber-400' : 'text-slate-300'}`}>
-                          {total}
-                        </span>
-                        
-                        <div className="flex bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
-                          <button
-                            type="button"
-                            onClick={() => allocateAsi(key as AttributeKey, -1)}
-                            disabled={alloc === 0}
-                            className="px-3 py-1 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-slate-900 text-slate-300 font-bold"
-                          >
-                            -
-                          </button>
-                          <div className="w-px bg-slate-700" />
-                          <button
-                            type="button"
-                            onClick={() => allocateAsi(key as AttributeKey, 1)}
-                            disabled={asiPoints === 0}
-                            className="px-3 py-1 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-slate-900 text-slate-300 font-bold"
-                          >
-                            +
-                          </button>
+                      return (
+                        <div key={key} className="flex items-center justify-between p-2.5 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                          <span className="text-xs font-bold text-white uppercase w-12">{key}</span>
+                          
+                          <div className="flex items-center gap-3">
+                            <span className={`text-base font-mono font-black ${alloc > 0 ? 'text-amber-400' : 'text-slate-300'}`}>
+                              {total}
+                            </span>
+                            
+                            <div className="flex bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
+                              <button
+                                type="button"
+                                onClick={() => allocateAsi(key as AttributeKey, -1)}
+                                disabled={alloc === 0}
+                                className="px-2.5 py-0.5 hover:bg-slate-700 disabled:opacity-30 text-slate-300 font-bold text-xs"
+                              >
+                                -
+                              </button>
+                              <div className="w-px bg-slate-700" />
+                              <button
+                                type="button"
+                                onClick={() => allocateAsi(key as AttributeKey, 1)}
+                                disabled={asiPoints === 0}
+                                className="px-2.5 py-0.5 hover:bg-slate-700 disabled:opacity-30 text-slate-300 font-bold text-xs"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
                         </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* MODO TALENTO (FEAT) */}
+              {asiChoiceMode === 'feat' && (
+                <div className="space-y-4 animate-fade-in">
+                  
+                  {/* Busca */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Buscar talento (ex: Alerta, Sharpshooter, Tough)..."
+                      value={featSearch}
+                      onChange={(e) => setFeatSearch(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder:text-slate-500 outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  {/* Lista de Feats */}
+                  <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+                    {DND5E_FEATS_DB.filter(f => 
+                      f.namePt.toLowerCase().includes(featSearch.toLowerCase()) || 
+                      f.name.toLowerCase().includes(featSearch.toLowerCase())
+                    ).map(feat => {
+                      const isSelected = selectedFeat?.name === feat.name;
+                      const prereqCheck = checkFeatPrerequisites(sheet, feat);
+
+                      return (
+                        <div
+                          key={feat.name}
+                          onClick={() => {
+                            if (prereqCheck.met) setSelectedFeat(feat);
+                          }}
+                          className={`p-3 rounded-xl border transition-all text-left cursor-pointer ${
+                            isSelected 
+                              ? 'bg-cyan-500/20 border-cyan-500 shadow-md shadow-cyan-500/20' 
+                              : prereqCheck.met 
+                                ? 'bg-slate-900/80 border-slate-800 hover:border-slate-700' 
+                                : 'bg-slate-950/40 border-slate-900 opacity-50 cursor-not-allowed'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                              {feat.namePt} <span className="text-[10px] text-slate-500 font-normal">({feat.name})</span>
+                            </span>
+                            {isSelected && <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />}
+                          </div>
+
+                          <p className="text-[11px] text-slate-400 leading-relaxed line-clamp-2">{feat.description}</p>
+
+                          {feat.prerequisite && (
+                            <div className="mt-2 text-[10px] font-mono flex items-center gap-1 text-amber-400/90">
+                              <AlertCircle className="w-3 h-3 shrink-0" />
+                              <span>Pré-requisito: {feat.prerequisite}</span>
+                            </div>
+                          )}
+
+                          {!prereqCheck.met && prereqCheck.reason && (
+                            <div className="mt-1.5 text-[10px] text-rose-400 font-semibold">
+                              ❌ {prereqCheck.reason}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Seletor de Atributo para Half-Feat */}
+                  {selectedFeat && (selectedFeat.benefits?.attributeBonus || selectedFeat.namePt.includes('Resiliente')) && (
+                    <div className="bg-cyan-950/40 border border-cyan-500/40 p-3 rounded-xl space-y-2 animate-fade-in">
+                      <span className="text-xs font-bold text-cyan-300 block">
+                        Este talento concede +1 em um Atributo. Escolha o atributo:
+                      </span>
+                      <div className="grid grid-cols-6 gap-1">
+                        {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as AttributeKey[]).map(attr => (
+                          <button
+                            key={attr}
+                            type="button"
+                            onClick={() => setHalfFeatAttr(attr)}
+                            className={`py-1.5 text-xs font-mono font-bold uppercase rounded-lg border transition-all ${
+                              halfFeatAttr === attr 
+                                ? 'bg-cyan-500 text-slate-950 border-cyan-400' 
+                                : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500'
+                            }`}
+                          >
+                            {attr}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  )}
+
+                </div>
+              )}
+
             </div>
           )}
 
@@ -429,8 +602,8 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
             <button
               type="button"
               onClick={handleNextStep}
-              disabled={(step === 1 && hpGained === null) || (step === 2 && subclassFeature && !pendingSubclass) || (step === 3 && asiPoints > 0)}
-              className="px-5 py-2 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:hover:bg-cyan-500 text-slate-950 rounded-xl text-sm font-black transition-all flex items-center gap-1.5"
+              disabled={isNextDisabled()}
+              className="px-5 py-2 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:hover:bg-cyan-500 text-slate-950 rounded-xl text-sm font-black transition-all flex items-center gap-1.5 cursor-pointer"
             >
               {step === (isAsiLevel ? 3 : 2) ? (
                 <>
@@ -451,3 +624,4 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
     </div>
   );
 };
+

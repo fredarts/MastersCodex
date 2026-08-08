@@ -1,7 +1,6 @@
 'use client';
 
-import React from 'react';
-import { Tv, Play, Swords, Map as MapIcon, Image as ImageIcon, Sparkles, Radio } from 'lucide-react';
+import { Tv, Play, Swords, Map as MapIcon, Image as ImageIcon, Sparkles, Radio, BookOpen } from 'lucide-react';
 import { GameScene } from '@/lib/types';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { PresenceIndicator } from '@/components/live-cockpit/PresenceIndicator';
@@ -12,6 +11,7 @@ interface LiveCockpitHeaderProps {
   setLiveDisplayMode: (mode: 'artwork' | 'map' | 'combat') => void;
   onOpenPlayerView: () => void;
   onOpenCreateScene: () => void;
+  onToggleNotebook?: () => void;
 }
 
 export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
@@ -20,6 +20,7 @@ export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
   setLiveDisplayMode,
   onOpenPlayerView,
   onOpenCreateScene,
+  onToggleNotebook,
 }) => {
   const { onlineUsers } = useLiveCockpit();
   return (
@@ -77,8 +78,18 @@ export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
         </button>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <PresenceIndicator users={onlineUsers} className="border-r border-zinc-800 pr-3 mr-1" />
+
+        {onToggleNotebook && (
+          <button
+            onClick={onToggleNotebook}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-semibold rounded-lg border border-amber-500/30 transition-colors"
+            title="Abrir Caderno de Anotações do DM"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-amber-400" /> Caderno DM
+          </button>
+        )}
 
         <button
           onClick={onOpenCreateScene}

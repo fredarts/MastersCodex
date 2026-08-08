@@ -1511,9 +1511,9 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
       {
         name: 'Arquétipo Marcial',
         level: 3,
-        description: 'Escolha um arquétipo marcial que se esforçará para emular (Ex: Campeão).',
+        description: 'Escolha um arquétipo marcial que se esforçará para emular (ex: Campeão, Mestre de Batalha, Cavaleiro Arcano, Guerreiro Rúnico).',
         activation: 'none',
-        choices: ['Campeão'],
+        choices: ['Campeão', 'Mestre de Batalha', 'Cavaleiro Arcano', 'Guerreiro Rúnico'],
         isSubclassChoice: true
       },
       {
@@ -1522,6 +1522,27 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
         description: 'Seus ataques com armas atingem um acerto crítico num valor de 19 ou 20.',
         activation: 'none',
         requiresSubclass: 'Campeão'
+      },
+      {
+        name: 'Superioridade Marcial',
+        level: 3,
+        description: 'Você ganha 4 dados de Superioridade (d8) e 3 manobras marciais (Desarmar, Rasteira, Empurrão) para aprimorar seus ataques e controle tático.',
+        activation: 'none',
+        requiresSubclass: 'Mestre de Batalha'
+      },
+      {
+        name: 'Conjuração Arcana & Vínculo com Arma',
+        level: 3,
+        description: 'Você aprende Truques e Magias de Mago (Abjuração/Evocação). Além disso, pode sintonizar com 1 arma e convocá-la à sua mão como Ação Bônus.',
+        activation: 'bonus_action',
+        requiresSubclass: 'Cavaleiro Arcano'
+      },
+      {
+        name: 'Poder do Gigante & Magia Rúnica',
+        level: 3,
+        description: 'Você ganha a habilidade de crescer para o tamanho Grande (Large) por 1 minuto (+1d6 dano, vantagem em Força) e gravar runas mágicas em seu equipamento.',
+        activation: 'bonus_action',
+        requiresSubclass: 'Guerreiro Rúnico'
       }
     ],
     4: [
@@ -1555,6 +1576,27 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
         description: 'Adicione metade do seu bônus de proficiência a testes de Força, Destreza ou Constituição que não usem a proficiência.',
         activation: 'none',
         requiresSubclass: 'Campeão'
+      },
+      {
+        name: 'Conheça seu Inimigo',
+        level: 7,
+        description: 'Observando uma criatura por 1 minuto fora de combate, você descobre se ela é superior/igual/inferior a você em estatísticas chave.',
+        activation: 'none',
+        requiresSubclass: 'Mestre de Batalha'
+      },
+      {
+        name: 'Magia de Guerra',
+        level: 7,
+        description: 'Quando você usar sua ação para conjurar um Truque, pode fazer um ataque com arma como Ação Bônus.',
+        activation: 'bonus_action',
+        requiresSubclass: 'Cavaleiro Arcano'
+      },
+      {
+        name: 'Escudo Rúnico',
+        level: 7,
+        description: 'Quando uma criatura que você possa ver a 18m acertar um ataque em um aliado, use sua Reação para forçá-la a rerolar a jogada.',
+        activation: 'reaction',
+        requiresSubclass: 'Guerreiro Rúnico'
       }
     ],
     8: [
@@ -1580,6 +1622,20 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
         description: 'Você pode escolher um segundo estilo de luta.',
         activation: 'none',
         requiresSubclass: 'Campeão'
+      },
+      {
+        name: 'Superioridade Aprimorada (d10)',
+        level: 10,
+        description: 'Seus dados de Superioridade tornam-se d10.',
+        activation: 'none',
+        requiresSubclass: 'Mestre de Batalha'
+      },
+      {
+        name: 'Golpe Arcano',
+        level: 10,
+        description: 'Quando você acertar uma criatura com um ataque com arma, ela terá desvantagem na próxima salvaguarda contra uma magia que você conjurar antes do fim do seu próximo turno.',
+        activation: 'none',
+        requiresSubclass: 'Cavaleiro Arcano'
       }
     ],
     11: [
@@ -1621,6 +1677,20 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
         description: 'Seus ataques com armas atingem um acerto crítico num valor 18, 19 ou 20.',
         activation: 'none',
         requiresSubclass: 'Campeão'
+      },
+      {
+        name: 'Implacável',
+        level: 15,
+        description: 'Se você rolar iniciativa e não tiver dados de superioridade restantes, você recupera 1 dado de superioridade.',
+        activation: 'none',
+        requiresSubclass: 'Mestre de Batalha'
+      },
+      {
+        name: 'Investida Arcana',
+        level: 15,
+        description: 'Ao usar Surto de Ação, você pode se teleportar magicamente até 9 metros (30ft) para um espaço desocupado antes ou depois da ação adicional.',
+        activation: 'none',
+        requiresSubclass: 'Cavaleiro Arcano'
       }
     ],
     16: [
@@ -1652,6 +1722,20 @@ export const CLASS_FEATURES_DB: Record<string, Record<number, Omit<ClassFeature,
         description: 'No início de cada um de seus turnos (se tiver até metade de seus PV), recupera 5 + Modificador de Constituição.',
         activation: 'none',
         requiresSubclass: 'Campeão'
+      },
+      {
+        name: 'Superioridade Suprema (d12)',
+        level: 18,
+        description: 'Seus dados de Superioridade tornam-se d12.',
+        activation: 'none',
+        requiresSubclass: 'Mestre de Batalha'
+      },
+      {
+        name: 'Magia de Guerra Aprimorada',
+        level: 18,
+        description: 'Quando você usar sua ação para conjurar uma Magia, pode fazer um ataque com arma como Ação Bônus.',
+        activation: 'bonus_action',
+        requiresSubclass: 'Cavaleiro Arcano'
       }
     ],
     19: [
