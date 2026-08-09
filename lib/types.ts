@@ -215,6 +215,11 @@ export interface UserCampaign {
   partyMembers?: CampaignPartyMember[];
 }
 
+export interface StatusDuration {
+  name: string;
+  remainingRounds: number;
+}
+
 export interface Combatant {
   id: string;
   name: string;
@@ -254,6 +259,7 @@ export interface Combatant {
   visionType?: VisionType;
   darkvisionRange?: number;
   hasTorch?: boolean;
+  statusDurations?: StatusDuration[];
 }
 
 export type WallType = 'wall' | 'door' | 'secret_door' | 'window' | 'terrain' | 'illusion';

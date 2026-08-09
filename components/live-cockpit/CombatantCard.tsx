@@ -204,21 +204,42 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                 </span>
               )}
             </div>
-
             {/* Condition Badges */}
             <div className="flex flex-wrap gap-1 mt-1 relative">
-              {c.conditions?.map((cond) => (
+              {c.conditions?.map((cond) => {
+                const duration = c.statusDurations?.find(d => d.name === cond)?.remainingRounds;
+                return (
+                  <span
+                    key={cond}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleCondition(c.id, cond);
+                    }}
+                    className="text-[8px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-rose-500/40"
+                  >
+                    {cond}{duration !== undefined && duration > 0 ? ` (${duration}r)` : ''} ×
+                  </span>
+                );
+              })}
+
+              {/* Custom Status Durations Badges (e.g. Fúria) */}
+              {c.statusDurations?.filter(d => !c.conditions?.includes(d.name as any)).map((effect) => (
                 <span
-                  key={cond}
+                  key={effect.name}
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleToggleCondition(c.id, cond);
+                    onUpdateCombatants(prev => prev.map(x => x.id === c.id ? {
+                      ...x,
+                      statusDurations: x.statusDurations?.filter(d => d.name !== effect.name)
+                    } : x));
                   }}
-                  className="text-[8px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-rose-500/40"
+                  className="text-[8px] font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-cyan-500/40"
+                  title="Clique para remover"
                 >
-                  {cond} ×
+                  {effect.name} ({effect.remainingRounds === 99 ? '∞' : `${effect.remainingRounds}r`}) ×
                 </span>
               ))}
+
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -228,7 +249,7 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
               >
                 + Status
               </button>
-
+ 
               {/* Status Popover */}
               {isStatusOpen && (
                 <div className="absolute top-full left-0 mt-2 w-48 bg-[#0f141d] border border-slate-700 rounded-xl shadow-2xl p-2 z-20 grid grid-cols-2 gap-1" onClick={(e) => e.stopPropagation()}>
@@ -250,6 +271,27 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                       </button>
                     );
                   })}
+                  
+                  {/* Custom Effect Row */}
+                  <div className="col-span-2 border-t border-slate-800 mt-1 pt-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const name = window.prompt('Nome do Efeito / Status Customizado:');
+                        if (!name) return;
+                        const rawDuration = window.prompt(`Duração de '${name}' em rodadas (vazio ou 0 para infinito):`, '0');
+                        const duration = parseInt(rawDuration || '0', 10);
+                        
+                        onUpdateCombatants(prev => prev.map(x => x.id === c.id ? {
+                          ...x,
+                          statusDurations: [...(x.statusDurations || []), { name, remainingRounds: duration > 0 ? duration : 99 }]
+                        } : x));
+                      }}
+                      className="w-full text-center text-[9px] font-bold text-amber-400 bg-amber-950/20 hover:bg-amber-900/30 py-1 rounded"
+                    >
+                      + Efeito Customizado
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

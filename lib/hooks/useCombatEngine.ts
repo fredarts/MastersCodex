@@ -40,12 +40,42 @@ export function useCombatEngine() {
 
     setCombatants((prev) => prev.map((c, idx) => {
       if (idx === nextIndex) {
-        const hasImmobilizingCondition = c.conditions?.some(cond => 
+        // Decrement status durations
+        let updatedDurations = c.statusDurations ? c.statusDurations.map(d => ({
+          ...d,
+          remainingRounds: d.remainingRounds - 1
+        })) : [];
+
+        const expired = updatedDurations.filter(d => d.remainingRounds <= 0);
+        const active = updatedDurations.filter(d => d.remainingRounds > 0);
+
+        let updatedConditions = c.conditions || [];
+        expired.forEach(exp => {
+          updatedConditions = updatedConditions.filter(cond => cond !== exp.name);
+          // Dispatch events for floating combat text and logs
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('masters_codex_combat_text', {
+              detail: { combatantId: c.id, type: 'damage', amount: `${exp.name} Expirou!` }
+            }));
+            window.dispatchEvent(new CustomEvent('masters_codex_log_entry', {
+              detail: {
+                message: `O efeito '${exp.name}' expirou em ${c.name}.`,
+                description: `O efeito '${exp.name}' expirou em ${c.name}.`,
+                type: 'status_expired',
+                actorId: c.id
+              }
+            }));
+          }
+        });
+
+        const hasImmobilizingCondition = updatedConditions.some(cond => 
           ['Agarrado', 'Paralisado', 'Petrificado', 'Restrito', 'Inconsciente', 'Incapacitado'].includes(cond)
         );
 
         return {
           ...c,
+          conditions: updatedConditions,
+          statusDurations: active.length > 0 ? active : undefined,
           actionUsed: false,
           bonusActionUsed: false,
           reactionUsed: false,
@@ -91,10 +121,30 @@ export function useCombatEngine() {
         if (c.id !== id) return c;
         const currentConditions = c.conditions || [];
         const hasCondition = currentConditions.includes(condition);
-        const updatedConditions = hasCondition
-          ? currentConditions.filter((cond) => cond !== condition)
-          : [...currentConditions, condition];
-        return { ...c, conditions: updatedConditions };
+        
+        let updatedConditions = [];
+        let updatedDurations = c.statusDurations || [];
+
+        if (hasCondition) {
+          updatedConditions = currentConditions.filter((cond) => cond !== condition);
+          updatedDurations = updatedDurations.filter(d => d.name !== condition);
+        } else {
+          updatedConditions = [...currentConditions, condition];
+          let duration = 0;
+          if (typeof window !== 'undefined') {
+            const rawDuration = window.prompt(`Definir duração de '${condition}' em rodadas (vazio ou 0 para infinito):`, '0');
+            duration = parseInt(rawDuration || '0', 10);
+          }
+          if (duration > 0) {
+            updatedDurations = [...updatedDurations, { name: condition, remainingRounds: duration }];
+          }
+        }
+
+        return {
+          ...c,
+          conditions: updatedConditions,
+          statusDurations: updatedDurations.length > 0 ? updatedDurations : undefined
+        };
       })
     );
   }, [setCombatants]);

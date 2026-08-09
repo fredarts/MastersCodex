@@ -75,6 +75,44 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
 
   const handleNextTurn = () => {
     if (combatants.length === 0) return;
+
+    const processCombatantTurnStart = (c: Combatant): Combatant => {
+      let updatedDurations = c.statusDurations ? c.statusDurations.map(d => ({
+        ...d,
+        remainingRounds: d.remainingRounds - 1
+      })) : [];
+
+      const expired = updatedDurations.filter(d => d.remainingRounds <= 0);
+      const active = updatedDurations.filter(d => d.remainingRounds > 0);
+
+      let updatedConditions = c.conditions || [];
+      expired.forEach(exp => {
+        updatedConditions = updatedConditions.filter(cond => cond !== exp.name);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('masters_codex_combat_text', {
+            detail: { combatantId: c.id, type: 'damage', amount: `${exp.name} Expirou!` }
+          }));
+        }
+      });
+
+      const hasImmobilizingCondition = updatedConditions.some(cond => 
+        ['Agarrado', 'Paralisado', 'Petrificado', 'Restrito', 'Inconsciente', 'Incapacitado'].includes(cond)
+      );
+
+      return {
+        ...c,
+        conditions: updatedConditions,
+        statusDurations: active.length > 0 ? active : undefined,
+        actionUsed: false,
+        bonusActionUsed: false,
+        reactionUsed: false,
+        hasDashed: false,
+        movementUsed: hasImmobilizingCondition ? c.movementUsed : 0,
+        turnStartX: c.x,
+        turnStartZ: c.z
+      };
+    };
+
     let nextIdx = 0;
     if (currentTurnIndex >= combatants.length - 1) {
       setCurrentTurnIndex(0);
@@ -90,19 +128,7 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
           
           return sorted.map((c, idx) => {
              if (idx === 0) {
-               const hasImmobilizingCondition = c.conditions?.some(cond => 
-                 ['Agarrado', 'Paralisado', 'Petrificado', 'Restrito', 'Inconsciente', 'Incapacitado'].includes(cond)
-               );
-               return {
-                 ...c,
-                 actionUsed: false,
-                 bonusActionUsed: false,
-                 reactionUsed: false,
-                 hasDashed: false,
-                 movementUsed: hasImmobilizingCondition ? c.movementUsed : 0,
-                 turnStartX: c.x,
-                 turnStartZ: c.z
-               };
+               return processCombatantTurnStart(c);
              }
              return c;
           });
@@ -116,20 +142,7 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
 
     setCombatants(prev => prev.map((c, idx) => {
       if (idx === nextIdx) {
-        const hasImmobilizingCondition = c.conditions?.some(cond => 
-          ['Agarrado', 'Paralisado', 'Petrificado', 'Restrito', 'Inconsciente', 'Incapacitado'].includes(cond)
-        );
-
-        return {
-          ...c,
-          actionUsed: false,
-          bonusActionUsed: false,
-          reactionUsed: false,
-          hasDashed: false,
-          movementUsed: hasImmobilizingCondition ? c.movementUsed : 0,
-          turnStartX: c.x,
-          turnStartZ: c.z
-        };
+        return processCombatantTurnStart(c);
       }
       return c;
     }));
@@ -167,11 +180,32 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
     setCombatants((prev) =>
       prev.map((c) => {
         if (c.id === id) {
-          const exists = c.conditions.includes(cond);
-          const newConds = exists
-            ? c.conditions.filter((x) => x !== cond)
-            : [...c.conditions, cond];
-          return { ...c, conditions: newConds };
+          const currentConditions = c.conditions || [];
+          const exists = currentConditions.includes(cond);
+          
+          let updatedConditions = [];
+          let updatedDurations = c.statusDurations || [];
+
+          if (exists) {
+            updatedConditions = currentConditions.filter((x) => x !== cond);
+            updatedDurations = updatedDurations.filter(d => d.name !== cond);
+          } else {
+            updatedConditions = [...currentConditions, cond];
+            let duration = 0;
+            if (typeof window !== 'undefined') {
+              const rawDuration = window.prompt(`Definir duração de '${cond}' em rodadas (vazio ou 0 para infinito):`, '0');
+              duration = parseInt(rawDuration || '0', 10);
+            }
+            if (duration > 0) {
+              updatedDurations = [...updatedDurations, { name: cond, remainingRounds: duration }];
+            }
+          }
+
+          return { 
+            ...c, 
+            conditions: updatedConditions,
+            statusDurations: updatedDurations.length > 0 ? updatedDurations : undefined
+          };
         }
         return c;
       })
@@ -365,11 +399,36 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
 
                       {/* Condition Badges */}
                       <div className="flex flex-wrap gap-1 mt-1.5 relative">
-                        {c.conditions.map((cond) => (
-                          <span key={cond} onClick={() => handleToggleCondition(c.id, cond)} className="text-[9px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full cursor-pointer hover:bg-rose-500/40">
-                            {cond} ×
+                        {c.conditions?.map((cond) => {
+                          const duration = c.statusDurations?.find(d => d.name === cond)?.remainingRounds;
+                          return (
+                            <span
+                              key={cond}
+                              onClick={() => handleToggleCondition(c.id, cond)}
+                              className="text-[9px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full cursor-pointer hover:bg-rose-500/40"
+                            >
+                              {cond}{duration !== undefined && duration > 0 ? ` (${duration}r)` : ''} ×
+                            </span>
+                          );
+                        })}
+
+                        {/* Custom Status Durations Badges (e.g. Fúria) */}
+                        {c.statusDurations?.filter(d => !c.conditions?.includes(d.name as any)).map((effect) => (
+                          <span
+                            key={effect.name}
+                            onClick={() => {
+                              setCombatants(prev => prev.map(x => x.id === c.id ? {
+                                ...x,
+                                statusDurations: x.statusDurations?.filter(d => d.name !== effect.name)
+                              } : x));
+                            }}
+                            className="text-[9px] font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 rounded-full cursor-pointer hover:bg-cyan-500/40"
+                            title="Clique para remover"
+                          >
+                            {effect.name} ({effect.remainingRounds === 99 ? '∞' : `${effect.remainingRounds}r`}) ×
                           </span>
                         ))}
+
                         <button 
                           onClick={() => setStatusMenuOpen(isStatusOpen ? null : c.id)}
                           className="text-[9px] font-bold text-slate-400 bg-[#0f141d] hover:bg-[#1e293b] border border-[#2a3449] px-2 py-0.5 rounded-full transition-colors flex items-center gap-1"
@@ -392,6 +451,26 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
                                 </button>
                               );
                             })}
+
+                            {/* Custom Effect Row */}
+                            <div className="col-span-2 border-t border-slate-800 mt-1 pt-1">
+                              <button
+                                onClick={() => {
+                                  const name = window.prompt('Nome do Efeito / Status Customizado:');
+                                  if (!name) return;
+                                  const rawDuration = window.prompt(`Duração de '${name}' em rodadas (vazio ou 0 para infinito):`, '0');
+                                  const duration = parseInt(rawDuration || '0', 10);
+                                  
+                                  setCombatants(prev => prev.map(x => x.id === c.id ? {
+                                    ...x,
+                                    statusDurations: [...(x.statusDurations || []), { name, remainingRounds: duration > 0 ? duration : 99 }]
+                                  } : x));
+                                }}
+                                className="w-full text-center text-[9px] font-bold text-amber-400 bg-amber-950/20 hover:bg-amber-900/30 py-1 rounded"
+                              >
+                                + Efeito Customizado
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>

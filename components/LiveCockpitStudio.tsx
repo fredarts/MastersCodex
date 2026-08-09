@@ -480,10 +480,30 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         if (c.id !== id) return c;
         const currentConditions = c.conditions || [];
         const hasCondition = currentConditions.includes(condition);
-        const updatedConditions = hasCondition
-          ? currentConditions.filter((cond) => cond !== condition)
-          : [...currentConditions, condition];
-        return { ...c, conditions: updatedConditions };
+        
+        let updatedConditions = [];
+        let updatedDurations = c.statusDurations || [];
+
+        if (hasCondition) {
+          updatedConditions = currentConditions.filter((cond) => cond !== condition);
+          updatedDurations = updatedDurations.filter(d => d.name !== condition);
+        } else {
+          updatedConditions = [...currentConditions, condition];
+          let duration = 0;
+          if (typeof window !== 'undefined') {
+            const rawDuration = window.prompt(`Definir duração de '${condition}' em rodadas (vazio ou 0 para infinito):`, '0');
+            duration = parseInt(rawDuration || '0', 10);
+          }
+          if (duration > 0) {
+            updatedDurations = [...updatedDurations, { name: condition, remainingRounds: duration }];
+          }
+        }
+
+        return {
+          ...c,
+          conditions: updatedConditions,
+          statusDurations: updatedDurations.length > 0 ? updatedDurations : undefined
+        };
       })
     );
   };
@@ -518,6 +538,20 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       });
     }
   };
+
+  // Listen to custom log entries (e.g. from hooks or other components)
+  useEffect(() => {
+    const handleLogEntry = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      if (customEvt.detail) {
+        addLogEntry(customEvt.detail);
+      }
+    };
+    window.addEventListener('masters_codex_log_entry', handleLogEntry);
+    return () => {
+      window.removeEventListener('masters_codex_log_entry', handleLogEntry);
+    };
+  }, [addLogEntry]);
 
   const parseAndRollDamage = (desc?: string, defaultMod: number = 0): number => {
     if (!desc) {
