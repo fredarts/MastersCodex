@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, X, BookOpen, Shield, Sparkles, Package, Flame, Heart } from 'lucide-react';
+import { Search, X, BookOpen, Shield, Sparkles, Package, Flame, Heart, Image as ImageIcon } from 'lucide-react';
 import { SRDMonster, SRDSpell, SRDItem } from '@/lib/types';
 import { INITIAL_MONSTERS, INITIAL_SPELLS, INITIAL_ITEMS } from '@/lib/srd-data';
 
@@ -16,6 +16,11 @@ export const CompendiumModal: React.FC<CompendiumModalProps> = ({ isOpen, onClos
   const [selectedMonster, setSelectedMonster] = useState<SRDMonster | null>(INITIAL_MONSTERS[0]);
   const [selectedSpell, setSelectedSpell] = useState<SRDSpell | null>(INITIAL_SPELLS[0]);
   const [selectedItem, setSelectedItem] = useState<SRDItem | null>(INITIAL_ITEMS[0]);
+  const [monsterDetailTab, setMonsterDetailTab] = useState<'narrative' | 'stats'>('narrative');
+
+  useEffect(() => {
+    setMonsterDetailTab('narrative');
+  }, [selectedMonster]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -172,44 +177,136 @@ export const CompendiumModal: React.FC<CompendiumModalProps> = ({ isOpen, onClos
                   </p>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="p-2.5 bg-[#0a0d14] rounded-lg border border-[#2a3449]">
-                    <span className="text-[10px] text-slate-400 block font-semibold">Classe de Armadura</span>
-                    <span className="text-sm font-bold text-cyan-400 font-mono">{selectedMonster.ac}</span>
-                  </div>
-                  <div className="p-2.5 bg-[#0a0d14] rounded-lg border border-[#2a3449]">
-                    <span className="text-[10px] text-slate-400 block font-semibold">Pontos de Vida</span>
-                    <span className="text-sm font-bold text-rose-400 font-mono">{selectedMonster.hp}</span>
-                  </div>
-                  <div className="p-2.5 bg-[#0a0d14] rounded-lg border border-[#2a3449]">
-                    <span className="text-[10px] text-slate-400 block font-semibold">Desafio (XP)</span>
-                    <span className="text-sm font-bold text-amber-400 font-mono">
-                      ND {selectedMonster.cr} ({selectedMonster.xp} XP)
-                    </span>
-                  </div>
+                {/* Sub-Tabs for Monster Details */}
+                <div className="flex border-b border-[#2a3449] bg-[#0a0d14]/40 p-0.5 rounded-lg">
+                  <button
+                    onClick={() => setMonsterDetailTab('narrative')}
+                    className={`flex-1 py-1.5 text-xs font-bold transition-all rounded-md ${
+                      monsterDetailTab === 'narrative' ? 'bg-[#1f2738] text-amber-300' : 'text-slate-400'
+                    }`}
+                  >
+                    História e Arte
+                  </button>
+                  <button
+                    onClick={() => setMonsterDetailTab('stats')}
+                    className={`flex-1 py-1.5 text-xs font-bold transition-all rounded-md ${
+                      monsterDetailTab === 'stats' ? 'bg-[#1f2738] text-amber-300' : 'text-slate-400'
+                    }`}
+                  >
+                    Ficha de Combate
+                  </button>
                 </div>
 
-                {/* Abilities */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Habilidades Especiais:</h4>
-                  {selectedMonster.abilities.map((ab, idx) => (
-                    <div key={idx} className="bg-[#0a0d14] p-3 rounded-lg border border-[#2a3449]">
-                      <span className="font-bold text-xs text-slate-200">{ab.name}: </span>
-                      <span className="text-xs text-slate-300">{ab.desc}</span>
+                {/* Narrative Tab */}
+                {monsterDetailTab === 'narrative' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3 bg-[#0a0d14]/30 p-4 rounded-xl border border-[#2a3449]/50">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-semibold">Tamanho e Tipo</span>
+                        <span className="text-sm font-bold text-slate-200">{selectedMonster.size} ({selectedMonster.type})</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-semibold">Alinhamento</span>
+                        <span className="text-sm font-bold text-slate-200">{selectedMonster.alignment}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-semibold">Deslocamento</span>
+                        <span className="text-sm font-bold text-slate-200">{selectedMonster.speed}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-semibold">Desafio de Combate</span>
+                        <span className="text-sm font-bold text-amber-400">ND {selectedMonster.cr} ({selectedMonster.xp} XP)</span>
+                      </div>
                     </div>
-                  ))}
-                </div>
 
-                {/* Actions */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Ações de Combate:</h4>
-                  {selectedMonster.actions.map((act, idx) => (
-                    <div key={idx} className="bg-[#0a0d14] p-3 rounded-lg border border-[#2a3449]">
-                      <span className="font-bold text-xs text-slate-200">{act.name}: </span>
-                      <span className="text-xs text-slate-300">{act.desc}</span>
+                    <div className="flex flex-col items-center justify-center bg-[#0a0d14]/40 border border-[#2a3449]/50 rounded-xl p-4 min-h-[160px]">
+                      <span className="text-[10px] text-slate-400 block font-semibold mb-2">Representação do Pino</span>
+                      {selectedMonster.tokenImageUrl ? (
+                        <div className="w-32 h-32 rounded-lg overflow-hidden border border-amber-500/20 bg-slate-950 flex items-center justify-center p-2 relative">
+                          <img 
+                            src={selectedMonster.tokenImageUrl} 
+                            alt={selectedMonster.name} 
+                            className="max-w-full max-h-full object-contain filter drop-shadow-[0_0_8px_rgba(245,158,11,0.25)]" 
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-32 h-32 rounded-lg border border-dashed border-[#2a3449] bg-slate-900/20 flex flex-col items-center justify-center text-slate-500 p-2 text-center text-xs">
+                          <ImageIcon className="w-8 h-8 mb-2 opacity-40 text-slate-500" />
+                          <span>Nenhum pino personalizado</span>
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
+
+                {/* Stats Tab */}
+                {monsterDetailTab === 'stats' && (
+                  <div className="space-y-4">
+                    {/* Key stats row */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="p-2.5 bg-[#0a0d14] rounded-lg border border-[#2a3449]">
+                        <span className="text-[10px] text-slate-400 block font-semibold">Classe de Armadura</span>
+                        <span className="text-sm font-bold text-cyan-400 font-mono">{selectedMonster.ac}</span>
+                      </div>
+                      <div className="p-2.5 bg-[#0a0d14] rounded-lg border border-[#2a3449]">
+                        <span className="text-[10px] text-slate-400 block font-semibold">Pontos de Vida</span>
+                        <span className="text-sm font-bold text-rose-400 font-mono">{selectedMonster.hp}</span>
+                      </div>
+                      <div className="p-2.5 bg-[#0a0d14] rounded-lg border border-[#2a3449]">
+                        <span className="text-[10px] text-slate-400 block font-semibold">Deslocamento</span>
+                        <span className="text-sm font-bold text-amber-400 font-mono">{selectedMonster.speed}</span>
+                      </div>
+                    </div>
+
+                    {/* Attributes block */}
+                    <div className="grid grid-cols-6 gap-1 bg-[#0a0d14]/60 p-2 rounded-xl border border-[#2a3449]">
+                      {[
+                        { label: 'FOR', val: selectedMonster.str },
+                        { label: 'DES', val: selectedMonster.dex },
+                        { label: 'CON', val: selectedMonster.con },
+                        { label: 'INT', val: selectedMonster.int },
+                        { label: 'SAB', val: selectedMonster.wis },
+                        { label: 'CAR', val: selectedMonster.cha }
+                      ].map((attr) => {
+                        const mod = Math.floor((attr.val - 10) / 2);
+                        const modSign = mod >= 0 ? '+' : '';
+                        return (
+                          <div key={attr.label} className="text-center p-1 bg-[#161c28]/80 rounded border border-[#2a3449]/40">
+                            <span className="text-[9px] font-bold text-slate-400 block">{attr.label}</span>
+                            <span className="text-xs font-bold text-slate-200 block font-mono">{attr.val}</span>
+                            <span className="text-[9px] text-slate-500 font-semibold font-mono">{`${modSign}${mod}`}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Abilities */}
+                    {selectedMonster.abilities && selectedMonster.abilities.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Habilidades Especiais:</h4>
+                        {selectedMonster.abilities.map((ab, idx) => (
+                          <div key={idx} className="bg-[#0a0d14] p-3 rounded-lg border border-[#2a3449]">
+                            <span className="font-bold text-xs text-slate-200">{ab.name}: </span>
+                            <span className="text-xs text-slate-300">{ab.desc}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    {selectedMonster.actions && selectedMonster.actions.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Ações de Combate:</h4>
+                        {selectedMonster.actions.map((act, idx) => (
+                          <div key={idx} className="bg-[#0a0d14] p-3 rounded-lg border border-[#2a3449]">
+                            <span className="font-bold text-xs text-slate-200">{act.name}: </span>
+                            <span className="text-xs text-slate-300">{act.desc}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

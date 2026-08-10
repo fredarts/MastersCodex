@@ -1,5 +1,5 @@
 import { RepositoryFactory } from '@/lib/repositories/RepositoryFactory';
-import { World, WorldEntity, Result } from '@/lib/types';
+import { World, WorldEntity, EntityStatSheet, Result } from '@/lib/types';
 
 export const worldService = {
   async fetchWorlds(userId?: string): Promise<Result<World[]>> {
@@ -89,6 +89,45 @@ export const worldService = {
       return {
         ok: false,
         error: e instanceof Error ? e : new Error(e?.message || 'Erro ao remover entidade.'),
+      };
+    }
+  },
+
+  async fetchEntityStatSheet(entityId: string, userId?: string): Promise<Result<EntityStatSheet | null>> {
+    try {
+      const repo = RepositoryFactory.getWorldRepository(userId);
+      const data = await repo.fetchEntityStatSheet(entityId);
+      return { ok: true, value: data };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao buscar ficha de combate.'),
+      };
+    }
+  },
+
+  async saveEntityStatSheet(sheet: EntityStatSheet, userId?: string): Promise<Result<void>> {
+    try {
+      const repo = RepositoryFactory.getWorldRepository(userId);
+      await repo.saveEntityStatSheet(sheet);
+      return { ok: true, value: undefined };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao salvar ficha de combate.'),
+      };
+    }
+  },
+
+  async deleteEntityStatSheet(entityId: string, userId?: string): Promise<Result<void>> {
+    try {
+      const repo = RepositoryFactory.getWorldRepository(userId);
+      await repo.deleteEntityStatSheet(entityId);
+      return { ok: true, value: undefined };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e : new Error(e?.message || 'Erro ao remover ficha de combate.'),
       };
     }
   },

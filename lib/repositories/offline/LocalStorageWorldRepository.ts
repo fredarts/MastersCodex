@@ -1,4 +1,4 @@
-import { World, WorldEntity } from '@/lib/types';
+import { World, WorldEntity, EntityStatSheet } from '@/lib/types';
 import { IWorldRepository } from '../contracts/IWorldRepository';
 
 export class LocalStorageWorldRepository implements IWorldRepository {
@@ -77,6 +77,41 @@ export class LocalStorageWorldRepository implements IWorldRepository {
       const all: WorldEntity[] = saved ? JSON.parse(saved) : [];
       const filtered = all.filter((e) => e.id !== id);
       localStorage.setItem('codex_entities', JSON.stringify(filtered));
+      // Delete associated stat sheet as well
+      await this.deleteEntityStatSheet(id);
+    } catch (_e) {}
+  }
+
+  async fetchEntityStatSheet(entityId: string): Promise<EntityStatSheet | null> {
+    try {
+      const saved = localStorage.getItem('codex_entity_stat_sheets');
+      const all: EntityStatSheet[] = saved ? JSON.parse(saved) : [];
+      return all.find((s) => s.entityId === entityId) || null;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  async saveEntityStatSheet(sheet: EntityStatSheet): Promise<void> {
+    try {
+      const saved = localStorage.getItem('codex_entity_stat_sheets');
+      const all: EntityStatSheet[] = saved ? JSON.parse(saved) : [];
+      const idx = all.findIndex((s) => s.entityId === sheet.entityId || s.id === sheet.id);
+      if (idx !== -1) {
+        all[idx] = sheet;
+      } else {
+        all.push(sheet);
+      }
+      localStorage.setItem('codex_entity_stat_sheets', JSON.stringify(all));
+    } catch (_e) {}
+  }
+
+  async deleteEntityStatSheet(entityId: string): Promise<void> {
+    try {
+      const saved = localStorage.getItem('codex_entity_stat_sheets');
+      const all: EntityStatSheet[] = saved ? JSON.parse(saved) : [];
+      const filtered = all.filter((s) => s.entityId !== entityId);
+      localStorage.setItem('codex_entity_stat_sheets', JSON.stringify(filtered));
     } catch (_e) {}
   }
 }

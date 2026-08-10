@@ -20,6 +20,51 @@ const textureLoader = new THREE.TextureLoader();
 const loadedModelCache = new Map<string, THREE.Group>();
 const loadedTextureCache = new Map<string, THREE.Texture>();
 
+/**
+ * Processa a textura via Canvas offscreen, tornando pixels brancos/quase-brancos transparentes.
+ * Funciona como um chroma-key em tempo real para remover fundos brancos de tokens billboard.
+ * @param texture - Textura Three.js carregada
+ * @param threshold - Limiar de "brancura" (0-255). Pixels com R, G e B acima deste valor serão transparentes. Default: 235.
+ */
+function removeWhiteBackground(texture: THREE.Texture, threshold = 235): THREE.Texture {
+  const img = texture.image as HTMLImageElement;
+  if (!img || !img.width || !img.height) return texture;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return texture;
+
+  ctx.drawImage(img, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+
+    // Se o pixel é branco/quase-branco, tornar totalmente transparente
+    if (r >= threshold && g >= threshold && b >= threshold) {
+      data[i + 3] = 0; // alpha = 0
+    }
+    // Suavizar bordas semi-brancas para evitar halo (anti-aliasing)
+    else if (r >= threshold - 20 && g >= threshold - 20 && b >= threshold - 20) {
+      const avgDistance = ((threshold - r) + (threshold - g) + (threshold - b)) / 3;
+      const alphaFactor = Math.min(1, avgDistance / 20);
+      data[i + 3] = Math.round(data[i + 3] * alphaFactor);
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+
+  const newTexture = new THREE.CanvasTexture(canvas);
+  newTexture.colorSpace = THREE.SRGBColorSpace;
+  newTexture.needsUpdate = true;
+  return newTexture;
+}
+
 function getSpriteHeightBySize(sizeStr?: string): number {
   if (!sizeStr) return 2.3;
   const s = sizeStr.toLowerCase();
@@ -165,8 +210,10 @@ export function createTokenMesh(
         imageUrl,
         (tex) => {
           tex.colorSpace = THREE.SRGBColorSpace;
-          loadedTextureCache.set(imageUrl, tex);
-          applyTextureToSprite(tex);
+          // Processa a textura para remover fundo branco antes de salvar no cache
+          const processedTex = removeWhiteBackground(tex);
+          loadedTextureCache.set(imageUrl, processedTex);
+          applyTextureToSprite(processedTex);
         },
         undefined,
         (err) => {

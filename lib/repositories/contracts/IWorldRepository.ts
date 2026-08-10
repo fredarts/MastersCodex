@@ -1,4 +1,4 @@
-import { World, WorldEntity } from '@/lib/types';
+import { World, WorldEntity, EntityStatSheet } from '@/lib/types';
 
 export interface IWorldRepository {
   fetchWorlds(userId?: string): Promise<World[]>;
@@ -8,4 +8,7 @@ export interface IWorldRepository {
   createWorldEntity(entity: Omit<WorldEntity, 'id'>): Promise<WorldEntity>;
   updateWorldEntity(entity: WorldEntity): Promise<void>;
   deleteWorldEntity(id: string): Promise<void>;
+  fetchEntityStatSheet(entityId: string): Promise<EntityStatSheet | null>;
+  saveEntityStatSheet(sheet: EntityStatSheet): Promise<void>;
+  deleteEntityStatSheet(entityId: string): Promise<void>;
 }

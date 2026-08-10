@@ -264,7 +264,10 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
       int: m.int,
       wis: m.wis,
       cha: m.cha,
-      actions: m.actions
+      actions: m.actions,
+      tokenImageUrl: m.tokenImageUrl,
+      modelUrl: m.modelUrl,
+      tokenType: m.tokenType,
     };
     setCombatants((prev) => [...prev, newC].sort((a, b) => b.initiative - a.initiative));
   };

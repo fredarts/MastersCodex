@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { World, WorldEntity } from '@/lib/types';
+import { World, WorldEntity, EntityStatSheet } from '@/lib/types';
 import { WorldRow, WorldEntityRow } from '@/lib/database.types';
 import { mapWorldRowToDomain, mapWorldEntityRowToDomain } from '@/lib/mappers';
 import { IWorldRepository } from '../contracts/IWorldRepository';
@@ -89,6 +89,73 @@ export class SupabaseWorldRepository implements IWorldRepository {
 
   async deleteWorldEntity(id: string): Promise<void> {
     const { error } = await supabase.from('world_entities').delete().eq('id', id);
+    if (error) throw error;
+    // Database cascade constraint handles deleting stat sheet automatically, 
+    // but doing it explicitly here or letting the DB cascade handles it.
+  }
+
+  async fetchEntityStatSheet(entityId: string): Promise<EntityStatSheet | null> {
+    const { data, error } = await supabase
+      .from('entity_stat_sheets')
+      .select('*')
+      .eq('entity_id', entityId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+    
+    return {
+      id: data.id,
+      entityId: data.entity_id,
+      ac: data.ac,
+      hp: data.hp,
+      maxHp: data.max_hp,
+      speed: data.speed,
+      cr: data.cr,
+      xp: data.xp,
+      str: data.str,
+      dex: data.dex,
+      con: data.con,
+      int: data.int,
+      wis: data.wis,
+      cha: data.cha,
+      abilities: data.abilities || [],
+      actions: data.actions || [],
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  }
+
+  async saveEntityStatSheet(sheet: EntityStatSheet): Promise<void> {
+    const { error } = await supabase
+      .from('entity_stat_sheets')
+      .upsert({
+        entity_id: sheet.entityId,
+        ac: sheet.ac,
+        hp: sheet.hp,
+        max_hp: sheet.maxHp,
+        speed: sheet.speed,
+        cr: sheet.cr,
+        xp: sheet.xp,
+        str: sheet.str,
+        dex: sheet.dex,
+        con: sheet.con,
+        int: sheet.int,
+        wis: sheet.wis,
+        cha: sheet.cha,
+        abilities: sheet.abilities || [],
+        actions: sheet.actions || [],
+      }, { onConflict: 'entity_id' });
+
+    if (error) throw error;
+  }
+
+  async deleteEntityStatSheet(entityId: string): Promise<void> {
+    const { error } = await supabase
+      .from('entity_stat_sheets')
+      .delete()
+      .eq('entity_id', entityId);
+
     if (error) throw error;
   }
 }

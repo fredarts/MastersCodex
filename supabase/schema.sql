@@ -61,7 +61,7 @@ ON public.campaign_members (campaign_id, user_id, character_name);
 CREATE TABLE IF NOT EXISTS public.world_entities (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   world_id UUID NOT NULL REFERENCES public.worlds(id) ON DELETE CASCADE,
-  category TEXT NOT NULL CHECK (category IN ('npc', 'location', 'faction', 'religion', 'lore_event', 'species', 'ethnicity', 'tradition', 'profession', 'natural_law', 'spell', 'disease', 'item', 'material', 'technology', 'document', 'language', 'military_conflict', 'military_unit', 'currency', 'trade_route', 'beast', 'flora', 'magic_system', 'plane', 'cosmology')),
+  category TEXT NOT NULL CHECK (category IN ('npc', 'location', 'faction', 'religion', 'lore_event', 'species', 'ethnicity', 'tradition', 'profession', 'natural_law', 'spell', 'disease', 'item', 'material', 'technology', 'document', 'language', 'military_conflict', 'military_unit', 'currency', 'trade_route', 'beast', 'flora', 'magic_system', 'plane', 'cosmology', 'monster')),
   name TEXT NOT NULL,
   sub_type TEXT,
   status TEXT DEFAULT 'active',
@@ -83,7 +83,7 @@ ALTER TABLE public.world_entities ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT
 -- Garantir que a constraint de category esteja atualizada para todas as categorias
 ALTER TABLE public.world_entities DROP CONSTRAINT IF EXISTS world_entities_category_check;
 ALTER TABLE public.world_entities ADD CONSTRAINT world_entities_category_check 
-CHECK (category IN ('npc', 'location', 'faction', 'religion', 'lore_event', 'species', 'ethnicity', 'tradition', 'profession', 'natural_law', 'spell', 'disease', 'item', 'material', 'technology', 'document', 'language', 'military_conflict', 'military_unit', 'currency', 'trade_route', 'beast', 'flora', 'magic_system', 'plane', 'cosmology'));
+CHECK (category IN ('npc', 'location', 'faction', 'religion', 'lore_event', 'species', 'ethnicity', 'tradition', 'profession', 'natural_law', 'spell', 'disease', 'item', 'material', 'technology', 'document', 'language', 'military_conflict', 'military_unit', 'currency', 'trade_route', 'beast', 'flora', 'magic_system', 'plane', 'cosmology', 'monster'));
 
 -- 1.6 Tabela Sessions
 CREATE TABLE IF NOT EXISTS public.sessions (
@@ -741,3 +741,108 @@ CREATE POLICY "Campaign members can insert dice rolls" ON public.dice_roll_logs
       user_id = auth.uid()::text
     )
   );
+
+-- ==============================================================================
+-- 1.13 TABELA ENTITY STAT SHEETS (Fichas de Combate de NPCs/Monstros)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.entity_stat_sheets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id UUID NOT NULL UNIQUE REFERENCES public.world_entities(id) ON DELETE CASCADE,
+  ac INT NOT NULL DEFAULT 10,
+  hp INT NOT NULL DEFAULT 10,
+  max_hp INT NOT NULL DEFAULT 10,
+  speed TEXT DEFAULT '9m (30ft)',
+  cr TEXT DEFAULT '0',
+  xp INT DEFAULT 0,
+  str INT DEFAULT 10,
+  dex INT DEFAULT 10,
+  con INT DEFAULT 10,
+  int INT DEFAULT 10,
+  wis INT DEFAULT 10,
+  cha INT DEFAULT 10,
+  abilities JSONB DEFAULT '[]'::jsonb,
+  actions JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.entity_stat_sheets ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Entity_Stat_Sheets_Select" ON public.entity_stat_sheets
+  FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Entity_Stat_Sheets_Insert" ON public.entity_stat_sheets
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Entity_Stat_Sheets_Update" ON public.entity_stat_sheets
+  FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Entity_Stat_Sheets_Delete" ON public.entity_stat_sheets
+  FOR DELETE USING (auth.role() = 'authenticated');
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.entity_stat_sheets;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END $$;
+
+-- ==============================================================================
+-- 1.14 TABELAS COMPENDIUM SRD (Monstros, Magias, Itens)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.srd_monsters (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  size TEXT NOT NULL,
+  alignment TEXT,
+  ac INT NOT NULL,
+  hp INT NOT NULL,
+  speed TEXT,
+  cr TEXT NOT NULL,
+  xp INT,
+  str INT DEFAULT 10,
+  dex INT DEFAULT 10,
+  con INT DEFAULT 10,
+  int INT DEFAULT 10,
+  wis INT DEFAULT 10,
+  cha INT DEFAULT 10,
+  abilities JSONB DEFAULT '[]'::jsonb,
+  actions JSONB DEFAULT '[]'::jsonb,
+  token_image_url TEXT,
+  model_url TEXT,
+  token_type TEXT DEFAULT 'billboard',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.srd_spells (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  level INT NOT NULL,
+  school TEXT NOT NULL,
+  casting_time TEXT NOT NULL,
+  range TEXT NOT NULL,
+  components TEXT NOT NULL,
+  duration TEXT NOT NULL,
+  description TEXT NOT NULL,
+  classes JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.srd_items (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  rarity TEXT NOT NULL,
+  description TEXT NOT NULL,
+  value TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Indexes for Fast Filtering and Search
+CREATE INDEX IF NOT EXISTS idx_srd_monsters_cr ON public.srd_monsters (cr);
+CREATE INDEX IF NOT EXISTS idx_srd_monsters_name ON public.srd_monsters (name text_pattern_ops);
+CREATE INDEX IF NOT EXISTS idx_srd_spells_level ON public.srd_spells (level);
+CREATE INDEX IF NOT EXISTS idx_srd_spells_school ON public.srd_spells (school);
+CREATE INDEX IF NOT EXISTS idx_srd_spells_name ON public.srd_spells (name text_pattern_ops);
+CREATE INDEX IF NOT EXISTS idx_srd_items_rarity ON public.srd_items (rarity);
+CREATE INDEX IF NOT EXISTS idx_srd_items_type ON public.srd_items (type);

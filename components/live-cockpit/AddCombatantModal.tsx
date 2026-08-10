@@ -63,7 +63,9 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
       type: 'monster',
       cr: monster.cr,
       conditions: [],
-      modelUrl: getModelUrlByNameOrPath(monster.name),
+      tokenImageUrl: monster.tokenImageUrl,
+      tokenType: monster.tokenType || (monster.tokenImageUrl ? 'billboard' : '3d'),
+      modelUrl: monster.modelUrl || getModelUrlByNameOrPath(monster.name),
     };
     onAddCombatant(newCombatant);
   };

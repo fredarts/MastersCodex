@@ -250,6 +250,9 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
       ac: m.ac,
       initiative: 0,
       conditions: [],
+      tokenImageUrl: m.tokenImageUrl,
+      modelUrl: m.modelUrl,
+      tokenType: m.tokenType,
     }));
 
     // Add active online combatants of type 'monster' if they aren't templates

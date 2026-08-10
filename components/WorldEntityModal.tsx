@@ -1,14 +1,18 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Sparkles, Layers, BookOpen, FileText, Image as ImageIcon, Trash2, Upload, AlertCircle, Wand2, Network } from 'lucide-react';
 import { useWorld } from '@/lib/hooks/useWorld';
-import { WorldEntityCategory, WorldEntity, EntityConnection, ConnectionType } from '@/lib/types';
+import { WorldEntityCategory, WorldEntity, EntityConnection, ConnectionType, EntityStatSheet } from '@/lib/types';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
 import { storageService } from '@/lib/services/storageService';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useUserSettings } from '@/lib/hooks/useUserSettings';
 import { WorldEntityAiGeneratorModal } from '@/components/WorldEntityAiGeneratorModal';
+import { worldService } from '@/lib/services/worldService';
+
+const generateTimestampId = (prefix: string) => `${prefix}-${Date.now()}`;
 
 interface WorldEntityModalProps {
   isOpen: boolean;
@@ -45,6 +49,50 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
+  // Tab and Stat Sheet States
+  const [activeTab, setActiveTab] = useState<'description' | 'stats'>('description');
+  const [ac, setAc] = useState(10);
+  const [hp, setHp] = useState(10);
+  const [maxHp, setMaxHp] = useState(10);
+  const [speed, setSpeed] = useState('9m (30ft)');
+  const [cr, setCr] = useState('0');
+  const [xp, setXp] = useState(0);
+  const [str, setStr] = useState(10);
+  const [dex, setDex] = useState(10);
+  const [con, setCon] = useState(10);
+  const [int, setInt] = useState(10);
+  const [wis, setWis] = useState(10);
+  const [cha, setCha] = useState(10);
+  const [abilities, setAbilities] = useState<{ name: string; desc: string }[]>([]);
+  const [actions, setActions] = useState<{ name: string; desc: string }[]>([]);
+  const [newAbilityName, setNewAbilityName] = useState('');
+  const [newAbilityDesc, setNewAbilityDesc] = useState('');
+  const [newActionName, setNewActionName] = useState('');
+  const [newActionDesc, setNewActionDesc] = useState('');
+
+  const resetStatSheetDefaults = () => {
+    setAc(10);
+    setHp(10);
+    setMaxHp(10);
+    setSpeed('9m (30ft)');
+    setCr('0');
+    setXp(0);
+    setStr(10);
+    setDex(10);
+    setCon(10);
+    setInt(10);
+    setWis(10);
+    setCha(10);
+    setAbilities([]);
+    setActions([]);
+  };
+
+  const handleClose = () => {
+    setActiveTab('description');
+    resetStatSheetDefaults();
+    onClose();
+  };
+
   // AI Image Generator states (Nano Banana)
   const [extraPrompt, setExtraPrompt] = useState('');
   const [isGeneratingAiImage, setIsGeneratingAiImage] = useState(false);
@@ -69,6 +117,34 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       const keys = Object.keys(attrs);
       if (keys.length > 0) setExtraAttr1(String(attrs[keys[0]] || ''));
       if (keys.length > 1) setExtraAttr2(String(attrs[keys[1]] || ''));
+
+      // Fetch combat stats if entity has them
+      const hasStats = ['npc', 'monster', 'beast'].includes(editingEntity.category);
+      if (hasStats) {
+        worldService.fetchEntityStatSheet(editingEntity.id).then((res) => {
+          if (res.ok && res.value) {
+            const sheet = res.value;
+            setAc(sheet.ac);
+            setHp(sheet.hp);
+            setMaxHp(sheet.maxHp);
+            setSpeed(sheet.speed || '9m (30ft)');
+            setCr(sheet.cr || '0');
+            setXp(sheet.xp || 0);
+            setStr(sheet.str);
+            setDex(sheet.dex);
+            setCon(sheet.con);
+            setInt(sheet.int);
+            setWis(sheet.wis);
+            setCha(sheet.cha);
+            setAbilities(sheet.abilities || []);
+            setActions(sheet.actions || []);
+          } else {
+            resetStatSheetDefaults();
+          }
+        });
+      } else {
+        resetStatSheetDefaults();
+      }
     } else {
       setCategory(defaultCategory);
       setName('');
@@ -80,6 +156,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       setImages([]);
       setConnections([]);
       setTags([]);
+      resetStatSheetDefaults();
     }
   }, [editingEntity, defaultCategory, isOpen]);
 
@@ -147,7 +224,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         try {
           const res = await fetch(finalUrl);
           const blob = await res.blob();
-          const file = new File([blob], `${categoryName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.jpg`, { type: 'image/jpeg' });
+          const file = new File([blob], generateTimestampId(categoryName.toLowerCase().replace(/\s+/g, '-')) + '.jpg', { type: 'image/jpeg' });
           const publicUrl = await storageService.uploadAsset(file, 'avatars');
           finalUrl = publicUrl;
         } catch (uploadErr) {
@@ -157,9 +234,10 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
 
       setImages((prev) => [...prev, finalUrl]);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to generate AI image', err);
-      setAiWarningMessage(err.message || 'Erro ao gerar imagem.');
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setAiWarningMessage(errMsg || 'Erro ao gerar imagem.');
     } finally {
       setIsGeneratingAiImage(false);
     }
@@ -171,12 +249,14 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
 
     setIsSubmitting(true);
 
-    const attributes: Record<string, any> = {};
+    const attributes: Record<string, string> = {};
     if (extraAttr1.trim()) attributes[getAttrKey1()] = extraAttr1.trim();
     if (extraAttr2.trim()) attributes[getAttrKey2()] = extraAttr2.trim();
 
+    let savedEntity: WorldEntity | null = null;
+
     if (editingEntity) {
-      await updateWorldEntity({
+      const updated: WorldEntity = {
         ...editingEntity,
         category,
         name: name.trim(),
@@ -187,9 +267,11 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         connections: connections,
         attributes,
         tags: tags.length > 0 ? tags : undefined,
-      });
+      };
+      await updateWorldEntity(updated);
+      savedEntity = updated;
     } else {
-      await createWorldEntity({
+      savedEntity = await createWorldEntity({
         worldId: activeWorld.id,
         category,
         name: name.trim(),
@@ -202,6 +284,31 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         attributes,
         tags: tags.length > 0 ? tags : undefined,
       });
+    }
+
+    if (savedEntity && ['npc', 'monster', 'beast'].includes(category)) {
+      const sheet: EntityStatSheet = {
+        id: editingEntity?.statSheet?.id || generateTimestampId('sheet'),
+        entityId: savedEntity.id,
+        ac,
+        hp,
+        maxHp,
+        speed,
+        cr,
+        xp,
+        str,
+        dex,
+        con,
+        int,
+        wis,
+        cha,
+        abilities,
+        actions,
+      };
+      const res = await worldService.saveEntityStatSheet(sheet);
+      if (!res.ok) {
+        console.error('Failed to save entity stat sheet:', res.error);
+      }
     }
 
     setIsSubmitting(false);
@@ -217,7 +324,8 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
     setTagInput('');
     setExtraPrompt('');
     setAiWarningMessage(null);
-    onClose();
+    resetStatSheetDefaults();
+    handleClose();
   };
 
   // Dynamic Text Helpers per Category
@@ -244,7 +352,8 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       case 'military_unit': return 'Adicionar Nova Unidade Militar';
       case 'currency': return 'Adicionar Sistema Monetário ou Moeda';
       case 'trade_route': return 'Adicionar Rota Comercial ou Mercado';
-      case 'beast': return 'Adicionar Monstro, Criatura ou Fera';
+      case 'beast': return 'Adicionar Fera ou Criatura Selvagem';
+      case 'monster': return 'Adicionar Novo Monstro ou Besta';
       case 'flora': return 'Adicionar Flora Extraordinária ou Planta';
       case 'magic_system': return 'Adicionar Sistema de Magia ou Lei Física';
       case 'plane': return 'Adicionar Plano de Existência ou Dimensão';
@@ -279,7 +388,8 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       case 'military_unit': return 'Ex: Legião de Ferro / Batalhão de Grifos do Sol';
       case 'currency': return 'Ex: Padrão Ouro Imperial / Fragmentos de Cristal Astral / Escambo de Peles';
       case 'trade_route': return 'Ex: Rota das Caravanas do Deserto / Mercado Negro de Porto Real';
-      case 'beast': return 'Ex: Quimera de Escamas Negras / Behemoth dos Picos Gelados';
+      case 'beast': return 'Ex: Lobo Gigante / Pantera Deslocadora';
+      case 'monster': return 'Ex: Dragão Vermelho Jovem / Observador (Beholder)';
       case 'flora': return 'Ex: Flor Solar Curativa / Cogumelo Luminescente das Profundezas';
       case 'magic_system': return 'Ex: Magia Rúnica Ancestral / Canalização Cósmica de Éter';
       case 'plane': return 'Ex: Plano das Sombras Reais / Dimensão das Nuvens Astral';
@@ -311,6 +421,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       case 'currency': return 'Taxa de Conversão / Material Base:';
       case 'trade_route': return 'Regiões Conectadas / Periculosidade:';
       case 'beast': return 'Nível de Perigo / Hábitat:';
+      case 'monster': return 'Nível de Perigo / Hábitat:';
       case 'flora': return 'Propriedades Medicinais / Hábitat:';
       case 'magic_system': return 'Fonte de Poder / Custo ou Limitação:';
       case 'plane': return 'Acessibilidade / Leis Físicas:';
@@ -342,6 +453,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       case 'currency': return 'conversao';
       case 'trade_route': return 'periculosidade';
       case 'beast': return 'nivel_perigo';
+      case 'monster': return 'nivel_perigo';
       case 'flora': return 'propriedades';
       case 'magic_system': return 'fonte_poder';
       case 'plane': return 'acessibilidade';
@@ -373,6 +485,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       case 'currency': return 'Região de Circulação / Aceitação:';
       case 'trade_route': return 'Principais Produtos / Guildas Envolvidas:';
       case 'beast': return 'Comportamento / Fraqueza:';
+      case 'monster': return 'Comportamento / Fraqueza:';
       case 'flora': return 'Efeitos / Rara ou Comum:';
       case 'magic_system': return 'Regras Físicas / Consequências de Uso:';
       case 'plane': return 'Habitantes Primordiais / Clima:';
@@ -404,6 +517,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       case 'currency': return 'circulacao';
       case 'trade_route': return 'produtos_guildas';
       case 'beast': return 'comportamento';
+      case 'monster': return 'comportamento';
       case 'flora': return 'efeitos';
       case 'magic_system': return 'consequencias';
       case 'plane': return 'habitantes';
@@ -431,7 +545,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-5 py-2.5 bg-[#0f141d] hover:bg-[#1f2738] text-slate-300 text-xs font-bold rounded-xl transition-all"
             >
               Cancelar
@@ -447,7 +561,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
             <div className="h-8 w-px bg-[#2a3449] mx-1"></div>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 text-slate-400 hover:text-slate-100 hover:bg-[#2a3449] rounded-xl transition-colors"
             >
               <X className="w-5 h-5" />
@@ -486,7 +600,8 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                 <option value="material">Recursos & Produtos de Exportação</option>
               </optgroup>
               <optgroup label="Bestiário & Natureza">
-                <option value="beast">Monstros & Feras (Predadores / Mitologia)</option>
+                <option value="monster">Monstro (Criatura / Bestiário)</option>
+                <option value="beast">Fera & Besta (Predador / Montaria)</option>
                 <option value="flora">Flora Extraordinária (Plantas Curativas / Fungos)</option>
                 <option value="species">Espécie / Raça / Biologia</option>
               </optgroup>
@@ -596,254 +711,506 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
               />
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-              Descrição Curta / Resumo Rápido:
-            </label>
-            <textarea
-              rows={3}
-              required
-              value={shortDesc}
-              onChange={(e) => {
-                setShortDesc(e.target.value);
-                if (aiWarningMessage) setAiWarningMessage(null);
-              }}
-              placeholder="Resumo de fácil leitura em poucas frases para consulta rápida durante o jogo..."
-              className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-3 text-xs text-slate-200 font-serif leading-relaxed focus:outline-none transition-all resize-none shadow-inner"
-            />
-          </div>
-
-          {/* Grid Row 3: Dynamic Attribute Textboxes */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                {getAttrLabel1()}
-              </label>
-              <textarea
-                rows={3}
-                value={extraAttr1}
-                onChange={(e) => setExtraAttr1(e.target.value)}
-                placeholder="Descreva detalhadamente o valor deste atributo..."
-                className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-3 text-xs text-slate-200 focus:outline-none transition-all resize-none shadow-inner font-mono leading-relaxed"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                {getAttrLabel2()}
-              </label>
-              <textarea
-                rows={3}
-                value={extraAttr2}
-                onChange={(e) => setExtraAttr2(e.target.value)}
-                placeholder="Descreva detalhadamente o valor deste atributo..."
-                className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-3 text-xs text-slate-200 focus:outline-none transition-all resize-none shadow-inner font-mono leading-relaxed"
-              />
-            </div>
-          </div>
-
-          {/* Row 4: Full Lore & Master Secrets Large Textarea Textbox */}
-          <div>
-            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-amber-400" />
-              <span>Conteúdo Completo, Lore Detalhada & Segredos (Opcional):</span>
-            </label>
-            <textarea
-              rows={5}
-              value={fullContent}
-              onChange={(e) => {
-                setFullContent(e.target.value);
-                if (aiWarningMessage) setAiWarningMessage(null);
-              }}
-              placeholder="Aprofundamento de história, regras de RPG, tabelas, encontros ou segredos exclusivos do Mestre..."
-              className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-4 text-xs text-slate-200 font-serif leading-relaxed focus:outline-none transition-all resize-none shadow-inner"
-            ></textarea>
-          </div>
-
-          {/* Row 5: Connections & Relationships */}
-          <div className="bg-[#0a0d14] border-2 border-[#2a3449] p-5 rounded-2xl space-y-4">
-            <div className="flex items-center gap-2 border-b border-[#2a3449] pb-3">
-              <Network className="w-5 h-5 text-amber-400" />
-              <div>
-                <h4 className="text-sm font-bold text-slate-100">Conexões na Lore</h4>
-                <p className="text-[11px] text-slate-400">Associe esta entidade a outras do mundo e defina a natureza da relação.</p>
-              </div>
-            </div>
-            
-            <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-              {worldEntities.filter(e => e.id !== editingEntity?.id).length === 0 ? (
-                <p className="text-xs text-slate-500 italic">Nenhuma outra entidade encontrada neste mundo.</p>
-              ) : (
-                worldEntities.filter(e => e.id !== editingEntity?.id).map(entity => {
-                  const existingConn = connections.find(c => c.targetId === entity.id);
-                  const isConnected = !!existingConn;
-                  
-                  return (
-                    <div key={entity.id} className={`flex items-center justify-between p-3 rounded-xl border ${isConnected ? 'bg-amber-500/10 border-amber-500/30' : 'bg-[#121824] border-[#2a3449]'}`}>
-                      <label className="flex items-center gap-3 cursor-pointer flex-1">
-                        <input 
-                          type="checkbox"
-                          checked={isConnected}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setConnections([...connections, { targetId: entity.id, type: 'neutral' }]);
-                            } else {
-                              setConnections(connections.filter(c => c.targetId !== entity.id));
-                            }
-                          }}
-                          className="w-4 h-4 rounded bg-[#0a0d14] border-[#2a3449] text-amber-500 focus:ring-amber-500/50 cursor-pointer"
-                        />
-                        <div className="flex flex-col">
-                          <span className={`text-sm font-bold ${isConnected ? 'text-amber-400' : 'text-slate-300'}`}>{entity.name}</span>
-                          <span className="text-[10px] text-slate-500 uppercase">{entity.category}</span>
-                        </div>
-                      </label>
-                      
-                      {isConnected && (
-                        <select
-                          value={existingConn.type}
-                          onChange={(e) => {
-                            const newType = e.target.value as ConnectionType;
-                            setConnections(connections.map(c => c.targetId === entity.id ? { ...c, type: newType } : c));
-                          }}
-                          className="bg-[#0a0d14] border border-amber-500/30 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer"
-                        >
-                          <option value="neutral">Neutro / Relacionado</option>
-                          <option value="allied">Aliado / Amigo</option>
-                          <option value="hostile">Inimigo / Hostil</option>
-                          <option value="family">Família / Sangue</option>
-                          <option value="member">Membro / Pertence a</option>
-                          <option value="location">Localizado em</option>
-                        </select>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Row 6: Media Gallery & AI Generator Section (Nano Banana) */}
-          <div className="bg-[#0a0d14] border-2 border-amber-500/30 p-5 rounded-2xl space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2a3449] pb-3">
-              <div className="flex items-center gap-2">
-                <ImageIcon className="w-5 h-5 text-amber-400" />
-                <div>
-                  <h4 className="text-sm font-bold text-slate-100">Galeria de Imagens & Conceito Visual</h4>
-                  <p className="text-[11px] text-slate-400">Adicione uploads, URLs ou gere ilustrações por IA para esta entrada.</p>
-                </div>
-              </div>
-
-              {/* Upload & Add URL buttons */}
-              <div className="flex items-center gap-2">
-                <label className={`flex items-center gap-1.5 px-3 py-1.5 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] rounded-xl text-xs font-bold text-slate-200 cursor-pointer transition-all ${isUploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  <Upload className={`w-3.5 h-3.5 text-amber-400 ${isUploadingImage ? 'animate-bounce' : ''}`} />
-                  <span>{isUploadingImage ? 'Enviando...' : 'Upload de Arquivo'}</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} disabled={isUploadingImage} />
-                </label>
-              </div>
-            </div>
-
-            {/* AI Image Generation Panel (Nano Banana) */}
-            <div className="bg-[#121824] border border-[#2a3449] p-4 rounded-xl space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Wand2 className="w-4 h-4 text-purple-400" />
-                  <span className="text-xs font-bold text-slate-200">Gerar Ilustração com IA (Nano Banana)</span>
-                </div>
-                <span className="text-[10px] font-mono text-purple-300 bg-purple-950/60 border border-purple-500/40 px-2 py-0.5 rounded">
-                  Gemini / Nano Banana AI
-                </span>
-              </div>
-
-              {/* Description Required Alert Warning Banner */}
-              {aiWarningMessage && (
-                <div className="bg-rose-950/90 border border-rose-500/60 p-3 rounded-xl flex items-center gap-2.5 text-rose-200 text-xs font-semibold shadow-lg animate-pulse">
-                  <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
-                  <span>{aiWarningMessage}</span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="md:col-span-2">
-                  <textarea
-                    rows={2}
-                    value={extraPrompt}
-                    onChange={(e) => setExtraPrompt(e.target.value)}
-                    placeholder="Adicionar prompt de texto extra (Ex: pintura a óleo estilo dark fantasy, iluminação dramática, alta definição)..."
-                    className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-purple-500 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none transition-all resize-none shadow-inner"
-                  />
-                </div>
-                <button
-                  type="button"
-                  disabled={isGeneratingAiImage}
-                  onClick={handleGenerateAiImage}
-                  className="h-full min-h-[48px] bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
-                >
-                  <Sparkles className="w-4 h-4 fill-slate-950" />
-                  <span>{isGeneratingAiImage ? 'Gerando Imagem...' : 'Gerar Imagem com IA'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Manual URL Input */}
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={imageUrlInput}
-                onChange={(e) => setImageUrlInput(e.target.value)}
-                placeholder="Cole a URL da imagem aqui (https://...)..."
-                className="flex-1 bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
-              />
+          {/* Tabs Selector for Narrative vs. Stats */}
+          {['npc', 'monster', 'beast'].includes(category) && (
+            <div className="flex gap-2 border-b border-[#2a3449] pb-px">
               <button
                 type="button"
-                onClick={handleAddImageUrl}
-                className="px-4 py-2 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] text-amber-300 font-bold text-xs rounded-xl"
+                onClick={() => setActiveTab('description')}
+                className={`px-4 py-2 border-b-2 font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeTab === 'description'
+                    ? 'border-amber-500 text-amber-400'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
               >
-                + Adicionar URL
+                <FileText className="w-3.5 h-3.5" />
+                <span>Descrição Narrativa</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('stats')}
+                className={`px-4 py-2 border-b-2 font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeTab === 'stats'
+                    ? 'border-amber-500 text-amber-400'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Ficha de Estatísticas</span>
               </button>
             </div>
+          )}
 
-            {/* Image Thumbnails Gallery */}
-            {images.length > 0 && (
+          {(!['npc', 'monster', 'beast'].includes(category) || activeTab === 'description') ? (
+            <>
               <div>
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block font-mono">
-                  Imagens da Galeria ({images.length}) — Clique na foto para expandir / dar zoom:
-                </span>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                  {images.map((imgUrl, idx) => (
-                    <div
-                      key={idx}
-                      className="relative group aspect-square rounded-xl overflow-hidden border-2 border-amber-500/40 bg-[#0a0d14] cursor-pointer hover:border-amber-400 transition-all"
-                      onClick={() => {
-                        setLightboxIndex(idx);
-                        setLightboxOpen(true);
-                      }}
-                    >
-                      <img src={imgUrl} alt={`Mídia ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteImage(idx);
-                          }}
-                          className="p-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg shadow-md transition-transform active:scale-95"
-                          title="Excluir Imagem"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                      {idx === 0 && (
-                        <span className="absolute top-1 left-1 bg-amber-500 text-slate-950 text-[9px] font-bold px-1.5 py-0.5 rounded shadow font-mono">
-                          CAPA
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Descrição Curta / Resumo Rápido:
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={shortDesc}
+                  onChange={(e) => {
+                    setShortDesc(e.target.value);
+                    if (aiWarningMessage) setAiWarningMessage(null);
+                  }}
+                  placeholder="Resumo de fácil leitura em poucas frases para consulta rápida durante o jogo..."
+                  className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-3 text-xs text-slate-200 font-serif leading-relaxed focus:outline-none transition-all resize-none shadow-inner"
+                />
+              </div>
+
+              {/* Grid Row 3: Dynamic Attribute Textboxes */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    {getAttrLabel1()}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={extraAttr1}
+                    onChange={(e) => setExtraAttr1(e.target.value)}
+                    placeholder="Descreva detalhadamente o valor deste atributo..."
+                    className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-3 text-xs text-slate-200 focus:outline-none transition-all resize-none shadow-inner font-mono leading-relaxed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    {getAttrLabel2()}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={extraAttr2}
+                    onChange={(e) => setExtraAttr2(e.target.value)}
+                    placeholder="Descreva detalhadamente o valor deste atributo..."
+                    className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-3 text-xs text-slate-200 focus:outline-none transition-all resize-none shadow-inner font-mono leading-relaxed"
+                  />
                 </div>
               </div>
-            )}
-          </div>
+
+              {/* Row 4: Full Lore & Master Secrets Large Textarea Textbox */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-amber-400" />
+                  <span>Conteúdo Completo, Lore Detalhada & Segredos (Opcional):</span>
+                </label>
+                <textarea
+                  rows={5}
+                  value={fullContent}
+                  onChange={(e) => {
+                    setFullContent(e.target.value);
+                    if (aiWarningMessage) setAiWarningMessage(null);
+                  }}
+                  placeholder="Aprofundamento de história, regras de RPG, tabelas, encontros ou segredos exclusivos do Mestre..."
+                  className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-4 text-xs text-slate-200 font-serif leading-relaxed focus:outline-none transition-all resize-none shadow-inner"
+                ></textarea>
+              </div>
+
+              {/* Row 5: Connections & Relationships */}
+              <div className="bg-[#0a0d14] border-2 border-[#2a3449] p-5 rounded-2xl space-y-4">
+                <div className="flex items-center gap-2 border-b border-[#2a3449] pb-3">
+                  <Network className="w-5 h-5 text-amber-400" />
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-100">Conexões na Lore</h4>
+                    <p className="text-[11px] text-slate-400">Associe esta entidade a outras do mundo e defina a natureza da relação.</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                  {worldEntities.filter(e => e.id !== editingEntity?.id).length === 0 ? (
+                    <p className="text-xs text-slate-500 italic">Nenhuma outra entidade encontrada neste mundo.</p>
+                  ) : (
+                    worldEntities.filter(e => e.id !== editingEntity?.id).map(entity => {
+                      const existingConn = connections.find(c => c.targetId === entity.id);
+                      const isConnected = !!existingConn;
+                      
+                      return (
+                        <div key={entity.id} className={`flex items-center justify-between p-3 rounded-xl border ${isConnected ? 'bg-amber-500/10 border-amber-500/30' : 'bg-[#121824] border-[#2a3449]'}`}>
+                          <label className="flex items-center gap-3 cursor-pointer flex-1">
+                            <input 
+                              type="checkbox"
+                              checked={isConnected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setConnections([...connections, { targetId: entity.id, type: 'neutral' }]);
+                                } else {
+                                  setConnections(connections.filter(c => c.targetId !== entity.id));
+                                }
+                              }}
+                              className="w-4 h-4 rounded bg-[#0a0d14] border-[#2a3449] text-amber-500 focus:ring-amber-500/50 cursor-pointer"
+                            />
+                            <div className="flex flex-col">
+                              <span className={`text-sm font-bold ${isConnected ? 'text-amber-400' : 'text-slate-300'}`}>{entity.name}</span>
+                              <span className="text-[10px] text-slate-500 uppercase">{entity.category}</span>
+                            </div>
+                          </label>
+                          
+                          {isConnected && (
+                            <select
+                              value={existingConn.type}
+                              onChange={(e) => {
+                                const newType = e.target.value as ConnectionType;
+                                setConnections(connections.map(c => c.targetId === entity.id ? { ...c, type: newType } : c));
+                              }}
+                              className="bg-[#0a0d14] border border-amber-500/30 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer"
+                            >
+                              <option value="neutral">Neutro / Relacionado</option>
+                              <option value="allied">Aliado / Amigo</option>
+                              <option value="hostile">Inimigo / Hostil</option>
+                              <option value="family">Família / Sangue</option>
+                              <option value="member">Membro / Pertence a</option>
+                              <option value="location">Localizado em</option>
+                            </select>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Row 6: Media Gallery & AI Generator Section (Nano Banana) */}
+              <div className="bg-[#0a0d14] border-2 border-amber-500/30 p-5 rounded-2xl space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2a3449] pb-3">
+                  <div className="flex items-center gap-2">
+                    <ImageIcon className="w-5 h-5 text-amber-400" />
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-100">Galeria de Imagens & Conceito Visual</h4>
+                      <p className="text-[11px] text-slate-400">Adicione uploads, URLs ou gere ilustrações por IA para esta entrada.</p>
+                    </div>
+                  </div>
+
+                  {/* Upload & Add URL buttons */}
+                  <div className="flex items-center gap-2">
+                    <label className={`flex items-center gap-1.5 px-3 py-1.5 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] rounded-xl text-xs font-bold text-slate-200 cursor-pointer transition-all ${isUploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      <Upload className={`w-3.5 h-3.5 text-amber-400 ${isUploadingImage ? 'animate-bounce' : ''}`} />
+                      <span>{isUploadingImage ? 'Enviando...' : 'Upload de Arquivo'}</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} disabled={isUploadingImage} />
+                    </label>
+                  </div>
+                </div>
+
+                {/* AI Image Generation Panel (Nano Banana) */}
+                <div className="bg-[#121824] border border-[#2a3449] p-4 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Wand2 className="w-4 h-4 text-purple-400" />
+                      <span className="text-xs font-bold text-slate-200">Gerar Ilustração com IA (Nano Banana)</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-purple-300 bg-purple-950/60 border border-purple-500/40 px-2 py-0.5 rounded">
+                      Gemini / Nano Banana AI
+                    </span>
+                  </div>
+
+                  {/* Description Required Alert Warning Banner */}
+                  {aiWarningMessage && (
+                    <div className="bg-rose-950/90 border border-rose-500/60 p-3 rounded-xl flex items-center gap-2.5 text-rose-200 text-xs font-semibold shadow-lg animate-pulse">
+                      <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                      <span>{aiWarningMessage}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="md:col-span-2">
+                      <textarea
+                        rows={2}
+                        value={extraPrompt}
+                        onChange={(e) => setExtraPrompt(e.target.value)}
+                        placeholder="Adicionar prompt de texto extra (Ex: pintura a óleo estilo dark fantasy, iluminação dramática, alta definição)..."
+                        className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-purple-500 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none transition-all resize-none shadow-inner"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isGeneratingAiImage}
+                      onClick={handleGenerateAiImage}
+                      className="h-full min-h-[48px] bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 fill-slate-950" />
+                      <span>{isGeneratingAiImage ? 'Gerando Imagem...' : 'Gerar Imagem com IA'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Manual URL Input */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={imageUrlInput}
+                    onChange={(e) => setImageUrlInput(e.target.value)}
+                    placeholder="Cole a URL da imagem aqui (https://...)..."
+                    className="flex-1 bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddImageUrl}
+                    className="px-4 py-2 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] text-amber-300 font-bold text-xs rounded-xl"
+                  >
+                    + Adicionar URL
+                  </button>
+                </div>
+
+                {/* Image Thumbnails Gallery */}
+                {images.length > 0 && (
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block font-mono">
+                      Imagens da Galeria ({images.length}) — Clique na foto para expandir / dar zoom:
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                      {images.map((imgUrl, idx) => (
+                        <div
+                          key={idx}
+                          className="relative group aspect-square rounded-xl overflow-hidden border-2 border-amber-500/40 bg-[#0a0d14] cursor-pointer hover:border-amber-400 transition-all"
+                          onClick={() => {
+                            setLightboxIndex(idx);
+                            setLightboxOpen(true);
+                          }}
+                        >
+                          <img src={imgUrl} alt={`Mídia ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteImage(idx);
+                              }}
+                              className="p-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg shadow-md transition-transform active:scale-95"
+                              title="Excluir Imagem"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                          {idx === 0 && (
+                            <span className="absolute top-1 left-1 bg-amber-500 text-slate-950 text-[9px] font-bold px-1.5 py-0.5 rounded shadow font-mono">
+                              CAPA
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            /* Stats sheet block */
+            <div className="space-y-6 animate-fade-in pb-4">
+              {/* Combat Values Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 bg-[#0a0d14] border border-[#2a3449] p-4 rounded-xl">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Classe de Armadura (CA):</label>
+                  <input
+                    type="number"
+                    value={ac}
+                    onChange={(e) => setAc(Math.max(1, parseInt(e.target.value) || 0))}
+                    className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-2 text-sm text-slate-100 font-bold focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">PV Atuais (HP):</label>
+                  <input
+                    type="number"
+                    value={hp}
+                    onChange={(e) => setHp(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-2 text-sm text-slate-100 font-bold focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">PV Máximos (Max HP):</label>
+                  <input
+                    type="number"
+                    value={maxHp}
+                    onChange={(e) => setMaxHp(Math.max(1, parseInt(e.target.value) || 0))}
+                    className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-2 text-sm text-slate-100 font-bold focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Velocidade (Speed):</label>
+                  <input
+                    type="text"
+                    value={speed}
+                    onChange={(e) => setSpeed(e.target.value)}
+                    className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none"
+                  />
+                </div>
+                <div className="col-span-2 sm:col-span-1 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">ND (CR):</label>
+                    <input
+                      type="text"
+                      value={cr}
+                      onChange={(e) => setCr(e.target.value)}
+                      className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2 py-2 text-sm text-slate-100 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">XP:</label>
+                    <input
+                      type="number"
+                      value={xp}
+                      onChange={(e) => setXp(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2 py-2 text-sm text-slate-100 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Ability Scores Grid */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">Atributos de Habilidade</h4>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                  {[
+                    { label: 'FOR (STR)', val: str, set: setStr },
+                    { label: 'DES (DEX)', val: dex, set: setDex },
+                    { label: 'CON (CON)', val: con, set: setCon },
+                    { label: 'INT (INT)', val: int, set: setInt },
+                    { label: 'SAB (WIS)', val: wis, set: setWis },
+                    { label: 'CAR (CHA)', val: cha, set: setCha }
+                  ].map((attr, idx) => {
+                    const mod = Math.floor((attr.val - 10) / 2);
+                    const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
+                    return (
+                      <div key={idx} className="bg-[#0a0d14] border border-[#2a3449] p-3 rounded-xl flex flex-col items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{attr.label}</span>
+                        <input
+                          type="number"
+                          value={attr.val}
+                          onChange={(e) => attr.set(Math.max(1, Math.min(30, parseInt(e.target.value) || 0)))}
+                          className="w-16 bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2 py-1.5 text-center text-sm text-slate-100 font-bold focus:outline-none my-1.5"
+                        />
+                        <span className={`text-xs font-bold ${mod >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{modStr}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Abilities & Actions Split Column */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Special Abilities */}
+                <div className="bg-[#0a0d14] border border-[#2a3449] p-4 rounded-xl space-y-4 flex flex-col">
+                  <div className="border-b border-[#2a3449] pb-2 flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Habilidades Especiais / Passivas</h4>
+                    <span className="text-[10px] text-slate-500 font-mono">{abilities.length}</span>
+                  </div>
+                  
+                  {/* List */}
+                  <div className="space-y-3 flex-1 overflow-y-auto max-h-60 pr-1">
+                    {abilities.length === 0 ? (
+                      <p className="text-xs text-slate-500 italic">Nenhuma habilidade especial adicionada.</p>
+                    ) : (
+                      abilities.map((ab, idx) => (
+                        <div key={idx} className="bg-[#121722] border border-[#2a3449] p-3 rounded-lg flex items-start justify-between gap-3">
+                          <div className="flex-1">
+                            <span className="text-xs font-bold text-amber-400 block">{ab.name}</span>
+                            <span className="text-[11px] text-slate-300 block mt-1 leading-relaxed">{ab.desc}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setAbilities(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-slate-500 hover:text-rose-400 p-1 hover:bg-[#1a2234] rounded transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Form to add */}
+                  <div className="bg-[#121722] border border-[#2a3449] p-3 rounded-lg space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Nome da Habilidade (Ex: Percepção Cega)"
+                      value={newAbilityName}
+                      onChange={(e) => setNewAbilityName(e.target.value)}
+                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                    />
+                    <textarea
+                      placeholder="Descrição do Efeito..."
+                      value={newAbilityDesc}
+                      onChange={(e) => setNewAbilityDesc(e.target.value)}
+                      rows={2}
+                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500 resize-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!newAbilityName.trim() || !newAbilityDesc.trim()) return;
+                        setAbilities(prev => [...prev, { name: newAbilityName.trim(), desc: newAbilityDesc.trim() }]);
+                        setNewAbilityName('');
+                        setNewAbilityDesc('');
+                      }}
+                      className="w-full py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 hover:border-amber-500/60 rounded text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      + Adicionar Habilidade
+                    </button>
+                  </div>
+                </div>
+
+                {/* Actions / Attacks */}
+                <div className="bg-[#0a0d14] border border-[#2a3449] p-4 rounded-xl space-y-4 flex flex-col">
+                  <div className="border-b border-[#2a3449] pb-2 flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Ações / Ataques</h4>
+                    <span className="text-[10px] text-slate-500 font-mono">{actions.length}</span>
+                  </div>
+                  
+                  {/* List */}
+                  <div className="space-y-3 flex-1 overflow-y-auto max-h-60 pr-1">
+                    {actions.length === 0 ? (
+                      <p className="text-xs text-slate-500 italic">Nenhuma ação ou ataque adicionado.</p>
+                    ) : (
+                      actions.map((ac, idx) => (
+                        <div key={idx} className="bg-[#121722] border border-[#2a3449] p-3 rounded-lg flex items-start justify-between gap-3">
+                          <div className="flex-1">
+                            <span className="text-xs font-bold text-amber-400 block">{ac.name}</span>
+                            <span className="text-[11px] text-slate-300 block mt-1 leading-relaxed">{ac.desc}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setActions(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-slate-500 hover:text-rose-400 p-1 hover:bg-[#1a2234] rounded transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Form to add */}
+                  <div className="bg-[#121722] border border-[#2a3449] p-3 rounded-lg space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Nome da Ação (Ex: Garra / Sopro de Fogo)"
+                      value={newActionName}
+                      onChange={(e) => setNewActionName(e.target.value)}
+                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                    />
+                    <textarea
+                      placeholder="Descrição do Ataque (Alvo, bônus, dano...)"
+                      value={newActionDesc}
+                      onChange={(e) => setNewActionDesc(e.target.value)}
+                      rows={2}
+                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500 resize-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!newActionName.trim() || !newActionDesc.trim()) return;
+                        setActions(prev => [...prev, { name: newActionName.trim(), desc: newActionDesc.trim() }]);
+                        setNewActionName('');
+                        setNewActionDesc('');
+                      }}
+                      className="w-full py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 hover:border-amber-500/60 rounded text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      + Adicionar Ação
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Lightbox / Zoom Carousel Modal */}

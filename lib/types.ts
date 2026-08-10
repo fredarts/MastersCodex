@@ -49,7 +49,8 @@ export type WorldEntityCategory =
   | 'flora'
   | 'magic_system'
   | 'plane'
-  | 'cosmology';
+  | 'cosmology'
+  | 'monster';
 
 export interface WorldMapPin {
   id: string;
@@ -95,6 +96,27 @@ export interface World {
   createdAt?: string;
 }
 
+export interface EntityStatSheet {
+  id: string;
+  entityId: string;
+  ac: number;
+  hp: number;
+  maxHp: number;
+  speed?: string;
+  cr?: string;
+  xp?: number;
+  str: number;
+  dex: number;
+  con: number;
+  int: number;
+  wis: number;
+  cha: number;
+  abilities?: { name: string; desc: string }[];
+  actions?: { name: string; desc: string }[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface WorldEntity {
   id: string;
   worldId: string;
@@ -108,6 +130,7 @@ export interface WorldEntity {
   attributes?: Record<string, any>;
   connections?: EntityConnection[]; // IDs de outras entidades conectadas e tipo da relação
   tags?: string[]; // Custom tags/etiquetas de organização e busca livre
+  statSheet?: EntityStatSheet;
   createdAt?: string;
 }
 
@@ -361,6 +384,9 @@ export interface SRDMonster {
   cha: number;
   abilities: { name: string; desc: string }[];
   actions: { name: string; desc: string }[];
+  tokenImageUrl?: string;
+  modelUrl?: string;
+  tokenType?: 'billboard' | '3d';
 }
 
 export interface CustomMonsterAction {
