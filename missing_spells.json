@@ -1,0 +1,758 @@
+[
+  {
+    "index": "acid-arrow",
+    "name": "Acid Arrow",
+    "level": 2,
+    "url": "/api/2014/spells/acid-arrow"
+  },
+  {
+    "index": "aid",
+    "name": "Aid",
+    "level": 2,
+    "url": "/api/2014/spells/aid"
+  },
+  {
+    "index": "animal-friendship",
+    "name": "Animal Friendship",
+    "level": 1,
+    "url": "/api/2014/spells/animal-friendship"
+  },
+  {
+    "index": "animal-messenger",
+    "name": "Animal Messenger",
+    "level": 2,
+    "url": "/api/2014/spells/animal-messenger"
+  },
+  {
+    "index": "animal-shapes",
+    "name": "Animal Shapes",
+    "level": 8,
+    "url": "/api/2014/spells/animal-shapes"
+  },
+  {
+    "index": "antilife-shell",
+    "name": "Antilife Shell",
+    "level": 5,
+    "url": "/api/2014/spells/antilife-shell"
+  },
+  {
+    "index": "antipathy-sympathy",
+    "name": "Antipathy/Sympathy",
+    "level": 8,
+    "url": "/api/2014/spells/antipathy-sympathy"
+  },
+  {
+    "index": "arcane-hand",
+    "name": "Arcane Hand",
+    "level": 5,
+    "url": "/api/2014/spells/arcane-hand"
+  },
+  {
+    "index": "arcane-lock",
+    "name": "Arcane Lock",
+    "level": 2,
+    "url": "/api/2014/spells/arcane-lock"
+  },
+  {
+    "index": "arcane-sword",
+    "name": "Arcane Sword",
+    "level": 7,
+    "url": "/api/2014/spells/arcane-sword"
+  },
+  {
+    "index": "arcanists-magic-aura",
+    "name": "Arcanist's Magic Aura",
+    "level": 2,
+    "url": "/api/2014/spells/arcanists-magic-aura"
+  },
+  {
+    "index": "augury",
+    "name": "Augury",
+    "level": 2,
+    "url": "/api/2014/spells/augury"
+  },
+  {
+    "index": "bane",
+    "name": "Bane",
+    "level": 1,
+    "url": "/api/2014/spells/bane"
+  },
+  {
+    "index": "barkskin",
+    "name": "Barkskin",
+    "level": 2,
+    "url": "/api/2014/spells/barkskin"
+  },
+  {
+    "index": "bestow-curse",
+    "name": "Bestow Curse",
+    "level": 3,
+    "url": "/api/2014/spells/bestow-curse"
+  },
+  {
+    "index": "black-tentacles",
+    "name": "Black Tentacles",
+    "level": 4,
+    "url": "/api/2014/spells/black-tentacles"
+  },
+  {
+    "index": "blight",
+    "name": "Blight",
+    "level": 4,
+    "url": "/api/2014/spells/blight"
+  },
+  {
+    "index": "branding-smite",
+    "name": "Branding Smite",
+    "level": 2,
+    "url": "/api/2014/spells/branding-smite"
+  },
+  {
+    "index": "calm-emotions",
+    "name": "Calm Emotions",
+    "level": 2,
+    "url": "/api/2014/spells/calm-emotions"
+  },
+  {
+    "index": "charm-person",
+    "name": "Charm Person",
+    "level": 1,
+    "url": "/api/2014/spells/charm-person"
+  },
+  {
+    "index": "circle-of-death",
+    "name": "Circle of Death",
+    "level": 6,
+    "url": "/api/2014/spells/circle-of-death"
+  },
+  {
+    "index": "color-spray",
+    "name": "Color Spray",
+    "level": 1,
+    "url": "/api/2014/spells/color-spray"
+  },
+  {
+    "index": "commune-with-nature",
+    "name": "Commune With Nature",
+    "level": 5,
+    "url": "/api/2014/spells/commune-with-nature"
+  },
+  {
+    "index": "compulsion",
+    "name": "Compulsion",
+    "level": 4,
+    "url": "/api/2014/spells/compulsion"
+  },
+  {
+    "index": "conjure-animals",
+    "name": "Conjure Animals",
+    "level": 3,
+    "url": "/api/2014/spells/conjure-animals"
+  },
+  {
+    "index": "conjure-fey",
+    "name": "Conjure Fey",
+    "level": 6,
+    "url": "/api/2014/spells/conjure-fey"
+  },
+  {
+    "index": "contingency",
+    "name": "Contingency",
+    "level": 6,
+    "url": "/api/2014/spells/contingency"
+  },
+  {
+    "index": "create-food-and-water",
+    "name": "Create Food and Water",
+    "level": 3,
+    "url": "/api/2014/spells/create-food-and-water"
+  },
+  {
+    "index": "create-or-destroy-water",
+    "name": "Create or Destroy Water",
+    "level": 1,
+    "url": "/api/2014/spells/create-or-destroy-water"
+  },
+  {
+    "index": "create-undead",
+    "name": "Create Undead",
+    "level": 6,
+    "url": "/api/2014/spells/create-undead"
+  },
+  {
+    "index": "demiplane",
+    "name": "Demiplane",
+    "level": 8,
+    "url": "/api/2014/spells/demiplane"
+  },
+  {
+    "index": "detect-evil-and-good",
+    "name": "Detect Evil and Good",
+    "level": 1,
+    "url": "/api/2014/spells/detect-evil-and-good"
+  },
+  {
+    "index": "dispel-evil-and-good",
+    "name": "Dispel Evil and Good",
+    "level": 5,
+    "url": "/api/2014/spells/dispel-evil-and-good"
+  },
+  {
+    "index": "divination",
+    "name": "Divination",
+    "level": 4,
+    "url": "/api/2014/spells/divination"
+  },
+  {
+    "index": "divine-favor",
+    "name": "Divine Favor",
+    "level": 1,
+    "url": "/api/2014/spells/divine-favor"
+  },
+  {
+    "index": "dominate-beast",
+    "name": "Dominate Beast",
+    "level": 4,
+    "url": "/api/2014/spells/dominate-beast"
+  },
+  {
+    "index": "dominate-monster",
+    "name": "Dominate Monster",
+    "level": 8,
+    "url": "/api/2014/spells/dominate-monster"
+  },
+  {
+    "index": "enthrall",
+    "name": "Enthrall",
+    "level": 2,
+    "url": "/api/2014/spells/enthrall"
+  },
+  {
+    "index": "eyebite",
+    "name": "Eyebite",
+    "level": 6,
+    "url": "/api/2014/spells/eyebite"
+  },
+  {
+    "index": "fabricate",
+    "name": "Fabricate",
+    "level": 4,
+    "url": "/api/2014/spells/fabricate"
+  },
+  {
+    "index": "faithful-hound",
+    "name": "Faithful Hound",
+    "level": 4,
+    "url": "/api/2014/spells/faithful-hound"
+  },
+  {
+    "index": "false-life",
+    "name": "False Life",
+    "level": 1,
+    "url": "/api/2014/spells/false-life"
+  },
+  {
+    "index": "fire-storm",
+    "name": "Fire Storm",
+    "level": 7,
+    "url": "/api/2014/spells/fire-storm"
+  },
+  {
+    "index": "flame-blade",
+    "name": "Flame Blade",
+    "level": 2,
+    "url": "/api/2014/spells/flame-blade"
+  },
+  {
+    "index": "flesh-to-stone",
+    "name": "Flesh to Stone",
+    "level": 6,
+    "url": "/api/2014/spells/flesh-to-stone"
+  },
+  {
+    "index": "floating-disk",
+    "name": "Floating Disk",
+    "level": 1,
+    "url": "/api/2014/spells/floating-disk"
+  },
+  {
+    "index": "forbiddance",
+    "name": "Forbiddance",
+    "level": 6,
+    "url": "/api/2014/spells/forbiddance"
+  },
+  {
+    "index": "freezing-sphere",
+    "name": "Freezing Sphere",
+    "level": 6,
+    "url": "/api/2014/spells/freezing-sphere"
+  },
+  {
+    "index": "giant-insect",
+    "name": "Giant Insect",
+    "level": 4,
+    "url": "/api/2014/spells/giant-insect"
+  },
+  {
+    "index": "glibness",
+    "name": "Glibness",
+    "level": 8,
+    "url": "/api/2014/spells/glibness"
+  },
+  {
+    "index": "goodberry",
+    "name": "Goodberry",
+    "level": 1,
+    "url": "/api/2014/spells/goodberry"
+  },
+  {
+    "index": "guards-and-wards",
+    "name": "Guards and Wards",
+    "level": 6,
+    "url": "/api/2014/spells/guards-and-wards"
+  },
+  {
+    "index": "guiding-bolt",
+    "name": "Guiding Bolt",
+    "level": 1,
+    "url": "/api/2014/spells/guiding-bolt"
+  },
+  {
+    "index": "hallow",
+    "name": "Hallow",
+    "level": 5,
+    "url": "/api/2014/spells/hallow"
+  },
+  {
+    "index": "heat-metal",
+    "name": "Heat Metal",
+    "level": 2,
+    "url": "/api/2014/spells/heat-metal"
+  },
+  {
+    "index": "hellish-rebuke",
+    "name": "Hellish Rebuke",
+    "level": 1,
+    "url": "/api/2014/spells/hellish-rebuke"
+  },
+  {
+    "index": "heroes-feast",
+    "name": "Heroes' Feast",
+    "level": 6,
+    "url": "/api/2014/spells/heroes-feast"
+  },
+  {
+    "index": "heroism",
+    "name": "Heroism",
+    "level": 1,
+    "url": "/api/2014/spells/heroism"
+  },
+  {
+    "index": "hideous-laughter",
+    "name": "Hideous Laughter",
+    "level": 1,
+    "url": "/api/2014/spells/hideous-laughter"
+  },
+  {
+    "index": "hold-monster",
+    "name": "Hold Monster",
+    "level": 5,
+    "url": "/api/2014/spells/hold-monster"
+  },
+  {
+    "index": "holy-aura",
+    "name": "Holy Aura",
+    "level": 8,
+    "url": "/api/2014/spells/holy-aura"
+  },
+  {
+    "index": "hunters-mark",
+    "name": "Hunter's Mark",
+    "level": 1,
+    "url": "/api/2014/spells/hunters-mark"
+  },
+  {
+    "index": "illusory-script",
+    "name": "Illusory Script",
+    "level": 1,
+    "url": "/api/2014/spells/illusory-script"
+  },
+  {
+    "index": "inflict-wounds",
+    "name": "Inflict Wounds",
+    "level": 1,
+    "url": "/api/2014/spells/inflict-wounds"
+  },
+  {
+    "index": "insect-plague",
+    "name": "Insect Plague",
+    "level": 5,
+    "url": "/api/2014/spells/insect-plague"
+  },
+  {
+    "index": "instant-summons",
+    "name": "Instant Summons",
+    "level": 6,
+    "url": "/api/2014/spells/instant-summons"
+  },
+  {
+    "index": "irresistible-dance",
+    "name": "Irresistible Dance",
+    "level": 6,
+    "url": "/api/2014/spells/irresistible-dance"
+  },
+  {
+    "index": "legend-lore",
+    "name": "Legend Lore",
+    "level": 5,
+    "url": "/api/2014/spells/legend-lore"
+  },
+  {
+    "index": "lesser-restoration",
+    "name": "Lesser Restoration",
+    "level": 2,
+    "url": "/api/2014/spells/lesser-restoration"
+  },
+  {
+    "index": "locate-animals-or-plants",
+    "name": "Locate Animals or Plants",
+    "level": 2,
+    "url": "/api/2014/spells/locate-animals-or-plants"
+  },
+  {
+    "index": "mage-armor",
+    "name": "Mage Armor",
+    "level": 1,
+    "url": "/api/2014/spells/mage-armor"
+  },
+  {
+    "index": "magic-circle",
+    "name": "Magic Circle",
+    "level": 3,
+    "url": "/api/2014/spells/magic-circle"
+  },
+  {
+    "index": "magic-jar",
+    "name": "Magic Jar",
+    "level": 6,
+    "url": "/api/2014/spells/magic-jar"
+  },
+  {
+    "index": "magnificent-mansion",
+    "name": "Magnificent Mansion",
+    "level": 7,
+    "url": "/api/2014/spells/magnificent-mansion"
+  },
+  {
+    "index": "mass-suggestion",
+    "name": "Mass Suggestion",
+    "level": 6,
+    "url": "/api/2014/spells/mass-suggestion"
+  },
+  {
+    "index": "mislead",
+    "name": "Mislead",
+    "level": 5,
+    "url": "/api/2014/spells/mislead"
+  },
+  {
+    "index": "move-earth",
+    "name": "Move Earth",
+    "level": 6,
+    "url": "/api/2014/spells/move-earth"
+  },
+  {
+    "index": "nondetection",
+    "name": "Nondetection",
+    "level": 3,
+    "url": "/api/2014/spells/nondetection"
+  },
+  {
+    "index": "passwall",
+    "name": "Passwall",
+    "level": 5,
+    "url": "/api/2014/spells/passwall"
+  },
+  {
+    "index": "planar-ally",
+    "name": "Planar Ally",
+    "level": 6,
+    "url": "/api/2014/spells/planar-ally"
+  },
+  {
+    "index": "planar-binding",
+    "name": "Planar Binding",
+    "level": 5,
+    "url": "/api/2014/spells/planar-binding"
+  },
+  {
+    "index": "plant-growth",
+    "name": "Plant Growth",
+    "level": 3,
+    "url": "/api/2014/spells/plant-growth"
+  },
+  {
+    "index": "prismatic-spray",
+    "name": "Prismatic Spray",
+    "level": 7,
+    "url": "/api/2014/spells/prismatic-spray"
+  },
+  {
+    "index": "prismatic-wall",
+    "name": "Prismatic Wall",
+    "level": 9,
+    "url": "/api/2014/spells/prismatic-wall"
+  },
+  {
+    "index": "private-sanctum",
+    "name": "Private Sanctum",
+    "level": 4,
+    "url": "/api/2014/spells/private-sanctum"
+  },
+  {
+    "index": "produce-flame",
+    "name": "Produce Flame",
+    "level": 0,
+    "url": "/api/2014/spells/produce-flame"
+  },
+  {
+    "index": "project-image",
+    "name": "Project Image",
+    "level": 7,
+    "url": "/api/2014/spells/project-image"
+  },
+  {
+    "index": "protection-from-energy",
+    "name": "Protection From Energy",
+    "level": 3,
+    "url": "/api/2014/spells/protection-from-energy"
+  },
+  {
+    "index": "protection-from-poison",
+    "name": "Protection from Poison",
+    "level": 2,
+    "url": "/api/2014/spells/protection-from-poison"
+  },
+  {
+    "index": "purify-food-and-drink",
+    "name": "Purify Food and Drink",
+    "level": 1,
+    "url": "/api/2014/spells/purify-food-and-drink"
+  },
+  {
+    "index": "ray-of-enfeeblement",
+    "name": "Ray of Enfeeblement",
+    "level": 2,
+    "url": "/api/2014/spells/ray-of-enfeeblement"
+  },
+  {
+    "index": "resilient-sphere",
+    "name": "Resilient Sphere",
+    "level": 4,
+    "url": "/api/2014/spells/resilient-sphere"
+  },
+  {
+    "index": "scrying",
+    "name": "Scrying",
+    "level": 5,
+    "url": "/api/2014/spells/scrying"
+  },
+  {
+    "index": "secret-chest",
+    "name": "Secret Chest",
+    "level": 4,
+    "url": "/api/2014/spells/secret-chest"
+  },
+  {
+    "index": "seeming",
+    "name": "Seeming",
+    "level": 5,
+    "url": "/api/2014/spells/seeming"
+  },
+  {
+    "index": "sending",
+    "name": "Sending",
+    "level": 3,
+    "url": "/api/2014/spells/sending"
+  },
+  {
+    "index": "sequester",
+    "name": "Sequester",
+    "level": 7,
+    "url": "/api/2014/spells/sequester"
+  },
+  {
+    "index": "silence",
+    "name": "Silence",
+    "level": 2,
+    "url": "/api/2014/spells/silence"
+  },
+  {
+    "index": "silent-image",
+    "name": "Silent Image",
+    "level": 1,
+    "url": "/api/2014/spells/silent-image"
+  },
+  {
+    "index": "sleet-storm",
+    "name": "Sleet Storm",
+    "level": 3,
+    "url": "/api/2014/spells/sleet-storm"
+  },
+  {
+    "index": "slow",
+    "name": "Slow",
+    "level": 3,
+    "url": "/api/2014/spells/slow"
+  },
+  {
+    "index": "speak-with-animals",
+    "name": "Speak with Animals",
+    "level": 1,
+    "url": "/api/2014/spells/speak-with-animals"
+  },
+  {
+    "index": "speak-with-dead",
+    "name": "Speak with Dead",
+    "level": 3,
+    "url": "/api/2014/spells/speak-with-dead"
+  },
+  {
+    "index": "speak-with-plants",
+    "name": "Speak with Plants",
+    "level": 3,
+    "url": "/api/2014/spells/speak-with-plants"
+  },
+  {
+    "index": "spirit-guardians",
+    "name": "Spirit Guardians",
+    "level": 3,
+    "url": "/api/2014/spells/spirit-guardians"
+  },
+  {
+    "index": "stinking-cloud",
+    "name": "Stinking Cloud",
+    "level": 3,
+    "url": "/api/2014/spells/stinking-cloud"
+  },
+  {
+    "index": "stone-shape",
+    "name": "Stone Shape",
+    "level": 4,
+    "url": "/api/2014/spells/stone-shape"
+  },
+  {
+    "index": "telekinesis",
+    "name": "Telekinesis",
+    "level": 5,
+    "url": "/api/2014/spells/telekinesis"
+  },
+  {
+    "index": "telepathic-bond",
+    "name": "Telepathic Bond",
+    "level": 5,
+    "url": "/api/2014/spells/telepathic-bond"
+  },
+  {
+    "index": "teleportation-circle",
+    "name": "Teleportation Circle",
+    "level": 5,
+    "url": "/api/2014/spells/teleportation-circle"
+  },
+  {
+    "index": "tiny-hut",
+    "name": "Tiny Hut",
+    "level": 3,
+    "url": "/api/2014/spells/tiny-hut"
+  },
+  {
+    "index": "tongues",
+    "name": "Tongues",
+    "level": 3,
+    "url": "/api/2014/spells/tongues"
+  },
+  {
+    "index": "transport-via-plants",
+    "name": "Transport via Plants",
+    "level": 6,
+    "url": "/api/2014/spells/transport-via-plants"
+  },
+  {
+    "index": "tree-stride",
+    "name": "Tree Stride",
+    "level": 5,
+    "url": "/api/2014/spells/tree-stride"
+  },
+  {
+    "index": "true-strike",
+    "name": "True Strike",
+    "level": 0,
+    "url": "/api/2014/spells/true-strike"
+  },
+  {
+    "index": "unseen-servant",
+    "name": "Unseen Servant",
+    "level": 1,
+    "url": "/api/2014/spells/unseen-servant"
+  },
+  {
+    "index": "vampiric-touch",
+    "name": "Vampiric Touch",
+    "level": 3,
+    "url": "/api/2014/spells/vampiric-touch"
+  },
+  {
+    "index": "wall-of-ice",
+    "name": "Wall of Ice",
+    "level": 6,
+    "url": "/api/2014/spells/wall-of-ice"
+  },
+  {
+    "index": "wall-of-thorns",
+    "name": "Wall of Thorns",
+    "level": 6,
+    "url": "/api/2014/spells/wall-of-thorns"
+  },
+  {
+    "index": "warding-bond",
+    "name": "Warding Bond",
+    "level": 2,
+    "url": "/api/2014/spells/warding-bond"
+  },
+  {
+    "index": "water-breathing",
+    "name": "Water Breathing",
+    "level": 3,
+    "url": "/api/2014/spells/water-breathing"
+  },
+  {
+    "index": "water-walk",
+    "name": "Water Walk",
+    "level": 3,
+    "url": "/api/2014/spells/water-walk"
+  },
+  {
+    "index": "weird",
+    "name": "Weird",
+    "level": 9,
+    "url": "/api/2014/spells/weird"
+  },
+  {
+    "index": "wind-walk",
+    "name": "Wind Walk",
+    "level": 6,
+    "url": "/api/2014/spells/wind-walk"
+  },
+  {
+    "index": "wind-wall",
+    "name": "Wind Wall",
+    "level": 3,
+    "url": "/api/2014/spells/wind-wall"
+  },
+  {
+    "index": "word-of-recall",
+    "name": "Word of Recall",
+    "level": 6,
+    "url": "/api/2014/spells/word-of-recall"
+  }
+]

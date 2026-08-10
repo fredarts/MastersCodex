@@ -1,16 +1,5 @@
-export interface SRDSpell {
-  name: string;
-  level: number; // 0 = Truque
-  school: string;
-  castingTime: string;
-  range: string;
-  components: string;
-  duration: string;
-  description: string;
-  classes: string[];
-  damage?: string;
-  save?: string;
-}
+import { SRDSpell } from './types';
+export type { SRDSpell };
 
 export interface SRDItem {
   name: string;

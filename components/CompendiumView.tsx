@@ -115,6 +115,10 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
   // Spell Filters State
   const [spellLevelFilter, setSpellLevelFilter] = useState<string>('all');
   const [spellSchoolFilter, setSpellSchoolFilter] = useState<string>('all');
+  const [spellClassFilter, setSpellClassFilter] = useState<string>('all');
+  const [spellRitualOnly, setSpellRitualOnly] = useState<boolean>(false);
+  const [spellConcentrationOnly, setSpellConcentrationOnly] = useState<boolean>(false);
+  const [spellShapeFilter, setSpellShapeFilter] = useState<string>('all');
 
   // Item Filters State
   const [itemRarityFilter, setItemRarityFilter] = useState<string>('all');
@@ -232,6 +236,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
     const matchesQuery =
       !q ||
       s.name.toLowerCase().includes(q) ||
+      (s.englishName && s.englishName.toLowerCase().includes(q)) ||
       s.school.toLowerCase().includes(q) ||
       s.description.toLowerCase().includes(q);
 
@@ -241,7 +246,17 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
     const matchesSchool =
       spellSchoolFilter === 'all' || s.school.toLowerCase() === spellSchoolFilter.toLowerCase();
 
-    return matchesQuery && matchesLevel && matchesSchool;
+    const matchesClass =
+      spellClassFilter === 'all' ||
+      (s.classes && s.classes.some((c) => c.toLowerCase().includes(spellClassFilter.toLowerCase())));
+
+    const matchesRitual = !spellRitualOnly || !!s.ritual;
+    const matchesConcentration = !spellConcentrationOnly || !!s.concentration;
+
+    const matchesShape =
+      spellShapeFilter === 'all' || (s.targetArea && s.targetArea.shape === spellShapeFilter);
+
+    return matchesQuery && matchesLevel && matchesSchool && matchesClass && matchesRitual && matchesConcentration && matchesShape;
   });
 
   // Item Filtering Logic
@@ -270,7 +285,15 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
     monsterAlignmentFilter !== 'all' ||
     query !== '';
 
-  const hasActiveSpellFilters = spellLevelFilter !== 'all' || spellSchoolFilter !== 'all' || query !== '';
+  const hasActiveSpellFilters =
+    spellLevelFilter !== 'all' ||
+    spellSchoolFilter !== 'all' ||
+    spellClassFilter !== 'all' ||
+    spellRitualOnly ||
+    spellConcentrationOnly ||
+    spellShapeFilter !== 'all' ||
+    query !== '';
+
   const hasActiveItemFilters = itemRarityFilter !== 'all' || itemTypeFilter !== 'all' || query !== '';
 
   const clearMonsterFilters = () => {
@@ -285,6 +308,10 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
     setQuery('');
     setSpellLevelFilter('all');
     setSpellSchoolFilter('all');
+    setSpellClassFilter('all');
+    setSpellRitualOnly(false);
+    setSpellConcentrationOnly(false);
+    setSpellShapeFilter('all');
   };
 
   const clearItemFilters = () => {
@@ -514,21 +541,67 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
               ))}
             </select>
 
+            {/* Class Filter */}
             <select
-              value={spellSchoolFilter}
-              onChange={(e) => setSpellSchoolFilter(e.target.value)}
+              value={spellClassFilter}
+              onChange={(e) => setSpellClassFilter(e.target.value)}
               className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium"
             >
-              <option value="all">Escola (Todas)</option>
-              <option value="Abjuração">Abjuração</option>
-              <option value="Adivinhação">Adivinhação</option>
-              <option value="Conjuração">Conjuração</option>
-              <option value="Encantamento">Encantamento</option>
-              <option value="Evocação">Evocação</option>
-              <option value="Ilusão">Ilusão</option>
-              <option value="Necromancia">Necromancia</option>
-              <option value="Transmutação">Transmutação</option>
+              <option value="all">Classe (Todas)</option>
+              <option value="Bardo">Bardo</option>
+              <option value="Bruxo">Bruxo (Warlock)</option>
+              <option value="Clérigo">Clérigo</option>
+              <option value="Druida">Druida</option>
+              <option value="Feiticeiro">Feiticeiro (Sorcerer)</option>
+              <option value="Mago">Mago (Wizard)</option>
+              <option value="Paladino">Paladino</option>
+              <option value="Patrulheiro">Patrulheiro (Ranger)</option>
             </select>
+
+            {/* Shape / Area Filter */}
+            <select
+              value={spellShapeFilter}
+              onChange={(e) => setSpellShapeFilter(e.target.value)}
+              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium"
+            >
+              <option value="all">Formato / Área (Todos)</option>
+              <option value="cone">📐 Cone / Leque</option>
+              <option value="sphere">🟢 Esfera / Baforada</option>
+              <option value="line">⚡ Linha</option>
+              <option value="cube">🧊 Cubo</option>
+              <option value="cylinder">🏛️ Cilindro</option>
+              <option value="single_target">🎯 Alvo Único</option>
+              <option value="multiple_targets">🎯🎯 Múltiplos Alvos</option>
+              <option value="touch">🖐️ Toque</option>
+              <option value="self">👤 Pessoal (Si Mesmo)</option>
+            </select>
+
+            {/* Toggles */}
+            <button
+              type="button"
+              onClick={() => setSpellRitualOnly(!spellRitualOnly)}
+              className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                spellRitualOnly
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow'
+                  : 'bg-[#161c28] text-slate-400 border-[#2a3449] hover:text-slate-200'
+              }`}
+            >
+              <span>📜</span>
+              <span>Apenas Rituais</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSpellConcentrationOnly(!spellConcentrationOnly)}
+              className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                spellConcentrationOnly
+                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/60 shadow'
+                  : 'bg-[#161c28] text-slate-400 border-[#2a3449] hover:text-slate-200'
+              }`}
+            >
+              <span>🧘</span>
+              <span>Concentração</span>
+            </button>
 
             {hasActiveSpellFilters && (
               <button
@@ -1045,33 +1118,251 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
           )}
 
           {activeTab === 'spells' && selectedSpell && (
-            <div className="space-y-5">
-              <div className="border-b border-[#2a3449] pb-4">
-                <h2 className="text-2xl font-bold text-slate-100 font-serif">{selectedSpell.name}</h2>
-                <p className="text-xs text-amber-400 font-semibold mt-1">
-                  {selectedSpell.level === 0 ? 'Truque' : `${selectedSpell.level}º Nível`} de {selectedSpell.school}
-                </p>
+            <div className="space-y-6">
+              {/* Header Hero Banner */}
+              <div className="border-b border-[#2a3449] pb-5 flex flex-wrap items-start justify-between gap-4 bg-gradient-to-r from-[#0f141d] to-transparent p-4 rounded-2xl border border-[#2a3449]/80 shadow-md">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-3xl font-extrabold text-amber-100 font-serif tracking-wide">
+                      {selectedSpell.name}
+                    </h2>
+                    <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      {selectedSpell.level === 0 ? 'Truque' : `${selectedSpell.level}º Nível`}
+                    </span>
+                  </div>
+                  {selectedSpell.englishName && (
+                    <p className="text-xs text-slate-400 font-mono italic">
+                      Original: {selectedSpell.englishName}
+                    </p>
+                  )}
+                  <p className="text-xs text-amber-400 font-semibold pt-1">
+                    Escola de {selectedSpell.school}
+                  </p>
+                </div>
+
+                {/* Class badges */}
+                {selectedSpell.classes && selectedSpell.classes.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 max-w-xs justify-end">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase block w-full text-right mb-0.5">Classes de Conjurador:</span>
+                    {selectedSpell.classes.map((cls, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-0.5 bg-[#161c28] border border-amber-500/30 text-amber-300 text-[10px] font-bold rounded-md shadow-sm"
+                      >
+                        {cls}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="bg-[#0a0d14] p-3.5 rounded-xl border border-[#2a3449]">
-                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">
-                    Tempo de Conjuração:
+              {/* Grid de Metadados Detalhados */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div className="bg-[#0a0d14] p-3.5 rounded-xl border border-[#2a3449] space-y-1">
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">
+                    Tempo de Conjuração
                   </span>
                   <span className="font-bold text-slate-200">{selectedSpell.castingTime}</span>
                 </div>
-                <div className="bg-[#0a0d14] p-3.5 rounded-xl border border-[#2a3449]">
-                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Alcance:</span>
+
+                <div className="bg-[#0a0d14] p-3.5 rounded-xl border border-[#2a3449] space-y-1">
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">
+                    Alcance
+                  </span>
                   <span className="font-bold text-slate-200">{selectedSpell.range}</span>
+                </div>
+
+                <div className="bg-[#0a0d14] p-3.5 rounded-xl border border-[#2a3449] space-y-1">
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">
+                    Duração
+                  </span>
+                  <span className="font-bold text-slate-200">{selectedSpell.duration}</span>
+                </div>
+
+                <div className="bg-[#0a0d14] p-3.5 rounded-xl border border-[#2a3449] space-y-1">
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">
+                    Concentração & Ritual
+                  </span>
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${selectedSpell.concentration ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                      {selectedSpell.concentration ? '🧘 Concentração' : 'Sem Concentração'}
+                    </span>
+                    {selectedSpell.ritual && (
+                      <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded text-[10px] font-bold">
+                        📜 Ritual
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-[#0a0d14] p-5 rounded-2xl border border-[#2a3449] space-y-2">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Efeito da Magia:</h4>
+              {/* Seção 2: Componentes & Formato da Área */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Componentes (V, S, M) */}
+                <div className="bg-[#0a0d14]/70 p-4 rounded-2xl border border-[#2a3449] space-y-2.5">
+                  <span className="text-xs font-bold text-amber-400 uppercase tracking-wider block">
+                    🧪 Componentes & Ingredientes
+                  </span>
+                  {(() => {
+                    const comp = typeof selectedSpell.components === 'object' ? selectedSpell.components : null;
+                    const rawText = typeof selectedSpell.components === 'string' ? selectedSpell.components : comp?.raw || '';
+                    const isV = comp ? comp.verbal : rawText.includes('V');
+                    const isS = comp ? comp.somatic : rawText.includes('S');
+                    const isM = comp ? comp.material : rawText.includes('M');
+                    const matDesc = comp?.materialsDescription || (rawText.includes('(') ? rawText.substring(rawText.indexOf('(') + 1, rawText.indexOf(')')) : null);
+
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded-md text-xs font-mono font-black border ${isV ? 'bg-amber-500/20 text-amber-300 border-amber-500/50' : 'bg-slate-900 text-slate-600 border-slate-800 opacity-40'}`}>
+                            V (Verbal)
+                          </span>
+                          <span className={`px-2 py-1 rounded-md text-xs font-mono font-black border ${isS ? 'bg-amber-500/20 text-amber-300 border-amber-500/50' : 'bg-slate-900 text-slate-600 border-slate-800 opacity-40'}`}>
+                            S (Somático/Gestual)
+                          </span>
+                          <span className={`px-2 py-1 rounded-md text-xs font-mono font-black border ${isM ? 'bg-amber-500/20 text-amber-300 border-amber-500/50' : 'bg-slate-900 text-slate-600 border-slate-800 opacity-40'}`}>
+                            M (Material)
+                          </span>
+                        </div>
+                        {matDesc && (
+                          <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449] text-xs space-y-1">
+                            <span className="text-[10px] font-bold text-amber-400 uppercase block">Materiais Exigidos:</span>
+                            <p className="text-slate-300 italic">{matDesc}</p>
+                            {comp?.costly && (
+                              <span className="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 bg-yellow-500/20 text-yellow-300 border border-yellow-500/40 rounded">
+                                💰 Requer Ingrediente Valioso com Custo em PO
+                              </span>
+                            )}
+                            {comp?.consumed && (
+                              <span className="inline-block mt-1 ml-1 text-[10px] font-bold px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded">
+                                🔥 Material Consumido na Conjuração
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Formato / Área de Efeito */}
+                <div className="bg-[#0a0d14]/70 p-4 rounded-2xl border border-[#2a3449] space-y-2.5">
+                  <span className="text-xs font-bold text-amber-400 uppercase tracking-wider block">
+                    📐 Formato & Área de Efeito
+                  </span>
+                  {(() => {
+                    const area = selectedSpell.targetArea;
+                    const shape = area?.shape;
+                    let shapeLabel = 'Alvo / Área';
+                    let shapeIcon = '🎯';
+                    if (shape === 'cone') { shapeLabel = 'Cone / Leque'; shapeIcon = '📐'; }
+                    else if (shape === 'sphere') { shapeLabel = 'Esfera / Baforada'; shapeIcon = '🟢'; }
+                    else if (shape === 'line') { shapeLabel = 'Linha'; shapeIcon = '⚡'; }
+                    else if (shape === 'cube') { shapeLabel = 'Cubo'; shapeIcon = '🧊'; }
+                    else if (shape === 'cylinder') { shapeLabel = 'Cilindro'; shapeIcon = '🏛️'; }
+                    else if (shape === 'wall') { shapeLabel = 'Parede / Muralha'; shapeIcon = '🧱'; }
+                    else if (shape === 'single_target') { shapeLabel = 'Alvo Único'; shapeIcon = '🎯'; }
+                    else if (shape === 'multiple_targets') { shapeLabel = 'Múltiplos Alvos'; shapeIcon = '🎯🎯'; }
+                    else if (shape === 'touch') { shapeLabel = 'Toque'; shapeIcon = '🖐️'; }
+                    else if (shape === 'self') { shapeLabel = 'Pessoal (Si Mesmo)'; shapeIcon = '👤'; }
+
+                    return (
+                      <div className="space-y-2 text-xs">
+                        <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449] flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] text-slate-400 uppercase block font-semibold">Tipo / Formato</span>
+                            <span className="font-bold text-slate-200 text-sm">{shapeIcon} {shapeLabel}</span>
+                          </div>
+                          {area?.formatted && (
+                            <span className="text-xs font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-lg">
+                              {area.formatted}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Dano / Salvaguarda / Rolagem de Dados Interativa */}
+              {selectedSpell.damageSave && (selectedSpell.damageSave.damageDice || selectedSpell.damageSave.saveStat) && (
+                <div className="bg-[#0a0d14]/70 p-4 rounded-2xl border border-amber-500/30 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                      ⚔️ Mecanismos de Ataque, Dano & Salvaguarda
+                    </span>
+                    {selectedSpell.damageSave.damageDice && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const diceFormula = selectedSpell.damageSave?.damageDice || '1d6';
+                          useLiveCockpitStudioStore.getState().setBg3DiceOverlay({
+                            title: `Efeito de Magia: ${selectedSpell.name}`,
+                            subtitle: `${selectedSpell.level === 0 ? 'Truque' : selectedSpell.level + 'º Nível'} - ${selectedSpell.damageSave?.damageType || 'Magia'}`,
+                            actorName: 'Conjurador',
+                            d20Roll: 15,
+                            selectedD20Roll: 15,
+                            modifier: 0,
+                            totalRoll: 15,
+                            damageDiceFormula: diceFormula,
+                            isRolling: true,
+                            phase: 'damage',
+                          });
+                          toast.success(`Executando rolagem de dano (${diceFormula}) para ${selectedSpell.name}`);
+                        }}
+                        className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+                      >
+                        <Swords className="w-3.5 h-3.5 text-slate-950" />
+                        <span>Rolar Dano ({selectedSpell.damageSave.damageDice})</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                    {selectedSpell.damageSave.damageDice && (
+                      <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449]">
+                        <span className="text-[10px] text-slate-400 uppercase block font-semibold">Dado de Dano / Cura</span>
+                        <span className="font-bold text-amber-300 font-mono text-sm">{selectedSpell.damageSave.damageDice} ({selectedSpell.damageSave.damageType || 'Magia'})</span>
+                      </div>
+                    )}
+                    {selectedSpell.damageSave.saveStat && (
+                      <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449]">
+                        <span className="text-[10px] text-slate-400 uppercase block font-semibold">Teste de Resistência (TR)</span>
+                        <span className="font-bold text-rose-300 font-mono text-sm">TR de {selectedSpell.damageSave.saveStat}</span>
+                      </div>
+                    )}
+                    {selectedSpell.damageSave.attackType && (
+                      <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449]">
+                        <span className="text-[10px] text-slate-400 uppercase block font-semibold">Tipo de Ataque</span>
+                        <span className="font-bold text-slate-200 capitalize">
+                          {selectedSpell.damageSave.attackType === 'ranged_spell' ? 'Ataque Mágico à Distância' : selectedSpell.damageSave.attackType === 'melee_spell' ? 'Ataque Mágico Corpo a Corpo' : selectedSpell.damageSave.attackType === 'save' ? 'Teste de Resistência' : 'Utilidade / Suporte'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Descrição Principal da Magia */}
+              <div className="bg-[#0a0d14] p-5 rounded-2xl border border-[#2a3449] space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Efeito Completo da Magia:</h4>
                 <p className="text-sm text-slate-200 leading-relaxed font-serif whitespace-pre-wrap">
                   {selectedSpell.description}
                 </p>
               </div>
+
+              {/* Em Níveis Superiores */}
+              {selectedSpell.higherLevels && (
+                <div className="bg-gradient-to-r from-amber-500/10 via-[#0a0d14] to-transparent p-4 rounded-2xl border border-amber-500/40 space-y-1.5 shadow-md">
+                  <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-400" /> Em Níveis Superiores:
+                  </h4>
+                  <p className="text-xs text-slate-300 leading-relaxed font-sans italic">
+                    {selectedSpell.higherLevels}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

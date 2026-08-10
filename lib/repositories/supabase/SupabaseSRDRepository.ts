@@ -54,14 +54,20 @@ export class SupabaseSRDRepository {
     return (data || []).map(row => ({
       id: row.id,
       name: row.name,
+      englishName: row.english_name || undefined,
       level: row.level,
       school: row.school,
       castingTime: row.casting_time,
       range: row.range,
-      components: row.components,
+      components: row.components_detail && Object.keys(row.components_detail).length > 0 ? row.components_detail : row.components,
       duration: row.duration,
+      concentration: row.concentration || false,
+      ritual: row.ritual || false,
+      targetArea: row.target_area && Object.keys(row.target_area).length > 0 ? row.target_area : undefined,
+      damageSave: row.damage_save && Object.keys(row.damage_save).length > 0 ? row.damage_save : undefined,
       description: row.description,
-      classes: row.classes
+      higherLevels: row.higher_levels || undefined,
+      classes: row.classes || []
     }));
   }
 

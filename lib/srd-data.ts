@@ -1,4 +1,5 @@
 import { SRDMonster, SRDSpell, SRDItem, Encounter, LoreNode, BGMTrack, SFXButton, ConditionType } from './types';
+import { ALL_SRD_SPELLS } from './srd-spells-data';
 
 export const CONDITIONS: ConditionType[] = [
   'Cego',
@@ -3997,104 +3998,7 @@ export const INITIAL_MONSTERS: SRDMonster[] = [
   }
 ];
 
-export const INITIAL_SPELLS: SRDSpell[] = [
-  {
-    id: 'magic-missile',
-    name: 'Mísseis Mágicos (Magic Missile)',
-    level: 1,
-    school: 'Evocação',
-    castingTime: '1 Ação',
-    range: '36 metros',
-    components: 'V, S',
-    duration: 'Instantânea',
-    description: 'Você cria três dardos brilhantes de força mágica. Cada dardo atinge uma criatura à sua escolha e causa 1d4 + 1 de dano de força automaticamente (sem teste de ataque).',
-    classes: ['Mago', 'Feiticeiro']
-  },
-  {
-    id: 'fireball',
-    name: 'Bola de Fogo (Fireball)',
-    level: 3,
-    school: 'Evocação',
-    castingTime: '1 Ação',
-    range: '45 metros (150 pés)',
-    components: 'V, S, M (uma bolinha de guano de morcego e enxofre)',
-    duration: 'Instantânea',
-    description: 'Um raio brilhante lampeja do seu dedo indicador para um ponto que você escolher e explode com um rugido baixo em uma explosão de chamas. Cada criatura em uma esfera de 6m de raio deve fazer um teste de Destreza. Falha: 8d6 de dano de fogo.',
-    classes: ['Mago', 'Feiticeiro']
-  },
-  {
-    id: 'cure-wounds',
-    name: 'Curar Ferimentos (Cure Wounds)',
-    level: 1,
-    school: 'Evocação',
-    castingTime: '1 Ação',
-    range: 'Toque',
-    components: 'V, S',
-    duration: 'Instantânea',
-    description: 'Uma criatura que você tocar recupera um número de pontos de vida igual a 1d8 + seu modificador de habilidade de conjuração.',
-    classes: ['Bardo', 'Clérigo', 'Druida', 'Paladino', 'Ranger']
-  },
-  {
-    id: 'shield',
-    name: 'Escudo Mágico (Shield)',
-    level: 1,
-    school: 'Abjuração',
-    castingTime: '1 Reação',
-    range: 'Pessoal',
-    components: 'V, S',
-    duration: '1 Rodada',
-    description: 'Uma barreira invisível de força mágica surge e o protege. Até o início do seu próximo turno, você ganha +5 de bônus na CA.',
-    classes: ['Mago', 'Feiticeiro']
-  },
-  {
-    id: 'misty-step',
-    name: 'Passo Nebuloso (Misty Step)',
-    level: 2,
-    school: 'Conjuração',
-    castingTime: '1 Ação Bônus',
-    range: 'Pessoal',
-    components: 'V',
-    duration: 'Instantânea',
-    description: 'Brevemente cercado por uma névoa prateada, você se teleporta até 9 metros para um espaço desocupado que possa ver.',
-    classes: ['Mago', 'Feiticeiro', 'Bruxo']
-  },
-  {
-    id: 'hold-person',
-    name: 'Imobilizar Pessoa (Hold Person)',
-    level: 2,
-    school: 'Encantamento',
-    castingTime: '1 Ação',
-    range: '18 metros',
-    components: 'V, S, M (uma pequena peça de ferro reto)',
-    duration: 'Concentração, até 1 minuto',
-    description: 'Escolha um humanoide. Ele deve passar num teste de resistência de Sabedoria ou ficará Paralisado pela duração da magia.',
-    classes: ['Bardo', 'Clérigo', 'Druida', 'Mago', 'Feiticeiro', 'Bruxo']
-  },
-  {
-    id: 'invisibility',
-    name: 'Invisibilidade (Invisibility)',
-    level: 2,
-    school: 'Ilusão',
-    castingTime: '1 Ação',
-    range: 'Toque',
-    components: 'V, S, M (uma pestana envolta em goma)',
-    duration: 'Concentração, até 1 hora',
-    description: 'Uma criatura que você tocar fica invisível até que a magia termine. A magia termina se o alvo atacar ou conjurar uma magia.',
-    classes: ['Bardo', 'Mago', 'Feiticeiro', 'Bruxo']
-  },
-  {
-    id: 'eldritch-blast',
-    name: 'Disparo Místico (Eldritch Blast)',
-    level: 0,
-    school: 'Evocação',
-    castingTime: '1 Ação',
-    range: '36 metros',
-    components: 'V, S',
-    duration: 'Instantânea',
-    description: 'Um feixe de energia crepitante dispara em direção a uma criatura ao alcance. Faça um ataque à distância com magia. Acerto: 1d10 de dano de força.',
-    classes: ['Bruxo']
-  }
-];
+export const INITIAL_SPELLS: SRDSpell[] = ALL_SRD_SPELLS;
 
 export const INITIAL_ITEMS: SRDItem[] = [
   {

@@ -435,17 +435,75 @@ export interface CustomMonster {
   createdAt?: string;
 }
 
+export type SpellSchool =
+  | 'Abjuração'
+  | 'Adivinhação'
+  | 'Conjuração'
+  | 'Encantamento'
+  | 'Evocação'
+  | 'Ilusão'
+  | 'Necromancia'
+  | 'Transmutação';
+
+export type SpellAreaShape =
+  | 'cone'             // Cone / Leque (ex: Mãos Flamejantes, Cone de Frio)
+  | 'cube'             // Cubo (ex: Névoa Assassina, Escuridão)
+  | 'cylinder'         // Cilindro (ex: Coluna de Chamas)
+  | 'line'             // Linha (ex: Relâmpago)
+  | 'sphere'           // Esfera / Baforada (ex: Bola de Fogo)
+  | 'square'           // Quadrado
+  | 'wall'             // Parede (ex: Muralha de Fogo)
+  | 'single_target'    // Alvo Único (ex: Míssil Mágico, Imobilizar Pessoa)
+  | 'multiple_targets' // Múltiplos Alvos (ex: Raio de Ruína)
+  | 'self'             // Pessoal / Em Si Mesmo (ex: Escudo Mágico, Passo Nebuloso)
+  | 'touch'            // Toque (ex: Curar Ferimentos, Voo)
+  | 'special';         // Especial
+
+export interface SpellComponents {
+  verbal: boolean;               // V (Verbal)
+  somatic: boolean;              // S (Somático / Gestual)
+  material: boolean;             // M (Material / Ingredientes)
+  materialsDescription?: string; // Descrição dos materiais (ex: "uma bolinha de guano de morcego e enxofre")
+  costly?: boolean;              // O ingrediente possui custo em PO? (ex: diamante de 300 PO)
+  consumed?: boolean;            // O ingrediente é consumido ao conjurar?
+  raw?: string;                  // Texto formatado (ex: "V, S, M (guano de morcego e enxofre)")
+}
+
+export interface SpellTargetArea {
+  type: 'target' | 'area' | 'self' | 'touch' | 'special';
+  shape?: SpellAreaShape;
+  sizeValue?: number;            // ex: 6 (metros)
+  sizeUnit?: 'm' | 'ft';          // 'm' ou 'ft'
+  formatted?: string;            // ex: "Esfera de 6m (20ft) de raio", "Leque/Cone de 4.5m", "Linha de 30m"
+}
+
+export interface SpellDamageSave {
+  damageDice?: string;           // ex: "8d6", "1d8 + mod", "1d10"
+  damageType?: string;           // ex: "Fogo", "Força", "Radiante", "Necrótico", "Cura", "Gelo", "Elétrico"
+  saveStat?: 'STR' | 'DEX' | 'CON' | 'INT' | 'WIS' | 'CHA'; // Teste de Resistência
+  saveEffect?: 'none' | 'half' | 'negate' | 'special';      // Sucesso reduz pela metade, anula, etc.
+  attackType?: 'melee_spell' | 'ranged_spell' | 'save' | 'utility' | 'none';
+}
+
 export interface SRDSpell {
-  id: string;
-  name: string;
-  level: number; // 0 for cantrip
-  school: string;
-  castingTime: string;
-  range: string;
-  components: string;
-  duration: string;
-  description: string;
-  classes: string[];
+  id?: string;
+  name: string;                  // Nome em PT (ex: "Bola de Fogo (Fireball)")
+  englishName?: string;           // Nome original em EN (ex: "Fireball")
+  level: number;                 // 0 (Truque) até 9 (9º Nível)
+  school: SpellSchool | string;
+  castingTime: string;           // ex: "1 ação", "1 ação bônus", "1 reação", "10 minutos"
+  range: string;                 // ex: "45 metros (150 pés)", "Toque", "Pessoal"
+  duration: string;              // ex: "Instantânea", "Concentração, até 1 hora"
+  concentration?: boolean;       // Requer Concentração? (true/false)
+  ritual?: boolean;              // Pode ser conjurada como Ritual? (true/false)
+  components: string | SpellComponents; // String legada ("V, S, M") ou objeto estruturado
+  targetArea?: SpellTargetArea;  // Forma da magia (alvo, leque, cone, esfera, linha, etc.)
+  damageSave?: SpellDamageSave;  // Dados de dano, salvaguarda e tipo de ataque
+  description: string;           // Descrição completa dos efeitos da magia
+  higherLevels?: string;         // Efeito quando conjurada em níveis superiores ("Em Níveis Superiores")
+  classes: string[];             // Classes que têm acesso ("Bardo", "Clérigo", "Druida", "Feiticeiro", "Bruxo", "Mago", "Paladino", "Patrulheiro")
+  damage?: string;               // Propriedade legado opcional
+  save?: string;                 // Propriedade legado opcional
 }
 
 export interface SRDItem {

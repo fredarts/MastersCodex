@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { CharacterSheet, CharacterSpell } from '@/lib/types';
-import { SRD_SPELLS, SRDSpell } from '@/lib/srd-compendium';
-import { Search, Sparkles, Plus, Check, X, Flame, Shield, Wand2 } from 'lucide-react';
+import { ALL_SRD_SPELLS } from '@/lib/srd-spells-data';
+import { SRDSpell } from '@/lib/types';
+import { Search, Sparkles, Plus, Check, X, Wand2 } from 'lucide-react';
 
 interface SpellCompendiumModalProps {
   sheet: CharacterSheet;
@@ -28,9 +29,10 @@ export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
 
   if (!isOpen) return null;
 
-  const filteredSpells = SRD_SPELLS.filter((spell) => {
+  const filteredSpells = ALL_SRD_SPELLS.filter((spell) => {
     const matchesSearch =
       spell.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (spell.englishName && spell.englishName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       spell.school.toLowerCase().includes(searchTerm.toLowerCase()) ||
       spell.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesLevel = selectedLevelFilter === 'all' || spell.level === selectedLevelFilter;
@@ -38,6 +40,7 @@ export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
   });
 
   const handleImportSpell = (srdSpell: SRDSpell) => {
+    const compText = typeof srdSpell.components === 'string' ? srdSpell.components : (srdSpell.components.raw || 'V, S');
     const newSpell: CharacterSpell = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
       name: srdSpell.name,
@@ -46,7 +49,7 @@ export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
       school: srdSpell.school,
       castingTime: srdSpell.castingTime,
       range: srdSpell.range,
-      description: `${srdSpell.description}\n\nComponentes: ${srdSpell.components} | Duração: ${srdSpell.duration}`,
+      description: `${srdSpell.description}\n\nComponentes: ${compText} | Duração: ${srdSpell.duration}${srdSpell.concentration ? ' (Concentração)' : ''}${srdSpell.ritual ? ' (Ritual)' : ''}`,
       isBonus: srdSpell.level === 0 ? isAtCantripLimit : isAtSpellLimit,
     };
 

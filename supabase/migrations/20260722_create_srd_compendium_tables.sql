@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS public.srd_monsters (
 CREATE TABLE IF NOT EXISTS public.srd_spells (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
+  english_name TEXT,
   level INT NOT NULL,
   school TEXT NOT NULL,
   casting_time TEXT NOT NULL,
@@ -34,6 +35,12 @@ CREATE TABLE IF NOT EXISTS public.srd_spells (
   components TEXT NOT NULL,
   duration TEXT NOT NULL,
   description TEXT NOT NULL,
+  higher_levels TEXT,
+  concentration BOOLEAN DEFAULT FALSE,
+  ritual BOOLEAN DEFAULT FALSE,
+  components_detail JSONB DEFAULT '{}'::jsonb,
+  target_area JSONB DEFAULT '{}'::jsonb,
+  damage_save JSONB DEFAULT '{}'::jsonb,
   classes JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -55,5 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_srd_monsters_name ON public.srd_monsters (name te
 CREATE INDEX IF NOT EXISTS idx_srd_spells_level ON public.srd_spells (level);
 CREATE INDEX IF NOT EXISTS idx_srd_spells_school ON public.srd_spells (school);
 CREATE INDEX IF NOT EXISTS idx_srd_spells_name ON public.srd_spells (name text_pattern_ops);
+CREATE INDEX IF NOT EXISTS idx_srd_spells_concentration ON public.srd_spells (concentration);
+CREATE INDEX IF NOT EXISTS idx_srd_spells_ritual ON public.srd_spells (ritual);
 CREATE INDEX IF NOT EXISTS idx_srd_items_rarity ON public.srd_items (rarity);
 CREATE INDEX IF NOT EXISTS idx_srd_items_type ON public.srd_items (type);

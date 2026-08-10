@@ -16,6 +16,9 @@ export interface SpellQueryFilter {
   level?: number | 'all';
   school?: string;
   className?: string;
+  concentration?: boolean;
+  ritual?: boolean;
+  shape?: string;
   page?: number;
   limit?: number;
 }
@@ -52,29 +55,7 @@ export const srdService = {
 
         const { data, error } = await query;
         if (!error && data && data.length > 0) {
-          return data.map((m: any) => ({
-            id: m.id,
-            name: m.name,
-            type: m.type,
-            size: m.size,
-            alignment: m.alignment,
-            ac: m.ac,
-            hp: m.hp,
-            speed: m.speed,
-            cr: m.cr,
-            xp: m.xp,
-            str: m.str,
-            dex: m.dex,
-            con: m.con,
-            int: m.int,
-            wis: m.wis,
-            cha: m.cha,
-            abilities: m.abilities || [],
-            actions: m.actions || [],
-            tokenImageUrl: m.token_image_url || m.tokenImageUrl || `/assets/2d/Monstros/${m.name}.png`,
-            tokenType: m.token_type || m.tokenType || 'billboard',
-            modelUrl: m.model_url || m.modelUrl || undefined,
-          }));
+          return data;
         }
       } catch (e) {
         console.warn('Fallback para compêndio estático de monstros local:', e);
@@ -97,7 +78,7 @@ export const srdService = {
   },
 
   async fetchSpells(filter: SpellQueryFilter = {}): Promise<SRDSpell[]> {
-    const { searchQuery, level, school, className, page = 1, limit = 500 } = filter;
+    const { searchQuery, level, school, className, concentration, ritual, shape, page = 1, limit = 500 } = filter;
 
     if (isSupabaseConfigured()) {
       try {
@@ -112,6 +93,12 @@ export const srdService = {
         if (school && school !== 'all') {
           query = query.eq('school', school);
         }
+        if (concentration !== undefined) {
+          query = query.eq('concentration', concentration);
+        }
+        if (ritual !== undefined) {
+          query = query.eq('ritual', ritual);
+        }
 
         const from = (page - 1) * limit;
         const to = from + limit - 1;
@@ -122,13 +109,19 @@ export const srdService = {
           return data.map((s: any) => ({
             id: s.id,
             name: s.name,
+            englishName: s.english_name || undefined,
             level: s.level,
             school: s.school,
             castingTime: s.casting_time,
             range: s.range,
-            components: s.components,
+            components: s.components_detail && Object.keys(s.components_detail).length > 0 ? s.components_detail : s.components,
             duration: s.duration,
+            concentration: s.concentration || false,
+            ritual: s.ritual || false,
+            targetArea: s.target_area && Object.keys(s.target_area).length > 0 ? s.target_area : undefined,
+            damageSave: s.damage_save && Object.keys(s.damage_save).length > 0 ? s.damage_save : undefined,
             description: s.description,
+            higherLevels: s.higher_levels || undefined,
             classes: s.classes || [],
           }));
         }
@@ -148,6 +141,18 @@ export const srdService = {
     }
     if (school && school !== 'all') {
       results = results.filter((s) => s.school.toLowerCase() === school.toLowerCase());
+    }
+    if (className && className !== 'all') {
+      results = results.filter((s) => s.classes.some((c) => c.toLowerCase().includes(className.toLowerCase())));
+    }
+    if (concentration !== undefined) {
+      results = results.filter((s) => !!s.concentration === concentration);
+    }
+    if (ritual !== undefined) {
+      results = results.filter((s) => !!s.ritual === ritual);
+    }
+    if (shape && shape !== 'all') {
+      results = results.filter((s) => s.targetArea?.shape === shape);
     }
     return results;
   },
