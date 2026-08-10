@@ -35,11 +35,31 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
   const [actualD1, setActualD1] = useState<number>(state?.d20Roll || 1);
   const [actualD2, setActualD2] = useState<number>(state?.secondD20Roll || 1);
 
+  const lastStateRef = React.useRef<{ title: string; actorName?: string; targetName?: string; modifier: number } | null>(null);
+
   // Initialize cards when state changes
   useEffect(() => {
-    if (state?.modifierCards) {
+    if (!state) return;
+
+    // Guard against resetting state when updating secondary fields (like damageAmount)
+    const isSameRoll = lastStateRef.current &&
+      lastStateRef.current.title === state.title &&
+      lastStateRef.current.actorName === state.actorName &&
+      lastStateRef.current.targetName === state.targetName &&
+      lastStateRef.current.modifier === state.modifier;
+
+    if (isSameRoll) return;
+
+    lastStateRef.current = {
+      title: state.title,
+      actorName: state.actorName,
+      targetName: state.targetName,
+      modifier: state.modifier,
+    };
+
+    if (state.modifierCards) {
       setModifierCards(state.modifierCards.map((c) => ({ ...c, isEnabled: c.isEnabled !== false })));
-    } else if (state) {
+    } else {
       // Default cards fallback
       const defaultCards: Bg3RollModifierCard[] = [];
       if (state.modifier !== 0) {
@@ -54,9 +74,9 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
       }
       setModifierCards(defaultCards);
     }
-    setActualD1(state?.d20Roll || 1);
-    setActualD2(state?.secondD20Roll || 1);
-    setDc(state?.difficultyClass ?? 10);
+    setActualD1(state.d20Roll || 1);
+    setActualD2(state.secondD20Roll || 1);
+    setDc(state.difficultyClass ?? 10);
     setHasRolled(false);
     setIsRolling(false);
     setActiveBonusIndex(-1);
@@ -149,7 +169,9 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
         rawTotal += Math.floor(Math.random() * dmgInfo.sides) + 1;
       }
     }
-    const finalDamage = Math.max(1, rawTotal + dmgInfo.bonus);
+    const finalDamage = state?.damageAmount !== undefined
+      ? state.damageAmount
+      : Math.max(1, rawTotal + dmgInfo.bonus);
 
     setTimeout(() => {
       clearInterval(interval);
@@ -157,7 +179,7 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
       setHasDamageRolled(true);
       setDamageRollResult(finalDamage);
     }, 1600);
-  }, [isDamageRolling, hasDamageRolled, dmgInfo, playDiceSound, isCrit]);
+  }, [isDamageRolling, hasDamageRolled, dmgInfo, playDiceSound, isCrit, state]);
 
   // Auto-start damage roll as soon as modal transitions to 'damage' phase
   useEffect(() => {
@@ -544,18 +566,31 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
       </div>
 
       {/* Bottom Dismiss / Continue Action */}
-      <div className="z-10 mt-6">
+      <div className="z-10 mt-6 flex flex-col items-center gap-2">
         {hasRolled ? (
-          <button
-            onClick={onClose}
-            className="px-10 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-serif font-black text-sm uppercase tracking-wider rounded-xl shadow-xl transition-all active:scale-95 border border-amber-200"
-          >
-            Continuar
-          </button>
+          <>
+            {!(modalPhase === 'd20' && isSuccess && state.damageDiceFormula) && (
+              <button
+                onClick={onClose}
+                className="px-10 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-serif font-black text-sm uppercase tracking-wider rounded-xl shadow-xl transition-all active:scale-95 border border-amber-200 cursor-pointer"
+              >
+                Continuar
+              </button>
+            )}
+            {modalPhase === 'd20' && isSuccess && state.damageDiceFormula && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-xs text-slate-500 hover:text-slate-300 uppercase tracking-widest font-mono underline cursor-pointer mt-1"
+              >
+                Fechar sem rolar dano
+              </button>
+            )}
+          </>
         ) : (
           <button
             onClick={onClose}
-            className="text-xs text-slate-500 hover:text-slate-300 uppercase tracking-widest font-mono underline"
+            className="text-xs text-slate-500 hover:text-slate-300 uppercase tracking-widest font-mono underline cursor-pointer"
           >
             Cancelar
           </button>

@@ -75,7 +75,7 @@ export function useLiveCockpitCombat(
     const isFail = d20 === 1;
     const total = d20 + mod;
 
-    let targetAc = target?.ac;
+    const targetAc = target?.ac;
     let isHit: boolean | undefined = undefined;
 
     if (title.startsWith('Ataque') && targetAc !== undefined) {
@@ -83,16 +83,14 @@ export function useLiveCockpitCombat(
     }
 
     let damageFormula: string | undefined = undefined;
-    let numberOfDice = 1; // Default to 1 for d20 roll
     if (actionDesc) {
       const dmgMatch = actionDesc.match(/(\d+)d\d+(?:\s*[\+\-]\s*\d+)?/i);
       if (dmgMatch) {
         damageFormula = actionDesc.match(/(\d+d\d+(?:\s*[\+\-]\s*\d+)?)/i)?.[1];
-        numberOfDice += parseInt(dmgMatch[1], 10);
       }
     }
 
-    playDiceSound(numberOfDice);
+    playDiceSound(1);
 
     setAnimatedRollNumber(d20);
     setBg3DiceOverlay({

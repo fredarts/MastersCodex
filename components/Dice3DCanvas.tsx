@@ -265,7 +265,7 @@ export const Dice3DCanvas: React.FC<Dice3DCanvasProps> = ({
     let animationFrameId: number;
     let angularVelX = (Math.random() - 0.5) * 0.4 + 0.25;
     let angularVelY = (Math.random() - 0.5) * 0.4 + 0.25;
-    let angularVelZ = (Math.random() - 0.5) * 0.2 + 0.1;
+    const angularVelZ = (Math.random() - 0.5) * 0.2 + 0.1;
     let posX = (Math.random() - 0.5) * 0.4;
     let posY = (Math.random() - 0.5) * 0.4;
     let velX = (Math.random() - 0.5) * 0.04;
@@ -309,6 +309,9 @@ export const Dice3DCanvas: React.FC<Dice3DCanvasProps> = ({
       renderer.render(scene, camera);
     };
 
+    const gl = renderer.getContext();
+    const extension = gl ? gl.getExtension('WEBGL_lose_context') : null;
+
     animate();
 
     return () => {
@@ -319,6 +322,9 @@ export const Dice3DCanvas: React.FC<Dice3DCanvasProps> = ({
       wireGeo.dispose();
       wireMat.dispose();
       renderer.dispose();
+      if (extension) {
+        extension.loseContext();
+      }
     };
   }, [dieType]); // Depend ONLY on dieType to prevent WebGL context destruction leaks!
 

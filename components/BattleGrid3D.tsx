@@ -21,6 +21,20 @@ import { disposeHierarchy } from '@/lib/3d-asset-manager';
 import { HelpCircle, X } from 'lucide-react';
 import { patchWebGLContext } from '@/lib/webgl-utils';
 
+const getCombatantDisplayName = (combatant: Combatant, allCombatants: Combatant[]): string => {
+  if (combatant.type !== 'monster') return combatant.name;
+  
+  const sameNameMonsters = allCombatants.filter(
+    (c) => c.type === 'monster' && c.name === combatant.name
+  );
+  
+  if (sameNameMonsters.length <= 1) return combatant.name;
+  
+  const sorted = [...sameNameMonsters].sort((a, b) => a.id.localeCompare(b.id));
+  const idx = sorted.findIndex((c) => c.id === combatant.id);
+  return `${combatant.name} ${idx + 1}`;
+};
+
 export interface BattleGrid3DProps {
   combatants: Combatant[];
   currentTurnIndex?: number;
@@ -211,6 +225,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const [targetIdState, setTargetIdState] = useState<string | undefined>(propSelectedTargetId);
   const [hoveredTargetId, setHoveredTargetId] = useState<string | undefined>(undefined);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [hoveredCombatantId, setHoveredCombatantId] = useState<string | undefined>(undefined);
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
 
   // Three.js hover ring for attack targeting mode
   const hoverRingRef = useRef<THREE.Mesh | null>(null);
@@ -1208,9 +1224,44 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     const handlePointerMove = (event: PointerEvent) => {
       if (!containerRef.current) return;
 
+      const rect = containerRef.current.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+
+      // Update HTML Tooltip position via direct DOM styles for 60fps performance
+      if (tooltipRef.current) {
+        tooltipRef.current.style.left = `${mouseX + 15}px`;
+        tooltipRef.current.style.top = `${mouseY + 15}px`;
+      }
+
+      // 1. Raycast to find if we are hovering over any token (for the general tooltip)
+      let hoveredTokenId: string | undefined = undefined;
+
+      if (tokenGroupRef.current && !isDraggingRef.current) {
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+
+        const intersects = raycaster.intersectObjects(tokenGroupRef.current.children, true);
+        if (intersects.length > 0) {
+          let obj: THREE.Object3D | null = intersects[0].object;
+          while (obj && !obj.name.startsWith('token-')) obj = obj.parent;
+          if (obj) {
+            const hKey = obj.name.replace('token-', '');
+            const hCombatant = callbacksRef.current.combatants.find(
+              (c) => (c.id || c.name) === hKey || c.id === hKey
+            );
+            if (hCombatant) {
+              hoveredTokenId = hCombatant.id;
+            }
+          }
+        }
+      }
+
+      setHoveredCombatantId(hoveredTokenId);
+
       // Mira de Magia: atualiza posição da mira com o cursor
       if (activeSpellTargetingRef.current && casterTokenKeyRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
@@ -1237,33 +1288,17 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
       // Attack targeting mode: show hover ring over hovered token
       if (callbacksRef.current.pendingAttack && tokenGroupRef.current && hoverRingRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-        raycaster.setFromCamera(mouse, camera);
-
-        const tokenIntersects = raycaster.intersectObjects(tokenGroupRef.current.children, true);
         const ring = hoverRingRef.current;
-        if (tokenIntersects.length > 0) {
-          let obj: THREE.Object3D | null = tokenIntersects[0].object;
-          while (obj && !obj.name.startsWith('token-')) obj = obj.parent;
-          if (obj) {
-            const hKey = obj.name.replace('token-', '');
-            const hCombatant = callbacksRef.current.combatants.find(
-              (c) => (c.id || c.name) === hKey || c.id === hKey
-            );
-            // Only highlight enemies (not the active combatant)
-            const activeId = callbacksRef.current.combatants[callbacksRef.current.currentTurnIndex]?.id;
-            if (hCombatant && hCombatant.id !== activeId) {
-              const pos = callbacksRef.current.getCombatantPos(hKey);
-              ring.position.x = pos.x;
-              ring.position.z = pos.z;
-              (ring.material as THREE.MeshBasicMaterial).opacity = 0.75;
-              callbacksRef.current.setHoveredTargetId(hCombatant.id);
-            } else {
-              (ring.material as THREE.MeshBasicMaterial).opacity = 0.0;
-              callbacksRef.current.setHoveredTargetId(undefined);
-            }
+        if (hoveredTokenId) {
+          const hCombatant = callbacksRef.current.combatants.find((c) => c.id === hoveredTokenId);
+          // Only highlight enemies (not the active combatant)
+          const activeId = callbacksRef.current.combatants[callbacksRef.current.currentTurnIndex]?.id;
+          if (hCombatant && hCombatant.id !== activeId) {
+            const pos = callbacksRef.current.getCombatantPos(hCombatant.id || hCombatant.name);
+            ring.position.x = pos.x;
+            ring.position.z = pos.z;
+            (ring.material as THREE.MeshBasicMaterial).opacity = 0.75;
+            callbacksRef.current.setHoveredTargetId(hCombatant.id);
           } else {
             (ring.material as THREE.MeshBasicMaterial).opacity = 0.0;
             callbacksRef.current.setHoveredTargetId(undefined);
@@ -1279,7 +1314,6 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
       if (!isDraggingRef.current || !draggedTokenKeyRef.current) return;
 
-      const rect = containerRef.current.getBoundingClientRect();
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
@@ -1948,8 +1982,50 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-in fade-in duration-150">
             <div className="bg-amber-500/90 backdrop-blur-sm text-slate-900 text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5">
               <span>🎯</span>
-              <span>{hov.name}</span>
+              <span>{getCombatantDisplayName(hov, combatants)}</span>
               <span className="text-amber-800 text-[10px]">CA {hov.ac}</span>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Hover Combatant Tooltip Card */}
+      {hoveredCombatantId && (() => {
+        const hov = combatants.find((c) => c.id === hoveredCombatantId);
+        if (!hov) return null;
+
+        const displayName = getCombatantDisplayName(hov, combatants);
+        const hpPercent = Math.max(0, Math.min(100, (hov.hp / hov.maxHp) * 100));
+
+        return (
+          <div
+            ref={tooltipRef}
+            className="absolute z-[40] pointer-events-none animate-in fade-in zoom-in-95 duration-100 bg-[#0d111d]/95 border border-slate-700/80 rounded-xl p-2.5 shadow-xl backdrop-blur-xs flex flex-col gap-1 w-44 transition-all"
+            style={{
+              left: '0px',
+              top: '0px',
+            }}
+          >
+            <div className="flex items-center justify-between gap-1">
+              <span className="font-serif font-black text-[11px] text-slate-100 truncate flex-1">
+                {displayName}
+              </span>
+              <span className="text-[8px] font-bold text-slate-400 bg-slate-950/40 border border-slate-800 px-1 rounded uppercase">
+                {hov.type === 'player' ? 'Player' : hov.type === 'npc' ? 'NPC' : 'Monster'}
+              </span>
+            </div>
+            
+            <div className="flex items-center justify-between text-[10px] font-bold mt-0.5">
+              <span className="text-emerald-400 font-mono">HP {hov.hp} / {hov.maxHp}</span>
+              <span className="text-slate-400 text-[9px] font-mono">{hpPercent.toFixed(0)}%</span>
+            </div>
+            <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800 mt-0.5">
+              <div 
+                className={`h-full rounded-full transition-all duration-300 ${
+                  hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 20 ? 'bg-amber-500' : 'bg-rose-600'
+                }`}
+                style={{ width: `${hpPercent}%` }}
+              />
             </div>
           </div>
         );

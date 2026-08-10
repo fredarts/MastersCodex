@@ -10,9 +10,12 @@ import { AddCombatantModal } from '@/components/live-cockpit/AddCombatantModal';
 import { BattleSetupModal } from '@/components/live-cockpit/BattleSetupModal';
 import { Combatant } from '@/lib/types';
 import { toast } from 'sonner';
+import { validateMeleeAttackRange } from '@/lib/utils/combat-range';
 
 interface LiveCockpitModalManagerProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   campaignMembers: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handleConfirmBattleSetup: (options: any) => void;
   handleConfirmMagicMissiles: () => void;
   handleAttackFromWidget?: (target: Combatant) => void;
@@ -44,12 +47,20 @@ export const LiveCockpitModalManager: React.FC<LiveCockpitModalManagerProps> = (
     confirmDeleteCombatant,
     setConfirmDeleteCombatant,
     pendingAttack,
-    setPendingAttack,
     magicMissileModalState,
     setMagicMissileModalState,
     selectedTargetId,
     setSelectedTargetId,
   } = useLiveCockpitStudioStore();
+
+  const currentActor = currentTurnIndex !== undefined ? combatants[currentTurnIndex] : undefined;
+  const target = selectedTargetId ? combatants.find(c => c.id === selectedTargetId) : undefined;
+  
+  const rangeValidation = (currentActor && target && pendingAttack)
+    ? validateMeleeAttackRange(currentActor, target, pendingAttack.title, pendingAttack.actionDesc || '')
+    : { isValid: true, actualDistance: 0, maxAllowedDistance: 999, isMelee: false };
+
+  const isOutOfRange = !rangeValidation.isValid;
 
   return (
     <>
@@ -142,9 +153,20 @@ export const LiveCockpitModalManager: React.FC<LiveCockpitModalManagerProps> = (
       {/* Target Confirmation Overlay */}
       {pendingAttack && selectedTargetId && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-bottom-5 fade-in duration-200">
-          <div className="bg-slate-900 border border-rose-500/50 shadow-2xl shadow-rose-500/20 rounded-2xl p-4 flex items-center gap-4">
-            <div className="text-rose-400 font-bold text-sm">
-              Confirmar <span className="text-slate-100">{pendingAttack.title}</span> contra o alvo selecionado?
+          <div className={`bg-slate-900 border ${
+            isOutOfRange 
+              ? 'border-amber-500/80 shadow-amber-500/30 animate-pulse' 
+              : 'border-rose-500/50 shadow-rose-500/20'
+          } shadow-2xl rounded-2xl p-4 flex items-center gap-4 transition-all duration-300`}>
+            <div className="flex flex-col gap-1">
+              <div className="text-rose-400 font-bold text-sm">
+                Confirmar <span className="text-slate-100">{pendingAttack.title}</span> contra o alvo selecionado?
+              </div>
+              {isOutOfRange && (
+                <span className="text-amber-400 text-xs font-mono font-semibold flex items-center gap-1">
+                  ⚠️ Alvo fora de alcance corpo a corpo (Distância: {(rangeValidation.actualDistance * 1.5).toFixed(1)}m / Alcance Máx: {(rangeValidation.maxAllowedDistance * 1.5).toFixed(1)}m)
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button

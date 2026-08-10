@@ -47,6 +47,8 @@ export const Model3DViewer: React.FC<Model3DViewerProps> = ({
     patchWebGLContext(renderer);
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const gl = renderer.getContext();
+    const extension = gl ? gl.getExtension('WEBGL_lose_context') : null;
 
     // Limpar elementos prévios do container
     while (container.firstChild) {
@@ -198,6 +200,9 @@ export const Model3DViewer: React.FC<Model3DViewerProps> = ({
         }
       });
       renderer.dispose();
+      if (extension) {
+        extension.loseContext();
+      }
       while (container.firstChild) {
         container.removeChild(container.firstChild);
       }

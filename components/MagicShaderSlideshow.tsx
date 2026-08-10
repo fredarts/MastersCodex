@@ -7,6 +7,21 @@ interface MagicShaderSlideshowProps {
   className?: string;
 }
 
+// Create a tiny canvas base64 image as default placeholder texture
+function createPlaceholderTexture() {
+  if (typeof window === 'undefined') return new THREE.Texture();
+  const canvas = document.createElement('canvas');
+  canvas.width = 2;
+  canvas.height = 2;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#0a0d14';
+    ctx.fillRect(0, 0, 2, 2);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  return texture;
+}
+
 export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
   imageUrl,
   className = '',
@@ -148,6 +163,9 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     state.renderer = renderer;
 
+    const gl = renderer.getContext();
+    const extension = gl ? gl.getExtension('WEBGL_lose_context') : null;
+
     // 2. Initialize Scene & Camera
     const scene = new THREE.Scene();
     state.scene = scene;
@@ -260,6 +278,9 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
         state.texture2.dispose();
       }
       renderer.dispose();
+      if (extension) {
+        extension.loseContext();
+      }
     };
   }, []);
 
@@ -292,19 +313,7 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
     });
   }, [imageUrl]);
 
-  // Create a tiny canvas base64 image as default placeholder texture
-  function createPlaceholderTexture() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 2;
-    canvas.height = 2;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#0a0d14';
-      ctx.fillRect(0, 0, 2, 2);
-    }
-    const texture = new THREE.CanvasTexture(canvas);
-    return texture;
-  }
+
 
   return (
     <div ref={containerRef} className={`relative w-full h-full min-h-[250px] overflow-hidden ${className}`}>

@@ -42,6 +42,9 @@ export function useThreeScene(options: ThreeSceneOptions = {}) {
     }
     rendererRef.current = renderer;
 
+    const gl = renderer.getContext();
+    const extension = gl ? gl.getExtension('WEBGL_lose_context') : null;
+
     containerRef.current.appendChild(renderer.domElement);
 
     // 4. Resize Listener
@@ -72,6 +75,9 @@ export function useThreeScene(options: ThreeSceneOptions = {}) {
       if (rendererRef.current && rendererRef.current.domElement) {
         rendererRef.current.domElement.remove();
         rendererRef.current.dispose();
+      }
+      if (extension) {
+        extension.loseContext();
       }
     };
   }, []);

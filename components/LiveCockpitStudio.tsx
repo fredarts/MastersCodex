@@ -553,9 +553,9 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     };
   }, [addLogEntry]);
 
-  const parseAndRollDamage = (desc?: string, defaultMod: number = 0): number => {
+  const parseAndRollDamage = (desc?: string, defaultMod: number = 0, playSound: boolean = true): number => {
     if (!desc) {
-      playDiceSound(1);
+      if (playSound) playDiceSound(1);
       return Math.floor(Math.random() * 8) + 1 + defaultMod;
     }
     const match = desc.match(/([0-9]+)d([0-9]+)(?:\s*[\+\-]\s*([0-9]+))?/i);
@@ -564,7 +564,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       const sides = parseInt(match[2], 10);
       const bonus = match[3] ? parseInt(match[3], 10) : 0;
 
-      playDiceSound(count);
+      if (playSound) playDiceSound(count);
 
       let total = 0;
       for (let i = 0; i < count; i++) {
@@ -573,7 +573,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       return Math.max(1, total + bonus);
     }
     
-    playDiceSound(1);
+    if (playSound) playDiceSound(1);
     return Math.max(1, Math.floor(Math.random() * 8) + 1 + defaultMod);
   };
 
@@ -642,10 +642,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
             });
 
             if (isHit) {
-              const dmg = parseAndRollDamage(actionDesc, mod);
+              const dmg = parseAndRollDamage(actionDesc, mod, false);
               const prevHp = target.hp;
               handleHpChange(target.id, -dmg);
               const newHp = Math.max(0, target.hp - dmg);
+              setBg3DiceOverlay((prev) => (prev ? { ...prev, damageAmount: dmg } : null));
 
               addLogEntry({
                 actorId: currentActor.id,
