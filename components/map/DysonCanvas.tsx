@@ -47,6 +47,9 @@ import {
 } from './visionCore';
 import { Combatant, VisionType } from '@/lib/types';
 import { Cell, TileType, ChestConfig, ContainerType, ContainerStatus, ChestLoot } from '../MapMaker';
+import { getCreatureGridSize } from '@/lib/utils/creatureSize';
+
+const token2DImageCache = new Map<string, HTMLImageElement>();
 
 function hexToRgba(hex: string, alpha: number): string {
   let c = (hex || '#ff9900').replace('#', '');
@@ -1140,29 +1143,86 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
             }
           }
 
-          const tx = bgImage ? gridOffsetX + c * CELL_SIZE + CELL_SIZE / 2 : c * CELL_SIZE + CELL_SIZE / 2;
-          const ty = bgImage ? gridOffsetY + r * CELL_SIZE + CELL_SIZE / 2 : r * CELL_SIZE + CELL_SIZE / 2;
+          const tokenCombatant = combatants?.find(comb => {
+            const cName = comb.name.trim().toLowerCase();
+            return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
+          });
 
-          // Token border
+          const sizeInfo = getCreatureGridSize(tokenCombatant?.size);
+          const gridSquares = sizeInfo.gridSquares;
+          const tokenDiameter = gridSquares * CELL_SIZE;
+          const tokenRadius = (tokenDiameter / 2) * 0.88;
+
+          const tx = (bgImage ? gridOffsetX : 0) + c * CELL_SIZE + tokenDiameter / 2;
+          const ty = (bgImage ? gridOffsetY : 0) + r * CELL_SIZE + tokenDiameter / 2;
+
+          // Token border & base fill
+          ctx.save();
           ctx.beginPath();
-          ctx.arc(tx, ty, CELL_SIZE * 0.4, 0, Math.PI * 2);
-          ctx.lineWidth = 3;
+          ctx.arc(tx, ty, tokenRadius, 0, Math.PI * 2);
+          ctx.lineWidth = Math.max(3, 3 + (gridSquares - 1) * 1.5);
           ctx.strokeStyle = '#020617';
           ctx.fillStyle = cell.tokenColor?.includes('cyan') ? '#06b6d4' : '#e11d48';
           ctx.fill();
           ctx.stroke();
+          ctx.restore();
 
-          // Token text
-          ctx.fillStyle = '#ffffff';
-          ctx.font = `bold ${Math.floor(CELL_SIZE * 0.28)}px monospace`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(cell.tokenName, tx, ty);
+          // Token Image (if present on combatant)
+          const tokenUrl = tokenCombatant?.tokenImageUrl || tokenCombatant?.avatarUrl;
+          let imageDrawn = false;
+          if (tokenUrl) {
+            let img = token2DImageCache.get(tokenUrl);
+            if (!img) {
+              img = new Image();
+              img.src = tokenUrl;
+              token2DImageCache.set(tokenUrl, img);
+            }
+            if (img.complete && img.naturalWidth > 0) {
+              ctx.save();
+              ctx.beginPath();
+              ctx.arc(tx, ty, tokenRadius - 2, 0, Math.PI * 2);
+              ctx.clip();
+              ctx.drawImage(img, tx - tokenRadius + 2, ty - tokenRadius + 2, (tokenRadius - 2) * 2, (tokenRadius - 2) * 2);
+              ctx.restore();
+              imageDrawn = true;
+            }
+          }
 
-          const tokenCombatant = combatants?.find(c => {
-            const cName = c.name.trim().toLowerCase();
-            return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
-          });
+          // Token text initials/name if no image loaded
+          if (!imageDrawn) {
+            ctx.fillStyle = '#ffffff';
+            const fontSize = Math.floor(CELL_SIZE * (0.28 + (gridSquares - 1) * 0.1));
+            ctx.font = `bold ${fontSize}px monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(cell.tokenName, tx, ty);
+          }
+
+          // Size Badge for Multi-tile Creatures (e.g. [Grande 2x2], [Enorme 3x3])
+          if (gridSquares > 1) {
+            ctx.save();
+            const badgeText = `${sizeInfo.sizeLabel} (${gridSquares}x${gridSquares})`;
+            const badgeFontSize = Math.max(10, Math.floor(CELL_SIZE * 0.22));
+            ctx.font = `bold ${badgeFontSize}px Inter, sans-serif`;
+            const badgeW = ctx.measureText(badgeText).width + 8;
+            const badgeH = badgeFontSize + 4;
+            const badgeX = tx - badgeW / 2;
+            const badgeY = ty + tokenRadius - badgeH / 2;
+
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+            ctx.strokeStyle = cell.tokenColor?.includes('cyan') ? '#06b6d4' : '#e11d48';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(badgeText, tx, badgeY + badgeH / 2);
+            ctx.restore();
+          }
 
           // Tremorsense sonar rings
           if (tokenCombatant?.visionType === 'tremorsense') {
@@ -1172,7 +1232,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
             ctx.strokeStyle = 'rgba(6, 182, 212, 0.4)';
             for (let i = 0; i < ringCount; i++) {
               const phase = (time + i / ringCount) % 1;
-              const radius = CELL_SIZE * 0.5 + (CELL_SIZE * 3 * phase);
+              const radius = tokenRadius + (CELL_SIZE * 3 * phase);
               const alpha = (1 - phase) * 0.5;
               ctx.beginPath();
               ctx.arc(tx, ty, radius, 0, Math.PI * 2);
@@ -1184,11 +1244,13 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           }
 
           // Active indicator pulse
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-          ctx.lineWidth = 1.5;
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+          ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.arc(tx, ty, CELL_SIZE * 0.45, 0, Math.PI * 2);
+          ctx.arc(tx, ty, tokenRadius * 1.06, 0, Math.PI * 2);
           ctx.stroke();
+          ctx.restore();
         }
       }
     }
@@ -1945,13 +2007,32 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return;
     }
 
-    // Token drag takes priority over door/trap editing
-    if (clickedCell && clickedCell.tokenName && e.button === 0 && !isSpacePressed) {
+    // Token drag takes priority over door/trap editing (suporta hitboxes multi-célula de criaturas grandes/gigantes)
+    const tokenHit = (() => {
+      if (clickedCell?.tokenName) {
+        return { name: clickedCell.tokenName, color: clickedCell.tokenColor || '', originR: pos.r, originC: pos.c };
+      }
+      for (let tr = Math.max(0, pos.r - 6); tr <= pos.r; tr++) {
+        for (let tc = Math.max(0, pos.c - 6); tc <= pos.c; tc++) {
+          const candidateCell = grid[tr]?.[tc];
+          if (candidateCell?.tokenName) {
+            const comb = combatants?.find(combItem => combItem.name.trim().toLowerCase() === candidateCell.tokenName?.trim().toLowerCase());
+            const gridSquares = getCreatureGridSize(comb?.size).gridSquares;
+            if (gridSquares > 1 && pos.r >= tr && pos.r < tr + gridSquares && pos.c >= tc && pos.c < tc + gridSquares) {
+              return { name: candidateCell.tokenName, color: candidateCell.tokenColor || '', originR: tr, originC: tc };
+            }
+          }
+        }
+      }
+      return null;
+    })();
+
+    if (tokenHit && e.button === 0 && !isSpacePressed) {
       setDraggingToken({
-         name: clickedCell.tokenName,
-         color: clickedCell.tokenColor || '',
-         startR: pos.r,
-         startC: pos.c,
+         name: tokenHit.name,
+         color: tokenHit.color,
+         startR: tokenHit.originR,
+         startC: tokenHit.originC,
          currentR: pos.r,
          currentC: pos.c
       });

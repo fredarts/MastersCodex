@@ -18,6 +18,7 @@ import { AudioMaestro } from '@/components/AudioMaestro';
 import { AudioMaestroPanel } from '@/components/AudioMaestroPanel';
 import { AudioMaestroModal } from '@/components/AudioMaestroModal';
 import { CompendiumModal } from '@/components/CompendiumModal';
+import { CompendiumView } from '@/components/CompendiumView';
 import { PlayerViewModal } from '@/components/PlayerViewModal';
 import { AuthModal } from '@/components/AuthModal';
 import { CreateCampaignModal } from '@/components/CreateCampaignModal';
@@ -299,17 +300,8 @@ function MainApp() {
               {activeTab === 'lore' && <LoreGraph />}
 
               {activeTab === 'compendium' && (
-                <div className="flex-1 p-6 overflow-y-auto bg-[#0a0d14]">
-                  <h2 className="text-lg font-bold text-slate-100 mb-2">Compêndio Completo D&D 5e SRD</h2>
-                  <p className="text-xs text-slate-400 mb-4">
-                    Pressione <kbd className="px-1.5 py-0.5 bg-[#161c28] border border-[#2a3449] rounded font-mono">Ctrl + Espaço</kbd> a qualquer momento para abrir a busca flutuante rápida.
-                  </p>
-                  <button
-                    onClick={() => setIsCompendiumOpen(true)}
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg shadow-md"
-                  >
-                    Abrir Busca Flutuante do Compêndio
-                  </button>
+                <div className="flex-1 h-full w-full overflow-hidden flex flex-col bg-[#0a0d14]">
+                  <CompendiumView />
                 </div>
               )}
 
@@ -317,8 +309,8 @@ function MainApp() {
                 <AudioMaestroPanel />
               )}
 
-              {/* Right Panel AI Assistant always accessible on desktop when not on AI, Worldbuilder, SessionStudio or Campaign Settings tab */}
-              {activeTab !== 'ai' && activeTab !== 'worldbuilder' && activeTab !== 'session_studio' && activeTab !== 'campaign_settings' && (
+              {/* Right Panel AI Assistant always accessible on desktop when not on AI, Worldbuilder, SessionStudio, Campaign Settings or Compendium tab */}
+              {activeTab !== 'ai' && activeTab !== 'worldbuilder' && activeTab !== 'session_studio' && activeTab !== 'campaign_settings' && activeTab !== 'compendium' && (
                 !isAIPanelCollapsed ? (
                   <div className="hidden xl:block h-full transition-all duration-300">
                     <AICoPilot

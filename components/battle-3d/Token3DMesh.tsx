@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Combatant } from '@/lib/types';
 import { getModelUrlByNameOrPath, resolvePlayerModelUrl } from '@/lib/3d-models';
+import { getCreatureGridSize } from '@/lib/utils/creatureSize';
 
 export interface TokenMeshOptions {
   combatant: Combatant;
@@ -66,23 +67,22 @@ function removeWhiteBackground(texture: THREE.Texture, threshold = 235): THREE.T
 }
 
 function getSpriteHeightBySize(sizeStr?: string): number {
-  if (!sizeStr) return 2.3;
-  const s = sizeStr.toLowerCase();
-  if (s.includes('miú') || s.includes('tiny')) return 1.4;
-  if (s.includes('pequeno') || s.includes('small')) return 1.8;
-  if (s.includes('médio') || s.includes('medio') || s.includes('medium')) return 2.3;
-  if (s.includes('grande') || s.includes('large')) return 3.6;
-  if (s.includes('enorme') || s.includes('huge')) return 5.2;
-  if (s.includes('imenso') || s.includes('gargantuan')) return 7.5;
-  return 2.3;
+  const info = getCreatureGridSize(sizeStr);
+  if (info.gridSquares === 1) {
+    if (info.sizeLabel === 'Miúdo') return 1.4;
+    if (info.sizeLabel === 'Pequeno') return 1.8;
+    return 2.3;
+  }
+  return 2.3 * info.scaleFactor;
 }
 
-function normalizeAndPrepareModel(modelScene: THREE.Group): THREE.Group {
+function normalizeAndPrepareModel(modelScene: THREE.Group, sizeStr?: string): THREE.Group {
   const box = new THREE.Box3().setFromObject(modelScene);
   const size = new THREE.Vector3();
   box.getSize(size);
 
-  const targetHeight = 2.295; // Altura proporcional em unidades 3D (aumentada em 70%)
+  const info = getCreatureGridSize(sizeStr);
+  const targetHeight = 2.295 * info.scaleFactor; // Altura proporcional ao tamanho do grid
   const naturalHeight = size.y || Math.max(size.x, size.z);
 
   if (naturalHeight > 0) {
@@ -91,7 +91,8 @@ function normalizeAndPrepareModel(modelScene: THREE.Group): THREE.Group {
     const boxMinY = box.min.y;
     modelScene.position.y = -boxMinY * scale;
   } else {
-    modelScene.scale.set(1.445, 1.445, 1.445);
+    const defaultScale = 1.445 * info.scaleFactor;
+    modelScene.scale.set(defaultScale, defaultScale, defaultScale);
     modelScene.position.y = 0;
   }
 
@@ -116,11 +117,13 @@ export function createTokenMesh(
   group.rotation.y = (options.rotationAngleDeg * Math.PI) / 180;
 
   const isPlayer = options.combatant.type === 'player';
+  const sizeInfo = getCreatureGridSize(options.combatant.size);
+  const sizeScale = Math.max(1, sizeInfo.gridSquares * 0.85);
 
   // 1. Selection Ring
   const isSelected = options.isCurrentTurn || options.isSelectedForRotation || options.isSelectedTarget || options.isSpellTargeted;
   if (isSelected) {
-    const ringGeo = new THREE.RingGeometry(1.275, 1.53, 32);
+    const ringGeo = new THREE.RingGeometry(1.275 * sizeScale, 1.53 * sizeScale, 32);
     const ringColor = options.isSpellTargeted
       ? 0xf97316
       : options.isCurrentTurn
@@ -141,12 +144,12 @@ export function createTokenMesh(
   }
 
   // 2. Direction Arrow Cone
-  const arrowGeo = new THREE.ConeGeometry(0.25, 0.5, 3);
+  const arrowGeo = new THREE.ConeGeometry(0.25 * sizeScale, 0.5 * sizeScale, 3);
   const arrowMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
   const arrowMesh = new THREE.Mesh(arrowGeo, arrowMat);
   arrowMesh.name = 'arrowMesh';
   arrowMesh.rotation.x = Math.PI / 2;
-  arrowMesh.position.set(0, 0.05, -1.0);
+  arrowMesh.position.set(0, 0.05, -1.0 * sizeScale);
   group.add(arrowMesh);
 
   // 3. Determine Token Mode & URLs
@@ -167,7 +170,7 @@ export function createTokenMesh(
     const spriteHeight = getSpriteHeightBySize(options.combatant.size);
 
     // Dark Ground Shadow Ring under Billboard
-    const shadowGeo = new THREE.CircleGeometry(0.9, 32);
+    const shadowGeo = new THREE.CircleGeometry(0.9 * sizeScale, 32);
     const shadowMat = new THREE.MeshBasicMaterial({
       color: 0x000000,
       transparent: true,
@@ -232,7 +235,7 @@ export function createTokenMesh(
       gltfLoader.load(
         modelUrl,
         (gltf) => {
-          const preparedModel = normalizeAndPrepareModel(gltf.scene);
+          const preparedModel = normalizeAndPrepareModel(gltf.scene, options.combatant.size);
           loadedModelCache.set(modelUrl!, preparedModel.clone(true));
           group.add(preparedModel);
           if (onLoaded) onLoaded();
@@ -268,8 +271,11 @@ export function updateTokenMeshState(
       ? 0xef4444
       : 0x3b82f6;
 
+    const sizeInfo = getCreatureGridSize(options.combatant.size);
+    const sizeScale = Math.max(1, sizeInfo.gridSquares * 0.85);
+
     if (!ringMesh) {
-      const ringGeo = new THREE.RingGeometry(1.275, 1.53, 32);
+      const ringGeo = new THREE.RingGeometry(1.275 * sizeScale, 1.53 * sizeScale, 32);
       const ringMat = new THREE.MeshBasicMaterial({
         color: ringColor,
         side: THREE.DoubleSide,

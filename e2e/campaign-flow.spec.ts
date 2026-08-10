@@ -78,16 +78,8 @@ test.describe('Masters Codex - Fluxos de Shell e Navegação', () => {
     await expect(compendiumTab).toBeVisible();
     await compendiumTab.click();
 
-    // Clica no botão para abrir a busca do compêndio
-    const openSearchButton = page.getByRole('button', { name: /Abrir Busca Flutuante do Compêndio/i });
-    await expect(openSearchButton).toBeVisible();
-    await openSearchButton.click();
-
-    // Verifica se o modal de busca do compêndio foi aberto (usando placeholder correto)
+    // Verifica que o compêndio abre diretamente na tela principal (usando placeholder da busca)
     await expect(page.getByPlaceholder(/Pesquisar no Compêndio/i)).toBeVisible();
-
-    // Fecha o modal
-    await page.keyboard.press('Escape');
 
     // Navega para Mundos & Lore Graph
     const worldbuilderTab = page.getByRole('button', { name: /Mundos & Lore Graph/i });

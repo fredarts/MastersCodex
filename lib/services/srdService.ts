@@ -30,7 +30,7 @@ export interface ItemQueryFilter {
 
 export const srdService = {
   async fetchMonsters(filter: MonsterQueryFilter = {}): Promise<SRDMonster[]> {
-    const { searchQuery, cr, type, page = 1, limit = 50 } = filter;
+    const { searchQuery, cr, type, page = 1, limit = 500 } = filter;
 
     if (isSupabaseConfigured()) {
       try {
@@ -71,6 +71,9 @@ export const srdService = {
             cha: m.cha,
             abilities: m.abilities || [],
             actions: m.actions || [],
+            tokenImageUrl: m.token_image_url || m.tokenImageUrl || `/assets/2d/Monstros/${m.name}.png`,
+            tokenType: m.token_type || m.tokenType || 'billboard',
+            modelUrl: m.model_url || m.modelUrl || undefined,
           }));
         }
       } catch (e) {
@@ -79,7 +82,10 @@ export const srdService = {
     }
 
     // Local Fallback Filter
-    let results = [...INITIAL_MONSTERS];
+    let results = INITIAL_MONSTERS.map((m) => ({
+      ...m,
+      tokenImageUrl: m.tokenImageUrl || `/assets/2d/Monstros/${m.name}.png`,
+    }));
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       results = results.filter((m) => m.name.toLowerCase().includes(q) || m.type.toLowerCase().includes(q));
@@ -91,7 +97,7 @@ export const srdService = {
   },
 
   async fetchSpells(filter: SpellQueryFilter = {}): Promise<SRDSpell[]> {
-    const { searchQuery, level, school, className, page = 1, limit = 50 } = filter;
+    const { searchQuery, level, school, className, page = 1, limit = 500 } = filter;
 
     if (isSupabaseConfigured()) {
       try {
@@ -147,7 +153,7 @@ export const srdService = {
   },
 
   async fetchItems(filter: ItemQueryFilter = {}): Promise<SRDItem[]> {
-    const { searchQuery, rarity, type, page = 1, limit = 50 } = filter;
+    const { searchQuery, rarity, type, page = 1, limit = 500 } = filter;
 
     if (isSupabaseConfigured()) {
       try {

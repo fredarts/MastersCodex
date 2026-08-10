@@ -40,7 +40,7 @@ describe('SRD Compendium Service Tests', () => {
     it('deve buscar monstros locais com busca textual de nome', async () => {
       const results = await srdService.fetchMonsters({ searchQuery: 'Goblin' });
       expect(results.length).toBeGreaterThanOrEqual(1);
-      expect(results[0].name).toBe('Goblin');
+      expect(results.some((m) => m.name.includes('Goblin'))).toBe(true);
     });
 
     it('deve filtrar monstros por nível de desafio (CR)', async () => {

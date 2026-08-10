@@ -259,6 +259,7 @@ export interface Combatant {
   wis?: number;
   cha?: number;
   actions?: { name: string; desc: string }[];
+  abilities?: { name: string; desc: string }[];
   cr?: string;
   speed?: string;
   size?: string;

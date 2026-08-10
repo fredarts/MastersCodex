@@ -258,6 +258,7 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
       initiative: initRoll,
       conditions: [],
       cr: m.cr,
+      size: m.size,
       str: m.str,
       dex: m.dex,
       con: m.con,

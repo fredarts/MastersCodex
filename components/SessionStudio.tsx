@@ -345,6 +345,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
         initiative: Math.floor(Math.random() * 20) + 1,
         conditions: [],
         cr: m.cr,
+        size: m.size,
         tokenImageUrl: m.tokenImageUrl,
         modelUrl: m.modelUrl,
         tokenType: m.tokenType,
@@ -379,6 +380,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
         initiative: Math.floor(Math.random() * 20) + 1,
         conditions: [],
         cr: monster.cr,
+        size: monster.size,
         tokenImageUrl: monster.tokenImageUrl,
         modelUrl: monster.modelUrl,
       });
