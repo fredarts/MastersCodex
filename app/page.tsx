@@ -221,7 +221,7 @@ function MainApp() {
         isSidebarCollapsed={isSidebarCollapsed}
         onToggleSidebar={toggleSidebar}
         isAIPanelCollapsed={isAIPanelCollapsed}
-        onToggleAIPanel={toggleAIPanel}
+        onToggleAIPanel={roleMode === 'player' ? undefined : toggleAIPanel}
       />
 
       {/* Main Workspace Body: Switch based on Role Mode */}

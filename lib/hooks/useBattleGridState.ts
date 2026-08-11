@@ -27,8 +27,12 @@ export function useBattleGridState(
 
       if (c.type !== 'player') return false;
 
-      if (userCharacterName && c.name.toLowerCase() === userCharacterName.toLowerCase()) {
-        return true;
+      if (userCharacterName) {
+        const cClean = c.name.toLowerCase();
+        const uClean = userCharacterName.toLowerCase();
+        if (cClean === uClean || cClean.includes(uClean) || uClean.includes(cClean)) {
+          return true;
+        }
       }
 
       return false;

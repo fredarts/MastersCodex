@@ -3,15 +3,12 @@
 import React from 'react';
 import { 
   Swords, 
-  Shield, 
-  Heart, 
   Sparkles, 
-  Flame, 
-  ChevronRight, 
-  ChevronLeft, 
-  UserCheck, 
   Clock, 
-  Activity 
+  UserCheck, 
+  Skull, 
+  User, 
+  Shield 
 } from 'lucide-react';
 import { Combatant } from '@/lib/types';
 
@@ -39,98 +36,137 @@ export const PlayerCombatTrackerHUD: React.FC<PlayerCombatTrackerHUDProps> = ({
   );
 
   return (
-    <div className="w-full bg-[#0a0d14]/90 backdrop-blur-md border-b border-[#2a3449] p-2.5 shadow-xl transition-all">
-      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+    <div className="w-full bg-[#0a0d14]/95 backdrop-blur-xl border-b border-[#2a3449] px-4 py-2 shadow-2xl transition-all">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        
         {/* Left Side: Combat Status & Round Badge */}
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 font-bold shadow-inner">
-            <Swords className="w-4 h-4 animate-pulse" />
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 font-bold shadow-inner">
+            <Swords className="w-5 h-5 animate-pulse" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono font-bold text-rose-400 uppercase tracking-widest bg-rose-950/60 border border-rose-500/30 px-2 py-0.5 rounded">
+              <span className="text-[10px] font-mono font-bold text-rose-400 uppercase tracking-widest bg-rose-950/80 border border-rose-500/40 px-2 py-0.5 rounded shadow-sm">
                 COMBATE ATIVO
               </span>
-              <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded">
+              <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/80 border border-amber-500/40 px-2 py-0.5 rounded shadow-sm">
                 RODADA #{roundCount}
               </span>
             </div>
             {currentCombatant && (
-              <p className="text-xs font-bold text-slate-100 mt-0.5 flex items-center gap-1.5">
-                <span>Vez de:</span>
-                <strong className={`font-mono ${isMyTurn ? 'text-amber-300 animate-pulse' : 'text-cyan-300'}`}>
+              <p className="text-xs font-bold text-slate-200 mt-0.5 flex items-center gap-1.5">
+                <span className="text-slate-400 font-normal">Vez de:</span>
+                <strong className={`font-mono ${isMyTurn ? 'text-amber-300 animate-pulse font-extrabold' : 'text-cyan-300'}`}>
                   {currentCombatant.name}
                 </strong>
-                {isMyTurn && (
-                  <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-1.5 py-0.2 rounded font-mono">
-                    SUA VEZ!
-                  </span>
-                )}
               </p>
             )}
           </div>
         </div>
 
-        {/* Center: Turn Order Carousel */}
-        <div className="flex-1 max-w-2xl overflow-x-auto flex items-center gap-2 py-1 px-2 no-scrollbar">
+        {/* Center: Baldur's Gate 3 Style Vertical Portrait Initiative Bar */}
+        <div className="flex-1 max-w-3xl overflow-x-auto flex items-center gap-2 py-1 px-2 no-scrollbar">
           {combatants.map((c, idx) => {
             const isTurn = idx === currentTurnIndex;
             const isMe = c.name.toLowerCase().includes(playerCharName.toLowerCase()) || playerCharName.toLowerCase().includes(c.name.toLowerCase());
             const hpPercent = Math.max(0, Math.min(100, (c.hp / c.maxHp) * 100));
+            const isDead = c.hp <= 0;
+
+            const portraitUrl = c.avatarUrl || c.tokenImageUrl;
 
             return (
               <div
                 key={`${c.id}-${idx}`}
-                className={`shrink-0 min-w-[140px] p-2 rounded-xl border transition-all duration-300 ${
-                  isTurn
-                    ? 'bg-amber-950/60 border-amber-500 text-slate-100 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/40 scale-105'
+                className={`relative shrink-0 w-16 h-20 rounded-xl border flex flex-col justify-between overflow-hidden transition-all duration-300 ${
+                  isDead
+                    ? 'bg-slate-950/80 border-rose-950/60 opacity-50 grayscale'
+                    : isTurn
+                    ? 'bg-amber-950/90 border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.6)] scale-110 z-10 ring-2 ring-amber-500/40'
                     : isMe
-                    ? 'bg-cyan-950/40 border-cyan-500/40 text-cyan-200'
-                    : 'bg-[#141a26] border-[#2a3449] text-slate-400'
+                    ? 'bg-cyan-950/50 border-cyan-400/80 shadow-[0_0_12px_rgba(34,211,238,0.3)]'
+                    : 'bg-[#121826]/90 border-[#2a3449] hover:border-slate-500'
                 }`}
+                title={`${c.name} (Iniciativa: ${c.initiative} • HP: ${c.hp}/${c.maxHp})`}
               >
-                <div className="flex items-center justify-between gap-1 mb-1">
-                  <div className="flex items-center gap-1 min-w-0">
-                    <span className="text-[9px] font-mono text-amber-400 font-bold bg-[#0a0d14] px-1 py-0.2 rounded">
-                      #{c.initiative}
-                    </span>
-                    <span className="text-xs font-bold truncate max-w-[85px]">{c.name}</span>
+                {/* Initiative Badge (Top Left) */}
+                <div className="absolute top-0 left-0 bg-black/80 text-amber-400 font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded-br-lg z-10 border-r border-b border-amber-500/30 backdrop-blur-sm">
+                  #{c.initiative}
+                </div>
+
+                {/* 'VOCÊ' or 'SUA VEZ' Badge (Top Right) */}
+                {isMe && (
+                  <div className={`absolute top-0 right-0 font-mono text-[8px] font-extrabold px-1 py-0.5 rounded-bl-lg z-10 ${
+                    isTurn ? 'bg-amber-500 text-slate-950 animate-pulse' : 'bg-cyan-500 text-slate-950'
+                  }`}>
+                    {isTurn ? 'SUA VEZ' : 'VOCÊ'}
                   </div>
-                  {isMe && (
-                    <span className="text-[8px] bg-cyan-500 text-slate-950 font-bold px-1 rounded font-mono shrink-0">
-                      VOCÊ
-                    </span>
+                )}
+
+                {/* Portrait Content */}
+                <div className="flex-1 flex items-center justify-center overflow-hidden relative bg-[#0a0d14]">
+                  {isDead ? (
+                    <div className="flex flex-col items-center justify-center text-rose-500">
+                      <Skull className="w-6 h-6 animate-pulse" />
+                    </div>
+                  ) : portraitUrl ? (
+                    <img
+                      src={portraitUrl}
+                      alt={c.name}
+                      className="w-full h-full object-cover object-top"
+                    />
+                  ) : (
+                    <div className={`w-full h-full flex items-center justify-center text-xs font-bold font-mono ${
+                      c.type === 'monster' ? 'text-rose-400 bg-rose-950/30' : c.type === 'npc' ? 'text-amber-400 bg-amber-950/30' : 'text-cyan-400 bg-cyan-950/30'
+                    }`}>
+                      {c.type === 'monster' ? (
+                        <Skull className="w-5 h-5 opacity-80" />
+                      ) : (
+                        c.name.slice(0, 2).toUpperCase()
+                      )}
+                    </div>
+                  )}
+
+                  {/* Active turn golden aura overlay */}
+                  {isTurn && !isDead && (
+                    <div className="absolute inset-0 border border-amber-400/50 pointer-events-none animate-pulse" />
                   )}
                 </div>
 
-                {/* HP Progress Bar */}
-                <div className="w-full h-1 bg-[#0a0d14] rounded-full overflow-hidden border border-[#2a3449]">
-                  <div
-                    className={`h-full transition-all duration-300 ${
-                      hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 20 ? 'bg-amber-500' : 'bg-rose-600'
-                    }`}
-                    style={{ width: `${hpPercent}%` }}
-                  />
+                {/* Name & HP Progress Footer */}
+                <div className="bg-[#0a0d14]/95 p-1 border-t border-[#2a3449]/60 shrink-0">
+                  <div className="text-[9px] font-bold text-slate-200 truncate text-center leading-tight">
+                    {c.name}
+                  </div>
+                  {/* Mini HP Bar */}
+                  <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden mt-0.5 border border-slate-800">
+                    <div
+                      className={`h-full transition-all duration-300 ${
+                        hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 20 ? 'bg-amber-500' : 'bg-rose-600'
+                      }`}
+                      style={{ width: `${hpPercent}%` }}
+                    />
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* Right Side: Active Turn Callout */}
-        <div className="flex items-center gap-2">
+        {/* Right Side: Refined Turn Indicator Badge (No Huge Button) */}
+        <div className="flex items-center gap-2 shrink-0">
           {isMyTurn ? (
-            <div className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 text-xs font-black shadow-lg shadow-amber-500/20 animate-pulse flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4" />
-              <span>FAÇA SUA JOGADA!</span>
+            <div className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-mono font-bold shadow-lg shadow-amber-500/10 flex items-center gap-1.5 animate-pulse">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>SEU TURNO</span>
             </div>
           ) : (
-            <div className="px-3 py-1.5 rounded-xl bg-[#141a26] border border-[#2a3449] text-slate-400 text-xs font-mono flex items-center gap-1.5">
+            <div className="px-3 py-1.5 rounded-xl bg-[#121826] border border-[#2a3449] text-slate-400 text-xs font-mono flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-slate-500" />
               <span>Aguardando Turno...</span>
             </div>
           )}
         </div>
+
       </div>
     </div>
   );

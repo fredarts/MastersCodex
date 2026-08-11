@@ -20,6 +20,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { CharacterSheet, Combatant, DiceRollEvent } from '@/lib/types';
+import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 const calculateModifier = (score: number) => Math.floor(((score || 10) - 10) / 2);
 
 interface PlayerTokenActionDockProps {
@@ -35,6 +36,7 @@ interface PlayerTokenActionDockProps {
     movementUsed?: number;
   }) => void;
   onOpenFullSheet: () => void;
+  onStartAttackTargeting?: (attack: any) => void;
 }
 
 export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
@@ -45,6 +47,7 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
   onExecuteRoll,
   onUpdateCombatantActionState,
   onOpenFullSheet,
+  onStartAttackTargeting,
 }) => {
   const [activeTab, setActiveTab] = useState<'attacks' | 'spells' | 'features' | 'saves'>('attacks');
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
@@ -60,6 +63,11 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
 
   // Disparar rolagem de ataque com arma
   const handleWeaponAttackRoll = (attack: { name: string; atkBonus: string; damage: string; type: string }) => {
+    if (onStartAttackTargeting) {
+      onStartAttackTargeting(attack);
+      return;
+    }
+
     const cleanBonus = parseInt(attack.atkBonus.replace(/[^0-9-]/g, '')) || 0;
     const d20 = Math.floor(Math.random() * 20) + 1;
     const totalAtk = d20 + cleanBonus;
@@ -103,27 +111,71 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
     }
   };
 
-  // Disparar salvaguarda de atributo
+  // Disparar salvaguarda de atributo com Modal de Dados 3D
   const handleSaveRoll = (attrKey: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha', attrLabel: string) => {
     const attrScore = activeSheet.attributes?.[attrKey]?.score || 10;
     const mod = calculateModifier(attrScore);
     const isProficient = activeSheet.savingThrows?.[attrKey] || false;
-    const profBonus = Math.floor((activeSheet.level - 1) / 4) + 2;
+    const profBonus = Math.floor(((activeSheet.level || 1) - 1) / 4) + 2;
     const totalMod = mod + (isProficient ? profBonus : 0);
 
-    const d20 = Math.floor(Math.random() * 20) + 1;
-    const total = d20 + totalMod;
+    const setBg3DiceOverlay = useLiveCockpitStudioStore.getState().setBg3DiceOverlay;
+    const setDiceResult = useLiveCockpitStudioStore.getState().setDiceResult;
 
-    onExecuteRoll({
-      characterName: activeSheet.characterName,
-      avatarUrl: activeSheet.avatarUrl,
-      rollType: 'saving_throw',
-      label: `Salvaguarda de ${attrLabel}`,
-      d20Roll1: d20,
+    setBg3DiceOverlay({
+      title: `Salvaguarda: ${attrLabel}`,
+      subtitle: `TESTE DE RESISTÊNCIA DE ${attrLabel.toUpperCase()}`,
+      actorName: activeSheet.characterName || 'Jogador',
       modifier: totalMod,
-      total: total,
-      isCrit: d20 === 20,
-      isFail: d20 === 1,
+      difficultyClass: 12,
+      modifierCards: [
+        {
+          id: `mod-attr-${attrKey}`,
+          label: `Modificador de ${attrLabel}`,
+          value: mod >= 0 ? `+${mod}` : `${mod}`,
+          numericValue: mod,
+          iconType: 'attribute',
+          isEnabled: true,
+        },
+        ...(isProficient
+          ? [
+              {
+                id: `mod-prof-${attrKey}`,
+                label: 'Bônus de Proficiência',
+                value: `+${profBonus}`,
+                numericValue: profBonus,
+                iconType: 'proficiency' as const,
+                isEnabled: true,
+              },
+            ]
+          : []),
+      ],
+      isRolling: false,
+      phase: 'd20',
+      onRollComplete: (finalTotal: number, isHit: boolean, roll: number) => {
+        const isCrit = roll === 20;
+        const isFail = roll === 1;
+
+        setDiceResult({
+          title: `Salvaguarda de ${attrLabel}`,
+          roll,
+          total: finalTotal,
+          isCrit,
+          isFail,
+        });
+
+        onExecuteRoll({
+          characterName: activeSheet.characterName,
+          avatarUrl: activeSheet.avatarUrl,
+          rollType: 'saving_throw',
+          label: `Salvaguarda de ${attrLabel}`,
+          d20Roll1: roll,
+          modifier: totalMod,
+          total: finalTotal,
+          isCrit,
+          isFail,
+        });
+      },
     });
   };
 

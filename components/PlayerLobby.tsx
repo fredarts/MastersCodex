@@ -47,7 +47,9 @@ import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useCustomDialog } from '@/context/CustomDialogContext';
 import { usePartyLoot } from '@/context/PartyLootContext';
+import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 
+import { FloatingDiceRollerHUD } from './live-cockpit/FloatingDiceRollerHUD';
 import { PlayerCombatTrackerHUD } from './player-view/PlayerCombatTrackerHUD';
 import { PlayerTokenActionDock } from './player-view/PlayerTokenActionDock';
 import { PresenceIndicator } from './live-cockpit/PresenceIndicator';
@@ -98,6 +100,78 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [macroDisplayMode, setMacroDisplayMode] = useState<MacroBarDisplayMode>('both');
   const [secretRollMode, setSecretRollMode] = useState<SecretRollNotificationMode>('subtle_notice');
+  const [pendingAttackPayload, setPendingAttackPayload] = useState<any>(null);
+
+  const setPendingAttack = useLiveCockpitStudioStore((state) => state.setPendingAttack);
+  const pendingAttackStore = useLiveCockpitStudioStore((state) => state.pendingAttack);
+  const setBg3DiceOverlay = useLiveCockpitStudioStore((state) => state.setBg3DiceOverlay);
+  const setDiceResult = useLiveCockpitStudioStore((state) => state.setDiceResult);
+
+  const handlePlayerAttackTarget = (target: any) => {
+    if (pendingAttackStore && pendingAttackPayload) {
+      const attack = pendingAttackPayload;
+      const cleanBonus = pendingAttackStore.mod;
+      const title = pendingAttackStore.title;
+      
+      const charName = activeSheet.characterName || 'Jogador';
+      const currentActor = combatants.find(
+        (c) => c.name.toLowerCase().includes(charName.toLowerCase()) || charName.toLowerCase().includes(c.name.toLowerCase())
+      );
+      
+      setBg3DiceOverlay({
+        title,
+        actorName: currentActor?.name || activeSheet.characterName,
+        targetName: target?.name,
+        modifier: cleanBonus,
+        targetAc: target?.ac || 10,
+        difficultyClass: target?.ac || 10,
+        damageDiceFormula: attack.damage || '1d8',
+        isRolling: false,
+        phase: 'd20',
+        onRollComplete: (finalTotal: number, isHitResult: boolean, roll: number) => {
+          const isCrit = roll === 20;
+          const isFail = roll === 1;
+
+          setDiceResult({
+            title,
+            roll,
+            total: finalTotal,
+            isCrit,
+            isFail,
+          });
+
+          const fullRoll = {
+            id: `roll-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            characterId: activeSheet.id,
+            characterName: activeSheet.characterName || charName,
+            avatarUrl: activeSheet.avatarUrl,
+            timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            rollType: 'attack',
+            label: `Ataque: ${attack.name} em ${target.name}`,
+            d20Roll1: roll,
+            modifier: cleanBonus,
+            total: finalTotal,
+            isCrit,
+            isFail,
+            damageDice: attack.damage,
+            damageType: attack.type,
+          };
+          
+          broadcastPlayerRoll(fullRoll as any);
+
+          if (currentActor && updateCombatantState && liveDisplayMode === 'combat') {
+            const isMyTurn = combatants[currentTurnIndex]?.name.toLowerCase().includes(charName.toLowerCase());
+            if (isMyTurn && !currentActor.actionUsed) {
+              updateCombatantState(currentActor.id, { actionUsed: true });
+            }
+          }
+        }
+      });
+      
+      setPendingAttack(null);
+      setPendingAttackPayload(null);
+    }
+  };
 
   const handleCopyInviteCode = (code: string) => {
     if (!code) return;
@@ -972,6 +1046,48 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
               </div>
             </div>
 
+            {/* Controles de Visualização / Projeção do Jogador (Estilo Cockpit DM) */}
+            <div className="flex items-center gap-1.5 bg-[#0a0d14] p-1.5 rounded-xl border border-[#2a3449]">
+              <button
+                onClick={() => setPlayerCanvasView('art')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all ${
+                  playerCanvasView === 'art'
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
+                }`}
+                title="Modo Ilustração / Arte da Cena"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Ilustração</span>
+              </button>
+
+              <button
+                onClick={() => setPlayerCanvasView('map')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all ${
+                  playerCanvasView === 'map'
+                    ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
+                }`}
+                title="Modo Dungeon Map 2D"
+              >
+                <MapIcon className="w-3.5 h-3.5" />
+                <span>Dungeon Map</span>
+              </button>
+
+              <button
+                onClick={() => setPlayerCanvasView('grid')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all ${
+                  playerCanvasView === 'grid' || playerCanvasView === 'auto'
+                    ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
+                }`}
+                title="Modo Grid 3D / Combate"
+              >
+                <Swords className="w-3.5 h-3.5" />
+                <span>Grid 3D / Combate</span>
+              </button>
+            </div>
+
             {/* Right Header Actions & Online Avatars */}
             <div className="flex items-center gap-3">
               <PresenceIndicator users={onlineUsers} className="border-r border-[#2a3449] pr-3" />
@@ -1008,9 +1124,9 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
           <div className="flex-1 flex gap-3 overflow-hidden">
             {/* CENTER CANVAS (80% da tela: Grid 3D, Mapa 2D ou Arte da Cena) */}
             <div className="flex-1 bg-[#05070a] border border-[#2a3449] rounded-2xl flex flex-col justify-between relative overflow-hidden shadow-2xl">
-              {/* TOP OVERLAY: COMBAT INITIATIVE HUD */}
+              {/* TOP BAR: COMBAT INITIATIVE HUD */}
               {liveDisplayMode === 'combat' && (
-                <div className="absolute top-0 left-0 right-0 z-20">
+                <div className="w-full shrink-0 z-20">
                   <PlayerCombatTrackerHUD
                     combatants={combatants}
                     currentTurnIndex={currentTurnIndex}
@@ -1020,54 +1136,6 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                   />
                 </div>
               )}
-
-              {/* CANVAS VIEW MODE SWITCHER TABS (Floating Overlay Top-Right) */}
-              <div className="absolute top-3 right-3 z-30 flex items-center gap-1 bg-[#0a0d14]/80 backdrop-blur-md border border-[#2a3449] p-1 rounded-xl shadow-xl">
-                <button
-                  onClick={() => setPlayerCanvasView('auto')}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono transition-all ${
-                    playerCanvasView === 'auto'
-                      ? 'bg-amber-500 text-slate-950 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                  title="Projeção Automática enviada pelo Mestre"
-                >
-                  Auto (Mestre)
-                </button>
-                <button
-                  onClick={() => setPlayerCanvasView('grid')}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono transition-all flex items-center gap-1 ${
-                    playerCanvasView === 'grid'
-                      ? 'bg-amber-500 text-slate-950 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Swords className="w-3 h-3" />
-                  <span>Grid 3D</span>
-                </button>
-                <button
-                  onClick={() => setPlayerCanvasView('map')}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono transition-all flex items-center gap-1 ${
-                    playerCanvasView === 'map'
-                      ? 'bg-amber-500 text-slate-950 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <MapIcon className="w-3 h-3" />
-                  <span>Mapa 2D</span>
-                </button>
-                <button
-                  onClick={() => setPlayerCanvasView('art')}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono transition-all flex items-center gap-1 ${
-                    playerCanvasView === 'art'
-                      ? 'bg-amber-500 text-slate-950 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <ImageIcon className="w-3 h-3" />
-                  <span>Cena</span>
-                </button>
-              </div>
 
               {/* CANVAS CONTENT AREA */}
               <div className="flex-1 relative w-full h-full flex items-center justify-center overflow-hidden">
@@ -1082,6 +1150,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                           combatants={combatants}
                           currentTurnIndex={currentTurnIndex}
                           selectedTargetId={selectedTargetId || undefined}
+                          onAttackTarget={handlePlayerAttackTarget}
                           timeOfDayHour={currentScene?.timeOfDayHour}
                           timeOfDayPreset={currentScene?.timeOfDay}
                           hasFog={currentScene?.hasFog}
@@ -1164,30 +1233,43 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                 const isMyTurn = isCombat && combatants[currentTurnIndex]?.name.toLowerCase().includes(charName.toLowerCase());
 
                 return (
-                  <div className="p-3 z-20">
-                    <PlayerTokenActionDock
-                      activeSheet={activeSheet}
-                      playerCombatant={meCombatant}
-                      isMyTurn={isMyTurn}
-                      isCombatActive={isCombat}
-                      onExecuteRoll={(rollEvent) => {
-                        const fullRoll = {
-                          id: `roll-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                          characterId: activeSheet.id,
-                          characterName: activeSheet.characterName || charName,
-                          avatarUrl: activeSheet.avatarUrl,
-                          timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-                          ...rollEvent
-                        };
-                        broadcastPlayerRoll(fullRoll as any);
-                      }}
-                      onUpdateCombatantActionState={(update) => {
-                        if (meCombatant && updateCombatantState) {
-                          updateCombatantState(meCombatant.id, update);
-                        }
-                      }}
-                      onOpenFullSheet={() => handleOpenSheetForCampaign(currentCampaign || undefined)}
-                    />
+                  <div className="absolute bottom-3 left-3 right-3 z-20 pointer-events-none flex justify-center">
+                    <div className="pointer-events-auto w-full max-w-4xl">
+                      <PlayerTokenActionDock
+                        activeSheet={activeSheet}
+                        playerCombatant={meCombatant}
+                        isMyTurn={isMyTurn}
+                        isCombatActive={isCombat}
+                        onStartAttackTargeting={(attack) => {
+                          const cleanBonus = parseInt(attack.atkBonus.replace(/[^0-9-]/g, '')) || 0;
+                          setPendingAttack({
+                            title: `Ataque: ${attack.name}`,
+                            mod: cleanBonus,
+                            actorCombatant: meCombatant,
+                            actionDesc: attack.damage,
+                          });
+                          setPendingAttackPayload(attack);
+                          toast.info(`Mirando Ataque: ${attack.name}. Clique na criatura alvo no Grid 3D!`);
+                        }}
+                        onExecuteRoll={(rollEvent) => {
+                          const fullRoll = {
+                            id: `roll-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                            characterId: activeSheet.id,
+                            characterName: activeSheet.characterName || charName,
+                            avatarUrl: activeSheet.avatarUrl,
+                            timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                            ...rollEvent
+                          };
+                          broadcastPlayerRoll(fullRoll as any);
+                        }}
+                        onUpdateCombatantActionState={(update) => {
+                          if (meCombatant && updateCombatantState) {
+                            updateCombatantState(meCombatant.id, update);
+                          }
+                        }}
+                        onOpenFullSheet={() => handleOpenSheetForCampaign(currentCampaign || undefined)}
+                      />
+                    </div>
                   </div>
                 );
               })()}
@@ -1362,6 +1444,9 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
           readOnly={true}
         />
       )}
+
+      {/* 3D BG3 Dice Roller Modal & HUD */}
+      <FloatingDiceRollerHUD />
     </div>
   );
 };

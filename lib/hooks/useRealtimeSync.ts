@@ -59,6 +59,7 @@ export interface RealtimeSyncPayloads {
     currentTurnIndex?: number;
     roundCount?: number;
     mapData?: any;
+    selectedTargetId?: string | null;
   };
   DRAWING_ACTION: {
     action: 'add' | 'clear' | 'undo' | 'remove';

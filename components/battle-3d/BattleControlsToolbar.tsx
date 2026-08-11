@@ -317,15 +317,13 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
       <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-20">
         {/* Left Side: Status & Environment Menu Toggle */}
         <div className="flex items-center gap-2 pointer-events-auto">
-          <div className="flex items-center gap-2 bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-700/60 text-xs font-semibold text-slate-200 shadow-lg">
-            <Sun className="w-4 h-4 text-amber-400" />
-            <span>Grid 3D Tático</span>
-            {isPlacementPhase && (
+          {isPlacementPhase && (
+            <div className="flex items-center gap-2 bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-700/60 text-xs font-semibold text-slate-200 shadow-lg">
               <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded border border-amber-500/30 font-bold uppercase animate-pulse">
                 Fase de Posicionamento
               </span>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* DM Environment Settings Toggle */}
           {isDm && (

@@ -1198,6 +1198,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
                   controls.enabled = true;
                   setTargetIdState(clicked.id);
                   if (onSelT) onSelT(clicked);
+                  if (attackCb) attackCb(clicked);
                 }
               }
             } else {
@@ -1214,6 +1215,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
                 controls.enabled = true;
                 setTargetIdState(clicked.id);
                 if (onSelT) onSelT(clicked);
+                if (attackCb) attackCb(clicked);
               }
             }
           }

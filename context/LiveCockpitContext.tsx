@@ -70,6 +70,7 @@ interface LiveCockpitContextType {
   broadcastDrawingAction: (payload: any) => void;
   updateCombatantState: (id: string, update: Partial<Combatant>) => void;
   selectedTargetId: string | null;
+  setSelectedTargetId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 const LiveCockpitContext = createContext<LiveCockpitContextType | undefined>(undefined);
