@@ -43,6 +43,7 @@ import { CharacterManagerModal } from './character-sheet/CharacterManagerModal';
 import { createEmptyCharacterSheet, generateUuid } from '@/lib/dnd5e-data';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { useAuth } from '@/context/AuthContext';
+import { parseRangeString } from '@/lib/utils/dndRangeUtils';
 import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useCustomDialog } from '@/context/CustomDialogContext';
@@ -83,6 +84,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     onlineUsers,
     broadcastPlayerRoll,
     broadcastToPlayerView,
+    broadcastCombatUpdate,
     updateCombatantState,
     mapData,
     projectedScene,
@@ -168,6 +170,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
             rollType: 'attack',
             label: `Ataque: ${attack.name} em ${target.name}`,
+            d20Roll: roll,
             d20Roll1: roll,
             modifier: cleanBonus,
             total: finalTotal,
@@ -218,6 +221,14 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     }
 
     // Transmite a nova ordem de turno para o Mestre e demais jogadores
+    if (broadcastCombatUpdate) {
+      broadcastCombatUpdate({
+        combatants,
+        currentTurnIndex: nextIndex,
+        roundCount: nextRound,
+      });
+    }
+
     if (broadcastToPlayerView) {
       broadcastToPlayerView({
         combatants,
@@ -1316,11 +1327,15 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                         isCombatActive={isCombat}
                         onStartAttackTargeting={(attack) => {
                           const cleanBonus = parseInt(attack.atkBonus.replace(/[^0-9-]/g, '')) || 0;
+                          const rangeText = attack.rangeText || attack.range || attack.name;
+                          const rangeInfo = parseRangeString(rangeText);
                           setPendingAttack({
                             title: `Ataque: ${attack.name}`,
                             mod: cleanBonus,
                             actorCombatant: meCombatant,
                             actionDesc: attack.damage,
+                            rangeText,
+                            rangeInfo,
                           });
                           setPendingAttackPayload(attack);
                           toast.info(`Mirando Ataque: ${attack.name}. Clique na criatura alvo no Grid 3D!`);

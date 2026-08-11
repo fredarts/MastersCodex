@@ -37,11 +37,25 @@ export interface Bg3DiceOverlayState {
   onRollComplete?: (finalTotal: number, isHit: boolean, d20Value: number) => void;
 }
 
+import { RangeInfo, RangeStatus } from '../utils/dndRangeUtils';
+
 export interface PendingAttackState {
   title: string;
   mod: number;
   actorCombatant?: Combatant;
   actionDesc?: string;
+  rangeText?: string;
+  rangeInfo?: RangeInfo;
+}
+
+export interface SplineState {
+  attackerId?: string;
+  targetId?: string;
+  attackerPos?: { x: number; y: number; z: number };
+  targetPos?: { x: number; y: number; z: number };
+  distanceFt?: number;
+  status?: RangeStatus;
+  animationPhase: 'aiming' | 'firing' | 'fading' | 'idle';
 }
 
 export interface MagicMissileModalState {
@@ -71,6 +85,7 @@ interface LiveCockpitStudioState {
   showBattleSetupModal: boolean;
   confirmDeleteCombatant: Combatant | null;
   pendingAttack: PendingAttackState | null;
+  splineState: SplineState | null;
   magicMissileModalState: MagicMissileModalState | null;
 
   // Dice & BG3 Overlay
@@ -127,6 +142,7 @@ interface LiveCockpitStudioState {
   setShowBattleSetupModal: (v: boolean) => void;
   setConfirmDeleteCombatant: (c: Combatant | null) => void;
   setPendingAttack: (a: PendingAttackState | null) => void;
+  setSplineState: (s: SplineState | null | ((prev: SplineState | null) => SplineState | null)) => void;
   setMagicMissileModalState: (s: MagicMissileModalState | null | ((prev: MagicMissileModalState | null) => MagicMissileModalState | null)) => void;
 
   // Dice & Overlay
@@ -184,6 +200,7 @@ export const useLiveCockpitStudioStore = create<LiveCockpitStudioState>((set) =>
   showBattleSetupModal: false,
   confirmDeleteCombatant: null,
   pendingAttack: null,
+  splineState: null,
   magicMissileModalState: null,
 
   // Dice & BG3 Overlay
@@ -248,6 +265,10 @@ export const useLiveCockpitStudioStore = create<LiveCockpitStudioState>((set) =>
   setShowBattleSetupModal: (v) => set({ showBattleSetupModal: v }),
   setConfirmDeleteCombatant: (c) => set({ confirmDeleteCombatant: c }),
   setPendingAttack: (a) => set({ pendingAttack: a }),
+  setSplineState: (s) =>
+    set((state) => ({
+      splineState: typeof s === 'function' ? s(state.splineState) : s,
+    })),
   setMagicMissileModalState: (s) =>
     set((state) => ({
       magicMissileModalState: typeof s === 'function' ? s(state.magicMissileModalState) : s,

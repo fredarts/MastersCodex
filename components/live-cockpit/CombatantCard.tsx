@@ -107,7 +107,6 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
       if (activeScene) {
         onUpdateScene({ ...activeScene, combatants: next });
       }
-      broadcastToPlayerView({ combatants: next });
       return next;
     });
   };
@@ -168,7 +167,6 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                   .map((x) => (x.id === c.id ? { ...x, initiative: total } : x))
                   .sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
                 if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
-                broadcastToPlayerView({ combatants: next });
                 return next;
               });
               toast.success(`Nova iniciativa de ${c.name}: d20(${d20}) ${initModStr} = ${total}`);
@@ -306,7 +304,6 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                   onUpdateCombatants((prev) => {
                     const next = prev.map((x) => (x.id === c.id ? { ...x, actionUsed: !x.actionUsed } : x));
                     if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
-                    broadcastToPlayerView({ combatants: next });
                     return next;
                   });
                 }}
@@ -328,7 +325,6 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                   onUpdateCombatants((prev) => {
                     const next = prev.map((x) => (x.id === c.id ? { ...x, bonusActionUsed: !x.bonusActionUsed } : x));
                     if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
-                    broadcastToPlayerView({ combatants: next });
                     return next;
                   });
                 }}
@@ -350,7 +346,6 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                   onUpdateCombatants((prev) => {
                     const next = prev.map((x) => (x.id === c.id ? { ...x, reactionUsed: !x.reactionUsed } : x));
                     if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
-                    broadcastToPlayerView({ combatants: next });
                     return next;
                   });
                 }}
@@ -383,7 +378,6 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                         return x;
                       });
                       if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
-                      broadcastToPlayerView({ combatants: next });
                       return next;
                     });
                     toast.success(`${c.name} usou Disparada (Dash)! Deslocamento duplicado.`);

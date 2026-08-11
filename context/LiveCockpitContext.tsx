@@ -33,6 +33,7 @@ interface LiveCockpitContextType {
   roundCount: number;
   setRoundCount: React.Dispatch<React.SetStateAction<number>>;
   broadcastDiceRoll: (roll: { rollerName: string; rollType: string; diceFormula: string; result: number; isCrit?: boolean; isFail?: boolean }) => void;
+  broadcastCombatUpdate: (payload: any) => void;
   projectedScene: any;
   setProjectedScene: React.Dispatch<React.SetStateAction<any>>;
   mapData: unknown;
@@ -236,11 +237,21 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
           floorTextureUrl: sceneData.floorTextureUrl !== undefined ? sceneData.floorTextureUrl : base.floorTextureUrl,
           environmentSettings: sceneData.environmentSettings !== undefined ? sceneData.environmentSettings : base.environmentSettings,
           associatedMapId: sceneData.associatedMapId !== undefined ? sceneData.associatedMapId : base.associatedMapId,
-          associatedMapIds: sceneData.associatedMapIds !== undefined ? sceneData.associatedMapIds : base.associatedMapIds,
         };
       });
     }
-  }, []);
+
+    if (payload.combatants !== undefined) {
+      setCombatants(payload.combatants);
+      storeInitializeFromCombatants(payload.combatants);
+    }
+    if (payload.currentTurnIndex !== undefined) {
+      setCurrentTurnIndex(payload.currentTurnIndex);
+    }
+    if (payload.roundCount !== undefined) {
+      setRoundCount(payload.roundCount);
+    }
+  }, [storeInitializeFromCombatants]);
 
   // Realtime Sync Hook
   const {
@@ -329,7 +340,8 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     },
     onPlayerRoll: (payload) => {
       if (payload.roll) {
-        const r = payload.roll;
+        const r = payload.roll as any;
+        const d20Val = r.d20Roll1 ?? r.d20Roll ?? r.roll;
         const entry: CombatLogEntry = {
           id: r.id || `roll-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
           timestamp: r.timestamp || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
@@ -337,13 +349,16 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
           actorId: r.characterName,
           actorName: r.characterName,
           eventType: r.rollType === 'attack' ? 'attack' : 'system',
-          d20Roll: r.d20Roll,
+          d20Roll: d20Val,
           totalRoll: r.total,
           isCrit: r.isCrit,
           isFail: r.isFail,
-          description: `[JOGADOR] ${r.characterName} rolou ${r.label}: d20(${r.d20Roll}) ${r.modifier >= 0 ? '+' : ''}${r.modifier} = Total ${r.total}`,
+          description: `[JOGADOR] ${r.characterName} rolou ${r.label}${d20Val !== undefined ? `: d20(${d20Val}) ${r.modifier >= 0 ? '+' : ''}${r.modifier} = Total ${r.total}` : ''}${r.damageDice ? ` [Dano: ${r.damageDice}]` : ''}`,
         };
-        setCombatLogs((prev) => [...prev, entry]);
+        setCombatLogs((prev) => {
+          if (prev.some((l) => l.id === entry.id)) return prev;
+          return [...prev, entry];
+        });
       }
     },
     onChatMessage: (payload) => {
@@ -470,6 +485,13 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       broadcastCombatUpdate(currentState);
     }
   }, [combatants, currentTurnIndex, roundCount, activeCampaign?.role, broadcastCombatUpdate, isCombatStateEqual]);
+
+  // Sincroniza target selecionado
+  useEffect(() => {
+    if (activeCampaign?.role === 'dm') {
+      broadcastLiveProjection({ targetId: selectedTargetId });
+    }
+  }, [selectedTargetId, activeCampaign?.role, broadcastLiveProjection]);
 
   // Presence Heartbeat
   useEffect(() => {
@@ -653,8 +675,27 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [syncBroadcastCombatLogEntry]);
 
   const broadcastPlayerRoll = useCallback((roll: PlayerRollEvent) => {
+    const r = roll as any;
+    const d20Val = r.d20Roll1 ?? r.d20Roll ?? r.roll;
+    const entry: CombatLogEntry = {
+      id: r.id || `roll-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: r.timestamp || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      round: roundCount,
+      actorId: r.characterName,
+      actorName: r.characterName,
+      eventType: r.rollType === 'attack' ? 'attack' : 'system',
+      d20Roll: d20Val,
+      totalRoll: r.total,
+      isCrit: r.isCrit,
+      isFail: r.isFail,
+      description: `[JOGADOR] ${r.characterName} rolou ${r.label}${d20Val !== undefined ? `: d20(${d20Val}) ${r.modifier >= 0 ? '+' : ''}${r.modifier} = Total ${r.total}` : ''}${r.damageDice ? ` [Dano: ${r.damageDice}]` : ''}`,
+    };
+    setCombatLogs((prev) => {
+      if (prev.some((l) => l.id === entry.id)) return prev;
+      return [...prev, entry];
+    });
     syncBroadcastPlayerRoll({ roll });
-  }, [syncBroadcastPlayerRoll]);
+  }, [roundCount, syncBroadcastPlayerRoll]);
 
   const broadcastChatMessage = useCallback((message: ChatMessage) => {
     setChatMessages((prev) => {
@@ -711,6 +752,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         roundCount,
         setRoundCount,
         broadcastDiceRoll,
+        broadcastCombatUpdate,
         projectedScene,
         setProjectedScene,
         mapData,
@@ -751,10 +793,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
           );
         },
         selectedTargetId,
-        setSelectedTargetId: (id: string | null) => {
-          setSelectedTargetId(id);
-          broadcastToPlayerView({ targetId: id });
-        },
+        setSelectedTargetId,
       }}
     >
       {children}

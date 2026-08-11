@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CharacterSheet, CharacterEquipmentItem } from '@/lib/types';
-import { Coins, Package, Plus, Trash2, Gem, Weight, Scale, Sparkles } from 'lucide-react';
+import { Coins, Package, Plus, Trash2, Gem, Weight, Scale, Sparkles, ShoppingCart } from 'lucide-react';
 import { ItemCompendiumModal } from '../Modals/ItemCompendiumModal';
 import { toast } from 'sonner';
 import { getEffectiveAttributeScore } from '@/lib/dnd5e-calculator';
@@ -92,9 +92,9 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
     );
   };
 
-  // CÁLCULO DA CAPACIDADE DE CARGA (D&D 5e: FORÇA * 15 lb)
+  // CÁLCULO DA CAPACIDADE DE CARGA (D&D 5e convertido para kg: FORÇA * 7.5 kg)
   const strScore = getEffectiveAttributeScore(sheet, 'str');
-  const maxCarryingCapacity = strScore * 15;
+  const maxCarryingCapacity = strScore * 7.5;
 
   const totalWeight = items.reduce((sum, item) => {
     const raw = (item.weight || '0').replace(/[^0-9.]/g, '');
@@ -109,7 +109,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
       id: Date.now().toString(),
       name: 'Novo Item',
       quantity: 1,
-      weight: '1 lb',
+      weight: '0.5 kg',
       notes: '',
     };
     updateItems([...items, newItem]);
@@ -130,9 +130,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
         sheet={sheet}
         isOpen={isItemCompendiumOpen}
         onClose={() => setIsItemCompendiumOpen(false)}
-        onAddItem={(newItem) => {
-          updateItems([...items, newItem]);
-        }}
+        onChange={onChange}
       />
 
       {/* CARTEIRA / MOEDAS */}
@@ -213,7 +211,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
             <span className="text-xs font-bold uppercase text-amber-400">Capacidade de Carga</span>
           </div>
           <span className={`text-xs font-black font-mono ${isEncumbered ? 'text-rose-400' : 'text-emerald-400'}`}>
-            {totalWeight.toFixed(1)} / {maxCarryingCapacity} lb
+            {totalWeight.toFixed(1)} / {maxCarryingCapacity} kg
           </span>
         </div>
 
@@ -246,8 +244,8 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
               onClick={() => setIsItemCompendiumOpen(true)}
               className="flex items-center gap-1 text-[11px] font-black bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 px-3 py-1 rounded-xl shadow-md transition-colors"
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              Compêndio
+              <ShoppingCart className="w-3.5 h-3.5" />
+              Abrir Loja
             </button>
             <button
               type="button"

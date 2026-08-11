@@ -22,12 +22,20 @@ import {
   MapPin,
   Scroll,
   Compass,
+  Gift,
+  Coins,
+  Weight,
 } from 'lucide-react';
-import { SRDMonster, SRDSpell, SRDItem } from '@/lib/types';
+import { SRDMonster, SRDSpell, SRDItem, CharacterSheet } from '@/lib/types';
 import { INITIAL_MONSTERS, INITIAL_SPELLS, INITIAL_ITEMS } from '@/lib/srd-data';
 import { srdService } from '@/lib/services/srdService';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
+import { useCampaign } from '@/context/CampaignContext';
+import { usePartyLoot } from '@/context/PartyLootContext';
+import { SRD_EQUIPMENT, SRDItem as SRDEquipmentItem } from '@/lib/srd-compendium';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 interface CompendiumViewProps {
   isModal?: boolean;
@@ -123,8 +131,38 @@ function getItemRarityBadgeStyle(rarity: string): { bg: string; text: string; bo
 }
 
 export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false, onClose }) => {
+  const { user, roleMode } = useAuth();
+  const { activeCampaign } = useCampaign();
+  const { setIsDmLootModalOpen } = usePartyLoot();
+
   const [query, setQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'monsters' | 'spells' | 'items'>('monsters');
+  const [activeTab, setActiveTab] = useState<'monsters' | 'spells' | 'items' | 'equipment'>('monsters');
+
+  // Equipment State
+  const [equipmentCategoryFilter, setEquipmentCategoryFilter] = useState<string>('all');
+  const [selectedEquipment, setSelectedEquipment] = useState<SRDEquipmentItem | null>(SRD_EQUIPMENT[0] || null);
+
+
+
+  const handleSendEquipmentLoot = (item: SRDEquipmentItem) => {
+    setIsDmLootModalOpen(true);
+    setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent('masters_codex_add_loot_item', {
+          detail: {
+            name: item.name,
+            quantity: 1,
+            weight: `${item.weight} kg`,
+            notes: `${item.description} (Custo: ${item.cost})`,
+            itemType:
+              item.category === 'Poção' ? 'potion' :
+              item.category === 'Arma' ? 'weapon' :
+              item.category === 'Armadura' ? 'armor' : 'equipment',
+          },
+        })
+      );
+    }, 200);
+  };
 
   // Monster Filters State
   const [monsterCrFilter, setMonsterCrFilter] = useState<string>('all');
@@ -301,7 +339,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
       (i.category && i.category.toLowerCase().includes(itemTypeFilter.toLowerCase()));
 
     const matchesAttunement =
-      !itemAttunementOnly || (!!i.attunement && i.attunement !== false);
+      !itemAttunementOnly || (!!i.attunement && i.attunement !== (false as any));
 
     return matchesQuery && matchesRarity && matchesType && matchesAttunement;
   });
@@ -348,6 +386,28 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
     setItemRarityFilter('all');
     setItemTypeFilter('all');
     setItemAttunementOnly(false);
+  };
+
+  // Equipment Filtering Logic
+  const filteredEquipment = SRD_EQUIPMENT.filter((item) => {
+    const q = query.trim().toLowerCase();
+    const matchesQuery =
+      !q ||
+      item.name.toLowerCase().includes(q) ||
+      item.description.toLowerCase().includes(q) ||
+      item.category.toLowerCase().includes(q);
+
+    const matchesCategory =
+      equipmentCategoryFilter === 'all' || item.category === equipmentCategoryFilter;
+
+    return matchesQuery && matchesCategory;
+  });
+
+  const hasActiveEquipmentFilters = equipmentCategoryFilter !== 'all' || query !== '';
+
+  const clearEquipmentFilters = () => {
+    setQuery('');
+    setEquipmentCategoryFilter('all');
   };
 
   return (
@@ -448,6 +508,21 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
             <span>Itens Mágicos</span>
             <span className="px-1.5 py-0.5 rounded-full bg-[#2a3449] text-[10px] text-slate-300">
               {filteredItems.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('equipment')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all border ${
+              activeTab === 'equipment'
+                ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 shadow-md'
+                : 'bg-[#161c28]/60 border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#161c28]'
+            }`}
+          >
+            <Package className="w-3.5 h-3.5" />
+            <span>Equipamentos</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-[#2a3449] text-[10px] text-slate-300">
+              {filteredEquipment.length}
             </span>
           </button>
         </div>
@@ -707,6 +782,41 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
             )}
           </div>
         )}
+
+        {/* Equipment Filter Toolbar */}
+        {activeTab === 'equipment' && (
+          <div className="flex flex-wrap items-center gap-2 pt-2 bg-[#0a0d14]/40 p-2.5 rounded-xl border border-[#2a3449]/50 text-xs">
+            <div className="flex items-center gap-1.5 text-amber-400 font-semibold mr-1">
+              <Filter className="w-3.5 h-3.5" />
+              <span className="text-[11px] uppercase tracking-wider">Categorias de Equipamento:</span>
+            </div>
+
+            {['all', 'Arma', 'Armadura', 'Equipamento', 'Poção', 'Ferramenta', 'Tesouro'].map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setEquipmentCategoryFilter(cat)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all uppercase cursor-pointer ${
+                  equipmentCategoryFilter === cat
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow'
+                    : 'bg-[#161c28] text-slate-400 border border-[#2a3449]/60 hover:text-white'
+                }`}
+              >
+                {cat === 'all' ? 'Todos' : cat}
+              </button>
+            ))}
+
+            {hasActiveEquipmentFilters && (
+              <button
+                onClick={clearEquipmentFilters}
+                className="flex items-center gap-1 px-2.5 py-1 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 rounded-lg transition-all font-semibold ml-auto cursor-pointer"
+              >
+                <FilterX className="w-3.5 h-3.5" />
+                <span>Limpar</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Content Split Pane */}
@@ -806,7 +916,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
                     </div>
                     <div className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
                       <span>{i.type}</span>
-                      {i.attunement && i.attunement !== false && (
+                      {i.attunement && i.attunement !== (false as any) && (
                         <span className="text-[9px] text-amber-400 font-semibold flex items-center gap-0.5">
                           <Zap className="w-2.5 h-2.5" /> Sintonização
                         </span>
@@ -821,6 +931,43 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
                 <p>Nenhum item encontrado com os filtros selecionados.</p>
                 <button
                   onClick={clearItemFilters}
+                  className="px-3 py-1 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 rounded-lg text-[11px] font-bold transition-all border border-amber-500/40"
+                >
+                  Limpar filtros
+                </button>
+              </div>
+            ))}
+
+          {activeTab === 'equipment' &&
+            (filteredEquipment.length > 0 ? (
+              filteredEquipment.map((item) => (
+                <button
+                  key={item.name}
+                  onClick={() => setSelectedEquipment(item)}
+                  className={`w-full text-left p-3 rounded-xl border text-xs transition-all ${
+                    selectedEquipment?.name === item.name
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold shadow-md'
+                      : 'bg-[#161c28] text-slate-300 border-[#2a3449] hover:bg-[#1f2738] hover:border-slate-600'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="truncate pr-2 font-medium">{item.name}</span>
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 border border-amber-500/20 shrink-0">
+                      {item.cost}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
+                    <span>{item.category}</span>
+                    <span>{item.weight} kg</span>
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="p-8 text-center text-slate-400 text-xs space-y-2">
+                <FilterX className="w-8 h-8 mx-auto opacity-30 text-amber-400" />
+                <p>Nenhum equipamento encontrado com os filtros selecionados.</p>
+                <button
+                  onClick={clearEquipmentFilters}
                   className="px-3 py-1 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 rounded-lg text-[11px] font-bold transition-all border border-amber-500/40"
                 >
                   Limpar filtros
@@ -1465,7 +1612,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
 
               {/* Status Badges Grid */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                {selectedItem.attunement && selectedItem.attunement !== false && (
+                {selectedItem.attunement && selectedItem.attunement !== (false as any) && (
                   <div className="bg-amber-500/10 p-3 rounded-xl border border-amber-500/30 flex items-center gap-2.5">
                     <Zap className="w-5 h-5 text-amber-400 shrink-0" />
                     <div>
@@ -1501,6 +1648,79 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Propriedades & Efeito Mágico:</h4>
                 <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap font-serif">
                   {selectedItem.description}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'equipment' && selectedEquipment && (
+            <div className="space-y-5">
+              {/* Header Banner */}
+              <div className="border-b border-[#2a3449] pb-5 flex flex-wrap items-start justify-between gap-4 bg-gradient-to-r from-[#0f141d] to-transparent p-4 rounded-2xl border border-[#2a3449]/80 shadow-md">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-3xl font-extrabold text-amber-100 font-serif tracking-wide animate-fade-in">
+                      {selectedEquipment.name}
+                    </h2>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300 font-medium">
+                    <span>{selectedEquipment.category}</span>
+                    <span>•</span>
+                    <span className="px-2 py-0.5 text-[11px] font-semibold rounded border bg-slate-500/15 text-slate-300 border-slate-500/30">
+                      Peso: {selectedEquipment.weight} kg
+                    </span>
+                    <span>•</span>
+                    <span className="px-2 py-0.5 text-[11px] font-semibold rounded border bg-amber-500/10 text-amber-300 border-amber-500/40">
+                      Custo: {selectedEquipment.cost}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {roleMode === 'dm' && (
+                    <button
+                      onClick={() => handleSendEquipmentLoot(selectedEquipment)}
+                      className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+                    >
+                      <Gift className="w-4 h-4 text-slate-950" />
+                      <span>Enviar ao Grupo/Loot</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Status Badges Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449] flex items-center gap-2.5">
+                  <Package className="w-5 h-5 text-slate-400 shrink-0" />
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase block font-semibold">Categoria</span>
+                    <span className="font-bold text-slate-200 text-xs">{selectedEquipment.category}</span>
+                  </div>
+                </div>
+
+                <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449] flex items-center gap-2.5">
+                  <Coins className="w-5 h-5 text-amber-300 shrink-0" />
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase block font-semibold">Preço de Venda</span>
+                    <span className="font-bold text-amber-300 font-mono text-xs">{selectedEquipment.cost}</span>
+                  </div>
+                </div>
+
+                <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449] flex items-center gap-2.5">
+                  <Weight className="w-5 h-5 text-slate-400 shrink-0" />
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase block font-semibold">Peso do Item</span>
+                    <span className="font-bold text-slate-200 font-mono text-xs">{selectedEquipment.weight} kg</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Item Description */}
+              <div className="bg-[#0a0d14] p-5 rounded-2xl border border-[#2a3449] space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Descrição & Propriedades:</h4>
+                <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap font-serif">
+                  {selectedEquipment.description}
                 </p>
               </div>
             </div>

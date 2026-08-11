@@ -335,7 +335,6 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         });
 
         if (hasChanges) {
-          broadcastToPlayerView({ combatants: next });
           return next;
         }
         return prev;
@@ -462,7 +461,6 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       if (activeScene) {
         updateScene({ ...activeScene, combatants: next });
       }
-      broadcastToPlayerView({ combatants: next });
       return next;
     });
   };
@@ -525,7 +523,6 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
 
     setCombatLogs((prev) => {
       const next = [...prev, newLog];
-      broadcastToPlayerView({ combatLogs: next });
       broadcastCombatLogEntry(newLog);
       return next;
     });

@@ -54,6 +54,34 @@ export const DmLootCreatorModal: React.FC = () => {
 
   const [isCompendiumOpen, setIsCompendiumOpen] = useState(false);
 
+  React.useEffect(() => {
+    const handlePreloadItem = (e: any) => {
+      const equipItem = e.detail;
+      if (!equipItem) return;
+
+      const item: Omit<PartyLootItem, 'claimedBy'> = {
+        id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        name: equipItem.name,
+        quantity: equipItem.quantity > 0 ? equipItem.quantity : 1,
+        weight: equipItem.weight,
+        rarity: 'Comum',
+        notes: equipItem.notes || '',
+        itemType: equipItem.itemType,
+        potionProps: equipItem.potionProps,
+        weaponProps: equipItem.weaponProps,
+        armorProps: equipItem.armorProps,
+        scrollProps: equipItem.scrollProps,
+      };
+
+      setItems((prev) => [...prev, item]);
+    };
+
+    window.addEventListener('masters_codex_add_loot_item', handlePreloadItem);
+    return () => {
+      window.removeEventListener('masters_codex_add_loot_item', handlePreloadItem);
+    };
+  }, []);
+
 
   const handleAddItem = (e: React.FormEvent) => {
     e.preventDefault();

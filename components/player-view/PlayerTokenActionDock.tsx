@@ -73,7 +73,7 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
   const movementRemaining = Math.max(0, speedFeet - movementUsed);
 
   // Disparar rolagem de ataque com arma
-  const handleWeaponAttackRoll = (attack: { name: string; atkBonus: string; damage: string; type: string }) => {
+  const handleWeaponAttackRoll = (attack: { name: string; atkBonus: string; damage: string; type: string; rangeText?: string }) => {
     if (isCombatActive && !isMyTurn) {
       toast.warning('Aguarde a sua vez no combate para realizar ataques!');
       return;
@@ -108,9 +108,20 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
   };
 
   // Disparar conjuração de magia
-  const handleCastSpell = (spell: { name: string; level: number; description?: string }) => {
+  const handleCastSpell = (spell: { name: string; level: number; description?: string; range?: string; damage?: string }) => {
     if (isCombatActive && !isMyTurn) {
       toast.warning('Aguarde a sua vez no combate para conjurar magias!');
+      return;
+    }
+
+    if (onStartAttackTargeting && (spell.damage || /raio|fogo|gelo|flecha|ataque|bolt|ray/i.test(spell.name))) {
+      onStartAttackTargeting({
+        name: spell.name,
+        atkBonus: '+5',
+        damage: spell.damage || '1d10',
+        type: 'Mágico',
+        rangeText: spell.range || '120 ft',
+      });
       return;
     }
 

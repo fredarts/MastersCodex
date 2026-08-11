@@ -47,6 +47,7 @@ export const LiveCockpitModalManager: React.FC<LiveCockpitModalManagerProps> = (
     confirmDeleteCombatant,
     setConfirmDeleteCombatant,
     pendingAttack,
+    setPendingAttack,
     magicMissileModalState,
     setMagicMissileModalState,
     selectedTargetId,
@@ -90,7 +91,6 @@ export const LiveCockpitModalManager: React.FC<LiveCockpitModalManagerProps> = (
             if (activeScene) {
               updateScene({ ...activeScene, combatants: next });
             }
-            broadcastToPlayerView({ combatants: next });
             return next;
           });
           toast.success(`${newCombatant.name} adicionado ao combate!`);
@@ -134,7 +134,6 @@ export const LiveCockpitModalManager: React.FC<LiveCockpitModalManagerProps> = (
                   if (activeScene) {
                     updateScene({ ...activeScene, combatants: updatedList });
                   }
-                  broadcastToPlayerView({ combatants: updatedList });
                   if (selectedTargetId === targetId) {
                     setSelectedTargetId(undefined);
                   }
@@ -172,11 +171,12 @@ export const LiveCockpitModalManager: React.FC<LiveCockpitModalManagerProps> = (
               <button
                 onClick={() => {
                   setSelectedTargetId(undefined);
+                  setPendingAttack(null);
                   broadcastToPlayerView({ targetId: undefined });
                 }}
                 className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-colors"
               >
-                Cancelar
+                Cancelar Ataque
               </button>
               <button
                 onClick={() => {

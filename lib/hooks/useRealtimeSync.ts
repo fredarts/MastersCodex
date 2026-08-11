@@ -31,6 +31,7 @@ export interface RealtimeSyncPayloads {
     casterTokenKey?: string | null;
     spellTargetPosition?: { x: number; z: number } | null;
     mapData?: any;
+    targetId?: string | null;
   };
   DICE_ROLL: { rollerName: string; rollType: string; diceFormula: string; result: number; isCrit?: boolean; isFail?: boolean; visibility?: string; isSecret?: boolean; secretMode?: string; details?: any };
   DICE_3D_BURST: { rollerName: string; dieType: 'd20' | 'd12' | 'd10' | 'd8' | 'd6' | 'd4'; result: number; isCrit?: boolean; isFail?: boolean; isHit?: boolean; title: string; isSecret?: boolean; subtleNoticeOnly?: boolean };

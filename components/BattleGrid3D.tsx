@@ -20,6 +20,9 @@ import { InstancedTokenManager } from './battle-3d/InstancedTokenManager';
 import { disposeHierarchy } from '@/lib/3d-asset-manager';
 import { HelpCircle, X } from 'lucide-react';
 import { patchWebGLContext } from '@/lib/webgl-utils';
+import { toast } from 'sonner';
+import { RangedAttackSplineSystem, RangedDistanceBadge } from './battle-3d/RangedAttackSplineMesh';
+import { calculateGridDistanceFeet, evaluateRangeStatus, parseRangeString, RangeStatus } from '@/lib/utils/dndRangeUtils';
 
 const getCombatantDisplayName = (combatant: Combatant, allCombatants: Combatant[]): string => {
   if (combatant.type !== 'monster') return combatant.name;
@@ -187,6 +190,17 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   } = useLiveCockpit();
 
   const pendingAttack = useLiveCockpitStudioStore((state) => state.pendingAttack);
+  const setPendingAttack = useLiveCockpitStudioStore((state) => state.setPendingAttack);
+
+  const splineSystemRef = useRef<RangedAttackSplineSystem | null>(null);
+  const [badgeScreenPos, setBadgeScreenPos] = useState<{ x: number; y: number } | null>(null);
+  const [splineBadgeInfo, setSplineBadgeInfo] = useState<{
+    distanceFt: number;
+    status: RangeStatus;
+    normalRangeM: number;
+    maxRangeM: number;
+    isWeaponWithLongRange: boolean;
+  } | null>(null);
 
 
 
@@ -605,9 +619,11 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     renderDragTrail,
     getCombatantPos,
     pendingAttack,
+    setPendingAttack,
     targetIdState,
     propOnAttackTarget,
     setHoveredTargetId,
+    setSplineBadgeInfo,
   });
 
   useEffect(() => {
@@ -625,9 +641,11 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       renderDragTrail,
       getCombatantPos,
       pendingAttack,
+      setPendingAttack,
       targetIdState,
       propOnAttackTarget,
       setHoveredTargetId,
+      setSplineBadgeInfo,
     };
   });
 
@@ -1048,6 +1066,15 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
       raycaster.setFromCamera(mouse, camera);
 
+      // Clique com o botão direito (button === 2) cancela a mira do ataque
+      if (event.button === 2 && callbacksRef.current.pendingAttack) {
+        callbacksRef.current.setPendingAttack(null);
+        callbacksRef.current.setSplineBadgeInfo(null);
+        if (splineSystemRef.current) splineSystemRef.current.clear();
+        toast.info('Mira de ataque cancelada.');
+        return;
+      }
+
       // Verificação de clique em Sinalizador 3D existente para remoção
       if (pingGroupRef.current) {
         const pingIntersects = raycaster.intersectObjects(pingGroupRef.current.children, true);
@@ -1193,6 +1220,48 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
                   setTargetIdState(undefined);
                   if (onSelT) onSelT(undefined);
                 } else if (currentPending) {
+                  const attackerPos2D = getPos(currentActor.id || currentActor.name);
+                  const targetPos2D = getPos(clicked.id || clicked.name);
+                  const distFt = calculateGridDistanceFeet(attackerPos2D, targetPos2D);
+                  const rInfo = currentPending.rangeInfo || parseRangeString(currentPending.rangeText || currentPending.actionDesc || currentPending.title);
+                  const rStatus = evaluateRangeStatus(distFt, rInfo);
+
+                  if (rStatus === 'OUT_OF_RANGE') {
+                    toast.warning(`Alvo fora do alcance máximo! (${(distFt * 0.3).toFixed(1)}m / ${rInfo.maxRangeM}m)`);
+                    isDraggingRef.current = false;
+                    draggedTokenKeyRef.current = null;
+                    controls.enabled = true;
+                    return;
+                  }
+
+                  if (rStatus === 'LONG_RANGE') {
+                    toast.info(`Disparo em Alcance Longo (${(distFt * 0.3).toFixed(1)}m) — Ataque com Desvantagem!`);
+                  }
+
+                  if (splineSystemRef.current) {
+                    splineSystemRef.current.update({
+                      attackerPos: { x: attackerPos2D.x, y: 0.5, z: attackerPos2D.z },
+                      targetPos: { x: targetPos2D.x, y: 0.5, z: targetPos2D.z },
+                      status: rStatus,
+                      distanceFt: distFt,
+                      animationPhase: 'firing',
+                      onAnimationComplete: () => {
+                        if (splineSystemRef.current) {
+                          splineSystemRef.current.update({
+                            attackerPos: { x: attackerPos2D.x, y: 0.5, z: attackerPos2D.z },
+                            targetPos: { x: targetPos2D.x, y: 0.5, z: targetPos2D.z },
+                            status: rStatus,
+                            distanceFt: distFt,
+                            animationPhase: 'fading',
+                            onAnimationComplete: () => {
+                              callbacksRef.current.setSplineBadgeInfo(null);
+                            }
+                          });
+                        }
+                      }
+                    });
+                  }
+
                   isDraggingRef.current = false;
                   draggedTokenKeyRef.current = null;
                   controls.enabled = true;
@@ -1210,6 +1279,51 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
                 setTargetIdState(undefined);
                 if (onSelT) onSelT(undefined);
               } else if (currentPending) {
+                const currentActor = activeCombatants[turnIdx];
+                if (currentActor) {
+                  const attackerPos2D = getPos(currentActor.id || currentActor.name);
+                  const targetPos2D = getPos(clicked.id || clicked.name);
+                  const distFt = calculateGridDistanceFeet(attackerPos2D, targetPos2D);
+                  const rInfo = currentPending.rangeInfo || parseRangeString(currentPending.rangeText || currentPending.actionDesc || currentPending.title);
+                  const rStatus = evaluateRangeStatus(distFt, rInfo);
+
+                  if (rStatus === 'OUT_OF_RANGE') {
+                    toast.warning(`Alvo fora do alcance máximo! (${(distFt * 0.3).toFixed(1)}m / ${rInfo.maxRangeM}m)`);
+                    isDraggingRef.current = false;
+                    draggedTokenKeyRef.current = null;
+                    controls.enabled = true;
+                    return;
+                  }
+
+                  if (rStatus === 'LONG_RANGE') {
+                    toast.info(`Disparo em Alcance Longo (${(distFt * 0.3).toFixed(1)}m) — Ataque com Desvantagem!`);
+                  }
+
+                  if (splineSystemRef.current) {
+                    splineSystemRef.current.update({
+                      attackerPos: { x: attackerPos2D.x, y: 0.5, z: attackerPos2D.z },
+                      targetPos: { x: targetPos2D.x, y: 0.5, z: targetPos2D.z },
+                      status: rStatus,
+                      distanceFt: distFt,
+                      animationPhase: 'firing',
+                      onAnimationComplete: () => {
+                        if (splineSystemRef.current) {
+                          splineSystemRef.current.update({
+                            attackerPos: { x: attackerPos2D.x, y: 0.5, z: attackerPos2D.z },
+                            targetPos: { x: targetPos2D.x, y: 0.5, z: targetPos2D.z },
+                            status: rStatus,
+                            distanceFt: distFt,
+                            animationPhase: 'fading',
+                            onAnimationComplete: () => {
+                              callbacksRef.current.setSplineBadgeInfo(null);
+                            }
+                          });
+                        }
+                      }
+                    });
+                  }
+                }
+
                 isDraggingRef.current = false;
                 draggedTokenKeyRef.current = null;
                 controls.enabled = true;
@@ -1288,30 +1402,64 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         return;
       }
 
-      // Attack targeting mode: show hover ring over hovered token
+      // Attack targeting mode: show hover ring over hovered token + Ranged Spline Arc
       if (callbacksRef.current.pendingAttack && tokenGroupRef.current && hoverRingRef.current) {
         const ring = hoverRingRef.current;
         if (hoveredTokenId) {
           const hCombatant = callbacksRef.current.combatants.find((c) => c.id === hoveredTokenId);
           // Only highlight enemies (not the active combatant)
-          const activeId = callbacksRef.current.combatants[callbacksRef.current.currentTurnIndex]?.id;
-          if (hCombatant && hCombatant.id !== activeId) {
+          const activeCombatant = callbacksRef.current.combatants[callbacksRef.current.currentTurnIndex];
+          const activeId = activeCombatant?.id;
+
+          if (hCombatant && activeCombatant && hCombatant.id !== activeId) {
             const pos = callbacksRef.current.getCombatantPos(hCombatant.id || hCombatant.name);
             ring.position.x = pos.x;
             ring.position.z = pos.z;
             (ring.material as THREE.MeshBasicMaterial).opacity = 0.75;
             callbacksRef.current.setHoveredTargetId(hCombatant.id);
+
+            // Trajetória Spline Curva (BG3 Style)
+            const attackerPos2D = callbacksRef.current.getCombatantPos(activeId || activeCombatant.name);
+            const targetPos2D = pos;
+            const distFt = calculateGridDistanceFeet(attackerPos2D, targetPos2D);
+            const pendingAtk = callbacksRef.current.pendingAttack;
+            const rInfo = pendingAtk.rangeInfo || parseRangeString(pendingAtk.rangeText || pendingAtk.actionDesc || pendingAtk.title);
+            const rStatus = evaluateRangeStatus(distFt, rInfo);
+
+            if (splineSystemRef.current) {
+              splineSystemRef.current.update({
+                attackerPos: { x: attackerPos2D.x, y: 0.5, z: attackerPos2D.z },
+                targetPos: { x: targetPos2D.x, y: 0.5, z: targetPos2D.z },
+                status: rStatus,
+                distanceFt: distFt,
+                animationPhase: 'aiming',
+              });
+            }
+
+            callbacksRef.current.setSplineBadgeInfo({
+              distanceFt: distFt,
+              status: rStatus,
+              normalRangeM: rInfo.normalRangeM,
+              maxRangeM: rInfo.maxRangeM,
+              isWeaponWithLongRange: rInfo.isWeaponWithLongRange,
+            });
           } else {
             (ring.material as THREE.MeshBasicMaterial).opacity = 0.0;
             callbacksRef.current.setHoveredTargetId(undefined);
+            if (splineSystemRef.current) splineSystemRef.current.clear();
+            callbacksRef.current.setSplineBadgeInfo(null);
           }
         } else {
           (ring.material as THREE.MeshBasicMaterial).opacity = 0.0;
           callbacksRef.current.setHoveredTargetId(undefined);
+          if (splineSystemRef.current) splineSystemRef.current.clear();
+          callbacksRef.current.setSplineBadgeInfo(null);
         }
       } else if (hoverRingRef.current) {
         // Not in attack mode: ensure ring is hidden
         (hoverRingRef.current.material as THREE.MeshBasicMaterial).opacity = 0.0;
+        if (splineSystemRef.current) splineSystemRef.current.clear();
+        callbacksRef.current.setSplineBadgeInfo(null);
       }
 
       if (!isDraggingRef.current || !draggedTokenKeyRef.current) return;
@@ -1502,10 +1650,18 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && activeSpellTargetingRef.current) {
-        setActiveSpellTargeting(null);
-        setCasterTokenKey(null);
-        setSpellTargetPosition(null);
+      if (e.key === 'Escape') {
+        if (callbacksRef.current.pendingAttack) {
+          callbacksRef.current.setPendingAttack(null);
+          callbacksRef.current.setSplineBadgeInfo(null);
+          if (splineSystemRef.current) splineSystemRef.current.clear();
+          toast.info('Mira de ataque cancelada. Mova seu personagem ou escolha outra ação.');
+        }
+        if (activeSpellTargetingRef.current) {
+          setActiveSpellTargeting(null);
+          setCasterTokenKey(null);
+          setSpellTargetPosition(null);
+        }
       }
     };
 
@@ -1514,6 +1670,10 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('keydown', handleKeyDown);
+
+    // Inicializar o RangedAttackSplineSystem na cena 3D
+    const splineSys = new RangedAttackSplineSystem(scene);
+    splineSystemRef.current = splineSys;
 
     // Animation loop
     let animId: number;
@@ -1554,6 +1714,14 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       }
       if (rainSysRef.current) rainSysRef.current.update(delta);
       if (groundFogSysRef.current) groundFogSysRef.current.update(delta);
+
+      // Animar e projetar o Badge de Distância da Trajetória Spline Curva
+      if (splineSystemRef.current) {
+        splineSystemRef.current.animate(delta);
+        const screenPos = splineSystemRef.current.getMidpointScreenPos(camera, container.clientWidth, container.clientHeight);
+        setBadgeScreenPos(screenPos);
+      }
+
       renderer.render(scene, camera);
     };
     animate();
@@ -1601,6 +1769,10 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         hoverRingRef.current.geometry.dispose();
         (hoverRingRef.current.material as THREE.MeshBasicMaterial).dispose();
         hoverRingRef.current = null;
+      }
+      if (splineSystemRef.current) {
+        splineSystemRef.current.destroy(scene);
+        splineSystemRef.current = null;
       }
       renderer.dispose();
       disposeHierarchy(scene);
@@ -1990,6 +2162,42 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
           </div>
         );
       })()}
+
+      {/* Top HUD Banner: Mirando Ataque com Botão Cancelar (ESC) */}
+      {pendingAttack && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 pointer-events-auto animate-in slide-in-from-top-4 fade-in duration-200">
+          <div className="bg-slate-950/95 border border-amber-500/60 shadow-2xl backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 text-slate-100">
+            <span className="text-amber-400 font-bold text-xs flex items-center gap-1.5">
+              <span className="animate-pulse">🎯</span>
+              <span>Mirando: <strong className="text-white">{pendingAttack.title}</strong></span>
+            </span>
+            <button
+              onClick={() => {
+                setPendingAttack(null);
+                setSplineBadgeInfo(null);
+                if (splineSystemRef.current) splineSystemRef.current.clear();
+                toast.info('Mira de ataque cancelada. Você pode se mover ou escolher outra ação.');
+              }}
+              className="bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 border border-rose-500/40 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all flex items-center gap-1 active:scale-95 cursor-pointer shadow-sm"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Cancelar Ataque (ESC)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Ranged Attack Distance Badge HUD */}
+      {pendingAttack && splineBadgeInfo && (
+        <RangedDistanceBadge
+          distanceFt={splineBadgeInfo.distanceFt}
+          status={splineBadgeInfo.status}
+          normalRangeM={splineBadgeInfo.normalRangeM}
+          maxRangeM={splineBadgeInfo.maxRangeM}
+          isWeaponWithLongRange={splineBadgeInfo.isWeaponWithLongRange}
+          screenPos={badgeScreenPos}
+        />
+      )}
 
       {/* Hover Combatant Tooltip Card */}
       {hoveredCombatantId && (() => {

@@ -299,7 +299,7 @@ export const srdService = {
       );
     }
     if (attunementOnly) {
-      results = results.filter((i) => !!i.attunement && i.attunement !== false);
+      results = results.filter((i) => !!i.attunement && i.attunement !== (false as any));
     }
 
     // Secondary: If local search yielded no results and preferRemote wasn't set, try Supabase
