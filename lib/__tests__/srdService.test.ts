@@ -90,7 +90,7 @@ describe('SRD Compendium Service Tests', () => {
 
       vi.spyOn(supabaseModule.supabase, 'from').mockReturnValue(mockQuery as any);
 
-      const results = await srdService.fetchMonsters({ searchQuery: 'Beholder', cr: '13', page: 2, limit: 10 });
+      const results = await srdService.fetchMonsters({ searchQuery: 'Beholder', cr: '13', page: 2, limit: 10, preferRemote: true });
       
       expect(supabaseModule.supabase.from).toHaveBeenCalledWith('srd_monsters');
       expect(mockQuery.textSearch).toHaveBeenCalledWith('fts', 'Beholder');
@@ -117,7 +117,7 @@ describe('SRD Compendium Service Tests', () => {
 
       vi.spyOn(supabaseModule.supabase, 'from').mockReturnValue(mockQuery as any);
 
-      const results = await srdService.fetchSpells({ searchQuery: 'Fireball', level: 3, school: 'Evocation', page: 1, limit: 5 });
+      const results = await srdService.fetchSpells({ searchQuery: 'Fireball', level: 3, school: 'Evocation', page: 1, limit: 5, preferRemote: true });
       
       expect(supabaseModule.supabase.from).toHaveBeenCalledWith('srd_spells');
       expect(mockQuery.textSearch).toHaveBeenCalledWith('fts', 'Fireball');

@@ -290,7 +290,10 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
           setCurrentTurnIndex(0);
           setRoundCount(1);
           setIsCombatActive(true);
-          broadcastToPlayerView({ combatants: sorted });
+          broadcastToPlayerView({ 
+            payload: scene,
+            combatants: sorted 
+          });
           initializeFromCombatants(sorted);
         } else {
           // Same scene: sync token positions/models but DO NOT reset turn order

@@ -68,6 +68,8 @@ interface LiveCockpitContextType {
   broadcastStateRequest: (payload?: { requesterId?: string }) => void;
   drawings: any[];
   broadcastDrawingAction: (payload: any) => void;
+  updateCombatantState: (id: string, update: Partial<Combatant>) => void;
+  selectedTargetId: string | null;
 }
 
 const LiveCockpitContext = createContext<LiveCockpitContextType | undefined>(undefined);
@@ -90,6 +92,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [activeSpellTargeting, setActiveSpellTargetingState] = useState<any>(null);
   const [casterTokenKey, setCasterTokenKeyState] = useState<string | null>(null);
   const [spellTargetPosition, setSpellTargetPositionState] = useState<{ x: number; z: number } | null>(null);
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [activeSheets, setActiveSheets] = useState<ActiveSheetState[]>([]);
   const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -148,6 +151,8 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (payload.activeSpellTargeting !== undefined) setActiveSpellTargetingState(payload.activeSpellTargeting);
     if (payload.casterTokenKey !== undefined) setCasterTokenKeyState(payload.casterTokenKey);
     if (payload.spellTargetPosition !== undefined) setSpellTargetPositionState(payload.spellTargetPosition);
+    if (payload.targetId !== undefined) setSelectedTargetId(payload.targetId);
+    
     if (payload.mapData !== undefined) {
       const data = payload.mapData;
       if (data && data.grid && Array.isArray(data.grid) && data.grid.length > 0) {
@@ -209,7 +214,8 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       sceneData.timeOfDay !== undefined ||
       sceneData.hasFog !== undefined ||
       sceneData.hasRain !== undefined ||
-      sceneData.floorTextureUrl !== undefined
+      sceneData.floorTextureUrl !== undefined ||
+      sceneData.environmentSettings !== undefined
     ) {
       setProjectedScene((prev: any) => {
         if (sceneId === null) return null;
@@ -227,6 +233,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
           hasFog: sceneData.hasFog !== undefined ? sceneData.hasFog : base.hasFog,
           hasRain: sceneData.hasRain !== undefined ? sceneData.hasRain : base.hasRain,
           floorTextureUrl: sceneData.floorTextureUrl !== undefined ? sceneData.floorTextureUrl : base.floorTextureUrl,
+          environmentSettings: sceneData.environmentSettings !== undefined ? sceneData.environmentSettings : base.environmentSettings,
           associatedMapId: sceneData.associatedMapId !== undefined ? sceneData.associatedMapId : base.associatedMapId,
           associatedMapIds: sceneData.associatedMapIds !== undefined ? sceneData.associatedMapIds : base.associatedMapIds,
         };
@@ -391,6 +398,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
           currentTurnIndex,
           roundCount,
           mapData,
+          selectedTargetId,
         });
       }
     },
@@ -403,6 +411,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         if (snapshot.currentTurnIndex !== undefined) setCurrentTurnIndex(snapshot.currentTurnIndex);
         if (snapshot.roundCount !== undefined) setRoundCount(snapshot.roundCount);
         if (snapshot.mapData !== undefined) setMapData(snapshot.mapData);
+        if (snapshot.selectedTargetId !== undefined) setSelectedTargetId(snapshot.selectedTargetId);
       }
     },
   });
@@ -729,6 +738,16 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         broadcastStateRequest,
         drawings,
         broadcastDrawingAction: handleDrawingAction,
+        updateCombatantState: (id: string, update: Partial<Combatant>) => {
+          setCombatants((prev) =>
+            prev.map((c) => (c.id === id ? { ...c, ...update } : c))
+          );
+        },
+        selectedTargetId,
+        setSelectedTargetId: (id: string | null) => {
+          setSelectedTargetId(id);
+          broadcastToPlayerView({ targetId: id });
+        },
       }}
     >
       {children}

@@ -12,6 +12,8 @@ import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
 import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
 import { PlayerTurnBanner } from '@/components/player-view/PlayerTurnBanner';
+import { PlayerCombatTrackerHUD } from '@/components/player-view/PlayerCombatTrackerHUD';
+import { PlayerTokenActionDock } from '@/components/player-view/PlayerTokenActionDock';
 import { SharedGameLog } from '@/components/live-cockpit/SharedGameLog';
 import { LiveChatPanel } from '@/components/live-cockpit/LiveChatPanel';
 import { MacroBarHUD } from '@/components/live-cockpit/MacroBarHUD';
@@ -58,6 +60,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
     roundCount: liveRoundCount,
     broadcastStateRequest,
     drawings,
+    updateCombatantState,
   } = useLiveCockpit();
   const { user } = useAuth();
 
@@ -545,14 +548,39 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
             </div>
           )}
 
-          {/* Botão Flutuante de Abrir Ficha no Canto Inferior */}
-          <button
-            onClick={() => setIsSheetModalOpen(true)}
-            className="absolute bottom-4 right-4 z-20 flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-4 py-2.5 rounded-2xl shadow-2xl border border-amber-300/50 hover:scale-105 active:scale-95 transition-all cursor-pointer"
-          >
-            <FileText className="w-5 h-5" />
-            <span className="text-xs uppercase tracking-wider">Ficha de Personagem</span>
-          </button>
+          {/* Overlay de Ações Rápidas do Jogador */}
+          {(() => {
+            const meCombatant = combatants.find(
+              (c) => c.name.toLowerCase().includes(playerCharName.toLowerCase()) || playerCharName.toLowerCase().includes(c.name.toLowerCase())
+            );
+            return (
+              <div className="absolute bottom-4 left-4 right-4 z-30 pointer-events-auto">
+                <PlayerTokenActionDock
+                  activeSheet={activeSheet}
+                  playerCombatant={meCombatant}
+                  isMyTurn={isMyTurn}
+                  isCombatActive={isCombatMode}
+                  onExecuteRoll={(rollEvent) => {
+                    const fullRoll = {
+                      id: `roll-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                      characterId: activeSheet.id,
+                      characterName: activeSheet.characterName || playerCharName,
+                      avatarUrl: activeSheet.avatarUrl,
+                      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                      ...rollEvent
+                    };
+                    broadcastPlayerRoll(fullRoll as any);
+                  }}
+                  onUpdateCombatantActionState={(update) => {
+                    if (meCombatant && updateCombatantState) {
+                      updateCombatantState(meCombatant.id, update);
+                    }
+                  }}
+                  onOpenFullSheet={() => setIsSheetModalOpen(true)}
+                />
+              </div>
+            );
+          })()}
         </div>
 
         {/* Right Tabbed Panel for Players (Iniciativa & Battle Log) */}

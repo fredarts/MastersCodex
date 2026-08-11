@@ -9,6 +9,7 @@ export interface MonsterQueryFilter {
   type?: string;
   page?: number;
   limit?: number;
+  preferRemote?: boolean;
 }
 
 export interface SpellQueryFilter {
@@ -21,6 +22,7 @@ export interface SpellQueryFilter {
   shape?: string;
   page?: number;
   limit?: number;
+  preferRemote?: boolean;
 }
 
 export interface ItemQueryFilter {
@@ -31,13 +33,15 @@ export interface ItemQueryFilter {
   attunementOnly?: boolean;
   page?: number;
   limit?: number;
+  preferRemote?: boolean;
 }
 
 export const srdService = {
   async fetchMonsters(filter: MonsterQueryFilter = {}): Promise<SRDMonster[]> {
-    const { searchQuery, cr, type, page = 1, limit = 500 } = filter;
+    const { searchQuery, cr, type, page = 1, limit = 500, preferRemote = false } = filter;
 
-    if (isSupabaseConfigured()) {
+    // Supabase explicitly requested
+    if (preferRemote && isSupabaseConfigured()) {
       try {
         let query = supabase.from('srd_monsters').select('*');
 
@@ -64,7 +68,7 @@ export const srdService = {
       }
     }
 
-    // Local Fallback Filter
+    // Primary: Local File Filter (Instant RAM search, 0 network overhead)
     let results = INITIAL_MONSTERS.map((m) => ({
       ...m,
       tokenImageUrl: m.tokenImageUrl || `/assets/2d/Monstros/${m.name}.png`,
@@ -76,13 +80,38 @@ export const srdService = {
     if (cr && cr !== 'all') {
       results = results.filter((m) => m.cr === cr);
     }
-    return results;
+    if (type && type !== 'all') {
+      results = results.filter((m) => m.type.toLowerCase().includes(type.toLowerCase()));
+    }
+
+    // Secondary: If local search yielded no results and preferRemote wasn't set, try Supabase (for custom DB monsters)
+    if (results.length === 0 && !preferRemote && isSupabaseConfigured()) {
+      try {
+        let query = supabase.from('srd_monsters').select('*');
+        if (searchQuery) {
+          query = query.textSearch('fts', searchQuery.trim().replace(/\s+/g, ' | '));
+        }
+        if (cr && cr !== 'all') {
+          query = query.eq('cr', cr);
+        }
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          return data;
+        }
+      } catch (e) {
+        console.warn('Erro na busca secundária de monstros no Supabase:', e);
+      }
+    }
+
+    const from = (page - 1) * limit;
+    return results.slice(from, from + limit);
   },
 
   async fetchSpells(filter: SpellQueryFilter = {}): Promise<SRDSpell[]> {
-    const { searchQuery, level, school, className, concentration, ritual, shape, page = 1, limit = 500 } = filter;
+    const { searchQuery, level, school, className, concentration, ritual, shape, page = 1, limit = 500, preferRemote = false } = filter;
 
-    if (isSupabaseConfigured()) {
+    // Supabase explicitly requested
+    if (preferRemote && isSupabaseConfigured()) {
       try {
         let query = supabase.from('srd_spells').select('*');
 
@@ -132,11 +161,11 @@ export const srdService = {
       }
     }
 
-    // Local Fallback Filter
+    // Primary: Local File Filter (Instant RAM search, 0 network overhead)
     let results = [...INITIAL_SPELLS];
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      results = results.filter((s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q));
+      results = results.filter((s) => s.name.toLowerCase().includes(q) || (s.englishName && s.englishName.toLowerCase().includes(q)) || s.description.toLowerCase().includes(q));
     }
     if (level !== undefined && level !== 'all') {
       results = results.filter((s) => s.level === Number(level));
@@ -156,13 +185,49 @@ export const srdService = {
     if (shape && shape !== 'all') {
       results = results.filter((s) => s.targetArea?.shape === shape);
     }
-    return results;
+
+    // Secondary: If local search yielded no results and preferRemote wasn't set, try Supabase
+    if (results.length === 0 && !preferRemote && isSupabaseConfigured()) {
+      try {
+        let query = supabase.from('srd_spells').select('*');
+        if (searchQuery) {
+          query = query.textSearch('fts', searchQuery.trim().replace(/\s+/g, ' | '));
+        }
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          return data.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            englishName: s.english_name || undefined,
+            level: s.level,
+            school: s.school,
+            castingTime: s.casting_time,
+            range: s.range,
+            components: s.components_detail && Object.keys(s.components_detail).length > 0 ? s.components_detail : s.components,
+            duration: s.duration,
+            concentration: s.concentration || false,
+            ritual: s.ritual || false,
+            targetArea: s.target_area && Object.keys(s.target_area).length > 0 ? s.target_area : undefined,
+            damageSave: s.damage_save && Object.keys(s.damage_save).length > 0 ? s.damage_save : undefined,
+            description: s.description,
+            higherLevels: s.higher_levels || undefined,
+            classes: s.classes || [],
+          }));
+        }
+      } catch (e) {
+        console.warn('Erro na busca secundária de magias no Supabase:', e);
+      }
+    }
+
+    const from = (page - 1) * limit;
+    return results.slice(from, from + limit);
   },
 
   async fetchItems(filter: ItemQueryFilter = {}): Promise<SRDItem[]> {
-    const { searchQuery, rarity, type, category, attunementOnly, page = 1, limit = 500 } = filter;
+    const { searchQuery, rarity, type, category, attunementOnly, page = 1, limit = 500, preferRemote = false } = filter;
 
-    if (isSupabaseConfigured()) {
+    // Supabase explicitly requested
+    if (preferRemote && isSupabaseConfigured()) {
       try {
         let query = supabase.from('srd_items').select('*');
 
@@ -199,7 +264,7 @@ export const srdService = {
       }
     }
 
-    // Local-First Filter (Fast RAM search)
+    // Primary: Local File Filter (Instant RAM search, 0 network overhead)
     let results = [...INITIAL_ITEMS];
 
     if (searchQuery) {
@@ -236,6 +301,34 @@ export const srdService = {
     if (attunementOnly) {
       results = results.filter((i) => !!i.attunement && i.attunement !== false);
     }
-    return results;
+
+    // Secondary: If local search yielded no results and preferRemote wasn't set, try Supabase
+    if (results.length === 0 && !preferRemote && isSupabaseConfigured()) {
+      try {
+        let query = supabase.from('srd_items').select('*');
+        if (searchQuery) {
+          query = query.textSearch('fts', searchQuery.trim().replace(/\s+/g, ' | '));
+        }
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          return data.map((i: any) => ({
+            id: i.id,
+            name: i.name,
+            englishName: i.english_name || i.englishName,
+            type: i.type,
+            category: i.category,
+            rarity: i.rarity,
+            attunement: i.attunement,
+            description: i.description,
+            value: i.value,
+          }));
+        }
+      } catch (e) {
+        console.warn('Erro na busca secundária de itens no Supabase:', e);
+      }
+    }
+
+    const from = (page - 1) * limit;
+    return results.slice(from, from + limit);
   },
 };

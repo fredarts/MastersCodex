@@ -150,14 +150,20 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 600;
 
-    const renderer = new THREE.WebGLRenderer({
-      canvas,
-      antialias: true,
-      alpha: true,
-      depth: false,
-      stencil: false,
-      powerPreference: 'high-performance',
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        alpha: true,
+        depth: false,
+        stencil: false,
+        powerPreference: 'high-performance',
+      });
+    } catch (e) {
+      console.warn("MagicShaderSlideshow: WebGL context creation failed.", e);
+      return;
+    }
     patchWebGLContext(renderer);
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
