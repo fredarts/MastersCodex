@@ -102,6 +102,26 @@ function getMonsterHabitats(monster: SRDMonster): string[] {
   return ['Masmorras Antigas', 'Ruínas Esquecidas', 'Cavernas Profundas'];
 }
 
+function getItemRarityBadgeStyle(rarity: string): { bg: string; text: string; border: string } {
+  const r = rarity.toLowerCase();
+  if (r.includes('incomum')) {
+    return { bg: 'bg-emerald-500/15', text: 'text-emerald-300', border: 'border-emerald-500/40' };
+  }
+  if (r.includes('rara') || r.includes('raro')) {
+    return { bg: 'bg-sky-500/15', text: 'text-sky-300', border: 'border-sky-500/40' };
+  }
+  if (r.includes('muito rara') || r.includes('muito raro')) {
+    return { bg: 'bg-purple-500/15', text: 'text-purple-300', border: 'border-purple-500/40' };
+  }
+  if (r.includes('lendária') || r.includes('lendário')) {
+    return { bg: 'bg-amber-500/20', text: 'text-amber-300', border: 'border-amber-500/50' };
+  }
+  if (r.includes('artefato')) {
+    return { bg: 'bg-rose-500/20', text: 'text-rose-300', border: 'border-rose-500/50' };
+  }
+  return { bg: 'bg-slate-500/15', text: 'text-slate-300', border: 'border-slate-500/30' };
+}
+
 export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false, onClose }) => {
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'monsters' | 'spells' | 'items'>('monsters');
@@ -123,6 +143,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
   // Item Filters State
   const [itemRarityFilter, setItemRarityFilter] = useState<string>('all');
   const [itemTypeFilter, setItemTypeFilter] = useState<string>('all');
+  const [itemAttunementOnly, setItemAttunementOnly] = useState<boolean>(false);
 
   const [monsters, setMonsters] = useState<SRDMonster[]>(INITIAL_MONSTERS);
   const [spells, setSpells] = useState<SRDSpell[]>(INITIAL_SPELLS);
@@ -265,17 +286,24 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
     const matchesQuery =
       !q ||
       i.name.toLowerCase().includes(q) ||
+      (i.englishName && i.englishName.toLowerCase().includes(q)) ||
       i.rarity.toLowerCase().includes(q) ||
       i.type.toLowerCase().includes(q) ||
+      (i.category && i.category.toLowerCase().includes(q)) ||
       i.description.toLowerCase().includes(q);
 
     const matchesRarity =
       itemRarityFilter === 'all' || i.rarity.toLowerCase().includes(itemRarityFilter.toLowerCase());
 
     const matchesType =
-      itemTypeFilter === 'all' || i.type.toLowerCase().includes(itemTypeFilter.toLowerCase());
+      itemTypeFilter === 'all' ||
+      i.type.toLowerCase().includes(itemTypeFilter.toLowerCase()) ||
+      (i.category && i.category.toLowerCase().includes(itemTypeFilter.toLowerCase()));
 
-    return matchesQuery && matchesRarity && matchesType;
+    const matchesAttunement =
+      !itemAttunementOnly || (!!i.attunement && i.attunement !== false);
+
+    return matchesQuery && matchesRarity && matchesType && matchesAttunement;
   });
 
   const hasActiveMonsterFilters =
@@ -294,7 +322,8 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
     spellShapeFilter !== 'all' ||
     query !== '';
 
-  const hasActiveItemFilters = itemRarityFilter !== 'all' || itemTypeFilter !== 'all' || query !== '';
+  const hasActiveItemFilters =
+    itemRarityFilter !== 'all' || itemTypeFilter !== 'all' || itemAttunementOnly || query !== '';
 
   const clearMonsterFilters = () => {
     setQuery('');
@@ -318,6 +347,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
     setQuery('');
     setItemRarityFilter('all');
     setItemTypeFilter('all');
+    setItemAttunementOnly(false);
   };
 
   return (
@@ -620,7 +650,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
           <div className="flex flex-wrap items-center gap-2 pt-2 bg-[#0a0d14]/40 p-2.5 rounded-xl border border-[#2a3449]/50 text-xs">
             <div className="flex items-center gap-1.5 text-amber-400 font-semibold mr-1">
               <Filter className="w-3.5 h-3.5" />
-              <span className="text-[11px] uppercase tracking-wider">Filtros de Itens:</span>
+              <span className="text-[11px] uppercase tracking-wider">Filtros de Itens Mágicos:</span>
             </div>
 
             <select
@@ -631,9 +661,9 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
               <option value="all">Raridade (Todas)</option>
               <option value="Comum">Comum</option>
               <option value="Incomum">Incomum</option>
-              <option value="Raro">Rara</option>
-              <option value="Muito Raro">Muito Rara</option>
-              <option value="Lendário">Lendária</option>
+              <option value="Rara">Rara</option>
+              <option value="Muito Rara">Muito Rara</option>
+              <option value="Lendária">Lendária</option>
               <option value="Artefato">Artefato</option>
             </select>
 
@@ -642,16 +672,29 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
               onChange={(e) => setItemTypeFilter(e.target.value)}
               className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium"
             >
-              <option value="all">Tipo (Todos)</option>
-              <option value="Arma">Arma</option>
-              <option value="Armadura">Armadura</option>
-              <option value="Poção">Poção</option>
-              <option value="Anel">Anel</option>
-              <option value="Varinha">Varinha</option>
-              <option value="Cajado">Cajado</option>
-              <option value="Pergaminho">Pergaminho</option>
+              <option value="all">Categoria / Tipo (Todos)</option>
+              <option value="Arma">Arma Mágica</option>
+              <option value="Armadura">Armadura / Escudo</option>
+              <option value="Poção">Poção / Óleo</option>
+              <option value="Anel">Anel Mágico</option>
+              <option value="Varinha">Varinha Mágica</option>
+              <option value="Cajado">Cajado Mágico</option>
+              <option value="Bastão">Bastão Mágico</option>
               <option value="Maravilhoso">Item Maravilhoso</option>
             </select>
+
+            <button
+              type="button"
+              onClick={() => setItemAttunementOnly(!itemAttunementOnly)}
+              className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                itemAttunementOnly
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow'
+                  : 'bg-[#161c28] text-slate-400 border-[#2a3449] hover:text-slate-200'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              <span>Requer Sintonização</span>
+            </button>
 
             {hasActiveItemFilters && (
               <button
@@ -743,23 +786,35 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
 
           {activeTab === 'items' &&
             (filteredItems.length > 0 ? (
-              filteredItems.map((i) => (
-                <button
-                  key={i.id || i.name}
-                  onClick={() => setSelectedItem(i)}
-                  className={`w-full text-left p-3 rounded-xl border text-xs transition-all ${
-                    selectedItem?.name === i.name
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold shadow-md'
-                      : 'bg-[#161c28] text-slate-300 border-[#2a3449] hover:bg-[#1f2738] hover:border-slate-600'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="truncate pr-2 font-medium">{i.name}</span>
-                    <span className="text-[10px] font-mono text-amber-400 shrink-0">{i.rarity}</span>
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-1">{i.type}</div>
-                </button>
-              ))
+              filteredItems.map((i) => {
+                const rarityBadge = getItemRarityBadgeStyle(i.rarity);
+                return (
+                  <button
+                    key={i.id || i.name}
+                    onClick={() => setSelectedItem(i)}
+                    className={`w-full text-left p-3 rounded-xl border text-xs transition-all ${
+                      selectedItem?.name === i.name
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold shadow-md'
+                        : 'bg-[#161c28] text-slate-300 border-[#2a3449] hover:bg-[#1f2738] hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="truncate pr-2 font-medium">{i.name}</span>
+                      <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${rarityBadge.bg} ${rarityBadge.text} ${rarityBadge.border}`}>
+                        {i.rarity}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
+                      <span>{i.type}</span>
+                      {i.attunement && i.attunement !== false && (
+                        <span className="text-[9px] text-amber-400 font-semibold flex items-center gap-0.5">
+                          <Zap className="w-2.5 h-2.5" /> Sintonização
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })
             ) : (
               <div className="p-8 text-center text-slate-400 text-xs space-y-2">
                 <FilterX className="w-8 h-8 mx-auto opacity-30 text-amber-400" />
@@ -1368,15 +1423,82 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
 
           {activeTab === 'items' && selectedItem && (
             <div className="space-y-5">
-              <div className="border-b border-[#2a3449] pb-4">
-                <h2 className="text-2xl font-bold text-slate-100 font-serif">{selectedItem.name}</h2>
-                <p className="text-xs text-amber-400 font-semibold mt-1">
-                  {selectedItem.type} • Raridade: {selectedItem.rarity}
-                </p>
+              {/* Header Banner */}
+              <div className="border-b border-[#2a3449] pb-5 flex flex-wrap items-start justify-between gap-4 bg-gradient-to-r from-[#0f141d] to-transparent p-4 rounded-2xl border border-[#2a3449]/80 shadow-md">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-3xl font-extrabold text-amber-100 font-serif tracking-wide">
+                      {selectedItem.name}
+                    </h2>
+                    {selectedItem.englishName && (
+                      <span className="text-xs text-slate-400 font-sans italic">
+                        ({selectedItem.englishName})
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300 font-medium">
+                    <span>{selectedItem.type}</span>
+                    <span>•</span>
+                    {(() => {
+                      const badge = getItemRarityBadgeStyle(selectedItem.rarity);
+                      return (
+                        <span className={`px-2 py-0.5 text-[11px] font-semibold rounded border ${badge.bg} ${badge.text} ${badge.border}`}>
+                          Raridade: {selectedItem.rarity}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      toast.success(`Item "${selectedItem.name}" adicionado ao inventário do grupo!`);
+                    }}
+                    className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Package className="w-4 h-4 text-slate-950" />
+                    <span>Adicionar ao Inventário</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="bg-[#0a0d14] p-5 rounded-2xl border border-[#2a3449] space-y-2">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Descrição:</h4>
+              {/* Status Badges Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                {selectedItem.attunement && selectedItem.attunement !== false && (
+                  <div className="bg-amber-500/10 p-3 rounded-xl border border-amber-500/30 flex items-center gap-2.5">
+                    <Zap className="w-5 h-5 text-amber-400 shrink-0" />
+                    <div>
+                      <span className="text-[10px] text-amber-400/80 uppercase block font-semibold">Sintonização</span>
+                      <span className="font-bold text-amber-200 text-xs">
+                        {typeof selectedItem.attunement === 'string' ? selectedItem.attunement : 'Requer Sintonização'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {selectedItem.value && (
+                  <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449] flex items-center gap-2.5">
+                    <Sparkles className="w-5 h-5 text-amber-300 shrink-0" />
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase block font-semibold">Valor Estimado</span>
+                      <span className="font-bold text-amber-300 font-mono text-xs">{selectedItem.value}</span>
+                    </div>
+                  </div>
+                )}
+                {selectedItem.weight && (
+                  <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449] flex items-center gap-2.5">
+                    <Package className="w-5 h-5 text-slate-400 shrink-0" />
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase block font-semibold">Peso do Item</span>
+                      <span className="font-bold text-slate-200 font-mono text-xs">{selectedItem.weight} kg</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Main Item Description */}
+              <div className="bg-[#0a0d14] p-5 rounded-2xl border border-[#2a3449] space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Propriedades & Efeito Mágico:</h4>
                 <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap font-serif">
                   {selectedItem.description}
                 </p>

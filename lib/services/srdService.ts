@@ -27,6 +27,8 @@ export interface ItemQueryFilter {
   searchQuery?: string;
   rarity?: string;
   type?: string;
+  category?: string;
+  attunementOnly?: boolean;
   page?: number;
   limit?: number;
 }
@@ -158,7 +160,7 @@ export const srdService = {
   },
 
   async fetchItems(filter: ItemQueryFilter = {}): Promise<SRDItem[]> {
-    const { searchQuery, rarity, type, page = 1, limit = 500 } = filter;
+    const { searchQuery, rarity, type, category, attunementOnly, page = 1, limit = 500 } = filter;
 
     if (isSupabaseConfigured()) {
       try {
@@ -183,8 +185,11 @@ export const srdService = {
           return data.map((i: any) => ({
             id: i.id,
             name: i.name,
+            englishName: i.english_name || i.englishName,
             type: i.type,
+            category: i.category,
             rarity: i.rarity,
+            attunement: i.attunement,
             description: i.description,
             value: i.value,
           }));
@@ -194,14 +199,42 @@ export const srdService = {
       }
     }
 
-    // Local Fallback Filter
+    // Local-First Filter (Fast RAM search)
     let results = [...INITIAL_ITEMS];
+
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      results = results.filter((i) => i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
+      results = results.filter(
+        (i) =>
+          i.name.toLowerCase().includes(q) ||
+          (i.englishName && i.englishName.toLowerCase().includes(q)) ||
+          i.type.toLowerCase().includes(q) ||
+          (i.category && i.category.toLowerCase().includes(q)) ||
+          i.description.toLowerCase().includes(q)
+      );
     }
     if (rarity && rarity !== 'all') {
-      results = results.filter((i) => i.rarity.toLowerCase() === rarity.toLowerCase());
+      const targetRarity = rarity.trim().toLowerCase();
+      results = results.filter((i) => {
+        const itemRarity = i.rarity.trim().toLowerCase();
+        if (targetRarity === 'rara' || targetRarity === 'raro') {
+          return itemRarity === 'rara' || itemRarity === 'raro';
+        }
+        return itemRarity === targetRarity;
+      });
+    }
+    if (type && type !== 'all') {
+      results = results.filter((i) => i.type.toLowerCase().includes(type.toLowerCase()));
+    }
+    if (category && category !== 'all') {
+      results = results.filter(
+        (i) =>
+          (i.category && i.category.toLowerCase() === category.toLowerCase()) ||
+          i.type.toLowerCase().includes(category.toLowerCase())
+      );
+    }
+    if (attunementOnly) {
+      results = results.filter((i) => !!i.attunement && i.attunement !== false);
     }
     return results;
   },

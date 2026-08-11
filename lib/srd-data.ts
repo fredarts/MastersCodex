@@ -1,5 +1,6 @@
 import { SRDMonster, SRDSpell, SRDItem, Encounter, LoreNode, BGMTrack, SFXButton, ConditionType } from './types';
 import { ALL_SRD_SPELLS } from './srd-spells-data';
+import { ALL_SRD_ITEMS } from './srd-items-data';
 
 export const CONDITIONS: ConditionType[] = [
   'Cego',
@@ -4000,51 +4001,7 @@ export const INITIAL_MONSTERS: SRDMonster[] = [
 
 export const INITIAL_SPELLS: SRDSpell[] = ALL_SRD_SPELLS;
 
-export const INITIAL_ITEMS: SRDItem[] = [
-  {
-    id: 'bag-of-holding',
-    name: 'Mochila de Carga (Bag of Holding)',
-    type: 'Item Mágico (Maravilhoso)',
-    rarity: 'Incomum',
-    description: 'Esta mochila tem um espaço interior consideravelmente maior que suas dimensões externas. Ela pode conter até 250 kg.'
-  },
-  {
-    id: 'flame-tongue',
-    name: 'Língua de Fogo (Flame Tongue)',
-    type: 'Arma Mágica (Espada)',
-    rarity: 'Rara',
-    description: 'Você pode usar uma ação bônus para falar a palavra de comando, fazendo com que chamas brotem da lâmina. Causa 2d6 de dano de fogo adicional.'
-  },
-  {
-    id: 'potion-of-healing',
-    name: 'Poção de Cura',
-    type: 'Consumível',
-    rarity: 'Comum',
-    description: 'Você recupera 2d4 + 2 pontos de vida ao beber esta poção vermelha borbulhante.',
-    value: '50 PO'
-  },
-  {
-    id: 'ring-of-protection',
-    name: 'Anel de Proteção',
-    type: 'Anel Mágico',
-    rarity: 'Raro',
-    description: 'Você ganha +1 de bônus na Classe de Armadura e nos testes de resistência enquanto usar este anel.'
-  },
-  {
-    id: 'wand-of-magic-missiles',
-    name: 'Varinha de Mísseis Mágicos',
-    type: 'Varinha Mágica',
-    rarity: 'Incomum',
-    description: 'Esta varinha tem 7 cargas. Enquanto a segurar, você pode usar uma ação para gastar 1 ou mais cargas para conjurar Mísseis Mágicos.'
-  },
-  {
-    id: 'cloak-of-displacement',
-    name: 'Capa do Deslocamento',
-    type: 'Item Mágico (Vestuário)',
-    rarity: 'Rara',
-    description: 'Enquanto usar esta capa, ela projeta uma ilusão de você ao seu lado, fazendo com que ataques contra você tenham Desvantagem.'
-  }
-];
+export const INITIAL_ITEMS: SRDItem[] = ALL_SRD_ITEMS;
 
 export const INITIAL_ENCOUNTERS: Encounter[] = [
   {

@@ -509,10 +509,15 @@ export interface SRDSpell {
 export interface SRDItem {
   id: string;
   name: string;
+  englishName?: string;
   type: string;
+  category?: string;
   rarity: string;
+  attunement?: string | boolean;
   description: string;
   value?: string;
+  weight?: number;
+  properties?: Record<string, any>;
 }
 
 export interface Encounter {
