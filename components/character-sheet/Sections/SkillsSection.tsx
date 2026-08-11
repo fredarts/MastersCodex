@@ -60,7 +60,7 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
     const maxRace = raceData?.skillChoices || 0;
     const raceFixed = raceData?.fixedSkills || [];
     
-    let remainingToValidate = [...proposedSkills];
+    const remainingToValidate = [...proposedSkills];
     
     // 1. Remove race fixed skills
     raceFixed.forEach(fk => {
@@ -186,101 +186,115 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
   });
 
   return (
-    <div className="space-y-6 pb-20 animate-fade-in select-none">
-      {/* CABEÇALHO DE BÔNUS DE PROFICIÊNCIA E SABEDORIA PASSIVA */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* BÔNUS DE PROFICIÊNCIA */}
-        <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-3 flex items-center gap-3 shadow-lg">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
-            <Award className="w-5 h-5 text-amber-400" />
+    <div className="space-y-6 pb-20 lg:pb-0 animate-fade-in select-none lg:grid lg:grid-cols-2 lg:gap-4 lg:h-full lg:overflow-hidden lg:min-h-0">
+      
+      {/* COLUNA ESQUERDA: PROFICIÊNCIAS E RESISTÊNCIAS */}
+      <div className="space-y-4 lg:overflow-y-auto lg:h-full lg:pr-2 bg3-scrollbar lg:pb-6">
+        {/* CABEÇALHO DE BÔNUS DE PROFICIÊNCIA E SABEDORIA PASSIVA */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* BÔNUS DE PROFICIÊNCIA */}
+          <div className="bg3-panel rounded-2xl p-3 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
+              <Award className="w-5 h-5 text-amber-400" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block font-serif">Proficiência</span>
+              <span className="text-xl font-black text-amber-400 font-mono">{formatModifier(profBonus)}</span>
+            </div>
           </div>
-          <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase block">Proficiência</span>
-            <span className="text-xl font-black text-amber-400 font-mono">{formatModifier(profBonus)}</span>
+
+          {/* SABEDORIA PASSIVA */}
+          <div className="bg3-panel rounded-2xl p-3 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
+              <Eye className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block font-serif">Sabedoria Passiva</span>
+              <span className="text-xl font-black text-emerald-400 font-mono">{passivePerception}</span>
+            </div>
           </div>
         </div>
 
-        {/* SABEDORIA PASSIVA */}
-        <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-3 flex items-center gap-3 shadow-lg">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
-            <Eye className="w-5 h-5 text-emerald-400" />
+        {/* TESTES DE RESISTÊNCIA (SALVAGUARDAS) */}
+        <div className="bg3-panel rounded-2xl p-4 space-y-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center justify-between font-serif border-b border-amber-500/10 pb-2">
+            <span className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-400" />
+              Testes de Resistência (Salvaguardas)
+            </span>
+          </h3>
+
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.keys(ATTR_NAMES) as AttributeKey[]).map((attrKey) => {
+              const isProficient = sheet.savingThrows[attrKey];
+              const total = calculateSavingThrowTotal(sheet, attrKey);
+
+              return (
+                <div
+                  key={attrKey}
+                  className={`flex items-center justify-between p-2 rounded-xl border transition-all ${
+                    isProficient
+                      ? 'bg-amber-500/15 border-amber-500/50 shadow-sm'
+                      : 'bg-[#0b0f19] border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleSavingThrowToggle(attrKey)}
+                    className="flex items-center gap-2 cursor-pointer flex-1 text-left focus:outline-none"
+                    title="Alternar Proficiência"
+                  >
+                    <div
+                      className={`w-3.5 h-3.5 rounded-full border ${
+                        isProficient ? 'bg-amber-400 border-amber-300' : 'border-slate-600 bg-slate-900'
+                      }`}
+                    />
+                    <span className="text-xs font-bold text-slate-200">{ATTR_NAMES[attrKey]}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => handleRollSavingThrow(attrKey, e)}
+                    className="flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-lg text-xs font-black font-mono transition-transform active:scale-95 cursor-pointer"
+                    title="Rolar Salvaguarda d20"
+                  >
+                    <Dices className="w-3 h-3" />
+                    {formatModifier(total)}
+                  </button>
+                </div>
+              );
+            })}
           </div>
-          <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase block">Sabedoria Passiva</span>
-            <span className="text-xl font-black text-emerald-400 font-mono">{passivePerception}</span>
-          </div>
+        </div>
+
+        {/* IDIOMAS E OUTRAS PROFICIÊNCIAS */}
+        <div className="bg3-panel rounded-2xl p-4 space-y-2">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2 font-serif border-b border-amber-500/10 pb-2">
+            🌐 Idiomas & Proficiências Diversas
+          </h3>
+          <textarea
+            rows={4}
+            value={sheet.otherProficienciesAndLanguages || ''}
+            onChange={(e) => onChange({ ...sheet, otherProficienciesAndLanguages: e.target.value })}
+            placeholder="Ex: Idiomas: Comum, Élfico. Proficiências: Armaduras Leves, Ferramentas de Ladino."
+            className="w-full bg-[#0b0f19]/80 border border-slate-700/80 rounded-xl p-3 text-xs text-slate-250 focus:outline-none focus:border-amber-500 leading-relaxed font-serif"
+          />
         </div>
       </div>
 
-      {/* TESTES DE RESISTÊNCIA (SALVAGUARDAS) */}
-      <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-amber-400" />
-            Testes de Resistência (Salvaguardas)
-          </span>
-          <span className="text-[10px] text-slate-400 font-normal">Toque no mod para rolar d20</span>
-        </h3>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {(Object.keys(ATTR_NAMES) as AttributeKey[]).map((attrKey) => {
-            const isProficient = sheet.savingThrows[attrKey];
-            const total = calculateSavingThrowTotal(sheet, attrKey);
-
-            return (
-              <div
-                key={attrKey}
-                className={`flex items-center justify-between p-2 rounded-xl border transition-all ${
-                  isProficient
-                    ? 'bg-amber-500/15 border-amber-500/50 shadow-sm'
-                    : 'bg-[#0b0f19] border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => handleSavingThrowToggle(attrKey)}
-                  className="flex items-center gap-2 cursor-pointer flex-1 text-left"
-                  title="Alternar Proficiência"
-                >
-                  <div
-                    className={`w-3.5 h-3.5 rounded-full border ${
-                      isProficient ? 'bg-amber-400 border-amber-300' : 'border-slate-600 bg-slate-900'
-                    }`}
-                  />
-                  <span className="text-xs font-bold text-slate-200">{ATTR_NAMES[attrKey]}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={(e) => handleRollSavingThrow(attrKey, e)}
-                  className="flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-lg text-xs font-black font-mono transition-transform active:scale-95 cursor-pointer"
-                  title="Rolar Salvaguarda d20"
-                >
-                  <Dices className="w-3 h-3" />
-                  {formatModifier(total)}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 18 PERÍCIAS D&D 5E */}
-      <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-3">
-        <div className="flex flex-col gap-1">
+      {/* COLUNA DIREITA: PERÍCIAS */}
+      <div className="bg3-panel rounded-2xl p-4 flex flex-col lg:h-full lg:min-h-0 h-[500px]">
+        <div className="flex flex-col gap-1 border-b border-amber-500/10 pb-2 mb-2 shrink-0">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2 font-serif">
               <Target className="w-4 h-4 text-amber-400" />
               Perícias ({selectedSkills.length} / {maxAllowedSkills})
             </h3>
             <div className="flex items-center gap-2">
-              {!isLocked && (
-                <span className="text-[10px] text-slate-400 hidden sm:inline">Toque na bolinha p/ nivel</span>
-              )}
               <button
                 type="button"
                 onClick={() => onChange({ ...sheet, skillsLocked: !isLocked })}
-                className={`flex items-center justify-center w-6 h-6 rounded-lg transition-colors ${
+                className={`flex items-center justify-center w-6 h-6 rounded-lg transition-colors cursor-pointer ${
                   isLocked ? 'bg-red-500/20 text-red-400' : 'bg-slate-800 text-slate-400 hover:text-white'
                 }`}
                 title={isLocked ? "Destravar Perícias" : "Travar Perícias"}
@@ -294,10 +308,10 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
               Classe: {usedClass}/{maxClass}
             </span>
             <span className={usedWildcard === (maxBackground + maxRace) ? "text-slate-300" : "text-slate-500"}>
-              Livres (Antecedente): {usedWildcard}/{maxBackground + maxRace}
+              Livres: {usedWildcard}/{maxBackground + maxRace}
             </span>
             {raceFixed.length > 0 && (
-              <span className={usedRaceFixed === raceFixed.length ? "text-purple-400" : "text-purple-400/60"}>
+              <span className={usedRaceFixed === raceFixed.length ? "text-cyan-400" : "text-cyan-400/60"}>
                 Raça: {usedRaceFixed}/{raceFixed.length}
               </span>
             )}
@@ -305,12 +319,12 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
         </div>
 
         {getClassLevel(sheet, 'Patrulheiro') > 0 && (
-          <div className="flex items-center justify-between bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-3 mb-2 animate-fade-in">
+          <div className="flex items-center justify-between bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-2.5 mb-2 animate-fade-in shrink-0">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
               <div>
-                <span className="text-[11px] font-bold text-emerald-400 block uppercase leading-tight">Inimigo / Terreno Favorito</span>
-                <span className="text-[9px] text-slate-400 block leading-tight">Concede vantagem em testes aplicáveis de Inteligência e Sabedoria.</span>
+                <span className="text-[10px] font-bold text-emerald-400 block uppercase leading-tight font-serif">Inimigo / Terreno Favorito</span>
+                <span className="text-[8px] text-slate-400 block leading-tight">Vantagem em Inteligência e Sabedoria aplicáveis.</span>
               </div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
@@ -320,12 +334,12 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
                 onChange={(e) => setFavoredContext(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500 peer-checked:after:bg-white peer-checked:after:border-white"></div>
+              <div className="w-8 h-4.5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-500 peer-checked:after:bg-white peer-checked:after:border-white"></div>
             </label>
           </div>
         )}
 
-        <div className="space-y-1.5">
+        <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 bg3-scrollbar">
           {(Object.keys(SKILL_DEFINITIONS) as DndSkillKey[]).map((skillKey) => {
             const def = SKILL_DEFINITIONS[skillKey];
             const level: SkillProficiencyLevel = sheet.skills[skillKey] || 'none';
@@ -339,7 +353,7 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
                     ? 'bg-emerald-950/40 border-emerald-500/50 shadow-sm'
                     : level === 'proficient'
                     ? 'bg-amber-950/40 border-amber-500/40'
-                    : 'bg-[#0b0f19] border-slate-800/80 hover:border-slate-700'
+                    : 'bg-[#0b0f19] border-slate-800/85 hover:border-slate-700'
                 }`}
               >
                 <div
@@ -359,10 +373,10 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
                     {level === 'expertise' ? 'E' : level === 'proficient' ? 'P' : ''}
                   </div>
                   <div>
-                    <span className="text-xs font-bold text-slate-200 block leading-tight flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-200 block leading-tight flex items-center gap-1.5 font-serif">
                       {def.name}
                       {raceData?.fixedSkills?.includes(skillKey as DndSkillKey) && (
-                        <span className="text-[8px] bg-purple-500/20 text-purple-300 px-1 rounded uppercase tracking-wider border border-purple-500/30">Raça</span>
+                        <span className="text-[8px] bg-cyan-500/20 text-cyan-300 px-1 rounded uppercase tracking-wider border border-cyan-500/30">Raça</span>
                       )}
                       {(!raceData?.fixedSkills?.includes(skillKey as DndSkillKey) && (classData?.skillOptions === 'all' || classData?.skillOptions?.includes(skillKey as DndSkillKey))) && (
                         <span className="text-[8px] bg-amber-500/20 text-amber-300 px-1 rounded uppercase tracking-wider border border-amber-500/30">Classe</span>
@@ -377,7 +391,7 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
                 <button
                   type="button"
                   onClick={(e) => handleRollSkill(skillKey, e)}
-                  className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 hover:border-amber-500/60 px-2.5 py-1 rounded-xl text-xs font-black font-mono transition-all active:scale-95 cursor-pointer shadow-sm"
+                  className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 hover:border-amber-500/60 px-2.5 py-1 rounded-xl text-xs font-black font-mono transition-all active:scale-95 cursor-pointer shadow-sm font-serif"
                   title="Rolar Perícia no Chat"
                 >
                   <Dices className="w-3.5 h-3.5 text-amber-400" />
@@ -387,20 +401,6 @@ export const SkillsSection: React.FC<SkillsSectionProps> = ({
             );
           })}
         </div>
-      </div>
-
-      {/* IDIOMAS E OUTRAS PROFICIÊNCIAS */}
-      <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-2">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-          🌐 Idiomas e Outras Proficiências
-        </h3>
-        <textarea
-          rows={4}
-          value={sheet.otherProficienciesAndLanguages || ''}
-          onChange={(e) => onChange({ ...sheet, otherProficienciesAndLanguages: e.target.value })}
-          placeholder="Ex: Idiomas: Comum, Élfico. Proficiências: Armaduras Leves, Ferramentas de Ladino."
-          className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl p-3 text-xs text-slate-200 focus:outline-none focus:border-amber-500 leading-relaxed"
-        />
       </div>
     </div>
   );

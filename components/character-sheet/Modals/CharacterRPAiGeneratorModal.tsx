@@ -76,16 +76,16 @@ export const CharacterRPAiGeneratorModal: React.FC<CharacterRPAiGeneratorModalPr
 
   return (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 z-[110] animate-fade-in select-none">
-      <div className="bg-[#121722] border-2 border-purple-500/50 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col">
+      <div className="bg-[#0f0e0d] border border-amber-500/40 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#1b1933] to-[#121722] px-6 py-4 border-b border-[#2a3449] flex items-center justify-between">
+        <div className="bg-gradient-to-r from-[#1c140d] to-[#121722] px-6 py-4 border-b border-[#2a3449] flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400">
-              <Wand2 className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <Wand2 className="w-5 h-5 text-amber-450" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-100 mt-0.5">Criador de Lore com IA</h3>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-purple-400 font-mono">
+              <h3 className="text-lg font-bold text-slate-100 mt-0.5 font-serif">Criador de Lore com IA</h3>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-amber-400 font-mono">
                 {sheet.characterName || 'Aventureiro Sem Nome'}
               </p>
             </div>
@@ -93,7 +93,7 @@ export const CharacterRPAiGeneratorModal: React.FC<CharacterRPAiGeneratorModalPr
           <button
             onClick={onClose}
             disabled={isGenerating}
-            className="p-2 text-slate-400 hover:text-slate-100 hover:bg-[#2a3449] rounded-xl transition-colors disabled:opacity-50"
+            className="p-2 text-slate-400 hover:text-slate-100 hover:bg-[#2a3449] rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -121,7 +121,7 @@ export const CharacterRPAiGeneratorModal: React.FC<CharacterRPAiGeneratorModalPr
             }}
             disabled={isGenerating}
             placeholder="Ex: Quero um elfo ranger renegado que perdeu o olho esquerdo. Ele é muito cínico e tem medo de aranhas..."
-            className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-purple-500 rounded-xl p-4 text-sm text-slate-200 focus:outline-none transition-all resize-none shadow-inner leading-relaxed disabled:opacity-50"
+            className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-4 text-sm text-slate-200 focus:outline-none transition-all resize-none shadow-inner leading-relaxed disabled:opacity-50 font-serif"
           />
         </div>
 
@@ -131,7 +131,7 @@ export const CharacterRPAiGeneratorModal: React.FC<CharacterRPAiGeneratorModalPr
             type="button"
             onClick={onClose}
             disabled={isGenerating}
-            className="px-5 py-2.5 bg-[#161c28] hover:bg-[#1f2738] text-slate-300 text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+            className="px-5 py-2.5 bg-[#161c28] hover:bg-[#1f2738] text-slate-350 text-xs font-bold rounded-xl transition-all disabled:opacity-50 cursor-pointer font-serif"
           >
             Cancelar
           </button>
@@ -139,7 +139,7 @@ export const CharacterRPAiGeneratorModal: React.FC<CharacterRPAiGeneratorModalPr
             type="button"
             onClick={handleGenerate}
             disabled={isGenerating}
-            className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-slate-100 font-bold text-xs rounded-xl shadow-lg shadow-purple-500/20 flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+            className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all active:scale-95 cursor-pointer font-serif"
           >
             {isGenerating ? (
               <>

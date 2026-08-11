@@ -5,7 +5,7 @@ describe('Duração de Efeitos por Rodada (Combat Status Durations)', () => {
   it('deve decrementar a duração restante das condições e remover ao zerar', () => {
     // Simula a lógica de decremento que foi implementada
     const processCombatantTurnStart = (c: Combatant): Combatant => {
-      let updatedDurations = c.statusDurations ? c.statusDurations.map(d => ({
+      const updatedDurations = c.statusDurations ? c.statusDurations.map(d => ({
         ...d,
         remainingRounds: d.remainingRounds - 1
       })) : [];

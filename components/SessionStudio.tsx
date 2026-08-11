@@ -50,6 +50,8 @@ interface CharacterSheetMinimal {
   characterName?: string;
   className?: string;
   modelUrl?: string;
+  tokenType?: 'billboard' | '3d';
+  avatarUrl?: string;
   maxHp?: number;
   currentHp?: number;
   armorClass?: number;
@@ -445,11 +447,13 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
   const handleAddPlayerToScene = (mem: typeof campaignMembers[0]) => {
     const pName = mem.characterName || mem.displayName || 'Jogador';
 
-    // Busca a ficha do personagem no localStorage para ler HP, maxHp e AC reais
+    // Busca a ficha do personagem no localStorage para ler HP, maxHp, AC e tokenType reais
     let resolvedModelUrl: string | undefined = mem.modelUrl;
     let resolvedHp = 10;
     let resolvedMaxHp = 10;
     let resolvedAc = 10;
+    let resolvedTokenType: 'billboard' | '3d' = '3d';
+    let resolvedAvatarUrl: string | undefined;
 
     try {
       const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
@@ -472,6 +476,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
           if (found.maxHp) resolvedMaxHp = found.maxHp;
           resolvedHp = (found.currentHp != null) ? found.currentHp : resolvedMaxHp;
           if (found.armorClass) resolvedAc = found.armorClass;
+          // Token type preference (3D vs 2D billboard)
+          if (found.tokenType) resolvedTokenType = found.tokenType;
+          if (found.avatarUrl) resolvedAvatarUrl = found.avatarUrl;
         }
       }
     } catch (e) {}
@@ -491,6 +498,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       initiative: Math.floor(Math.random() * 20) + 1,
       conditions: [],
       modelUrl: resolvedModelUrl,
+      tokenType: resolvedTokenType,
+      tokenImageUrl: resolvedTokenType === 'billboard' ? resolvedAvatarUrl : undefined,
+      avatarUrl: resolvedAvatarUrl,
     };
     setSceneCombatants((prev) => [...prev, newP]);
   };
@@ -511,6 +521,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
         let resolvedHp = 10;
         let resolvedMaxHp = 10;
         let resolvedAc = 10;
+        let resolvedTokenType: 'billboard' | '3d' = '3d';
+        let resolvedAvatarUrl: string | undefined;
 
         try {
           const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
@@ -531,6 +543,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
               if (found.maxHp) resolvedMaxHp = found.maxHp;
               resolvedHp = (found.currentHp != null) ? found.currentHp : resolvedMaxHp;
               if (found.armorClass) resolvedAc = found.armorClass;
+              if (found.tokenType) resolvedTokenType = found.tokenType;
+              if (found.avatarUrl) resolvedAvatarUrl = found.avatarUrl;
             }
           }
         } catch (e) {}
@@ -549,6 +563,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
           initiative: Math.floor(Math.random() * 20) + 1,
           conditions: [],
           modelUrl: resolvedModelUrl,
+          tokenType: resolvedTokenType,
+          tokenImageUrl: resolvedTokenType === 'billboard' ? resolvedAvatarUrl : undefined,
+          avatarUrl: resolvedAvatarUrl,
         });
       }
     });

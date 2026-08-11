@@ -313,6 +313,8 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
 
       const updatedModelUrl =
         sheet.modelUrl || getModelUrlByNameOrPath(sheet.className || sheet.characterName);
+      const updatedTokenType: 'billboard' | '3d' = sheet.tokenType || '3d';
+      const updatedAvatarUrl: string | undefined = sheet.avatarUrl;
 
       setCombatants((prev) => {
         let hasChanges = false;
@@ -326,9 +328,15 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
             (sheet.id && c.id.includes(sheet.id));
 
           if (isMatch) {
-            if (c.modelUrl !== updatedModelUrl) {
+            if (c.modelUrl !== updatedModelUrl || c.tokenType !== updatedTokenType || c.avatarUrl !== updatedAvatarUrl) {
               hasChanges = true;
-              return { ...c, modelUrl: updatedModelUrl };
+              return {
+                ...c,
+                modelUrl: updatedModelUrl,
+                tokenType: updatedTokenType,
+                tokenImageUrl: updatedTokenType === 'billboard' ? updatedAvatarUrl : undefined,
+                avatarUrl: updatedAvatarUrl,
+              };
             }
           }
           return c;

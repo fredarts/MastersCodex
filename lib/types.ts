@@ -817,6 +817,7 @@ export interface CharacterSheet {
   avatarUrl?: string;
   avatarSettings?: { zoom: number; offsetX: number; offsetY: number };
   modelUrl?: string;
+  tokenType?: 'billboard' | '3d';
 
   // Atributos & Inspiração
   inspiration: boolean;

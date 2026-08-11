@@ -59,20 +59,20 @@ export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-[#0f172a] border border-purple-500/40 rounded-2xl shadow-2xl w-full max-w-2xl h-[85vh] flex flex-col overflow-hidden">
+      <div className="bg-[#0f0e0d] border border-amber-500/40 rounded-2xl shadow-2xl w-full max-w-2xl h-[85vh] flex flex-col overflow-hidden">
         {/* HEADER */}
-        <div className="bg-[#141b2d] border-b border-purple-500/20 px-5 py-4 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2 text-purple-400">
-            <Sparkles className="w-5 h-5 text-purple-400" />
-            <h2 className="text-sm font-black uppercase tracking-wider">Compêndio de Magias SRD D&D 5e</h2>
+        <div className="bg-[#141b2d] border-b border-amber-500/20 px-5 py-4 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2 text-amber-400">
+            <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />
+            <h2 className="text-sm font-black uppercase tracking-wider font-serif">Compêndio de Magias D&D 5e</h2>
           </div>
-          <button type="button" onClick={onClose} className="p-1 text-slate-400 hover:text-white">
+          <button type="button" onClick={onClose} className="p-1 text-slate-400 hover:text-white cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* CAMPO DE BUSCA E FILTROS */}
-        <div className="p-4 bg-[#111827] border-b border-slate-800 space-y-3 shrink-0">
+        <div className="p-4 bg-[#111827] border-b border-slate-850 space-y-3 shrink-0">
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
             <input
@@ -80,7 +80,7 @@ export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Buscar por nome, escola ou efeito (ex: Bola de Fogo, Cura, Míssil)..."
-              className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 font-medium"
+              className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 font-medium font-serif"
             />
           </div>
 
@@ -89,10 +89,10 @@ export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
             <button
               type="button"
               onClick={() => setSelectedLevelFilter('all')}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-colors border ${
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-colors border cursor-pointer font-serif ${
                 selectedLevelFilter === 'all'
-                  ? 'bg-purple-600 text-white border-purple-400'
-                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
+                  ? 'bg-amber-500 text-slate-950 border-amber-400'
+                  : 'bg-slate-900 text-slate-400 border-slate-850 hover:border-slate-700'
               }`}
             >
               Todos os Níveis
@@ -102,24 +102,24 @@ export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
                 key={lvl}
                 type="button"
                 onClick={() => setSelectedLevelFilter(lvl)}
-                className={`px-2 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-colors border ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition-colors border cursor-pointer font-serif ${
                   selectedLevelFilter === lvl
-                    ? 'bg-purple-600 text-white border-purple-400'
-                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
+                    ? 'bg-amber-500 text-slate-950 border-amber-400'
+                    : 'bg-slate-900 text-slate-400 border-slate-850 hover:border-slate-700'
                 }`}
               >
-                {lvl === 0 ? 'Truques' : `Niv ${lvl}`}
+                {lvl === 0 ? 'Truques' : `${lvl}º Círculo`}
               </button>
             ))}
           </div>
         </div>
 
         {/* LISTA DE MAGIAS DO COMPÊNDIO */}
-        <div className="p-4 overflow-y-auto flex-1 space-y-3 scrollbar-thin">
+        <div className="p-4 overflow-y-auto flex-1 space-y-3 bg3-scrollbar">
           {filteredSpells.length === 0 ? (
             <div className="p-10 text-center text-slate-500 space-y-2">
               <Wand2 className="w-8 h-8 text-slate-600 mx-auto" />
-              <p className="text-xs">Nenhuma magia encontrada para a busca atual.</p>
+              <p className="text-xs font-serif">Nenhuma magia encontrada para a busca atual.</p>
             </div>
           ) : (
             filteredSpells.map((spell) => {
@@ -127,20 +127,20 @@ export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
               return (
                 <div
                   key={spell.name}
-                  className="bg-[#141b2d] border border-slate-800 hover:border-purple-500/40 rounded-xl p-4 transition-all space-y-2"
+                  className="bg-[#141b2d]/40 border border-slate-850 hover:border-amber-500/40 rounded-xl p-4 transition-all space-y-2"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-white">{spell.name}</span>
-                        <span className="text-[10px] font-extrabold font-mono bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/30">
-                          {spell.level === 0 ? 'Truque' : `Nível ${spell.level}`}
+                        <span className="text-sm font-bold text-white font-serif">{spell.name}</span>
+                        <span className="text-[9px] font-extrabold font-mono bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30">
+                          {spell.level === 0 ? 'Truque' : `${spell.level}º Lvl`}
                         </span>
-                        <span className="text-[10px] font-semibold text-slate-400 uppercase">
+                        <span className="text-[10px] font-semibold text-slate-400 uppercase font-serif">
                           {spell.school}
                         </span>
                       </div>
-                      <div className="flex items-center gap-3 text-[10px] text-slate-400 mt-1 font-mono">
+                      <div className="flex items-center gap-3 text-[10px] text-slate-450 mt-1 font-mono">
                         <span>Tempo: {spell.castingTime}</span>
                         <span>•</span>
                         <span>Alcance: {spell.range}</span>
@@ -153,12 +153,12 @@ export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
                       type="button"
                       onClick={() => handleImportSpell(spell)}
                       disabled={isAdded}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
                         isAdded
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-default'
                           : (spell.level === 0 ? isAtCantripLimit : isAtSpellLimit)
                           ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 shadow-lg'
-                          : 'bg-purple-600 hover:bg-purple-500 text-white shadow-lg active:scale-95'
+                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black font-serif active:scale-95'
                       }`}
                     >
                       {isAdded ? (
@@ -175,7 +175,7 @@ export const SpellCompendiumModal: React.FC<SpellCompendiumModalProps> = ({
                     </button>
                   </div>
 
-                  <p className="text-xs text-slate-300 leading-relaxed bg-[#0b0f19] p-2.5 rounded-lg border border-slate-900">
+                  <p className="text-xs text-slate-350 leading-relaxed bg-[#0b0f19] p-2.5 rounded-lg border border-slate-900 font-serif">
                     {spell.description}
                   </p>
                 </div>

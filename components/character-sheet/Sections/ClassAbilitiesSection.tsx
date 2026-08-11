@@ -307,315 +307,328 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-fade-in pb-16">
-      {/* SEÇÃO 1: RECURSOS ATIVOS DA CLASSE */}
-      {Object.keys(resources).length > 0 && (
-        <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-4">
-          <div className="flex items-center gap-2 border-b border-slate-800/80 pb-3">
-            <Zap className="w-4 h-4 text-amber-400" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">Recursos de Classe</h3>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {Object.keys(resources).map((key) => {
-              const res = resources[key];
-              return (
-                <div key={key} className="bg-[#0b0f19] border border-slate-800 rounded-xl p-3 flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-extrabold text-slate-300 block">{res.label}</span>
-                    <span className="text-[10px] text-slate-500">
-                      {res.max === 9999 ? 'Uso Ilimitado' : `Máximo: ${res.max}`}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    {res.max !== 9999 && (
-                      <button
-                        type="button"
-                        onClick={() => adjustResource(key, -1)}
-                        className="w-7 h-7 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold flex items-center justify-center cursor-pointer"
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-
-                    <span className="text-base font-black text-amber-400 font-mono w-12 text-center">
-                      {res.max === 9999 ? '∞' : `${res.current} / ${res.max}`}
-                    </span>
-
-                    {res.max !== 9999 && (
-                      <button
-                        type="button"
-                        onClick={() => adjustResource(key, 1)}
-                        className="w-7 h-7 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold flex items-center justify-center cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* SEÇÃO 2: HABILIDADES ATIVAS DO BARBARO / PALADINO */}
-      <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-4">
-        <div className="flex items-center gap-2 border-b border-slate-800/80 pb-3">
-          <Swords className="w-4 h-4 text-rose-400" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-rose-400">Habilidades Ativas</h3>
-        </div>
-
-        <div className="space-y-3">
-          {/* Bárbaro - Fúria */}
-          {hasClass(sheet, 'Bárbaro') && (
-            <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Flame className={`w-4 h-4 ${isRageActive ? 'text-orange-500 animate-pulse' : 'text-slate-500'}`} />
-                  <span className="text-xs font-black text-white">Fúria (Rage)</span>
-                </div>
-                <p className="text-[11px] text-slate-400 max-w-xl">
-                  Garante vantagem em testes/salvaguardas de Força, dano extra em ataques corpo a corpo com Força (+{getRageDamageBonus(sheet.level)}) e resistência a danos físicos.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleToggleRage}
-                className={`px-4 py-2 rounded-xl text-xs font-black transition-all shrink-0 cursor-pointer ${
-                  isRageActive
-                    ? 'bg-rose-600 hover:bg-rose-500 text-white animate-pulse'
-                    : 'bg-orange-500 hover:bg-orange-400 text-slate-950'
-                }`}
-              >
-                {isRageActive ? 'Encerrar Fúria' : 'Entrar em Fúria'}
-              </button>
+    <div className="space-y-4 pb-20 lg:pb-0 animate-fade-in select-none lg:grid lg:grid-cols-2 lg:gap-4 lg:h-full lg:overflow-hidden lg:min-h-0">
+      
+      {/* COLUNA ESQUERDA: RECURSOS ATIVOS E TRIGERERS */}
+      <div className="space-y-4 lg:overflow-y-auto lg:h-full lg:pr-2 bg3-scrollbar lg:pb-6">
+        
+        {/* SEÇÃO 1: RECURSOS ATIVOS DA CLASSE */}
+        {Object.keys(resources).length > 0 && (
+          <div className="bg3-panel rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2 border-b border-slate-850 pb-2">
+              <Zap className="w-4 h-4 text-amber-400" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 font-serif">Recursos de Classe</h3>
             </div>
-          )}
 
-          {/* Paladino - Divine Smite */}
-          {hasClass(sheet, 'Paladino') && (
-            <>
-              <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-400" />
-                    <span className="text-xs font-black text-white">Destruição Divina (Divine Smite)</span>
-                    {activeBuffs.some(b => b.type === 'smite') && (
-                      <span className="text-[9px] font-bold bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30">
-                        PREPARADO
+            <div className="grid grid-cols-1 gap-2.5">
+              {Object.keys(resources).map((key) => {
+                const res = resources[key];
+                return (
+                  <div key={key} className="bg-[#0b0f19] border border-slate-800 rounded-xl p-2.5 flex items-center justify-between shadow-inner">
+                    <div>
+                      <span className="text-xs font-extrabold text-slate-350 block font-serif">{res.label}</span>
+                      <span className="text-[9px] text-slate-500 font-mono">
+                        {res.max === 9999 ? 'Uso Ilimitado' : `Máximo: ${res.max}`}
                       </span>
-                    )}
+                    </div>
+
+                    <div className="flex items-center gap-2.5">
+                      {res.max !== 9999 && (
+                        <button
+                          type="button"
+                          onClick={() => adjustResource(key, -1)}
+                          className="w-6 h-6 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold flex items-center justify-center cursor-pointer"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
+                      <span className="text-sm font-black text-amber-400 font-mono w-10 text-center">
+                        {res.max === 9999 ? '∞' : `${res.current} / ${res.max}`}
+                      </span>
+
+                      {res.max !== 9999 && (
+                        <button
+                          type="button"
+                          onClick={() => adjustResource(key, 1)}
+                          className="w-6 h-6 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold flex items-center justify-center cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-[11px] text-slate-400 max-w-xl">
-                    Gaste um espaço de magia para imbuir seu próximo ataque corpo a corpo com dano radiante extra de 2d8 (1º nível) + 1d8 por nível superior.
-                  </p>
-                </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-                <button
-                  type="button"
-                  onClick={() => setShowSmiteModal(true)}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black transition-all shrink-0 cursor-pointer"
-                >
-                  Conjurar Smite
-                </button>
-              </div>
+        {/* SEÇÃO 2: HABILIDADES ATIVAS */}
+        <div className="bg3-panel rounded-2xl p-4 space-y-3">
+          <div className="flex items-center gap-2 border-b border-rose-500/15 pb-2">
+            <Swords className="w-4 h-4 text-rose-450" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-rose-450 font-serif">Habilidades Ativas</h3>
+          </div>
 
-              {/* Paladino - Lay on Hands */}
-              <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-2.5">
+            {/* Bárbaro - Fúria */}
+            {hasClass(sheet, 'Bárbaro') && (
+              <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-3 flex flex-col justify-between gap-3 shadow-inner">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Heart className="w-4 h-4 text-emerald-400" />
-                    <span className="text-xs font-black text-white">Mãos Curativas (Lay on Hands)</span>
+                  <div className="flex items-center gap-1.5">
+                    <Flame className={`w-4 h-4 ${isRageActive ? 'text-orange-500 animate-pulse' : 'text-slate-500'}`} />
+                    <span className="text-xs font-black text-white font-serif">Fúria (Rage)</span>
                   </div>
-                  <p className="text-[11px] text-slate-400 max-w-xl">
-                    Toque uma criatura e gaste pontos de sua reserva curativa para restaurar PVs ou curar venenos/doenças.
+                  <p className="text-[10px] text-slate-400 leading-normal font-serif">
+                    Vantagem em Força, dano corpo a corpo (+{getRageDamageBonus(sheet.level)}) e resistências a danos físicos.
                   </p>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => setShowHandsModal(true)}
-                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-black transition-all shrink-0 cursor-pointer"
+                  onClick={handleToggleRage}
+                  className={`w-full py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                    isRageActive
+                      ? 'bg-rose-600 hover:bg-rose-500 text-white animate-pulse'
+                      : 'bg-orange-500 hover:bg-orange-400 text-slate-950'
+                  }`}
                 >
-                  Curar Criatura
+                  {isRageActive ? 'Encerrar Fúria' : 'Entrar em Fúria'}
                 </button>
               </div>
-            </>
-          )}
+            )}
 
-          {/* Bruxo - Habilidades Ativas */}
-          {hasClass(sheet, 'Bruxo') && (
-            <>
-              {resources['pact_slots'] && (
-                <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            {/* Paladino - Divine Smite / Lay on Hands */}
+            {hasClass(sheet, 'Paladino') && (
+              <>
+                <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-3 flex flex-col justify-between gap-3 shadow-inner">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-purple-400" />
-                      <span className="text-xs font-black text-white">Conjurar usando Pact Slot</span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 max-w-xl">
-                      Gaste um espaço de magia do pacto de {resources['pact_slot_level']?.current || 1}º círculo. Seus slots se recuperam em descansos curtos.
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleUsePactSlot}
-                    disabled={(resources['pact_slots']?.current || 0) <= 0}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl text-xs font-black transition-all shrink-0 cursor-pointer"
-                  >
-                    Gastar Slot
-                  </button>
-                </div>
-              )}
-
-              {resources['fortuna_submundo'] && (
-                <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Flame className="w-4 h-4 text-amber-500 animate-pulse" />
-                      <span className="text-xs font-black text-white">Fortuna do Submundo</span>
-                      {resources['fortuna_submundo']?.current === 0 && (
-                        <span className="text-[9px] bg-red-950 text-red-400 px-2 py-0.5 rounded-full border border-red-900">
-                          USADO
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      <span className="text-xs font-black text-white font-serif">Destruição Divina</span>
+                      {activeBuffs.some(b => b.type === 'smite') && (
+                        <span className="text-[8px] font-bold bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full border border-amber-500/30">
+                          PREPARADO
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-slate-400 max-w-xl">
-                      Adicione 1d10 a um teste de atributo ou salvaguarda após rolar, mas antes de saber o resultado. Recupera em descanso curto ou longo.
+                    <p className="text-[10px] text-slate-400 leading-normal font-serif">
+                      Imbui seu próximo ataque com dano radiante extra de 2d8 (+1d8 por nível de slot superior).
                     </p>
                   </div>
 
                   <button
                     type="button"
-                    onClick={handleFortunaSubmundo}
-                    disabled={(resources['fortuna_submundo']?.current || 0) <= 0}
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 rounded-xl text-xs font-black transition-all shrink-0 cursor-pointer"
+                    onClick={() => setShowSmiteModal(true)}
+                    className="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black cursor-pointer"
                   >
-                    Usar Habilidade
+                    Preparar Smite
                   </button>
                 </div>
-              )}
 
-              {resources['lancar_inferno'] && (
-                <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-3 flex flex-col justify-between gap-3 shadow-inner">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Flame className="w-4 h-4 text-red-500" />
-                      <span className="text-xs font-black text-white">Lançar no Inferno</span>
-                      {resources['lancar_inferno']?.current === 0 && (
-                        <span className="text-[9px] bg-red-950 text-red-400 px-2 py-0.5 rounded-full border border-red-900">
-                          USADO
-                        </span>
-                      )}
+                    <div className="flex items-center gap-1.5">
+                      <Heart className="w-4 h-4 text-emerald-400" />
+                      <span className="text-xs font-black text-white font-serif">Mãos Curativas (Lay on Hands)</span>
                     </div>
-                    <p className="text-[11px] text-slate-400 max-w-xl">
-                      Ao acertar uma criatura, transporte-a instantaneamente pelos planos inferiores. Causa 10d10 de dano psíquico no retorno. 1x por descanso longo.
+                    <p className="text-[10px] text-slate-400 leading-normal font-serif">
+                      Gaste pontos de sua reserva de cura para restaurar PVs ou neutralizar doenças.
                     </p>
                   </div>
 
                   <button
                     type="button"
-                    onClick={handleLancarInferno}
-                    disabled={(resources['lancar_inferno']?.current || 0) <= 0}
-                    className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl text-xs font-black transition-all shrink-0 cursor-pointer"
+                    onClick={() => setShowHandsModal(true)}
+                    className="w-full py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-black cursor-pointer"
                   >
-                    Lançar no Inferno
+                    Curar Criatura
                   </button>
                 </div>
-              )}
-            </>
-          )}
+              </>
+            )}
 
-          {!hasClass(sheet, 'Bárbaro') && !hasClass(sheet, 'Paladino') && !hasClass(sheet, 'Bruxo') && (
-            <div className="text-center py-6 text-xs text-slate-500 italic">
-              Esta classe não possui habilidades de combate ativas integradas neste teste. Veja a lista de Habilidades Passivas abaixo.
-            </div>
-          )}
+            {/* Bruxo - Habilidades Ativas */}
+            {hasClass(sheet, 'Bruxo') && (
+              <>
+                {resources['pact_slots'] && (
+                  <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-3 flex flex-col justify-between gap-3 shadow-inner">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-cyan-400" />
+                        <span className="text-xs font-black text-white font-serif">Gastar Slot do Pacto</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-normal font-serif">
+                        Gaste um espaço de magia do pacto de {resources['pact_slot_level']?.current || 1}º círculo.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleUsePactSlot}
+                      disabled={(resources['pact_slots']?.current || 0) <= 0}
+                      className="w-full py-1.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-800 disabled:text-slate-650 text-slate-950 font-black rounded-xl text-xs cursor-pointer"
+                    >
+                      Gastar Slot do Pacto
+                    </button>
+                  </div>
+                )}
+
+                {resources['fortuna_submundo'] && (
+                  <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-3 flex flex-col justify-between gap-3 shadow-inner">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <Flame className="w-4 h-4 text-amber-500 animate-pulse" />
+                        <span className="text-xs font-black text-white font-serif">Fortuna do Submundo</span>
+                        {resources['fortuna_submundo']?.current === 0 && (
+                          <span className="text-[8px] bg-red-950 text-red-400 px-1.5 py-0.5 rounded-full border border-red-900 font-serif">
+                            USADO
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-normal font-serif">
+                        Adicione 1d10 a um teste ou salvaguarda após rolar (recarrega em descanso curto/longo).
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleFortunaSubmundo}
+                      disabled={(resources['fortuna_submundo']?.current || 0) <= 0}
+                      className="w-full py-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-650 text-slate-950 font-black rounded-xl text-xs cursor-pointer"
+                    >
+                      Invocar Fortuna do Submundo
+                    </button>
+                  </div>
+                )}
+
+                {resources['lancar_inferno'] && (
+                  <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-3 flex flex-col justify-between gap-3 shadow-inner">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <Flame className="w-4 h-4 text-red-500" />
+                        <span className="text-xs font-black text-white font-serif">Lançar no Inferno</span>
+                        {resources['lancar_inferno']?.current === 0 && (
+                          <span className="text-[8px] bg-red-950 text-red-400 px-1.5 py-0.5 rounded-full border border-red-900 font-serif">
+                            USADO
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-normal font-serif">
+                        Transporte o alvo pelos planos inferiores ao acertar um ataque. Causa 10d10 psíquico.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleLancarInferno}
+                      disabled={(resources['lancar_inferno']?.current || 0) <= 0}
+                      className="w-full py-1.5 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-800 disabled:text-slate-650 text-white font-black rounded-xl text-xs cursor-pointer"
+                    >
+                      Lançar no Inferno (10d10)
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {!hasClass(sheet, 'Bárbaro') && !hasClass(sheet, 'Paladino') && !hasClass(sheet, 'Bruxo') && (
+              <div className="text-center py-6 text-xs text-slate-500 italic font-serif">
+                Esta classe não possui habilidades de combate ativas integradas.
+              </div>
+            )}
+          </div>
         </div>
+
       </div>
 
-      {/* SEÇÃO 3: LISTA COMPLETA DE HABILIDADES ADQUIRIDAS (PASSIVAS/ATIVAS) */}
-      <div className="bg-[#141b2d] border border-amber-500/20 rounded-2xl p-4 shadow-lg space-y-4">
-        <div className="flex items-center gap-2 border-b border-slate-800/80 pb-3">
-          <Shield className="w-4 h-4 text-slate-400" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Características da Classe (Level up)</h3>
+      {/* COLUNA DIREITA: PASSIVAS E FEATS */}
+      <div className="space-y-4 lg:overflow-y-auto lg:h-full lg:pr-2 bg3-scrollbar lg:pb-6">
+        
+        {/* SEÇÃO 3: CARACTERÍSTICAS DA CLASSE */}
+        <div className="bg3-panel rounded-2xl p-4 space-y-3">
+          <div className="flex items-center gap-2 border-b border-slate-850 pb-2">
+            <Shield className="w-4 h-4 text-slate-400" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 font-serif">Características da Classe</h3>
+          </div>
+
+          <div className="space-y-2.5">
+            {features.length > 0 ? (
+              features.map((feat) => (
+                <div key={feat.id} className="bg-[#0b0f19]/60 border border-slate-800/80 rounded-xl p-3 space-y-1 shadow-inner">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-amber-300 font-serif">{feat.name}</span>
+                    <span className="text-[8px] font-bold bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700">
+                      Nível {feat.level}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-450 leading-relaxed font-serif">{feat.description}</p>
+                  {feat.activation && feat.activation !== 'none' && (
+                    <span className="inline-block text-[8px] font-bold text-cyan-400 mt-1 font-serif">
+                      Ativação: {feat.activation === 'action' ? 'Ação' : feat.activation === 'bonus_action' ? 'Ação Bônus' : feat.activation === 'reaction' ? 'Reação' : 'Especial'}
+                    </span>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-4 text-xs text-slate-500 italic font-serif">
+                Nenhuma característica cadastrada.
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="space-y-3">
-          {features.length > 0 ? (
-            features.map((feat) => (
-              <div key={feat.id} className="bg-[#0b0f19]/60 border border-slate-800/60 rounded-xl p-3 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-amber-300">{feat.name}</span>
-                  <span className="text-[9px] font-bold bg-slate-800/80 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700">
-                    Nível {feat.level}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">{feat.description}</p>
-                {feat.activation && feat.activation !== 'none' && (
-                  <span className="inline-block text-[9px] font-bold text-cyan-400 mt-1">
-                    Ativação: {feat.activation === 'action' ? 'Ação' : feat.activation === 'bonus_action' ? 'Ação Bônus' : feat.activation === 'reaction' ? 'Reação' : 'Especial'}
-                  </span>
-                )}
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-4 text-xs text-slate-500 italic">
-              Nenhuma habilidade carregada. Verifique se o nível da ficha é válido.
+        {/* SEÇÃO 4: TALENTOS ADQUIRIDOS (FEATS) */}
+        {sheet.feats && sheet.feats.length > 0 && (
+          <div className="bg3-panel rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2 border-b border-cyan-500/15 pb-2">
+              <Award className="w-4 h-4 text-cyan-400" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400 font-serif">Talentos (Feats) Adquiridos</h3>
             </div>
-          )}
-        </div>
+
+            <div className="space-y-2.5">
+              {sheet.feats.map((feat) => (
+                <div key={feat.id} className="bg-[#0b0f19]/80 border border-slate-800 rounded-xl p-3 shadow-inner space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-cyan-300 flex items-center gap-1.5 font-serif">
+                      {feat.namePt} <span className="text-[9px] text-slate-500 font-normal">({feat.name})</span>
+                    </span>
+                    <span className="text-[8px] font-bold bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-800 uppercase font-serif">
+                      {feat.category || 'Talento'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-350 leading-relaxed font-serif">{feat.description}</p>
+                  {feat.chosenAttribute && (
+                    <span className="inline-block text-[9px] font-bold text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-500/20 font-serif uppercase">
+                      Bônus: {feat.chosenAttribute.toUpperCase()} +1
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* SEÇÃO 4: TALENTOS ADQUIRIDOS (FEATS) */}
-      {sheet.feats && sheet.feats.length > 0 && (
-        <div className="bg-[#141b2d] border border-cyan-500/30 rounded-2xl p-4 shadow-lg space-y-4">
-          <div className="flex items-center gap-2 border-b border-slate-800/80 pb-3">
-            <Award className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400">Talentos (Feats) Adquiridos</h3>
-          </div>
-
-          <div className="space-y-3">
-            {sheet.feats.map((feat) => (
-              <div key={feat.id} className="bg-[#0b0f19]/80 border border-slate-800 rounded-xl p-3.5 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-cyan-300 flex items-center gap-2">
-                    {feat.namePt} <span className="text-[10px] text-slate-500 font-normal">({feat.name})</span>
-                  </span>
-                  <span className="text-[9px] font-bold bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-800 uppercase">
-                    {feat.category || 'Talento'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-300 leading-relaxed">{feat.description}</p>
-                {feat.chosenAttribute && (
-                  <span className="inline-block text-[10px] font-bold text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-500/20">
-                    Bônus +1: {feat.chosenAttribute.toUpperCase()}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* ==========================================
+          MODALS DE PALADINO FORA DO GRID LAYOUT
+          ========================================== */}
 
       {/* MODAL DE SELEÇÃO DE SLOTS DO SMITE */}
       {showSmiteModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
-          <div className="bg-[#0d1117] border border-amber-500/40 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+          <div className="bg-[#0f0e0d] border border-amber-500/40 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <span className="text-xs font-black uppercase text-amber-400 flex items-center gap-1.5">
+              <span className="text-xs font-black uppercase text-amber-400 flex items-center gap-1.5 font-serif">
                 <Sparkles className="w-4 h-4" />
                 Destruição Divina
               </span>
-              <button type="button" onClick={() => setShowSmiteModal(false)} className="text-slate-400 hover:text-white text-xs">Fechar</button>
+              <button type="button" onClick={() => setShowSmiteModal(false)} className="text-slate-400 hover:text-white text-xs cursor-pointer">Fechar</button>
             </div>
 
             <div className="space-y-3">
-              <label className="text-[11px] text-slate-400">Escolha o nível do Espaço de Magia:</label>
+              <label className="text-[11px] text-slate-400 font-serif">Escolha o nível do Espaço de Magia:</label>
               <div className="grid grid-cols-3 gap-2">
                 {[1, 2, 3, 4, 5].map((lvl) => {
                   const slot = sheet.spellSlots[lvl];
@@ -629,15 +642,15 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
                       type="button"
                       disabled={!hasSlot || available <= 0}
                       onClick={() => setSmiteSlotLevel(lvl)}
-                      className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all ${
+                      className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
                         !hasSlot || available <= 0
-                          ? 'opacity-40 border-slate-800 bg-slate-900/40 cursor-not-allowed text-slate-600'
+                          ? 'opacity-40 border-slate-800 bg-slate-900/40 cursor-not-allowed text-slate-650'
                           : isSelected
                           ? 'border-amber-500 bg-amber-500/10 text-amber-300 font-extrabold'
-                          : 'border-slate-800 bg-[#141b2d] text-slate-300 hover:border-slate-700'
+                          : 'border-slate-850 bg-[#141b2d] text-slate-350 hover:border-slate-700'
                       }`}
                     >
-                      <span className="text-sm font-black font-mono">{lvl}º Lvl</span>
+                      <span className="text-xs font-black font-mono">{lvl}º Lvl</span>
                       <span className="text-[9px]">{hasSlot ? `${available} rest.` : 'N/A'}</span>
                     </button>
                   );
@@ -649,14 +662,14 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
               <button
                 type="button"
                 onClick={() => setShowSmiteModal(false)}
-                className="px-4 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl"
+                className="px-4 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={handlePrepareSmite}
-                className="px-4 py-2 text-xs font-black bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl flex items-center gap-1"
+                className="px-4 py-2 text-xs font-black bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl flex items-center gap-1 cursor-pointer"
               >
                 <Swords className="w-3.5 h-3.5" />
                 Confirmar
@@ -669,30 +682,30 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
       {/* MODAL DE MÃOS CURATIVAS */}
       {showHandsModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
-          <div className="bg-[#0d1117] border border-emerald-500/40 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+          <div className="bg-[#0f0e0d] border border-emerald-500/40 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <span className="text-xs font-black uppercase text-emerald-400 flex items-center gap-1.5">
+              <span className="text-xs font-black uppercase text-emerald-400 flex items-center gap-1.5 font-serif">
                 <Heart className="w-4 h-4" />
                 Mãos Curativas
               </span>
-              <button type="button" onClick={() => setShowHandsModal(false)} className="text-slate-400 hover:text-white text-xs">Fechar</button>
+              <button type="button" onClick={() => setShowHandsModal(false)} className="text-slate-400 hover:text-white text-xs cursor-pointer">Fechar</button>
             </div>
 
             <div className="space-y-3">
-              <div className="flex justify-between items-center text-[11px]">
-                <span className="text-slate-400">Reserva Restante:</span>
+              <div className="flex justify-between items-center text-[10px] font-serif">
+                <span className="text-slate-450">Reserva Restante:</span>
                 <span className="font-extrabold text-emerald-400 font-mono">
                   {resources['lay_on_hands']?.current || 0} / {resources['lay_on_hands']?.max || 0} PVs
                 </span>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] text-slate-400">Quantidade de cura a aplicar:</label>
-                <div className="flex items-center justify-between bg-[#141b2d] border border-slate-800 rounded-xl p-2 w-full">
+                <label className="text-[10px] text-slate-400 font-serif">Quantidade de cura a aplicar:</label>
+                <div className="flex items-center justify-between bg-[#141b2d] border border-slate-800 rounded-xl p-1.5 w-full">
                   <button
                     type="button"
                     onClick={() => setLayOnHandsAmount(prev => Math.max(1, prev - 1))}
-                    className="w-8 h-8 bg-slate-800 hover:bg-slate-700 rounded flex items-center justify-center"
+                    className="w-8 h-8 bg-slate-800 hover:bg-slate-700 rounded flex items-center justify-center text-slate-200 cursor-pointer"
                   >
                     -1
                   </button>
@@ -703,13 +716,13 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
                     max={resources['lay_on_hands']?.current || 5}
                     value={layOnHandsAmount}
                     onChange={(e) => setLayOnHandsAmount(Math.max(1, Math.min(resources['lay_on_hands']?.current || 5, parseInt(e.target.value, 10) || 5)))}
-                    className="w-16 text-center bg-transparent font-black text-sm text-white focus:outline-none"
+                    className="w-16 text-center bg-transparent font-black text-xs text-white focus:outline-none"
                   />
 
                   <button
                     type="button"
                     onClick={() => setLayOnHandsAmount(prev => Math.min(resources['lay_on_hands']?.current || 5, prev + 1))}
-                    className="w-8 h-8 bg-slate-800 hover:bg-slate-700 rounded flex items-center justify-center"
+                    className="w-8 h-8 bg-slate-800 hover:bg-slate-700 rounded flex items-center justify-center text-slate-200 cursor-pointer"
                   >
                     +1
                   </button>
@@ -721,14 +734,14 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
               <button
                 type="button"
                 onClick={() => setShowHandsModal(false)}
-                className="px-4 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl"
+                className="px-4 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-350 rounded-xl cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={handleLayOnHands}
-                className="px-4 py-2 text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl flex items-center gap-1"
+                className="px-4 py-2 text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl flex items-center gap-1 cursor-pointer"
               >
                 <Heart className="w-3.5 h-3.5" />
                 Aplicar Cura

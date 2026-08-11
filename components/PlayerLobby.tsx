@@ -308,7 +308,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   // We track currentCampaignId for the member fetch effect
   const currentCampaignIdForMembers = selectedCampaignId || activeCampaign?.id || null;
 
-  // Carrega as fichas do Supabase vinculadas ao usuário conectado e à campanha ativa, mesclando com o localStorage
+  // Carrega as fichas do Supabase vinculadas ao usuário conectado, mesclando com o localStorage
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
     
@@ -317,14 +317,10 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
       if (!uId || !isValidUuid(uId)) return;
       
       try {
-        let query = supabase.from('character_sheets').select('*');
-        if (currentCampaignIdForMembers && isValidUuid(currentCampaignIdForMembers)) {
-          query = query.or(`user_id.eq.${uId},campaign_id.eq.${currentCampaignIdForMembers}`);
-        } else {
-          query = query.eq('user_id', uId);
-        }
-
-        const { data, error } = await query;
+        const { data, error } = await supabase
+          .from('character_sheets')
+          .select('*')
+          .eq('user_id', uId);
           
         if (!error && data) {
           const dbSheets = data.map((row) => ({
@@ -339,9 +335,10 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
           const dbSheetIds = new Set(dbSheets.map((s) => s.id));
           
           setCharacterSheets((prev) => {
-            // Remove local sheets that have a UUID ID but were deleted in Supabase
+            // Remove local sheets that have a UUID ID but were deleted in Supabase,
+            // and filter out any sheets that belong to other users to prevent leaks.
             const validLocalSheets = prev.filter(
-              (s) => !isValidUuid(s.id) || dbSheetIds.has(s.id)
+              (s) => (!isValidUuid(s.id) || dbSheetIds.has(s.id)) && (!s.userId || s.userId === uId)
             );
 
             const merged = [...validLocalSheets];
@@ -360,7 +357,8 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             
             const filtered = merged.filter((s) => {
               const isDefaultMock = s.characterName === 'Novo Aventureiro' && !dbSheets.some((dbS) => dbS.id === s.id);
-              return !isDefaultMock;
+              const isOtherUser = s.userId && s.userId !== uId;
+              return !isDefaultMock && !isOtherUser;
             });
             const finalSheets = filtered.length > 0 ? filtered : (merged.length > 0 ? merged : []);
             
@@ -382,7 +380,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     };
     
     fetchSheetsFromDb();
-  }, [user?.id, currentCampaignIdForMembers]);
+  }, [user?.id]);
 
   // Fetch campaign members when campaign changes
 
