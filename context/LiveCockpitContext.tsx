@@ -301,7 +301,10 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       // Set the ref immediately so that when the state update schedules a render, the sync useEffect can check it
       lastSyncStateRef.current = newState;
 
-      if (payload.combatants) setCombatants(payload.combatants);
+      if (payload.combatants) {
+        setCombatants(payload.combatants);
+        storeInitializeFromCombatants(payload.combatants);
+      }
       if (payload.currentTurnIndex !== undefined) setCurrentTurnIndex(payload.currentTurnIndex);
       if (payload.roundCount !== undefined) setRoundCount(payload.roundCount);
     },
@@ -408,7 +411,10 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       if (snapshot) {
         if (snapshot.mode) setLiveDisplayModeState(snapshot.mode);
         if (snapshot.projectedScene !== undefined) setProjectedScene(snapshot.projectedScene);
-        if (snapshot.combatants) setCombatants(snapshot.combatants);
+        if (snapshot.combatants) {
+          setCombatants(snapshot.combatants);
+          storeInitializeFromCombatants(snapshot.combatants);
+        }
         if (snapshot.currentTurnIndex !== undefined) setCurrentTurnIndex(snapshot.currentTurnIndex);
         if (snapshot.roundCount !== undefined) setRoundCount(snapshot.roundCount);
         if (snapshot.mapData !== undefined) setMapData(snapshot.mapData);

@@ -17,10 +17,12 @@ import {
   Wand2, 
   ShieldAlert,
   Crosshair,
-  RotateCcw
+  RotateCcw,
+  CheckCircle2
 } from 'lucide-react';
 import { CharacterSheet, Combatant, DiceRollEvent } from '@/lib/types';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
+import { toast } from 'sonner';
 const calculateModifier = (score: number) => Math.floor(((score || 10) - 10) / 2);
 
 interface PlayerTokenActionDockProps {
@@ -37,6 +39,7 @@ interface PlayerTokenActionDockProps {
   }) => void;
   onOpenFullSheet: () => void;
   onStartAttackTargeting?: (attack: any) => void;
+  onEndTurn?: () => void;
 }
 
 export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
@@ -48,9 +51,17 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
   onUpdateCombatantActionState,
   onOpenFullSheet,
   onStartAttackTargeting,
+  onEndTurn,
 }) => {
   const [activeTab, setActiveTab] = useState<'attacks' | 'spells' | 'features' | 'saves'>('attacks');
-  const [isExpanded, setIsExpanded] = useState<boolean>(true);
+  const [isExpanded, setIsExpanded] = useState<boolean>(!isCombatActive || isMyTurn);
+
+  // Auto-colapsa quando encerra o turno e auto-expande quando inicia a vez do jogador no combate
+  React.useEffect(() => {
+    if (isCombatActive) {
+      setIsExpanded(isMyTurn);
+    }
+  }, [isMyTurn, isCombatActive]);
 
   // Status de recursos da rodada
   const actionUsed = playerCombatant?.actionUsed ?? false;
@@ -63,6 +74,11 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
 
   // Disparar rolagem de ataque com arma
   const handleWeaponAttackRoll = (attack: { name: string; atkBonus: string; damage: string; type: string }) => {
+    if (isCombatActive && !isMyTurn) {
+      toast.warning('Aguarde a sua vez no combate para realizar ataques!');
+      return;
+    }
+
     if (onStartAttackTargeting) {
       onStartAttackTargeting(attack);
       return;
@@ -93,6 +109,11 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
 
   // Disparar conjuração de magia
   const handleCastSpell = (spell: { name: string; level: number; description?: string }) => {
+    if (isCombatActive && !isMyTurn) {
+      toast.warning('Aguarde a sua vez no combate para conjurar magias!');
+      return;
+    }
+
     const isCantrip = spell.level === 0;
     
     onExecuteRoll({
@@ -190,7 +211,11 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
   const spellsList = activeSheet.spells || [];
 
   return (
-    <div className="w-full max-w-4xl mx-auto bg-[#0f141d]/95 backdrop-blur-xl border border-amber-500/30 rounded-2xl shadow-2xl overflow-hidden transition-all duration-300">
+    <div className={`w-full max-w-4xl mx-auto backdrop-blur-xl border rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 ${
+      isCombatActive && !isMyTurn 
+        ? 'bg-[#0b0e14]/90 border-slate-700/50 opacity-85' 
+        : 'bg-[#0f141d]/95 border-amber-500/30'
+    }`}>
       {/* Dock Bar Top Header & Resource Counters */}
       <div className="bg-gradient-to-r from-[#141a26] via-[#1b2333] to-[#121723] p-3 flex flex-wrap items-center justify-between gap-2 border-b border-[#2a3449]">
         {/* Turn Status Badge */}
@@ -272,8 +297,19 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
           </div>
         )}
 
-        {/* Toggle Expand / Full Sheet */}
+        {/* Toggle Expand / Full Sheet / End Turn */}
         <div className="flex items-center gap-2">
+          {isCombatActive && isMyTurn && onEndTurn && (
+            <button
+              onClick={onEndTurn}
+              className="px-3 py-1 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-950/40 flex items-center gap-1.5 transition-all active:scale-95 animate-pulse cursor-pointer border border-emerald-400/50"
+              title="Encerrar seu turno e passar a vez para o próximo combatente"
+            >
+              <CheckCircle2 className="w-4 h-4 text-slate-950" />
+              <span>Encerrar Turno</span>
+            </button>
+          )}
+
           <button
             onClick={onOpenFullSheet}
             className="px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold rounded-xl transition-all"

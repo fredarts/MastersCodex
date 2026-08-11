@@ -71,13 +71,18 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     tokenPositions3D, 
     updateTokenPosition3D, 
     combatants, 
+    setCombatants,
+    initializeFromCombatants,
     currentTurnIndex, 
+    setCurrentTurnIndex,
     roundCount, 
+    setRoundCount,
     liveDisplayMode,
     combatLogs,
     chatMessages,
     onlineUsers,
     broadcastPlayerRoll,
+    broadcastToPlayerView,
     updateCombatantState,
     mapData,
     projectedScene,
@@ -93,6 +98,21 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   // Navigation & Modal States
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(activeCampaign?.id || null);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+
+  // Solicita o snapshot atual do Mestre ao carregar o lobby
+  useEffect(() => {
+    if (broadcastStateRequest) {
+      broadcastStateRequest();
+    }
+  }, [broadcastStateRequest, activeCampaign?.id]);
+
+  // Se a cena ativa possui combatentes e o estado local está vazio, inicializa os tokens
+  useEffect(() => {
+    if (activeScene?.combatants && activeScene.combatants.length > 0 && combatants.length === 0) {
+      if (setCombatants) setCombatants(activeScene.combatants);
+      if (initializeFromCombatants) initializeFromCombatants(activeScene.combatants);
+    }
+  }, [activeScene?.combatants, combatants.length, setCombatants, initializeFromCombatants]);
 
   // VTT Player Cockpit UI States
   const [playerCanvasView, setPlayerCanvasView] = useState<'auto' | 'grid' | 'map' | 'art'>('auto');
@@ -173,6 +193,43 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     }
   };
 
+  const handlePlayerNextTurn = () => {
+    if (!combatants || combatants.length === 0) return;
+    let nextIndex = currentTurnIndex + 1;
+    let nextRound = roundCount;
+
+    if (nextIndex >= combatants.length) {
+      nextIndex = 0;
+      nextRound += 1;
+      setRoundCount(nextRound);
+    }
+
+    setCurrentTurnIndex(nextIndex);
+
+    // Reseta recursos de ações do combatente cujo turno acabou de encerrar
+    const currentActor = combatants[currentTurnIndex];
+    if (currentActor && updateCombatantState) {
+      updateCombatantState(currentActor.id, {
+        actionUsed: false,
+        bonusActionUsed: false,
+        reactionUsed: false,
+        movementUsed: 0,
+      });
+    }
+
+    // Transmite a nova ordem de turno para o Mestre e demais jogadores
+    if (broadcastToPlayerView) {
+      broadcastToPlayerView({
+        combatants,
+        currentTurnIndex: nextIndex,
+        roundCount: nextRound,
+      });
+    }
+
+    const nextActor = combatants[nextIndex];
+    toast.success(`Turno encerrado! Próximo a jogar: ${nextActor?.name || 'Próximo combatente'}`);
+  };
+
   const handleCopyInviteCode = (code: string) => {
     if (!code) return;
     navigator.clipboard.writeText(code);
@@ -237,7 +294,10 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     }
   }, [characterSheets]);
 
-  // Carrega as fichas do Supabase vinculadas ao usuário conectado e mescla com o localStorage
+  // We track currentCampaignId for the member fetch effect
+  const currentCampaignIdForMembers = selectedCampaignId || activeCampaign?.id || null;
+
+  // Carrega as fichas do Supabase vinculadas ao usuário conectado e à campanha ativa, mesclando com o localStorage
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
     
@@ -246,10 +306,14 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
       if (!uId || !isValidUuid(uId)) return;
       
       try {
-        const { data, error } = await supabase
-          .from('character_sheets')
-          .select('*')
-          .eq('user_id', uId);
+        let query = supabase.from('character_sheets').select('*');
+        if (currentCampaignIdForMembers && isValidUuid(currentCampaignIdForMembers)) {
+          query = query.or(`user_id.eq.${uId},campaign_id.eq.${currentCampaignIdForMembers}`);
+        } else {
+          query = query.eq('user_id', uId);
+        }
+
+        const { data, error } = await query;
           
         if (!error && data) {
           const dbSheets = data.map((row) => ({
@@ -293,7 +357,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
               localStorage.setItem(STORAGE_KEY, JSON.stringify(finalSheets));
             } catch (e) {}
 
-            const targetActive = finalSheets.find((s) => s.characterName !== 'Novo Aventureiro') || finalSheets[0] || createEmptyCharacterSheet('player-1');
+            const targetActive = finalSheets.find((s) => s.userId === uId && s.characterName !== 'Novo Aventureiro') || finalSheets.find((s) => s.userId === uId) || finalSheets[0] || createEmptyCharacterSheet('player-1');
             if (targetActive) {
               setActiveSheet(targetActive);
             }
@@ -307,10 +371,9 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     };
     
     fetchSheetsFromDb();
-  }, [user?.id]);
+  }, [user?.id, currentCampaignIdForMembers]);
 
-  // We track currentCampaignId for the member fetch effect
-  const currentCampaignIdForMembers = selectedCampaignId || activeCampaign?.id || null;
+  // Fetch campaign members when campaign changes
 
   // Fetch campaign members when campaign changes
   useEffect(() => {
@@ -555,6 +618,13 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             console.log('Ficha sincronizada com o Supabase.');
           }
         });
+
+        if (cId && isValidUuid(cId)) {
+          supabase.from('campaign_members').update({
+            character_name: updatedWithTimestamp.characterName || 'Sem Nome',
+            avatar_url: updatedWithTimestamp.avatarUrl || null,
+          }).eq('campaign_id', cId).eq('user_id', uId);
+        }
       }
     }
 
@@ -1133,6 +1203,10 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                     roundCount={roundCount}
                     playerCharName={resolveCharName(currentCampaign)}
                     isCombatActive={true}
+                    characterSheets={characterSheets}
+                    activeSheet={activeSheet}
+                    campaignMembers={campaignMembers}
+                    onEndTurn={handlePlayerNextTurn}
                   />
                 </div>
               )}
@@ -1268,6 +1342,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                           }
                         }}
                         onOpenFullSheet={() => handleOpenSheetForCampaign(currentCampaign || undefined)}
+                        onEndTurn={handlePlayerNextTurn}
                       />
                     </div>
                   </div>

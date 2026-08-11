@@ -8,9 +8,10 @@ import {
   UserCheck, 
   Skull, 
   User, 
-  Shield 
+  Shield,
+  CheckCircle2
 } from 'lucide-react';
-import { Combatant } from '@/lib/types';
+import { Combatant, CharacterSheet } from '@/lib/types';
 
 interface PlayerCombatTrackerHUDProps {
   combatants: Combatant[];
@@ -18,6 +19,10 @@ interface PlayerCombatTrackerHUDProps {
   roundCount: number;
   playerCharName: string;
   isCombatActive: boolean;
+  characterSheets?: CharacterSheet[];
+  activeSheet?: CharacterSheet;
+  campaignMembers?: { id: string; userId: string; characterName?: string; avatarUrl?: string; role: string }[];
+  onEndTurn?: () => void;
 }
 
 export const PlayerCombatTrackerHUD: React.FC<PlayerCombatTrackerHUDProps> = ({
@@ -26,6 +31,10 @@ export const PlayerCombatTrackerHUD: React.FC<PlayerCombatTrackerHUDProps> = ({
   roundCount,
   playerCharName,
   isCombatActive,
+  characterSheets,
+  activeSheet,
+  campaignMembers,
+  onEndTurn,
 }) => {
   if (!isCombatActive || combatants.length === 0) return null;
 
@@ -72,7 +81,35 @@ export const PlayerCombatTrackerHUD: React.FC<PlayerCombatTrackerHUDProps> = ({
             const hpPercent = Math.max(0, Math.min(100, (c.hp / c.maxHp) * 100));
             const isDead = c.hp <= 0;
 
-            const portraitUrl = c.avatarUrl || c.tokenImageUrl;
+            // Robust name matcher for combatant portraits
+            const isMatch = (nameA?: string, nameB?: string) => {
+              if (!nameA || !nameB) return false;
+              const a = nameA.split('(')[0].trim().toLowerCase();
+              const b = nameB.split('(')[0].trim().toLowerCase();
+              if (!a || !b) return false;
+              return a === b || a.includes(b) || b.includes(a);
+            };
+
+            // Resolve portrait image with multi-source fallback
+            let portraitUrl = c.avatarUrl || c.tokenImageUrl;
+
+            if (!portraitUrl && activeSheet?.avatarUrl && isMatch(c.name, activeSheet.characterName)) {
+              portraitUrl = activeSheet.avatarUrl;
+            }
+
+            if (!portraitUrl && characterSheets && characterSheets.length > 0) {
+              const sheetMatch = characterSheets.find((s) => isMatch(c.name, s.characterName) && s.avatarUrl);
+              if (sheetMatch?.avatarUrl) {
+                portraitUrl = sheetMatch.avatarUrl;
+              }
+            }
+
+            if (!portraitUrl && campaignMembers && campaignMembers.length > 0) {
+              const memberMatch = campaignMembers.find((m) => isMatch(c.name, m.characterName) && m.avatarUrl);
+              if (memberMatch?.avatarUrl) {
+                portraitUrl = memberMatch.avatarUrl;
+              }
+            }
 
             return (
               <div
@@ -152,13 +189,17 @@ export const PlayerCombatTrackerHUD: React.FC<PlayerCombatTrackerHUDProps> = ({
           })}
         </div>
 
-        {/* Right Side: Refined Turn Indicator Badge (No Huge Button) */}
+        {/* Right Side: Refined Turn Indicator & End Turn Button */}
         <div className="flex items-center gap-2 shrink-0">
           {isMyTurn ? (
-            <div className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-mono font-bold shadow-lg shadow-amber-500/10 flex items-center gap-1.5 animate-pulse">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>SEU TURNO</span>
-            </div>
+            <button
+              onClick={onEndTurn}
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-950/40 flex items-center gap-1.5 transition-all active:scale-95 animate-pulse cursor-pointer border border-emerald-400/50"
+              title="Encerrar seu turno e passar a vez para o próximo combatente"
+            >
+              <CheckCircle2 className="w-4 h-4 text-slate-950" />
+              <span>Encerrar Turno</span>
+            </button>
           ) : (
             <div className="px-3 py-1.5 rounded-xl bg-[#121826] border border-[#2a3449] text-slate-400 text-xs font-mono flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-slate-500" />
