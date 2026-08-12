@@ -115,6 +115,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const lastTokenMoveTimesRef = useRef<Record<string, number>>({});
   const lastTokenRotateTimesRef = useRef<Record<string, number>>({});
+  const broadcastCombatUpdateRef = useRef<((payload: any) => void) | null>(null);
 
   // Active campaign ID for Supabase WebSocket channels
   const { activeCampaign } = useCampaign();
@@ -297,6 +298,13 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 ...activeScene,
                 combatants: next,
               });
+              if (broadcastCombatUpdateRef.current) {
+                broadcastCombatUpdateRef.current({
+                  combatants: next,
+                  currentTurnIndex,
+                  roundCount,
+                });
+              }
             }
             return next;
           }
@@ -304,7 +312,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         });
       }
     }
-  }, [storeInitializeFromCombatants, activeCampaign, activeScene, updateScene]);
+  }, [storeInitializeFromCombatants, activeCampaign, activeScene, updateScene, currentTurnIndex, roundCount]);
 
   // Realtime Sync Hook
   const {
@@ -490,6 +498,9 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
     },
   });
+
+  // Sync the ref immediately after initialization
+  broadcastCombatUpdateRef.current = broadcastCombatUpdate;
 
   // Carrega estado persistido localmente ao inicializar
   useEffect(() => {

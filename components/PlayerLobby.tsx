@@ -762,7 +762,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
              token_type: updatedWithTimestamp.tokenType || '3d',
            })
            .eq('campaign_id', cId)
-           .eq('user_id', uId)
+           .ilike('character_name', updatedWithTimestamp.characterName || 'Sem Nome')
            .then(({ error }) => {
              if (error) {
                console.error('Erro ao sincronizar token com campaign_members:', error);
@@ -1638,6 +1638,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                     </div>
 
                     {/* Feed da Aventura resumido */}
+                    {/*
                     <div className="space-y-2 pt-2 border-t border-[#2a3449]">
                       <h4 className="text-xs font-bold text-slate-300 uppercase font-mono flex items-center gap-1.5">
                         <BookOpen className="w-3.5 h-3.5 text-amber-400" /> Diário de Bordo
@@ -1657,6 +1658,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                         </div>
                       )}
                     </div>
+                    */}
                   </div>
                 ) : sidebarTab === 'log' ? (
                   <SharedGameLog

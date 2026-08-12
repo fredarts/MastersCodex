@@ -452,8 +452,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
     let resolvedHp = 10;
     let resolvedMaxHp = 10;
     let resolvedAc = 10;
-    let resolvedTokenType: 'billboard' | '3d' = '3d';
-    let resolvedAvatarUrl: string | undefined;
+    let resolvedTokenType: 'billboard' | '3d' = mem.tokenType || '3d';
+    let resolvedAvatarUrl: string | undefined = mem.avatarUrl;
 
     try {
       const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
@@ -521,8 +521,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
         let resolvedHp = 10;
         let resolvedMaxHp = 10;
         let resolvedAc = 10;
-        let resolvedTokenType: 'billboard' | '3d' = '3d';
-        let resolvedAvatarUrl: string | undefined;
+        let resolvedTokenType: 'billboard' | '3d' = mem.tokenType || '3d';
+        let resolvedAvatarUrl: string | undefined = mem.avatarUrl;
 
         try {
           const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
