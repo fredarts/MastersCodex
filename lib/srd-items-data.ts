@@ -1,6 +1,19 @@
 import { SRDItem } from './types';
+import { BATCH_2_RINGS } from './srd-items-batch-2';
+import { BATCH_3_WANDS_STAVES_RODS } from './srd-items-batch-3';
+import { BATCH_4_WEAPONS } from './srd-items-batch-4';
+import { BATCH_5_ARMORS } from './srd-items-batch-5';
+import { BATCH_6_WONDROUS_A_I } from './srd-items-batch-6';
+import { BATCH_7_WONDROUS_J_Z } from './srd-items-batch-7';
+import { BATCH_8_POTIONS_SCROLLS } from './srd-items-batch-8';
+import { BATCH_9_WEARABLES } from './srd-items-batch-9';
+import { BATCH_10_COLLECTIONS } from './srd-items-batch-10';
+import { BATCH_11_WONDROUS } from './srd-items-batch-11';
+import { BATCH_12_GENERIC_GEAR } from './srd-items-batch-12';
+import { BATCH_13_VARIANTS } from './srd-items-batch-13-variants';
+import { BATCH_14_UNIQUES } from './srd-items-batch-14-uniques';
 
-export const ALL_SRD_ITEMS: SRDItem[] = [
+export const BATCH_1_ITEMS: SRDItem[] = [
   // ==========================================
   // POÇÕES & CONSUMÍVEIS (POTIONS & CONSUMABLES)
   // ==========================================
@@ -829,3 +842,25 @@ export const ALL_SRD_ITEMS: SRDItem[] = [
     weight: 2,
   }
 ];
+
+const ALL_ITEMS_WITH_DUPLICATES: SRDItem[] = [
+  ...BATCH_1_ITEMS,
+  ...BATCH_2_RINGS,
+  ...BATCH_3_WANDS_STAVES_RODS,
+  ...BATCH_4_WEAPONS,
+  ...BATCH_5_ARMORS,
+  ...BATCH_6_WONDROUS_A_I,
+  ...BATCH_7_WONDROUS_J_Z,
+  ...BATCH_8_POTIONS_SCROLLS,
+  ...BATCH_9_WEARABLES,
+  ...BATCH_10_COLLECTIONS,
+  ...BATCH_11_WONDROUS,
+  ...BATCH_12_GENERIC_GEAR,
+  ...BATCH_13_VARIANTS,
+  ...BATCH_14_UNIQUES
+];
+
+// Remove duplicates by ID (keeping the newest one that was added)
+export const ALL_SRD_ITEMS: SRDItem[] = Array.from(
+  new Map(ALL_ITEMS_WITH_DUPLICATES.map(item => [item.id, item])).values()
+);
