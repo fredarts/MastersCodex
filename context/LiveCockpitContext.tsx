@@ -5,6 +5,8 @@ import { Combatant, CombatLogEntry, ChatMessage, PlayerRollEvent, DmCursorPayloa
 import { useRealtimeSync } from '@/lib/hooks/useRealtimeSync';
 import { useCampaign } from '@/context/CampaignContext';
 import { useAuth } from '@/context/AuthContext';
+import { useSession } from '@/context/SessionContext';
+import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { setGlobalBroadcaster } from '@/lib/dnd5e-dice';
 import { CRDTSolver } from '@/lib/sync/CRDTSolver';
 
@@ -117,6 +119,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   // Active campaign ID for Supabase WebSocket channels
   const { activeCampaign } = useCampaign();
   const { user } = useAuth();
+  const { activeScene, updateScene } = useSession();
   const campaignId = activeCampaign?.id || ((!user || user.id === 'user-demo') ? 'camp-demo-1' : null);
 
   // Helper to compare combat states
@@ -237,6 +240,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
           floorTextureUrl: sceneData.floorTextureUrl !== undefined ? sceneData.floorTextureUrl : base.floorTextureUrl,
           environmentSettings: sceneData.environmentSettings !== undefined ? sceneData.environmentSettings : base.environmentSettings,
           associatedMapId: sceneData.associatedMapId !== undefined ? sceneData.associatedMapId : base.associatedMapId,
+          associatedMapIds: sceneData.associatedMapIds !== undefined ? sceneData.associatedMapIds : base.associatedMapIds,
         };
       });
     }
@@ -251,7 +255,56 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (payload.roundCount !== undefined) {
       setRoundCount(payload.roundCount);
     }
-  }, [storeInitializeFromCombatants]);
+
+    if (payload.type === 'CHARACTER_MODEL_UPDATED' && payload.characterModelUpdated !== undefined) {
+      const sheet = payload.characterModelUpdated;
+      if (sheet && sheet.characterName) {
+        const updatedModelUrl =
+          sheet.modelUrl || getModelUrlByNameOrPath(sheet.className || sheet.characterName);
+        const updatedTokenType: 'billboard' | '3d' = sheet.tokenType || '3d';
+        const updatedAvatarUrl: string | undefined = sheet.avatarUrl;
+
+        setCombatants((prev) => {
+          let hasChanges = false;
+          const next = prev.map((c) => {
+            const cClean = c.name.split('(')[0].trim().toLowerCase();
+            const sheetClean = (sheet.characterName || '').split('(')[0].trim().toLowerCase();
+            const isMatch =
+              cClean === sheetClean ||
+              c.name.toLowerCase().includes(sheetClean) ||
+              sheet.characterName?.toLowerCase().includes(cClean) ||
+              (sheet.id && c.id.includes(sheet.id));
+
+            if (isMatch) {
+              if (c.modelUrl !== updatedModelUrl || c.tokenType !== updatedTokenType || c.avatarUrl !== updatedAvatarUrl) {
+                hasChanges = true;
+                return {
+                  ...c,
+                  modelUrl: updatedModelUrl,
+                  tokenType: updatedTokenType,
+                  tokenImageUrl: updatedTokenType === 'billboard' ? updatedAvatarUrl : undefined,
+                  avatarUrl: updatedAvatarUrl,
+                };
+              }
+            }
+            return c;
+          });
+
+          if (hasChanges) {
+            const isDm = activeCampaign?.role === 'dm';
+            if (isDm && activeScene && updateScene) {
+              updateScene({
+                ...activeScene,
+                combatants: next,
+              });
+            }
+            return next;
+          }
+          return prev;
+        });
+      }
+    }
+  }, [storeInitializeFromCombatants, activeCampaign, activeScene, updateScene]);
 
   // Realtime Sync Hook
   const {

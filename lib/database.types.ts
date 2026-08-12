@@ -42,6 +42,7 @@ export interface CampaignMemberRow {
   displayName?: string | null;
   avatar_url?: string | null;
   model_url?: string | null;
+  token_type?: 'billboard' | '3d' | null;
   joined_at?: string;
 }
 

@@ -168,7 +168,9 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                        typedMap.sceneId !== currentScene.id || 
                        (currentMapId && !sceneAssociatedIds.includes(currentMapId));
 
-    if (needsFetch && lastLoadedSceneMapKey !== currentScene.id) {
+    const fetchKey = `${currentScene.id}_${campaignMaps.length}`;
+
+    if (needsFetch && lastLoadedSceneMapKey !== fetchKey) {
       setIsMapLoading(true);
       fetchSceneMap(currentScene.id).then((savedData) => {
         let activeId = savedData?.activeMapId;
@@ -303,7 +305,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
             activeMapId: activeId,
             sceneId: currentScene.id
           });
-          setLastLoadedSceneMapKey(currentScene.id);
+          setLastLoadedSceneMapKey(fetchKey);
         }
         setIsMapLoading(false);
       }).catch((err) => {
@@ -311,7 +313,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
         setIsMapLoading(false);
       });
     }
-  }, [isOpen, liveDisplayMode, projectedScene, activeScene, mapData, lastLoadedSceneMapKey, fetchSceneMap, setMapData, campaignMaps]);
+  }, [isOpen, liveDisplayMode, projectedScene, activeScene, mapData, lastLoadedSceneMapKey, fetchSceneMap, setMapData, campaignMaps, combatants]);
 
   if (!isOpen) return null;
 

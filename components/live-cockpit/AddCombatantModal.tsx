@@ -84,10 +84,14 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
     const rollInit = Math.floor(Math.random() * 20) + 1;
     const pName = member.characterName || member.displayName || 'Jogador';
 
-    // Read real HP and AC from character sheet in localStorage
+    // Read real HP, AC, tokenType, modelUrl, and avatarUrl from character sheet in localStorage/member
     let resolvedHp = 20;
     let resolvedMaxHp = 20;
     let resolvedAc = 10;
+    let resolvedTokenType: 'billboard' | '3d' = member.tokenType || '3d';
+    let resolvedModelUrl = member.modelUrl || getModelUrlByNameOrPath(member.characterName || '');
+    let resolvedAvatarUrl = member.avatarUrl || '';
+
     try {
       const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
       if (saved) {
@@ -104,6 +108,9 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
           if (found.currentHp != null) resolvedHp = found.currentHp;
           else resolvedHp = resolvedMaxHp;
           if (found.armorClass) resolvedAc = found.armorClass;
+          if (found.tokenType) resolvedTokenType = found.tokenType;
+          if (found.modelUrl) resolvedModelUrl = found.modelUrl;
+          if (found.avatarUrl) resolvedAvatarUrl = found.avatarUrl;
         }
       }
     } catch (e) {}
@@ -117,7 +124,10 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
       initiative: rollInit,
       type: 'player',
       conditions: [],
-      modelUrl: member.modelUrl || getModelUrlByNameOrPath(member.characterName || ''),
+      tokenType: resolvedTokenType,
+      modelUrl: resolvedTokenType === '3d' ? resolvedModelUrl : undefined,
+      tokenImageUrl: resolvedTokenType === 'billboard' ? resolvedAvatarUrl : undefined,
+      avatarUrl: resolvedAvatarUrl,
     };
     onAddCombatant(newCombatant);
   };

@@ -76,6 +76,7 @@ export function mapCampaignMemberRowToDomain(row: CampaignMemberRow): CampaignMe
     displayName: row.displayName || undefined,
     avatarUrl: row.avatar_url || undefined,
     modelUrl: row.model_url || undefined,
+    tokenType: row.token_type || undefined,
     joinedAt: row.joined_at,
   };
 }

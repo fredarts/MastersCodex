@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { patchWebGLContext } from '@/lib/webgl-utils';
 
@@ -28,6 +28,8 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [webglFailed, setWebglFailed] = useState(false);
+  const retryCountRef = useRef(0);
   const stateRef = useRef({
     renderer: null as THREE.WebGLRenderer | null,
     scene: null as THREE.Scene | null,
@@ -84,49 +86,30 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
       return newUv;
     }
 
-    // Pseudo-random noise
-    float random(vec2 st) {
-      return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
-    }
-
-    // 2D Noise
-    float noise(vec2 st) {
-      vec2 i = floor(st);
-      vec2 f = fract(st);
-      float a = random(i);
-      float b = random(i + vec2(1.0, 0.0));
-      float c = random(i + vec2(0.0, 1.0));
-      float d = random(i + vec2(1.0, 1.0));
-      vec2 u = f * f * (3.0 - 2.0 * f);
-      return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+    // Pseudo random noise
+    float random(vec2 co) {
+      return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
     }
 
     void main() {
-      // Corrected UVs for both textures
       vec2 uv1 = getCoverUv(vUv, uImageSize1, uPlaneSize);
       vec2 uv2 = getCoverUv(vUv, uImageSize2, uPlaneSize);
-
-      // Noise pattern based on coordinates and time
-      float n = noise(vUv * 15.0 + uTime * 0.15);
-
-      // Transition progress threshold (from 0 to 2.5 to span the diagonal and noise)
-      float progress = uTransition * 2.5;
-      
-      // Rule: diagonal gradient + noise distortion
-      float rule = vUv.x + vUv.y + n * 0.5;
-
-      // Glow edge calculation
-      float edgeWidth = 0.18;
-      float edge = smoothstep(progress - edgeWidth, progress, rule) * (1.0 - smoothstep(progress, progress + edgeWidth, rule));
 
       vec4 color1 = texture2D(uTex1, uv1);
       vec4 color2 = texture2D(uTex2, uv2);
 
-      vec4 finalColor;
-      if (rule < progress) {
-        finalColor = color2;
-      } else {
-        finalColor = color1;
+      // Magical dissolve pattern (organic noise)
+      float noiseBase = random(vUv * 3.0 + vec2(uTime * 0.3));
+      float dissolve = smoothstep(uTransition - 0.3, uTransition + 0.3, noiseBase);
+
+      // Blend old -> new based on dissolve
+      vec4 finalColor = mix(color1, color2, dissolve * uTransition);
+
+      // Edge glow effect during transition
+      float edge = 0.0;
+      if (uTransition > 0.0 && uTransition < 1.0) {
+        float diff = abs(dissolve - 0.5);
+        edge = smoothstep(0.35, 0.0, diff) * uTransition * 1.5;
       }
 
       // Magical glowing particles (amber/orange spark particles for cosmic fire effect)
@@ -162,15 +145,23 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
       });
     } catch (e) {
       console.warn("MagicShaderSlideshow: WebGL context creation failed.", e);
+      // Retry once after a short delay (handles React StrictMode double-invoke)
+      if (retryCountRef.current < 2) {
+        retryCountRef.current++;
+        const retryTimer = setTimeout(() => {
+          setWebglFailed((prev) => !prev); // Force re-render to retry
+        }, 500);
+        return () => clearTimeout(retryTimer);
+      }
+      setWebglFailed(true);
       return;
     }
     patchWebGLContext(renderer);
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     state.renderer = renderer;
-
-    const gl = renderer.getContext();
-    const extension = gl ? gl.getExtension('WEBGL_lose_context') : null;
+    retryCountRef.current = 0; // Reset retry counter on success
+    setWebglFailed(false);
 
     // 2. Initialize Scene & Camera
     const scene = new THREE.Scene();
@@ -284,11 +275,10 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
         state.texture2.dispose();
       }
       renderer.dispose();
-      if (extension) {
-        extension.loseContext();
-      }
+      state.renderer = null;
+      state.material = null;
     };
-  }, []);
+  }, [webglFailed]);
 
   // Effect to load new texture and trigger transition
   useEffect(() => {
@@ -319,7 +309,23 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
     });
   }, [imageUrl]);
 
-
+  // CSS Fallback: when WebGL is unavailable, render the image with CSS effects
+  if (webglFailed) {
+    return (
+      <div className={`relative w-full h-full min-h-[250px] overflow-hidden ${className}`}>
+        {imageUrl && (
+          <img
+            src={imageUrl}
+            alt="Ilustração da cena"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        )}
+        {/* Overlay gradient to simulate the shader ambient look */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0d14]/80 via-transparent to-[#0a0d14]/40 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0a0d14]/30 via-transparent to-[#0a0d14]/30 pointer-events-none" />
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef} className={`relative w-full h-full min-h-[250px] overflow-hidden ${className}`}>

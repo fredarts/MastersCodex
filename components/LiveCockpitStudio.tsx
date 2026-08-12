@@ -72,6 +72,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     setSpellTargetPosition,
     broadcastCombatLogEntry,
     setCombatLogs,
+    broadcastCombatUpdate,
   } = useLiveCockpit();
 
   const { user } = useAuth();
@@ -343,6 +344,19 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         });
 
         if (hasChanges) {
+          if (broadcastCombatUpdate) {
+            broadcastCombatUpdate({
+              combatants: next,
+              currentTurnIndex,
+              roundCount,
+            });
+          }
+          if (activeScene && updateScene) {
+            updateScene({
+              ...activeScene,
+              combatants: next,
+            });
+          }
           return next;
         }
         return prev;
@@ -372,7 +386,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       if (bc) bc.close();
       window.removeEventListener('masters_codex_character_model_updated', handleLocalEvent);
     };
-  }, [setCombatants, broadcastToPlayerView]);
+  }, [setCombatants, broadcastCombatUpdate, activeScene, updateScene, currentTurnIndex, roundCount]);
 
   // Listen to 3D Grid spell confirms
   useEffect(() => {

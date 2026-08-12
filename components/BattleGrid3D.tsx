@@ -12,6 +12,7 @@ import { useBattleGridState } from '@/lib/hooks/useBattleGridState';
 import { applySceneEnvironment } from './battle-3d/BattleEnvironment';
 import { setupCameraAndOrbit, DEFAULT_CAMERA_PRESETS } from './battle-3d/BattleCameraControls';
 import { createTokenMesh, updateTokenMeshState, TokenMeshOptions } from './battle-3d/Token3DMesh';
+import { getModelUrlByNameOrPath, resolvePlayerModelUrl } from '@/lib/3d-models';
 import { createBattleSkyDome, SkyDomeInstance } from './battle-3d/BattleSkyDome';
 import { createCloudSystem, CloudSystemInstance } from './battle-3d/BattleClouds';
 import { createRainParticleSystem, createGroundFogSystem } from './battle-3d/WeatherEffects';
@@ -765,7 +766,29 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         genericOptionsMap.set(key, options);
       } else {
         const existingGroup = tokenMeshMapRef.current.get(key);
+        let shouldCreate = !existingGroup;
+
         if (existingGroup) {
+          const ud = existingGroup.userData || {};
+          const currentType = c.tokenType || (c.tokenImageUrl ? 'billboard' : '3d');
+          const currentImg = c.tokenImageUrl || c.avatarUrl;
+          let currentModel = c.modelUrl;
+          if (!currentModel && currentType === '3d') {
+            currentModel = c.type === 'player'
+              ? resolvePlayerModelUrl(c.name)
+              : getModelUrlByNameOrPath(c.name);
+          }
+
+          if (ud.tokenType !== currentType || ud.modelUrl !== currentModel || ud.imageUrl !== currentImg) {
+            // Re-create the token mesh because the representation changed!
+            tokenGroup.remove(existingGroup);
+            disposeHierarchy(existingGroup);
+            tokenMeshMapRef.current.delete(key);
+            shouldCreate = true;
+          }
+        }
+
+        if (!shouldCreate && existingGroup) {
           updateTokenMeshState(existingGroup, options);
 
           // Dynamic PointLight for Torches / Token Lighting

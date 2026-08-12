@@ -215,6 +215,7 @@ export interface CampaignMember {
   displayName?: string;
   avatarUrl?: string;
   modelUrl?: string;
+  tokenType?: 'billboard' | '3d';
   joinedAt?: string;
 }
 

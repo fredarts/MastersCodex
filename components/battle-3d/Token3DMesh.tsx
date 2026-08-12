@@ -248,6 +248,12 @@ export function createTokenMesh(
     }
   }
 
+  group.userData = {
+    tokenType,
+    modelUrl,
+    imageUrl,
+  };
+
   return group;
 }
 

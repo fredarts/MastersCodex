@@ -61,6 +61,7 @@ import { ThreeErrorBoundary } from './ThreeErrorBoundary';
 import { DysonCanvas } from './map/DysonCanvas';
 import { MagicShaderSlideshow } from './MagicShaderSlideshow';
 import { normalizeImageUrl, getYouTubeEmbedUrl } from '@/lib/imageUtils';
+import { revealVisionWithLOS, getTokenVisionRadius } from '@/components/map/visionCore';
 
 interface PlayerLobbyProps {
   onOpenPlayerView: () => void;
@@ -87,12 +88,13 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     broadcastCombatUpdate,
     updateCombatantState,
     mapData,
+    setMapData,
     projectedScene,
     drawings,
     broadcastStateRequest,
     selectedTargetId,
   } = useLiveCockpit();
-  const { activeScene } = useSession();
+  const { activeScene, fetchSceneMap, campaignMaps } = useSession();
   const { user } = useAuth();
   const { showAlert, showConfirm } = useCustomDialog();
   const { setIsOnPlayerCampaignView } = usePartyLoot();
@@ -116,8 +118,125 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     }
   }, [activeScene?.combatants, combatants.length, setCombatants, initializeFromCombatants]);
 
-  // VTT Player Cockpit UI States
+  // Auto-fetch dungeon map data from Supabase when the player is in 'map' view
   const [playerCanvasView, setPlayerCanvasView] = useState<'auto' | 'grid' | 'map' | 'art'>('auto');
+  const [lastLoadedSceneMapKey, setLastLoadedSceneMapKey] = useState<string | null>(null);
+  const [isMapLoading, setIsMapLoading] = useState(false);
+  useEffect(() => {
+    const activeView = playerCanvasView === 'auto' ? liveDisplayMode : playerCanvasView;
+    const currentScene = projectedScene || activeScene;
+    if (activeView !== 'map' || !currentScene?.id) return;
+
+    const typedMap = mapData as { activeMapId?: string; sceneId?: string; grid?: any[] } | null;
+    const needsFetch = !typedMap || !typedMap.grid || typedMap.grid.length === 0 || typedMap.sceneId !== currentScene.id;
+    const fetchKey = `${currentScene.id}_${campaignMaps.length}`;
+
+    if (needsFetch && lastLoadedSceneMapKey !== fetchKey && !isMapLoading) {
+      console.log('[PlayerLobby] Fetching dungeon map for scene:', currentScene.id, 'campaignMaps:', campaignMaps.length);
+      setIsMapLoading(true);
+      fetchSceneMap(currentScene.id).then((savedData) => {
+        let activeId = savedData?.activeMapId;
+        let gridData = null;
+
+        const associatedIds = (currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []))
+          .filter((id: string) => campaignMaps.some(m => m.id === id));
+        if (!activeId || !associatedIds.includes(activeId)) {
+          activeId = associatedIds[0] || null;
+        }
+        const templateMap = campaignMaps.find(m => m.id === activeId);
+        console.log('[PlayerLobby] savedData:', !!savedData, 'activeId:', activeId, 'templateMap:', !!templateMap, 'associatedIds:', associatedIds);
+
+        if (savedData) {
+          if (savedData.maps) {
+            gridData = activeId ? savedData.maps[activeId] : null;
+          } else if (savedData.grid) {
+            gridData = savedData;
+            activeId = currentScene.associatedMapId || 'legacy';
+          }
+        }
+
+        if (gridData && templateMap && templateMap.gridData) {
+          const tGrid = templateMap.gridData.grid || [];
+          const sGrid = gridData.grid || [];
+          const mergedGrid = tGrid.map((row: any[], r: number) =>
+            row.map((cell: any, c: number) => {
+              const sCell = sGrid[r]?.[c];
+              return {
+                ...cell,
+                fog: sCell !== undefined ? sCell.fog : true,
+                tokenName: (sCell && sCell.tokenName) ? sCell.tokenName : cell.tokenName,
+                tokenColor: (sCell && sCell.tokenName) ? sCell.tokenColor : cell.tokenColor,
+              };
+            })
+          );
+
+          // Reveal vision around tokens with LOS
+          for (let r = 0; r < mergedGrid.length; r++) {
+            for (let c = 0; c < mergedGrid[r].length; c++) {
+              if (mergedGrid[r][c].tokenName) {
+                const radius = getTokenVisionRadius(mergedGrid[r][c].tokenName, combatants);
+                revealVisionWithLOS(mergedGrid, r, c, radius);
+              }
+            }
+          }
+
+          gridData = {
+            grid: mergedGrid,
+            bgImageUrl: templateMap.gridData.bgImageUrl ?? gridData.bgImageUrl ?? null,
+            gridScale: templateMap.gridData.gridScale ?? gridData.gridScale ?? 40,
+            gridOffsetX: templateMap.gridData.gridOffsetX ?? gridData.gridOffsetX ?? 0,
+            gridOffsetY: templateMap.gridData.gridOffsetY ?? gridData.gridOffsetY ?? 0,
+            vectorWalls: templateMap.gridData.vectorWalls ?? gridData.vectorWalls ?? [],
+            lightSources: templateMap.gridData.lightSources ?? gridData.lightSources ?? [],
+          };
+        } else if (gridData && gridData.grid && gridData.grid.length > 0) {
+          // Grid data from saved scene map but no template (use as-is)
+          console.log('[PlayerLobby] Using raw savedData grid (no templateMap match)');
+        } else if (!gridData && templateMap && templateMap.gridData) {
+          const tempGrid = templateMap.gridData.grid || [];
+          const coveredGrid = tempGrid.map((row: any[]) =>
+            row.map((cell: any) => ({ ...cell, fog: true }))
+          );
+          for (let r = 0; r < coveredGrid.length; r++) {
+            for (let c = 0; c < coveredGrid[r].length; c++) {
+              if (tempGrid[r]?.[c]?.tokenName) {
+                coveredGrid[r][c].tokenName = tempGrid[r][c].tokenName;
+                coveredGrid[r][c].tokenColor = tempGrid[r][c].tokenColor;
+                const radius = getTokenVisionRadius(tempGrid[r][c].tokenName, combatants);
+                revealVisionWithLOS(coveredGrid, r, c, radius);
+              }
+            }
+          }
+          gridData = { ...templateMap.gridData, grid: coveredGrid };
+        }
+
+        if (gridData && gridData.grid && gridData.grid.length > 0) {
+          console.log('[PlayerLobby] Map loaded successfully. Grid size:', gridData.grid.length, 'x', gridData.grid[0]?.length);
+          setMapData({
+            grid: gridData.grid || [],
+            bgImageUrl: gridData.bgImageUrl || null,
+            gridScale: gridData.gridScale || 40,
+            gridOffsetX: gridData.gridOffsetX || 0,
+            gridOffsetY: gridData.gridOffsetY || 0,
+            vectorWalls: gridData.vectorWalls || [],
+            lightSources: gridData.lightSources || [],
+            activeMapId: activeId,
+            sceneId: currentScene.id
+          });
+        } else {
+          console.warn('[PlayerLobby] No grid data found for scene:', currentScene.id);
+        }
+        setLastLoadedSceneMapKey(fetchKey);
+        setIsMapLoading(false);
+      }).catch((err) => {
+        console.error('Erro ao sincronizar mapa no PlayerLobby:', err);
+        setLastLoadedSceneMapKey(fetchKey);
+        setIsMapLoading(false);
+      });
+    }
+  }, [playerCanvasView, liveDisplayMode, projectedScene, activeScene, mapData, lastLoadedSceneMapKey, fetchSceneMap, setMapData, campaignMaps, combatants, isMapLoading]);
+
+  // VTT Player Cockpit UI States
   const [sidebarTab, setSidebarTab] = useState<'init' | 'log' | 'chat'>('init');
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [macroDisplayMode, setMacroDisplayMode] = useState<MacroBarDisplayMode>('both');
@@ -607,6 +726,14 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
       })
     );
 
+    // Transmite via canal em tempo real do Supabase para o DM e outros integrantes
+    if (broadcastToPlayerView) {
+      broadcastToPlayerView({
+        type: 'CHARACTER_MODEL_UPDATED',
+        characterModelUpdated: updatedWithTimestamp,
+      });
+    }
+
     // Sincroniza a ficha com o banco de dados Supabase para acesso do Mestre e de outros usuários
     if (isSupabaseConfigured()) {
       const uId = user?.id || updatedWithTimestamp.userId || 'player-1';
@@ -629,10 +756,21 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
         });
 
         if (cId && isValidUuid(cId)) {
-          supabase.from('campaign_members').update({
-            character_name: updatedWithTimestamp.characterName || 'Sem Nome',
-            avatar_url: updatedWithTimestamp.avatarUrl || null,
-          }).eq('campaign_id', cId).eq('user_id', uId);
+           supabase.from('campaign_members').update({
+             character_name: updatedWithTimestamp.characterName || 'Sem Nome',
+             avatar_url: updatedWithTimestamp.avatarUrl || null,
+             token_type: updatedWithTimestamp.tokenType || '3d',
+           })
+           .eq('campaign_id', cId)
+           .eq('user_id', uId)
+           .then(({ error }) => {
+             if (error) {
+               console.error('Erro ao sincronizar token com campaign_members:', error);
+               toast.error(`Não foi possível salvar a preferência de token no servidor: ${error.message}`);
+             } else {
+               console.log('Preferência de token salva com sucesso em campaign_members.');
+             }
+           });
         }
       }
     }
@@ -1126,46 +1264,79 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             </div>
 
             {/* Controles de Visualização / Projeção do Jogador (Estilo Cockpit DM) */}
-            <div className="flex items-center gap-1.5 bg-[#0a0d14] p-1.5 rounded-xl border border-[#2a3449]">
-              <button
-                onClick={() => setPlayerCanvasView('art')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all ${
-                  playerCanvasView === 'art'
-                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
-                }`}
-                title="Modo Ilustração / Arte da Cena"
-              >
-                <ImageIcon className="w-3.5 h-3.5" />
-                <span>Ilustração</span>
-              </button>
+            {(() => {
+              const resolvedView = playerCanvasView === 'auto' ? liveDisplayMode : playerCanvasView;
+              const isArt = resolvedView === 'artwork' || resolvedView === 'art';
+              const isMap = resolvedView === 'map';
+              const isGrid = resolvedView === 'grid' || resolvedView === 'combat';
+              return (
+                <div className="flex items-center gap-1.5 bg-[#0a0d14] p-1.5 rounded-xl border border-[#2a3449]">
+                  {/* Botão Auto (Seguir) */}
+                  <button
+                    onClick={() => setPlayerCanvasView('auto')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 ${
+                      playerCanvasView === 'auto'
+                        ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md shadow-blue-500/20'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
+                    }`}
+                    title="Seguir visualização projetada pelo Mestre automaticamente"
+                  >
+                    <Sparkles className={`w-3.5 h-3.5 ${playerCanvasView === 'auto' ? 'animate-pulse text-amber-300' : ''}`} />
+                    <span>Auto</span>
+                  </button>
 
-              <button
-                onClick={() => setPlayerCanvasView('map')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all ${
-                  playerCanvasView === 'map'
-                    ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
-                }`}
-                title="Modo Dungeon Map 2D"
-              >
-                <MapIcon className="w-3.5 h-3.5" />
-                <span>Dungeon Map</span>
-              </button>
+                  <div className="h-4 w-[1px] bg-[#2a3449]/60" />
 
-              <button
-                onClick={() => setPlayerCanvasView('grid')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all ${
-                  playerCanvasView === 'grid' || playerCanvasView === 'auto'
-                    ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
-                }`}
-                title="Modo Grid 3D / Combate"
-              >
-                <Swords className="w-3.5 h-3.5" />
-                <span>Grid 3D / Combate</span>
-              </button>
-            </div>
+                  {/* Botão Ilustração */}
+                  <button
+                    onClick={() => setPlayerCanvasView('art')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 ${
+                      playerCanvasView === 'art'
+                        ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                        : isArt
+                        ? 'border border-amber-500/40 text-amber-400 bg-amber-950/20 hover:bg-[#161f30]'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
+                    }`}
+                    title="Modo Ilustração / Arte da Cena"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span>Ilustração</span>
+                  </button>
+
+                  {/* Botão Dungeon Map */}
+                  <button
+                    onClick={() => setPlayerCanvasView('map')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 ${
+                      playerCanvasView === 'map'
+                        ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'
+                        : isMap
+                        ? 'border border-indigo-500/40 text-indigo-400 bg-indigo-950/20 hover:bg-[#161f30]'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
+                    }`}
+                    title="Modo Dungeon Map 2D"
+                  >
+                    <MapIcon className="w-3.5 h-3.5" />
+                    <span>Dungeon Map</span>
+                  </button>
+
+                  {/* Botão Grid 3D / Combate */}
+                  <button
+                    onClick={() => setPlayerCanvasView('grid')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 ${
+                      playerCanvasView === 'grid'
+                        ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20'
+                        : isGrid
+                        ? 'border border-rose-500/40 text-rose-400 bg-rose-950/20 hover:bg-[#161f30]'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
+                    }`}
+                    title="Modo Grid 3D / Combate"
+                  >
+                    <Swords className="w-3.5 h-3.5" />
+                    <span>Grid 3D</span>
+                  </button>
+                </div>
+              );
+            })()}
 
             {/* Right Header Actions & Online Avatars */}
             <div className="flex items-center gap-3">
@@ -1269,6 +1440,13 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                         />
                       );
                     }
+                    // Map view is active but data hasn't loaded yet
+                    return (
+                      <div className="flex flex-col items-center justify-center gap-3 text-slate-400 font-mono animate-pulse">
+                        <MapIcon className="w-10 h-10 text-indigo-500/60 animate-bounce" />
+                        <p className="text-xs uppercase tracking-widest text-indigo-400">Carregando Mapa da Dungeon...</p>
+                      </div>
+                    );
                   }
 
                   // Default Scene Artwork View
