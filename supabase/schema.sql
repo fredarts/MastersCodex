@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS public.campaign_feed_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   campaign_id UUID NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
   session_id UUID REFERENCES public.sessions(id) ON DELETE SET NULL,
-  event_type TEXT NOT NULL CHECK (event_type IN ('battle_summary', 'npc_encounter', 'session_recap', 'milestone', 'house_rule')),
+  event_type TEXT NOT NULL CHECK (event_type IN ('battle_summary', 'npc_encounter', 'session_recap', 'milestone', 'house_rule', 'chat_message', 'world_lore')),
   title TEXT NOT NULL,
   summary TEXT NOT NULL,
   details JSONB DEFAULT '{}'::jsonb,
@@ -321,12 +321,18 @@ CREATE POLICY "Scenes_Modify" ON public.scenes FOR ALL USING (
   )
 );
 
--- CAMPAIGN_FEED_EVENTS: DM ou membros leem, apenas DM edita.
+-- CAMPAIGN_FEED_EVENTS: DM ou membros leem; membros podem inserir; apenas DM edita/apaga.
 ALTER TABLE public.campaign_feed_events ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Feed_Select" ON public.campaign_feed_events FOR SELECT USING (
   public.is_campaign_dm_or_member(campaign_id, auth.uid()::text)
 );
-CREATE POLICY "Feed_Modify" ON public.campaign_feed_events FOR ALL USING (
+CREATE POLICY "Feed_Insert" ON public.campaign_feed_events FOR INSERT WITH CHECK (
+  public.is_campaign_dm_or_member(campaign_id, auth.uid()::text)
+);
+CREATE POLICY "Feed_Update" ON public.campaign_feed_events FOR UPDATE USING (
+  public.is_campaign_dm(campaign_id, auth.uid()::text)
+);
+CREATE POLICY "Feed_Delete" ON public.campaign_feed_events FOR DELETE USING (
   public.is_campaign_dm(campaign_id, auth.uid()::text)
 );
 

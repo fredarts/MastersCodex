@@ -37,7 +37,7 @@ import {
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { useSession } from '@/context/SessionContext';
-import { UserCampaign, CharacterSheet, MacroBarDisplayMode, SecretRollNotificationMode } from '@/lib/types';
+import { UserCampaign, CharacterSheet, MacroBarDisplayMode, SecretRollNotificationMode, TransactionEntry } from '@/lib/types';
 import { CharacterSheetModal } from './character-sheet/CharacterSheetModal';
 import { CharacterManagerModal } from './character-sheet/CharacterManagerModal';
 import { createEmptyCharacterSheet, generateUuid } from '@/lib/dnd5e-data';
@@ -838,6 +838,26 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             pe: cur.pe + (currency.pe || 0),
             pl: cur.pl + (currency.pl || 0),
           };
+
+          // Registra a transação de loot recebido no histórico da ficha
+          const newEntries: TransactionEntry[] = [];
+          const nowStr = new Date().toLocaleString('pt-BR');
+          (['po', 'pp', 'pc', 'pe', 'pl'] as const).forEach(type => {
+            const amount = currency[type];
+            if (amount && amount > 0) {
+              newEntries.push({
+                id: `${Date.now()}-${type}`,
+                type: 'loot',
+                amount,
+                coinType: type,
+                reason: 'Recompensa de Loot (Mestre)',
+                date: nowStr
+              });
+            }
+          });
+          if (newEntries.length > 0) {
+            updated.transactionHistory = [...newEntries, ...(updated.transactionHistory || [])];
+          }
         }
         handleSaveSheetRef.current(updated);
       }

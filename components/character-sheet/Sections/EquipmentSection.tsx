@@ -1,17 +1,77 @@
-import React, { useState } from 'react';
-import { CharacterSheet, CharacterEquipmentItem } from '@/lib/types';
-import { Coins, Package, Plus, Trash2, Gem, Weight, Scale, Sparkles, ShoppingCart } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { CharacterSheet, CharacterEquipmentItem, TransactionEntry } from '@/lib/types';
+import { Coins, Package, Plus, Trash2, Gem, Weight, Scale, Sparkles, ShoppingCart, Lock, Unlock, History, Dices, ArrowDownRight } from 'lucide-react';
 import { ItemCompendiumModal } from '../Modals/ItemCompendiumModal';
 import { toast } from 'sonner';
 import { getEffectiveAttributeScore, recalculateSheetDerivedStats, WEAPON_TABLE } from '@/lib/dnd5e-calculator';
+import { useAuth } from '@/context/AuthContext';
+import { useCampaign } from '@/context/CampaignContext';
 
 interface EquipmentSectionProps {
   sheet: CharacterSheet;
   onChange: (updated: CharacterSheet) => void;
 }
 
+const STARTING_WEALTH_FORMULAS: Record<string, { formula: string; count: number; sides: number; multiplier: number }> = {
+  'artifice': { formula: '5d4 × 10 PO', count: 5, sides: 4, multiplier: 10 },
+  'barbaro': { formula: '2d4 × 10 PO', count: 2, sides: 4, multiplier: 10 },
+  'bardo': { formula: '5d4 × 10 PO', count: 5, sides: 4, multiplier: 10 },
+  'bruxo': { formula: '4d4 × 10 PO', count: 4, sides: 4, multiplier: 10 },
+  'clerigo': { formula: '5d4 × 10 PO', count: 5, sides: 4, multiplier: 10 },
+  'druida': { formula: '2d4 × 10 PO', count: 2, sides: 4, multiplier: 10 },
+  'feiticeiro': { formula: '3d4 × 10 PO', count: 3, sides: 4, multiplier: 10 },
+  'guerreiro': { formula: '5d4 × 10 PO', count: 5, sides: 4, multiplier: 10 },
+  'ladino': { formula: '4d4 × 10 PO', count: 4, sides: 4, multiplier: 10 },
+  'mago': { formula: '4d4 × 10 PO', count: 4, sides: 4, multiplier: 10 },
+  'monge': { formula: '5d4 PO', count: 5, sides: 4, multiplier: 1 },
+  'paladino': { formula: '5d4 × 10 PO', count: 5, sides: 4, multiplier: 10 },
+  'patrulheiro': { formula: '5d4 × 10 PO', count: 5, sides: 4, multiplier: 10 },
+};
+
+const normalizeClassName = (name: string): string => {
+  return (name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+};
+
 export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onChange }) => {
+  const { roleMode } = useAuth();
+  const { createFeedEvent, activeCampaign } = useCampaign();
+
   const [isItemCompendiumOpen, setIsItemCompendiumOpen] = useState(false);
+  
+  // Starting Wealth State
+  const [selectedClassRoll, setSelectedClassRoll] = useState<string>('');
+  const [rollResult, setRollResult] = useState<{
+    rolls: number[];
+    sum: number;
+    total: number;
+    className: string;
+  } | null>(null);
+  const [isRolling, setIsRolling] = useState(false);
+
+  // Spend State
+  const [spendAmount, setSpendAmount] = useState<number>(0);
+  const [spendCoinType, setSpendCoinType] = useState<'po' | 'pp' | 'pc' | 'pe' | 'pl'>('po');
+  const [spendReason, setSpendReason] = useState<string>('');
+  const [isSpendingFormOpen, setIsSpendingFormOpen] = useState(false);
+
+  const isLocked = roleMode !== 'dm' && sheet.startingWealthRolled;
+
+  // Auto-select starting wealth based on sheet class name
+  useEffect(() => {
+    if (sheet.className) {
+      const normalized = normalizeClassName(sheet.className);
+      if (STARTING_WEALTH_FORMULAS[normalized]) {
+        setSelectedClassRoll(normalized);
+      } else {
+        setSelectedClassRoll('custom');
+      }
+    }
+  }, [sheet.className]);
+
   const items = sheet.equipment || [];
 
   const coins = sheet.currency || {
@@ -28,6 +88,133 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
 
   const updateCoins = (newCoins: typeof coins) => {
     onChange({ ...sheet, currency: newCoins });
+  };
+
+  const handleRollStartingWealth = (classKey: string) => {
+    setIsRolling(true);
+    setTimeout(() => {
+      const normalizedKey = classKey.toLowerCase();
+      const config = STARTING_WEALTH_FORMULAS[normalizedKey] || { formula: '4d4 × 10 PO', count: 4, sides: 4, multiplier: 10 };
+      
+      const rolls: number[] = [];
+      let sum = 0;
+      for (let i = 0; i < config.count; i++) {
+        const val = Math.floor(Math.random() * config.sides) + 1;
+        rolls.push(val);
+        sum += val;
+      }
+      const total = sum * config.multiplier;
+
+      const currentCoins = sheet.currency || { po: 0, pp: 0, pc: 0, pe: 0, pl: 0 };
+      const newCoins = {
+        ...currentCoins,
+        po: currentCoins.po + total,
+      };
+
+      const displayName = Object.keys(STARTING_WEALTH_FORMULAS).find(k => k === normalizedKey)
+        ? classKey.charAt(0).toUpperCase() + classKey.slice(1)
+        : 'Outro';
+
+      const initialTransaction: TransactionEntry = {
+        id: Date.now().toString(),
+        type: 'roll',
+        amount: total,
+        coinType: 'po',
+        reason: `Riqueza Inicial Rolada (${config.formula})`,
+        date: new Date().toLocaleString('pt-BR'),
+      };
+
+      onChange({
+        ...sheet,
+        currency: newCoins,
+        startingWealthRolled: true,
+        transactionHistory: [initialTransaction, ...(sheet.transactionHistory || [])],
+      });
+
+      setRollResult({
+        rolls,
+        sum,
+        total,
+        className: displayName,
+      });
+      setIsRolling(false);
+      toast.success(`🎲 Você rolou Riqueza Inicial: ${total} PO!`);
+
+      // Broadcast chat message to campaign feed if campaign exists
+      if (sheet.campaignId || activeCampaign?.id) {
+        try {
+          if (createFeedEvent) {
+            createFeedEvent({
+              campaignId: sheet.campaignId || activeCampaign?.id || '',
+              eventType: 'chat_message',
+              title: 'Riqueza Inicial Rolada',
+              summary: `🎲 ${sheet.characterName} rolou a riqueza inicial de ${displayName}: [${rolls.join(' + ')}] = ${sum}${config.multiplier > 1 ? ` × ${config.multiplier}` : ''} = ${total} PO!`,
+              isPublic: true,
+            });
+          }
+        } catch (e) {
+          console.error('Erro ao enviar evento de feed para riqueza inicial:', e);
+        }
+      }
+    }, 1000);
+  };
+
+  const handleSpendCoins = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (spendAmount <= 0) {
+      toast.error('Informe um valor válido para gastar.');
+      return;
+    }
+    
+    const currentCoins = sheet.currency || { po: 0, pp: 0, pc: 0, pe: 0, pl: 0 };
+    const available = currentCoins[spendCoinType] || 0;
+
+    if (available < spendAmount) {
+      toast.error(`Você não possui ${spendAmount} ${spendCoinType.toUpperCase()} disponíveis. (Saldo: ${available})`);
+      return;
+    }
+
+    const newCoins = {
+      ...currentCoins,
+      [spendCoinType]: available - spendAmount,
+    };
+
+    const newTransaction: TransactionEntry = {
+      id: Date.now().toString(),
+      type: 'spend',
+      amount: spendAmount,
+      coinType: spendCoinType,
+      reason: spendReason.trim() || 'Gasto Geral',
+      date: new Date().toLocaleString('pt-BR'),
+    };
+
+    onChange({
+      ...sheet,
+      currency: newCoins,
+      transactionHistory: [newTransaction, ...(sheet.transactionHistory || [])],
+    });
+
+    toast.success(`💸 Gastou ${spendAmount} ${spendCoinType.toUpperCase()}!`);
+    
+    if (sheet.campaignId || activeCampaign?.id) {
+      try {
+        if (createFeedEvent) {
+          createFeedEvent({
+            campaignId: sheet.campaignId || activeCampaign?.id || '',
+            eventType: 'chat_message',
+            title: 'Gasto de Moedas',
+            summary: `💸 ${sheet.characterName} gastou ${spendAmount} ${spendCoinType.toUpperCase()}${spendReason ? ` com: "${spendReason}"` : ''}.`,
+            isPublic: true,
+          });
+        }
+      } catch (e) {
+        console.error('Erro ao enviar evento de feed para gasto de moedas:', e);
+      }
+    }
+
+    setSpendAmount(0);
+    setSpendReason('');
+    setIsSpendingFormOpen(false);
   };
 
   const handleUsePotion = (item: CharacterEquipmentItem) => {
@@ -412,69 +599,248 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
         
         {/* CARTEIRA / MOEDAS */}
         <div className="bg3-panel rounded-2xl p-3 space-y-2.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif border-b border-amber-500/15 pb-1">
-            <Coins className="w-3.5 h-3.5 text-amber-400" />
-            Bolsa de Moedas
+          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center justify-between font-serif border-b border-amber-500/15 pb-1">
+            <span className="flex items-center gap-1.5">
+              <Coins className="w-3.5 h-3.5 text-amber-400" />
+              Bolsa de Moedas
+            </span>
+            {sheet.startingWealthRolled ? (
+              <span className="flex items-center gap-1 text-[8px] text-slate-500 normal-case font-mono font-normal">
+                <Lock className="w-2.5 h-2.5 text-slate-500" />
+                Protegida
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-[8px] text-amber-600/80 normal-case font-mono font-normal">
+                <Unlock className="w-2.5 h-2.5 text-amber-600/80" />
+                Ajustável
+              </span>
+            )}
           </span>
 
           <div className="grid grid-cols-5 gap-1 text-center">
             {/* PC */}
-            <div className="bg-[#0b0f19] border border-amber-800/40 rounded-lg p-1">
+            <div className={`bg-[#0b0f19] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-amber-800/40'}`}>
               <span className="text-[8px] font-black text-amber-700 uppercase block font-mono">PC</span>
               <input
                 type="number"
                 min={0}
                 value={coins.pc}
+                disabled={isLocked}
                 onChange={(e) => updateCoins({ ...coins, pc: parseInt(e.target.value, 10) || 0 })}
-                className="w-full bg-slate-900 border border-slate-800 rounded py-0.5 text-center text-[10px] font-bold text-amber-600 focus:outline-none p-0"
+                className={`w-full bg-slate-900 border rounded py-0.5 text-center text-[10px] font-bold focus:outline-none p-0 ${
+                  isLocked 
+                    ? 'border-transparent text-slate-400 cursor-not-allowed' 
+                    : 'border-slate-800 text-amber-600'
+                }`}
               />
             </div>
             {/* PP */}
-            <div className="bg-[#0b0f19] border border-slate-700/40 rounded-lg p-1">
+            <div className={`bg-[#0b0f19] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-slate-700/40'}`}>
               <span className="text-[8px] font-black text-slate-400 uppercase block font-mono">PP</span>
               <input
                 type="number"
                 min={0}
                 value={coins.pp}
+                disabled={isLocked}
                 onChange={(e) => updateCoins({ ...coins, pp: parseInt(e.target.value, 10) || 0 })}
-                className="w-full bg-slate-900 border border-slate-800 rounded py-0.5 text-center text-[10px] font-bold text-slate-350 focus:outline-none p-0"
+                className={`w-full bg-slate-900 border rounded py-0.5 text-center text-[10px] font-bold focus:outline-none p-0 ${
+                  isLocked 
+                    ? 'border-transparent text-slate-400 cursor-not-allowed' 
+                    : 'border-slate-800 text-slate-350'
+                }`}
               />
             </div>
             {/* PE */}
-            <div className="bg-[#0b0f19] border border-emerald-700/40 rounded-lg p-1">
+            <div className={`bg-[#0b0f19] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-emerald-700/40'}`}>
               <span className="text-[8px] font-black text-emerald-500 uppercase block font-mono">PE</span>
               <input
                 type="number"
                 min={0}
                 value={coins.pe}
+                disabled={isLocked}
                 onChange={(e) => updateCoins({ ...coins, pe: parseInt(e.target.value, 10) || 0 })}
-                className="w-full bg-slate-900 border border-slate-800 rounded py-0.5 text-center text-[10px] font-bold text-emerald-400 focus:outline-none p-0"
+                className={`w-full bg-slate-900 border rounded py-0.5 text-center text-[10px] font-bold focus:outline-none p-0 ${
+                  isLocked 
+                    ? 'border-transparent text-slate-400 cursor-not-allowed' 
+                    : 'border-slate-800 text-emerald-400'
+                }`}
               />
             </div>
             {/* PO */}
-            <div className="bg-[#0b0f19] border border-amber-500/40 rounded-lg p-1">
+            <div className={`bg-[#0b0f19] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-amber-500/40'}`}>
               <span className="text-[8px] font-black text-amber-400 uppercase block font-mono">PO</span>
               <input
                 type="number"
                 min={0}
                 value={coins.po}
+                disabled={isLocked}
                 onChange={(e) => updateCoins({ ...coins, po: parseInt(e.target.value, 10) || 0 })}
-                className="w-full bg-slate-900 border border-slate-850 rounded py-0.5 text-center text-[11px] font-black text-amber-400 focus:outline-none p-0"
+                className={`w-full bg-slate-900 border rounded py-0.5 text-center text-[11px] font-black focus:outline-none p-0 ${
+                  isLocked 
+                    ? 'border-transparent text-slate-450 cursor-not-allowed' 
+                    : 'border-slate-850 text-amber-400'
+                }`}
               />
             </div>
             {/* PL */}
-            <div className="bg-[#0b0f19] border border-cyan-500/40 rounded-lg p-1">
+            <div className={`bg-[#0b0f19] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-cyan-500/40'}`}>
               <span className="text-[8px] font-black text-cyan-400 uppercase block font-mono">PL</span>
               <input
                 type="number"
                 min={0}
                 value={coins.pl}
+                disabled={isLocked}
                 onChange={(e) => updateCoins({ ...coins, pl: parseInt(e.target.value, 10) || 0 })}
-                className="w-full bg-slate-900 border border-slate-800 rounded py-0.5 text-center text-[10px] font-bold text-cyan-300 focus:outline-none p-0"
+                className={`w-full bg-slate-900 border rounded py-0.5 text-center text-[10px] font-bold focus:outline-none p-0 ${
+                  isLocked 
+                    ? 'border-transparent text-slate-400 cursor-not-allowed' 
+                    : 'border-slate-800 text-cyan-300'
+                }`}
               />
             </div>
           </div>
+
+          {/* Riqueza Inicial do Livro do Jogador */}
+          {!sheet.startingWealthRolled && (
+            <div className="bg-[#05070a]/90 border border-amber-500/20 rounded-xl p-2.5 mt-2.5 space-y-2.5">
+              <div className="flex items-center gap-1.5 text-amber-400">
+                <Dices className="w-3.5 h-3.5 animate-pulse text-amber-400" />
+                <span className="font-serif font-bold text-[10px] tracking-wide uppercase">Riqueza Inicial</span>
+              </div>
+              <p className="text-slate-400 text-[8.5px] leading-normal font-serif">
+                Selecione sua classe para rolar sua riqueza inicial como no Livro do Jogador e travar sua bolsa.
+              </p>
+              <div className="grid grid-cols-3 gap-1">
+                <select
+                  value={selectedClassRoll}
+                  onChange={(e) => setSelectedClassRoll(e.target.value)}
+                  className="col-span-2 bg-[#0b0f19] border border-amber-900/30 rounded px-1.5 py-1 text-[9px] text-amber-200 focus:outline-none leading-none"
+                >
+                  <option value="">-- Escolher Classe --</option>
+                  {Object.entries(STARTING_WEALTH_FORMULAS).map(([key, value]) => (
+                    <option key={key} value={key}>
+                      {key.charAt(0).toUpperCase() + key.slice(1)} ({value.formula})
+                    </option>
+                  ))}
+                  <option value="custom">Outra (4d4 × 10 PO)</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => handleRollStartingWealth(selectedClassRoll || normalizeClassName(sheet.className))}
+                  disabled={isRolling}
+                  className="bg-amber-600 hover:bg-amber-505 disabled:bg-slate-850 disabled:text-slate-500 text-slate-950 font-bold font-serif py-1 rounded text-[9px] transition-all flex items-center justify-center gap-1 border border-amber-400/20 active:scale-95 cursor-pointer uppercase"
+                >
+                  {isRolling ? 'Rolando' : 'Rolar'}
+                </button>
+              </div>
+              {rollResult && (
+                <div className="bg-[#05070a]/90 border border-emerald-500/20 rounded-lg p-1.5 text-center text-[9px] animate-fadeIn">
+                  <span className="text-slate-350 block font-mono text-[8px]">
+                    Resultado: [{rollResult.rolls.join(' + ')}] = {rollResult.sum}
+                  </span>
+                  <span className="font-black text-emerald-400 font-serif block text-[10px]">
+                    + {rollResult.total} PO ({rollResult.className})
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Opção de Registrar Gasto (Permite apenas redução de moedas) */}
+          {sheet.startingWealthRolled && (
+            <div className="border-t border-amber-500/10 pt-2 mt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] text-slate-500 font-mono">
+                  {roleMode === 'dm' ? '🔓 Acesso de Mestre' : '🔒 Edição Direta Bloqueada'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsSpendingFormOpen(!isSpendingFormOpen)}
+                  className="text-[9px] font-bold text-amber-500 hover:text-amber-400 flex items-center gap-1 transition-colors uppercase font-serif"
+                >
+                  <ArrowDownRight className="w-3 h-3 text-amber-500" />
+                  {isSpendingFormOpen ? 'Fechar Gasto' : '💸 Registrar Gasto'}
+                </button>
+              </div>
+
+              {isSpendingFormOpen && (
+                <form onSubmit={handleSpendCoins} className="bg-[#05070a] border border-amber-950/40 rounded-xl p-2.5 mt-2.5 space-y-2 animate-slideDown">
+                  <div className="grid grid-cols-3 gap-1">
+                    <div>
+                      <label className="text-[8px] font-bold text-slate-400 block mb-0.5">Valor</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={spendAmount || ''}
+                        onChange={(e) => setSpendAmount(parseInt(e.target.value, 10) || 0)}
+                        placeholder="Qtd"
+                        className="w-full bg-[#0b0f19] border border-slate-800 rounded px-1.5 py-0.5 text-center text-[10px] font-bold text-slate-200 focus:outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[8px] font-bold text-slate-400 block mb-0.5">Moeda</label>
+                      <select
+                        value={spendCoinType}
+                        onChange={(e) => setSpendCoinType(e.target.value as any)}
+                        className="w-full bg-[#0b0f19] border border-slate-800 rounded px-1 py-0.5 text-[10px] text-slate-200 focus:outline-none"
+                      >
+                        <option value="pc">PC</option>
+                        <option value="pp">PP</option>
+                        <option value="pe">PE</option>
+                        <option value="po">PO</option>
+                        <option value="pl">PL</option>
+                      </select>
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="submit"
+                        className="w-full bg-rose-950/80 hover:bg-rose-900 text-rose-350 border border-rose-800/40 font-bold font-serif py-1 rounded text-[9px] transition-all cursor-pointer uppercase active:scale-95"
+                      >
+                        Confirmar
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[8px] font-bold text-slate-400 block mb-0.5">Motivo do Gasto</label>
+                    <input
+                      type="text"
+                      value={spendReason}
+                      onChange={(e) => setSpendReason(e.target.value)}
+                      placeholder="Ex: Estalagem, Ração, etc."
+                      className="w-full bg-[#0b0f19] border border-slate-800 rounded px-2 py-1 text-[9px] text-slate-350 focus:outline-none font-serif"
+                    />
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* LOG DE TRANSAÇÕES */}
+        {sheet.startingWealthRolled && sheet.transactionHistory && sheet.transactionHistory.length > 0 && (
+          <div className="bg3-panel rounded-2xl p-3 space-y-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif border-b border-amber-500/15 pb-1">
+              <History className="w-3.5 h-3.5 text-amber-400" />
+              Histórico de Moedas
+            </span>
+            <div className="max-h-[100px] overflow-y-auto space-y-1.5 pr-1 bg3-scrollbar text-[9px] font-mono leading-tight">
+              {sheet.transactionHistory.map((t) => (
+                <div key={t.id} className="flex justify-between items-start border-b border-slate-850/60 pb-1 last:border-0">
+                  <div className="space-y-0.5">
+                    <span className="text-slate-300 block font-serif leading-none">{t.reason}</span>
+                    <span className="text-slate-500 text-[8px] block">{t.date}</span>
+                  </div>
+                  <span className={`font-black whitespace-nowrap ${
+                    t.type === 'spend' ? 'text-rose-400' : t.type === 'loot' ? 'text-emerald-400' : 'text-amber-450'
+                  }`}>
+                    {t.type === 'spend' ? '-' : '+'}{t.amount} {t.coinType.toUpperCase()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* PAINEL DE CARGA TOTAL */}
         <div className="bg3-panel rounded-2xl p-3 space-y-2">

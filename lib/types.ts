@@ -743,6 +743,16 @@ export interface CharacterCurrency {
   pl: number; // Peças de Platina
 }
 
+export interface TransactionEntry {
+  id: string;
+  type: 'spend' | 'loot' | 'roll' | 'dm_adjust';
+  amount: number;
+  coinType: 'pc' | 'pp' | 'pe' | 'po' | 'pl';
+  reason: string;
+  date: string;
+}
+
+
 export type ItemType = 'equipment' | 'weapon' | 'armor' | 'potion' | 'scroll';
 
 export interface CharacterEquipmentItem {
@@ -875,6 +885,9 @@ export interface CharacterSheet {
   treasure?: string;
   equipment?: CharacterEquipmentItem[];
   currency?: CharacterCurrency;
+  startingWealthRolled?: boolean;
+  transactionHistory?: TransactionEntry[];
+
 
   // Página 3: Magias
   spellcastingClass?: string;
