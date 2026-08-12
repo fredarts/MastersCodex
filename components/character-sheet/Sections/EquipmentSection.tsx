@@ -3,7 +3,7 @@ import { CharacterSheet, CharacterEquipmentItem } from '@/lib/types';
 import { Coins, Package, Plus, Trash2, Gem, Weight, Scale, Sparkles, ShoppingCart } from 'lucide-react';
 import { ItemCompendiumModal } from '../Modals/ItemCompendiumModal';
 import { toast } from 'sonner';
-import { getEffectiveAttributeScore } from '@/lib/dnd5e-calculator';
+import { getEffectiveAttributeScore, recalculateSheetDerivedStats, WEAPON_TABLE } from '@/lib/dnd5e-calculator';
 
 interface EquipmentSectionProps {
   sheet: CharacterSheet;
@@ -23,7 +23,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
   };
 
   const updateItems = (newItems: CharacterEquipmentItem[]) => {
-    onChange({ ...sheet, equipment: newItems });
+    onChange(recalculateSheetDerivedStats({ ...sheet, equipment: newItems }));
   };
 
   const updateCoins = (newCoins: typeof coins) => {
@@ -123,6 +123,107 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
     updateItems(items.map((i) => (i.id === id ? { ...i, ...updated } : i)));
   };
 
+  const handleToggleEquip = (item: CharacterEquipmentItem) => {
+    const isEquipped = !item.equipped;
+    let updatedItems = [...items];
+
+    if (isEquipped) {
+      const isWeapon = weapons.some(w => w.id === item.id);
+      const isShield = item.name.toLowerCase().includes('escudo') || item.name.toLowerCase().includes('shield') || item.armorProps?.armorType === 'shield';
+      const isArmor = !isShield && (armors.some(a => a.id === item.id) || item.itemType === 'armor');
+
+      if (isArmor) {
+        // Desequipa qualquer outra armadura (exceto escudo)
+        updatedItems = updatedItems.map(i => {
+          const isOtherArmor = i.id !== item.id && (i.itemType === 'armor' || armors.some(a => a.id === i.id)) && !i.name.toLowerCase().includes('escudo') && !i.name.toLowerCase().includes('shield') && i.armorProps?.armorType !== 'shield';
+          if (isOtherArmor) {
+            return { ...i, equipped: false };
+          }
+          return i;
+        });
+      } else if (isShield) {
+        // Desequipa qualquer outro escudo
+        updatedItems = updatedItems.map(i => {
+          const isOtherShield = i.id !== item.id && (i.name.toLowerCase().includes('escudo') || i.name.toLowerCase().includes('shield') || i.armorProps?.armorType === 'shield');
+          if (isOtherShield) {
+            return { ...i, equipped: false };
+          }
+          return i;
+        });
+        // Desequipa armas de duas mãos
+        updatedItems = updatedItems.map(i => {
+          const isTwoHandedWeapon = i.itemType === 'weapon' && (WEAPON_TABLE[i.name]?.properties?.some(p => p.toLowerCase().includes('duas mãos') || p.toLowerCase().includes('two-handed')));
+          if (isTwoHandedWeapon) {
+            return { ...i, equipped: false };
+          }
+          return i;
+        });
+      } else if (isWeapon) {
+        const isTwoHanded = WEAPON_TABLE[item.name]?.properties?.some(p => p.toLowerCase().includes('duas mãos') || p.toLowerCase().includes('two-handed'));
+        
+        if (isTwoHanded) {
+          // Desequipa todas as outras armas e escudos
+          updatedItems = updatedItems.map(i => {
+            const isOtherWeaponOrShield = i.id !== item.id && (
+              i.itemType === 'weapon' || 
+              weapons.some(w => w.id === i.id) ||
+              i.name.toLowerCase().includes('escudo') || 
+              i.name.toLowerCase().includes('shield') || 
+              i.armorProps?.armorType === 'shield'
+            );
+            if (isOtherWeaponOrShield) {
+              return { ...i, equipped: false };
+            }
+            return i;
+          });
+        } else {
+          // Arma de uma mão: desequipa armas de duas mãos
+          updatedItems = updatedItems.map(i => {
+            const isTwoHandedWeapon = WEAPON_TABLE[i.name]?.properties?.some(p => p.toLowerCase().includes('duas mãos') || p.toLowerCase().includes('two-handed'));
+            if (isTwoHandedWeapon) {
+              return { ...i, equipped: false };
+            }
+            return i;
+          });
+
+          const currentlyEquippedWeapons = updatedItems.filter(i => i.id !== item.id && i.equipped && (i.itemType === 'weapon' || weapons.some(w => w.id === i.id)));
+          const isShieldEquipped = updatedItems.some(i => i.equipped && (i.name.toLowerCase().includes('escudo') || i.name.toLowerCase().includes('shield') || i.armorProps?.armorType === 'shield'));
+
+          if (isShieldEquipped) {
+            // Com escudo, só pode 1 arma de uma mão
+            updatedItems = updatedItems.map(i => {
+              if (i.id !== item.id && i.equipped && (i.itemType === 'weapon' || weapons.some(w => w.id === i.id))) {
+                return { ...i, equipped: false };
+              }
+              return i;
+            });
+          } else {
+            // Sem escudo, máximo de 2 armas
+            if (currentlyEquippedWeapons.length >= 2) {
+              const oldestEquippedWeapon = currentlyEquippedWeapons[0];
+              updatedItems = updatedItems.map(i => {
+                if (i.id === oldestEquippedWeapon.id) {
+                  return { ...i, equipped: false };
+                }
+                return i;
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Toggle o item alvo
+    updatedItems = updatedItems.map(i => 
+      i.id === item.id ? { ...i, equipped: isEquipped } : i
+    );
+
+    onChange(recalculateSheetDerivedStats({
+      ...sheet,
+      equipment: updatedItems
+    }));
+  };
+
   const nameMatch = (item: CharacterEquipmentItem, keywords: string[]) => {
     const nameLower = item.name.toLowerCase();
     const typeLower = (item.itemType || '').toLowerCase();
@@ -200,6 +301,20 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
             className="w-full bg-transparent border-none text-[10px] text-slate-400 text-center focus:outline-none focus:ring-0 p-0"
           />
         </div>
+        {(weapons.some(w => w.id === item.id) || armors.some(a => a.id === item.id) || item.itemType === 'weapon' || item.itemType === 'armor') && (
+          <button
+            type="button"
+            onClick={() => handleToggleEquip(item)}
+            className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider h-[20px] shrink-0 border transition-all cursor-pointer ${
+              item.equipped
+                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-450 font-bold'
+                : 'bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-700/50'
+            }`}
+            title={item.equipped ? 'Desequipar item' : 'Equipar item'}
+          >
+            {item.equipped ? 'Equipado' : 'Equipar'}
+          </button>
+        )}
         {(item.itemType === 'potion' || item.name.toLowerCase().includes('poção') || item.name.toLowerCase().includes('potion')) && (
           <button
             type="button"

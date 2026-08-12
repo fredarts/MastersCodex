@@ -1,4 +1,4 @@
-import { AttributeKey, CharacterSheet, DndSkillKey, SkillProficiencyLevel, ClassFeature, CharacterResource, CharacterClassProgress, CharacterAttributes, CharacterCurrency } from './types';
+import { AttributeKey, CharacterSheet, DndSkillKey, SkillProficiencyLevel, ClassFeature, CharacterResource, CharacterClassProgress, CharacterAttributes, CharacterCurrency, CharacterWeaponAttack, CharacterEquipmentItem } from './types';
 import { DND_CLASSES, DND_RACES, SKILL_DEFINITIONS, CLASS_FEATURES_DB } from './dnd5e-data';
 
 /**
@@ -872,6 +872,28 @@ export const ARMOR_TABLE: Record<string, ArmorInfo> = {
 };
 
 /**
+ * Localiza a armadura correspondente na tabela, de forma case-insensitive e tolerante a prefixos/sufixos
+ */
+export function findArmorInfo(armorName: string = 'Nenhuma'): ArmorInfo {
+  const normalize = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9áéíóúâêôãõç]/g, '').trim();
+  const armorNameNorm = normalize(armorName);
+  
+  let matchedKey = Object.keys(ARMOR_TABLE).find(key => normalize(key) === armorNameNorm);
+  if (!matchedKey) {
+    const matches = Object.keys(ARMOR_TABLE).filter(key => 
+      key !== 'Nenhuma' && 
+      (armorNameNorm.includes(normalize(key)) || normalize(key).includes(armorNameNorm))
+    );
+    if (matches.length > 0) {
+      matches.sort((a, b) => b.length - a.length);
+      matchedKey = matches[0];
+    }
+  }
+  return matchedKey ? ARMOR_TABLE[matchedKey] : ARMOR_TABLE['Nenhuma'];
+}
+
+
+/**
  * Calcula a Classe de Armadura (CA) baseada na armadura equipada, escudo e habilidades de classe
  */
 export function calculateArmorClass(
@@ -880,7 +902,7 @@ export function calculateArmorClass(
   hasShield: boolean = false,
 ): number {
   const dexMod = getAttributeModifier(sheet, 'dex');
-  const armor = ARMOR_TABLE[armorName] || ARMOR_TABLE['Nenhuma'];
+  const armor = findArmorInfo(armorName);
   let ac: number;
 
   switch (armor.category) {
@@ -1237,7 +1259,7 @@ export function calculateDynamicSpeed(sheet: CharacterSheet): string {
   let bonusFeet = 0;
 
   const classes = getCharacterClasses(sheet);
-  const armor = ARMOR_TABLE[sheet.equippedArmor || 'Nenhuma'] || { category: 'none' };
+  const armor = findArmorInfo(sheet.equippedArmor || 'Nenhuma');
   const hasNoArmor = armor.category === 'none';
 
   // 1. Monge: Movimento Sem Armadura (Apenas sem armadura nem escudo)
@@ -1308,7 +1330,39 @@ export function recalculateSheetDerivedStats(sheet: CharacterSheet): CharacterSh
   const dexMod = getAttributeModifier(sheet, 'dex');
   const profBonus = calculateProficiencyBonus(sheet.level);
 
-  // 1. Recalcula Classe de Armadura (CA)
+  // Helper inside to match keywords in equipment items
+  const nameMatch = (item: CharacterEquipmentItem, keywords: string[]) => {
+    const nameLower = (item.name || '').toLowerCase();
+    const typeLower = (item.itemType || '').toLowerCase();
+    return keywords.some(kw => nameLower.includes(kw) || typeLower.includes(kw));
+  };
+
+  const strWeaponsKeywords = ['espada', 'arco', 'besta', 'adaga', 'machado', 'lança', 'lanca', 'martelo', 'dardo', 'clava', 'porrete', 'alabarda', 'cimitarra', 'rapieira', 'rapiêra', 'tridente', 'folha', 'weapon'];
+  const strArmorsKeywords = ['armadura', 'cota', 'gibão', 'gibao', 'escudo', 'shield', 'elmo', 'manto', 'placas', 'couro', 'malha', 'armor', 'peitoral', 'brunea', 'acolchoada', 'placa'];
+
+  // 1. Derive equipped armor and shield from inventory
+  if (sheet.equipment) {
+    const equippedArmorItem = sheet.equipment.find(
+      (item) => item.equipped && 
+                (item.itemType === 'armor' || nameMatch(item, strArmorsKeywords)) && 
+                item.armorProps?.armorType !== 'shield' && 
+                !item.name.toLowerCase().includes('escudo') && 
+                !item.name.toLowerCase().includes('shield')
+    );
+    
+    const hasEquippedShield = sheet.equipment.some(
+      (item) => item.equipped && 
+                (item.armorProps?.armorType === 'shield' || 
+                 item.name.toLowerCase().includes('escudo') || 
+                 item.name.toLowerCase().includes('shield'))
+    );
+
+    const equippedArmorName = equippedArmorItem ? equippedArmorItem.name : 'Nenhuma';
+    sheet.equippedArmor = equippedArmorName;
+    sheet.hasShield = hasEquippedShield;
+  }
+
+  // 1.1 Recalcula Classe de Armadura (CA)
   const newAC = calculateArmorClass(sheet, sheet.equippedArmor || 'Nenhuma', sheet.hasShield || false);
 
   // 1.5 Recalcula Deslocamento (Velocidade)
@@ -1351,8 +1405,52 @@ export function recalculateSheetDerivedStats(sheet: CharacterSheet): CharacterSh
      safeHitDiceUsed = `${usedCount}${(DND_CLASSES[currentClasses[0].name]?.hitDie || '1d8').replace(/^1/, '')}`;
   }
 
-  // 3. Recalcula Ataques de Armas com Proficiência e Força/Destreza
-  const updatedAttacks = sheet.attacks.map((atk) => {
+  // 3. Synchronize attacks for equipped weapons
+  const equippedWeapons = (sheet.equipment || []).filter(
+    (item) => item.equipped && 
+              (item.itemType === 'weapon' || nameMatch(item, strWeaponsKeywords))
+  );
+
+  const equipmentIds = (sheet.equipment || []).map(i => i.id);
+  const equippedWeaponIds = equippedWeapons.map(i => i.id);
+
+  // Filter out any attacks linked to weapons in inventory that are not equipped
+  const syncedAttacks = (sheet.attacks || []).filter(atk => 
+    !equipmentIds.includes(atk.id) || equippedWeaponIds.includes(atk.id)
+  );
+
+  // Ensure every equipped weapon has a corresponding attack in sheet.attacks
+  equippedWeapons.forEach((weapon) => {
+    const weaponAtkBonus = weapon.weaponProps?.atkBonus;
+    const calc = WEAPON_TABLE[weapon.name]
+      ? calculateWeaponAttack(sheet, weapon.name)
+      : {
+          atkBonus: weaponAtkBonus !== undefined ? (weaponAtkBonus >= 0 ? `+${weaponAtkBonus}` : `${weaponAtkBonus}`) : '+0',
+          damage: weapon.weaponProps?.damage || '1d4',
+          damageType: weapon.weaponProps?.damageType || 'Físico'
+        };
+
+    const weaponAttack: CharacterWeaponAttack = {
+      id: weapon.id,
+      name: weapon.name,
+      atkBonus: calc.atkBonus,
+      damage: calc.damage,
+      type: calc.damageType || 'Físico',
+    };
+
+    const existingIdx = syncedAttacks.findIndex(atk => atk.id === weapon.id);
+    if (existingIdx >= 0) {
+      syncedAttacks[existingIdx] = {
+        ...syncedAttacks[existingIdx],
+        ...weaponAttack
+      };
+    } else {
+      syncedAttacks.push(weaponAttack);
+    }
+  });
+
+  // Recalculate bônus de acerto/damage for all attacks (both custom and synced)
+  const updatedAttacks = syncedAttacks.map((atk) => {
     if (WEAPON_TABLE[atk.name]) {
       const calc = calculateWeaponAttack(sheet, atk.name);
       return {

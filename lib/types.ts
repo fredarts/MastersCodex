@@ -753,6 +753,7 @@ export interface CharacterEquipmentItem {
   notes?: string;
   rarity?: 'Comum' | 'Incomum' | 'Raro' | 'Muito Raro' | 'Lendário' | 'Artefato';
   itemType?: ItemType;
+  equipped?: boolean;
   potionProps?: {
     healingDice?: string;
     effectDesc?: string;

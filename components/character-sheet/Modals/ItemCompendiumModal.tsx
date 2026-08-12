@@ -17,6 +17,7 @@ import {
   ArrowLeftRight
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { recalculateSheetDerivedStats } from '@/lib/dnd5e-calculator';
 
 interface ItemCompendiumModalProps {
   sheet?: CharacterSheet;
@@ -360,11 +361,11 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
       }
     });
 
-    onChange({
+    onChange(recalculateSheetDerivedStats({
       ...sheet,
       currency: newCoins,
       equipment: updatedEquipment,
-    });
+    }));
 
     setCart([]);
     toast.success('Compra realizada com sucesso!');
@@ -398,11 +399,11 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
 
     const newCoins = addCopperToCoins(coins, sellValueCopper);
 
-    onChange({
+    onChange(recalculateSheetDerivedStats({
       ...sheet,
       currency: newCoins,
       equipment: updatedEquipment,
-    });
+    }));
 
     toast.success(
       `Vendido: "${item.name}" por ${formatCopperToCoins(sellValueCopper)} (50% do valor)!`

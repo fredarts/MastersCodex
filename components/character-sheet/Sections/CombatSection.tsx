@@ -832,31 +832,13 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
             <span className="text-2xl font-black text-amber-300 font-mono my-0.5 text-gold-glow">
               {sheet.armorClass}
             </span>
-            <div className="w-full space-y-1">
-              <select
-                value={sheet.equippedArmor || 'Nenhuma'}
-                onChange={(e) => {
-                  const updated = { ...sheet, equippedArmor: e.target.value };
-                  onChange(recalculateSheetDerivedStats(updated));
-                }}
-                className="w-full bg-[#0b0f19] border border-slate-700 rounded-lg text-[9px] font-bold text-slate-300 py-0.5 px-1 focus:outline-none"
-              >
-                {Object.keys(ARMOR_TABLE).map((armorName) => (
-                  <option key={armorName} value={armorName}>{armorName}</option>
-                ))}
-              </select>
-              <label className="flex items-center justify-center gap-1 text-[8px] font-bold text-slate-400 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={sheet.hasShield || false}
-                  onChange={(e) => {
-                    const updated = { ...sheet, hasShield: e.target.checked };
-                    onChange(recalculateSheetDerivedStats(updated));
-                  }}
-                  className="rounded border-slate-700 bg-slate-900 text-amber-500"
-                />
-                Escudo (+2 CA)
-              </label>
+            <div className="w-full space-y-1 bg-[#0b0f19]/60 border border-slate-800 rounded-xl p-1.5 flex flex-col items-center gap-1 font-serif">
+              <span className="text-[9px] font-bold text-slate-300 truncate max-w-full">
+                🛡️ {sheet.equippedArmor || 'Nenhuma'}
+              </span>
+              <span className="text-[8px] text-slate-500 font-sans">
+                {sheet.hasShield ? '🛡️ Com Escudo (+2 CA)' : '❌ Sem Escudo'}
+              </span>
             </div>
           </div>
 

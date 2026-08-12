@@ -22,8 +22,11 @@ import {
   calculateDynamicSpeed,
   getAttributeModifier,
   getEffectiveAttributeScore,
+  findArmorInfo,
 } from '../dnd5e-calculator';
 import { CharacterSheet } from '../types';
+import { SRD_EQUIPMENT } from '../srd-compendium';
+
 
 describe('D&D 5e Rules Calculator Unit Tests', () => {
   describe('calculateModifier', () => {
@@ -1564,3 +1567,48 @@ describe('Mecânicas do Bárbaro Lvl 20 (Campeão Primitivo)', () => {
     expect(getEffectiveAttributeScore(sheet, 'con')).toBe(16);
   });
 });
+
+describe('Teste de Armadura de Couro Batido', () => {
+  it('deve calcular corretamente a classe de armadura para Armadura de Couro Batido', () => {
+    const mockSheet: any = {
+      characterName: 'Teste',
+      className: 'Ladino',
+      level: 1,
+      attributes: {
+        str: { score: 10 },
+        dex: { score: 14 }, // Mod +2
+        con: { score: 10 },
+        int: { score: 10 },
+        wis: { score: 10 },
+        cha: { score: 10 }
+      },
+      equipment: [
+        {
+          id: 'armor1',
+          name: 'Armadura de Couro Batido',
+          equipped: true,
+          itemType: 'armor',
+          quantity: 1
+        }
+      ],
+      savingThrows: {},
+      attacks: [],
+      classResources: {}
+    };
+
+    const res = recalculateSheetDerivedStats(mockSheet);
+    expect(res.equippedArmor).toBe('Armadura de Couro Batido');
+    expect(res.armorClass).toBe(14); // 12 + 2 = 14
+  });
+
+  it('deve encontrar correspondência para todas as armaduras do compêndio SRD', () => {
+    const sdrArmors = SRD_EQUIPMENT.filter(item => item.category === 'Armadura' && item.name !== 'Escudo');
+    sdrArmors.forEach(armor => {
+      const matched = findArmorInfo(armor.name);
+      expect(matched.category).not.toBe('none');
+      expect(matched.name).not.toBe('Nenhuma');
+    });
+  });
+});
+
+
