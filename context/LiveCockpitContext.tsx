@@ -500,7 +500,9 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   });
 
   // Sync the ref immediately after initialization
-  broadcastCombatUpdateRef.current = broadcastCombatUpdate;
+  useEffect(() => {
+    broadcastCombatUpdateRef.current = broadcastCombatUpdate;
+  }, [broadcastCombatUpdate]);
 
   // Carrega estado persistido localmente ao inicializar
   useEffect(() => {
