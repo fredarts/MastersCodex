@@ -33,11 +33,13 @@ import { CharacterSheetModal } from '@/components/character-sheet/CharacterSheet
 import { MonsterStatBlockModal } from '@/components/live-cockpit/MonsterStatBlockModal';
 import { MinimizedSheetsDock } from '@/components/live-cockpit/MinimizedSheetsDock';
 import { UserSettingsModal } from '@/components/UserSettingsModal';
+import { LandingPage } from '@/components/LandingPage';
 
 function MainApp() {
-  const { user, roleMode, loadDemoEverything } = useAuth();
+  const { user, roleMode, setRoleMode, loadDemoEverything } = useAuth();
   const { activeCampaign, setActiveCampaign, createFeedEvent } = useCampaign();
   const [activeTab, setActiveTab] = useState<ActiveTab>('live_cockpit');
+  const [isLandingPage, setIsLandingPage] = useState<boolean>(true);
 
   const { characterSheets, saveSheet } = useCharacterSync({
     userId: user?.id || '',
@@ -210,6 +212,37 @@ function MainApp() {
     setActiveTab('ai');
   };
 
+  if (isLandingPage) {
+    return (
+      <div className="min-h-screen w-screen overflow-y-auto bg-[#06080d] text-slate-100">
+        <LandingPage
+          onEnterDM={() => {
+            setRoleMode('dm');
+            setIsLandingPage(false);
+          }}
+          onEnterPlayer={() => {
+            setRoleMode('player');
+            setIsLandingPage(false);
+          }}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          onLoadDemo={() => {
+            loadDemoEverything();
+            setRoleMode('dm');
+            setIsLandingPage(false);
+          }}
+        />
+
+        {/* Auth Modal directly accessible from Landing Page */}
+        {isAuthModalOpen && (
+          <AuthModal
+            isOpen={isAuthModalOpen}
+            onClose={() => setIsAuthModalOpen(false)}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-[#07090e] text-slate-100">
       {/* Top Header */}
@@ -222,6 +255,7 @@ function MainApp() {
         onToggleSidebar={toggleSidebar}
         isAIPanelCollapsed={isAIPanelCollapsed}
         onToggleAIPanel={roleMode === 'player' ? undefined : toggleAIPanel}
+        onGoToLandingPage={() => setIsLandingPage(true)}
       />
 
       {/* Main Workspace Body: Switch based on Role Mode */}

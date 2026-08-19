@@ -18,6 +18,7 @@ interface HeaderProps {
   onToggleSidebar?: () => void;
   isAIPanelCollapsed?: boolean;
   onToggleAIPanel?: () => void;
+  onGoToLandingPage?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -29,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleSidebar,
   isAIPanelCollapsed,
   onToggleAIPanel,
+  onGoToLandingPage,
 }) => {
   const { user, roleMode, setRoleMode, signOut } = useAuth();
   const { activeCampaign } = useCampaign();
@@ -61,7 +63,11 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        <div className="flex items-center gap-2.5">
+        <div 
+          onClick={onGoToLandingPage} 
+          className={`flex items-center gap-2.5 ${onGoToLandingPage ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
+          title={onGoToLandingPage ? "Voltar para a Página Inicial / Landing Page" : undefined}
+        >
           <div className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center">
             <img src="/logo.png" alt="Master's Codex Logo" className="w-full h-full object-contain drop-shadow-md" />
           </div>

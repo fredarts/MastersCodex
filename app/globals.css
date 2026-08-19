@@ -254,4 +254,13 @@ body {
   background: rgba(212, 175, 55, 0.7);
 }
 
+@keyframes progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
 
