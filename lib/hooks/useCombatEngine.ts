@@ -45,6 +45,25 @@ export function useCombatEngine() {
 
     setCurrentTurnIndex(nextIndex);
 
+    // Checagem de cruzamento da contagem de Iniciativa 20 (Lair Action)
+    const currentCombatant = combatants[currentTurnIndex];
+    const incomingCombatant = combatants[nextIndex];
+    const crossedInit20 = (currentCombatant && incomingCombatant && currentCombatant.initiative >= 20 && incomingCombatant.initiative < 20) ||
+      (nextRound > roundCount && combatants.some((x) => (x.initiative || 0) < 20) && !combatants.some((x) => (x.initiative || 0) >= 20));
+
+    if (crossedInit20 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('masters_codex_lair_action_alert', {
+        detail: { initiative: 20, round: nextRound }
+      }));
+      window.dispatchEvent(new CustomEvent('masters_codex_log_entry', {
+        detail: {
+          message: `🏰 Contagem de Iniciativa 20 alcançada! Momento de Ação de Covil.`,
+          description: `Monstros lendários com covil podem ativar um efeito de covil na contagem de iniciativa 20.`,
+          type: 'lair_action',
+        }
+      }));
+    }
+
     setCombatants((prev) => prev.map((c, idx) => {
       if (idx === nextIndex) {
         // Decrement status durations
@@ -79,6 +98,25 @@ export function useCombatEngine() {
           ['Agarrado', 'Paralisado', 'Petrificado', 'Restrito', 'Inconsciente', 'Incapacitado'].includes(cond)
         );
 
+        // Renovação de Ações Lendárias no início do turno da criatura
+        const maxLegendary = c.maxLegendaryActions ?? (c.isLegendary || c.legendaryActions !== undefined ? 3 : undefined);
+        const shouldRenewLegendary = maxLegendary !== undefined;
+        const newLegendaryActions = shouldRenewLegendary ? maxLegendary : c.legendaryActions;
+
+        if (shouldRenewLegendary && c.legendaryActions !== undefined && c.legendaryActions < maxLegendary && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('masters_codex_log_entry', {
+            detail: {
+              message: `⚡ ${c.name} renovou suas Ações Lendárias (${maxLegendary}/${maxLegendary})!`,
+              description: `${c.name} recuperou todos os pontos de Ações Lendárias no início do seu turno.`,
+              type: 'legendary_renew',
+              actorId: c.id,
+            }
+          }));
+          window.dispatchEvent(new CustomEvent('masters_codex_combat_text', {
+            detail: { combatantId: c.id, type: 'status', amount: `⚡ 3 Ações Lendárias` }
+          }));
+        }
+
         return {
           ...c,
           conditions: updatedConditions,
@@ -86,6 +124,7 @@ export function useCombatEngine() {
           actionUsed: false,
           bonusActionUsed: false,
           reactionUsed: false,
+          legendaryActions: newLegendaryActions,
           hasDashed: false,
           movementUsed: hasImmobilizingCondition ? c.movementUsed : 0,
           turnStartX: c.x,
@@ -94,7 +133,7 @@ export function useCombatEngine() {
       }
       return c;
     }));
-  }, [combatants.length, currentTurnIndex, roundCount, setCurrentTurnIndex, setRoundCount, setCombatants]);
+  }, [combatants, currentTurnIndex, roundCount, setCurrentTurnIndex, setRoundCount, setCombatants]);
 
   const handlePrevTurn = useCallback(() => {
     if (combatants.length === 0) return;

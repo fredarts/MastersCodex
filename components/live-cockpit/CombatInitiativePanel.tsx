@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Swords,
   BookOpen,
@@ -11,7 +11,10 @@ import {
   CheckCircle2,
   Check,
   MessageSquare,
+  Sparkles,
+  X,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { useSession } from '@/lib/hooks/useSession';
@@ -74,6 +77,18 @@ export const CombatInitiativePanel: React.FC<CombatInitiativePanelProps> = ({
     setShowAddCombatantModal,
     isBattleStarted,
   } = useLiveCockpitStudioStore();
+
+  const [lairActionAlert, setLairActionAlert] = useState<{ round: number; initiative: number } | null>(null);
+
+  useEffect(() => {
+    const handleLairAlert = (e: any) => {
+      setLairActionAlert(e.detail || { round: roundCount, initiative: 20 });
+    };
+    window.addEventListener('masters_codex_lair_action_alert', handleLairAlert);
+    return () => {
+      window.removeEventListener('masters_codex_lair_action_alert', handleLairAlert);
+    };
+  }, [roundCount]);
 
   return (
     <div className="w-[380px] bg-[#0c0f17] flex flex-col justify-between overflow-hidden border-l border-[#2a3449] relative">
@@ -166,6 +181,58 @@ export const CombatInitiativePanel: React.FC<CombatInitiativePanelProps> = ({
       ) : (
         /* Active Combat Interface */
         <>
+          {/* Lair Action (Ação de Covil) Alert Banner na Iniciativa 20 */}
+          {lairActionAlert && (
+            <div className="p-2.5 mx-2 mt-2 bg-gradient-to-r from-purple-950/90 via-amber-950/80 to-purple-950/90 border border-amber-500/60 rounded-xl shadow-lg flex items-center justify-between gap-2 select-none animate-pulse">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-500/50 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-black text-amber-300 uppercase tracking-wider font-serif flex items-center gap-1.5">
+                    <span>🏰 AÇÃO DE COVIL</span>
+                    <span className="text-[9px] font-mono text-amber-400 bg-amber-950 px-1 py-0.2 rounded border border-amber-500/40">
+                      Inic 20
+                    </span>
+                  </div>
+                  <p className="text-[9px] text-slate-300 truncate font-sans">
+                    O covil reage aos invasores na contagem 20!
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('masters_codex_log_entry', {
+                        detail: {
+                          message: `🏰 Ação de Covil ativada na Iniciativa 20!`,
+                          description: `O Mestre executou o efeito ambiental de covil da rodada.`,
+                          type: 'lair_action',
+                        }
+                      }));
+                    }
+                    toast.success('Ação de Covil registrada no Log de Combate!');
+                    setLairActionAlert(null);
+                  }}
+                  className="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[9px] rounded-lg shadow transition-all cursor-pointer"
+                >
+                  Ativar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLairActionAlert(null)}
+                  className="p-1 text-slate-400 hover:text-slate-200 rounded cursor-pointer"
+                  title="Dispensar alerta de covil"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Turn & Add Combatants Toolbar */}
           <div className="p-2 border-b border-[#2a3449] bg-[#161c28]/40 flex flex-col gap-2">
             <div className="flex gap-2">
@@ -191,7 +258,7 @@ export const CombatInitiativePanel: React.FC<CombatInitiativePanelProps> = ({
               </button>
             </div>
 
-            <div className="flex items-center gap-3 mt-1 pl-1">
+            <div className="flex items-center justify-between gap-3 mt-1 pl-1">
               <label className="flex items-center gap-1.5 cursor-pointer group">
                 <div
                   className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
@@ -212,6 +279,16 @@ export const CombatInitiativePanel: React.FC<CombatInitiativePanelProps> = ({
                   Rolar Iniciativa todo turno
                 </span>
               </label>
+
+              <button
+                type="button"
+                onClick={() => setLairActionAlert({ round: roundCount, initiative: 20 })}
+                className="text-[9px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 hover:underline cursor-pointer"
+                title="Disparar manualmente alerta de Ação de Covil"
+              >
+                <Sparkles className="w-3 h-3 text-amber-400" />
+                <span>Covil (Inic 20)</span>
+              </button>
             </div>
 
             <button

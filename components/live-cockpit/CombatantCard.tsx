@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { GripVertical, Dices, X, Swords, Sparkles, Check } from 'lucide-react';
+import { GripVertical, Dices, X, Swords, Sparkles, Check, Zap } from 'lucide-react';
 import { Combatant, ConditionType, CharacterSheet, CharacterSpell } from '@/lib/types';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
@@ -97,6 +97,79 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
         return groups;
       })()
     : {};
+
+  // Legendary Actions Logic
+  const isMonsterOrLegendary = c.type === 'monster' || c.type === 'npc' || c.isLegendary || c.legendaryActions !== undefined;
+  const maxLegendary = c.maxLegendaryActions ?? 3;
+  const currentLegendary = c.legendaryActions !== undefined ? c.legendaryActions : (c.isLegendary ? maxLegendary : maxLegendary);
+  const isLegendaryActive = c.isLegendary || c.legendaryActions !== undefined;
+
+  const handleSpendLegendary = (cost: number = 1) => {
+    const nextVal = Math.max(0, (c.legendaryActions !== undefined ? c.legendaryActions : maxLegendary) - cost);
+    onUpdateCombatants((prev) => {
+      const next = prev.map((x) => (x.id === c.id ? { ...x, isLegendary: true, legendaryActions: nextVal } : x));
+      if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
+      return next;
+    });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('masters_codex_log_entry', {
+        detail: {
+          message: `⚡ ${c.name} usou ${cost} Ação Lendária (restam ${nextVal}/${maxLegendary})!`,
+          description: `Ação lendária executada fora do seu turno.`,
+          type: 'legendary_action',
+          actorId: c.id,
+        }
+      }));
+      window.dispatchEvent(new CustomEvent('masters_codex_combat_text', {
+        detail: { combatantId: c.id, type: 'damage', amount: `-${cost} Ação Lendária` }
+      }));
+    }
+  };
+
+  const handleToggleLegendarySlot = (slotIdx: number) => {
+    const cur = c.legendaryActions !== undefined ? c.legendaryActions : maxLegendary;
+    const nextVal = slotIdx < cur ? slotIdx : slotIdx + 1;
+    onUpdateCombatants((prev) => {
+      const next = prev.map((x) => (x.id === c.id ? { ...x, isLegendary: true, legendaryActions: nextVal } : x));
+      if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
+      return next;
+    });
+
+    if (slotIdx < cur && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('masters_codex_log_entry', {
+        detail: {
+          message: `⚡ ${c.name} gastou 1 Ação Lendária (restam ${nextVal}/${maxLegendary})!`,
+          description: `Slot #${slotIdx + 1} consumido.`,
+          type: 'legendary_action',
+          actorId: c.id,
+        }
+      }));
+    }
+  };
+
+  const handleResetLegendary = () => {
+    onUpdateCombatants((prev) => {
+      const next = prev.map((x) => (x.id === c.id ? { ...x, isLegendary: true, legendaryActions: maxLegendary } : x));
+      if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
+      return next;
+    });
+    toast.success(`${c.name} recuperou todas as ${maxLegendary} Ações Lendárias!`);
+  };
+
+  const handleToggleLegendaryFeature = () => {
+    const nextState = !isLegendaryActive;
+    onUpdateCombatants((prev) => {
+      const next = prev.map((x) => (x.id === c.id ? {
+        ...x,
+        isLegendary: nextState,
+        legendaryActions: nextState ? maxLegendary : undefined
+      } : x));
+      if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
+      return next;
+    });
+    toast.info(nextState ? `Ações Lendárias ativadas para ${c.name}!` : `Ações Lendárias desativadas para ${c.name}.`);
+  };
 
   const handleCardDrop = (targetIdx: number) => {
     if (draggedCardIndex === null || draggedCardIndex === targetIdx) return;
@@ -399,6 +472,85 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                 Mov: {remainingMovement.toFixed(1)}m / {maxSpeed.toFixed(1)}m
               </span>
             </div>
+
+            {/* Legendary Actions Tracker (Para Monstros/NPCs e Chefes Lendários) */}
+            {isMonsterOrLegendary && (
+              <div className="mt-2 select-none" onClick={(e) => e.stopPropagation()}>
+                {isLegendaryActive ? (
+                  <div className="p-1.5 bg-[#0a0d14]/90 border border-amber-500/40 rounded-xl flex items-center justify-between gap-2 shadow-sm">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0 fill-amber-400 animate-pulse" />
+                      <span className="text-[10px] font-bold font-serif text-amber-300 tracking-wide truncate">
+                        Ações Lendárias:
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-600/40">
+                        {currentLegendary}/{maxLegendary}
+                      </span>
+                    </div>
+
+                    {/* Interactive Slots & Fast Buttons */}
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: maxLegendary }).map((_, slotIdx) => {
+                        const isActive = slotIdx < currentLegendary;
+                        return (
+                          <button
+                            key={slotIdx}
+                            type="button"
+                            onClick={() => handleToggleLegendarySlot(slotIdx)}
+                            className={`w-5 h-5 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                              isActive
+                                ? 'bg-amber-500/20 text-amber-400 border border-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.35)] hover:bg-amber-500/40 hover:scale-105'
+                                : 'bg-slate-900/80 text-slate-600 border border-slate-800 hover:border-amber-500/40'
+                            }`}
+                            title={isActive ? `Gastar ação lendária #${slotIdx + 1}` : `Recuperar ação lendária #${slotIdx + 1}`}
+                          >
+                            <Zap className={`w-2.5 h-2.5 ${isActive ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`} />
+                          </button>
+                        );
+                      })}
+
+                      <div className="flex items-center gap-0.5 ml-1 border-l border-amber-500/20 pl-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSpendLegendary(1)}
+                          disabled={currentLegendary <= 0}
+                          className="px-1.5 py-0.5 text-[8px] font-bold text-amber-300 bg-amber-950/40 hover:bg-amber-900/50 border border-amber-600/30 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                          title="Gastar 1 ação lendária"
+                        >
+                          -1
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSpendLegendary(2)}
+                          disabled={currentLegendary < 2}
+                          className="px-1.5 py-0.5 text-[8px] font-bold text-amber-300 bg-amber-950/40 hover:bg-amber-900/50 border border-amber-600/30 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                          title="Gastar 2 ações lendárias (ex: Golpe de Asas)"
+                        >
+                          -2
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleResetLegendary}
+                          className="px-1.5 py-0.5 text-[8px] font-bold text-slate-400 hover:text-amber-300 hover:bg-amber-950/40 rounded transition-colors cursor-pointer font-mono"
+                          title="Restaurar todas as ações lendárias para o máximo"
+                        >
+                          ↺
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleToggleLegendaryFeature}
+                    className="text-[9px] font-bold text-amber-400/80 hover:text-amber-300 bg-amber-950/20 hover:bg-amber-950/40 border border-amber-500/30 hover:border-amber-500/60 px-2 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <Zap className="w-3 h-3 text-amber-400" />
+                    <span>+ Habilitar Ações Lendárias (3/rodada)</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

@@ -285,6 +285,11 @@ export interface Combatant {
   darkvisionRange?: number;
   hasTorch?: boolean;
   statusDurations?: StatusDuration[];
+  isLegendary?: boolean;
+  legendaryActions?: number; // Saldo atual de ações lendárias (ex: 0, 1, 2, 3)
+  maxLegendaryActions?: number; // Máximo por rodada (padrão: 3)
+  hasLairActions?: boolean;
+  lairActions?: { name: string; desc: string }[];
 }
 
 export type WallType = 'wall' | 'door' | 'secret_door' | 'window' | 'terrain' | 'illusion';

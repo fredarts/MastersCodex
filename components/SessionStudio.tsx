@@ -27,7 +27,9 @@ import {
   Users,
   User,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Flame,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -45,6 +47,8 @@ import { BattleGrid3D } from '@/components/BattleGrid3D';
 import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
 import { useBattleGridStore } from '@/lib/stores/useBattleGridStore';
 import { useCustomDialog } from '@/context/CustomDialogContext';
+import { EncounterDifficultyMeter } from '@/components/live-cockpit/EncounterDifficultyMeter';
+import { crToXp, previewEncounterWithNewMonster, XP_THRESHOLDS_BY_LEVEL, getEncounterMultiplier } from '@/lib/dnd5e-encounter-calculator';
 
 interface CharacterSheetMinimal {
   characterName?: string;
@@ -141,12 +145,10 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
   const favoriteBgmTracks = allBgmTracks.filter(t => favorites.includes(t.id));
   const favoriteSfxTracks = allSfxTracks.filter(s => favorites.includes(s.id));
   const [sceneCombatants, setSceneCombatants] = useState<Combatant[]>([]);
-  const [npcSearchQuery, setNpcSearchQuery] = useState('');
-  const [showNpcDropdown, setShowNpcDropdown] = useState(false);
-  const [monsterSearchQuery, setMonsterSearchQuery] = useState('');
-  const [showMonsterDropdown, setShowMonsterDropdown] = useState(false);
+  const [combatAddTab, setCombatAddTab] = useState<'srd' | 'world' | 'npcs' | 'players'>('srd');
+  const [combatSearchQuery, setCombatSearchQuery] = useState('');
+  const [showCombatDropdown, setShowCombatDropdown] = useState(false);
   const [monsterQty, setMonsterQty] = useState(1);
-  const [monsterSourceTab, setMonsterSourceTab] = useState<'srd' | 'world'>('srd');
   const [customMonsters, setCustomMonsters] = useState<CustomMonster[]>([]);
 
   useEffect(() => {
@@ -164,32 +166,17 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest('.monster-dropdown-container')) {
-        setShowMonsterDropdown(false);
+      if (!target.closest('.combat-dropdown-container')) {
+        setShowCombatDropdown(false);
       }
     };
-    if (showMonsterDropdown) {
+    if (showCombatDropdown) {
       document.addEventListener('mousedown', handleOutsideClick);
     }
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
     };
-  }, [showMonsterDropdown]);
-
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.npc-dropdown-container')) {
-        setShowNpcDropdown(false);
-      }
-    };
-    if (showNpcDropdown) {
-      document.addEventListener('mousedown', handleOutsideClick);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-    };
-  }, [showNpcDropdown]);
+  }, [showCombatDropdown]);
 
   const [timeOfDayHour, setTimeOfDayHour] = useState<number>(12);
   const [hasFog, setHasFog] = useState(false);
@@ -247,6 +234,134 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       setSceneImages([]);
     }
   }, [selectedScene]);
+
+  // Helper para resolver nível do personagem salvo em LocalStorage
+  const resolvePlayerLevel = (pName: string): number => {
+    try {
+      const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
+      if (saved) {
+        const sheets: any[] = JSON.parse(saved);
+        const cClean = pName.split('(')[0].trim().toLowerCase();
+        const found = sheets.find(
+          (s) =>
+            (s.characterName && s.characterName.split('(')[0].trim().toLowerCase() === cClean) ||
+            (s.characterName && pName.toLowerCase().includes(s.characterName.toLowerCase())) ||
+            (s.characterName && s.characterName.toLowerCase().includes(pName.toLowerCase()))
+        );
+        if (found && found.level) return Number(found.level);
+      }
+    } catch (e) {}
+    return 1;
+  };
+
+  // Party computada para o encontro da cena
+  const encounterPartyList = React.useMemo(() => {
+    const playerCombatants = (sceneCombatants || []).filter((c) => c.type === 'player');
+    if (playerCombatants.length > 0) {
+      return playerCombatants.map((c) => ({
+        level: resolvePlayerLevel(c.name),
+      }));
+    }
+    const nonDmMembers = (campaignMembers || []).filter((m) => m.role !== 'dm');
+    if (nonDmMembers.length > 0) {
+      return nonDmMembers.map((m) => ({
+        level: resolvePlayerLevel(m.characterName || m.displayName || ''),
+      }));
+    }
+    return [{ level: 1 }, { level: 1 }, { level: 1 }, { level: 1 }];
+  }, [sceneCombatants, campaignMembers]);
+
+  // Monstros presentes na cena para a calculadora de XP
+  const encounterMonstersList = React.useMemo(() => {
+    return (sceneCombatants || [])
+      .filter((c) => c.type === 'monster' || c.type === 'npc')
+      .map((c, idx) => ({
+        id: c.id || `mon-${idx}`,
+        cr: c.cr,
+        name: c.name,
+        xp: crToXp(c.cr),
+      }));
+  }, [sceneCombatants]);
+
+  // Gerador automático de encontros por nível de dificuldade
+  const handleAutoGenerateEncounter = (targetDiff: 'easy' | 'medium' | 'hard' | 'deadly') => {
+    const pList = encounterPartyList.length > 0 ? encounterPartyList : [{ level: 1 }, { level: 1 }, { level: 1 }, { level: 1 }];
+    
+    // Calcula o orçamento alvo de XP para a party
+    const targetXpBudget = pList.reduce((acc, p) => {
+      const lvl = Math.max(1, Math.min(20, p.level || 1));
+      const thresholds = XP_THRESHOLDS_BY_LEVEL[lvl] || XP_THRESHOLDS_BY_LEVEL[1];
+      return acc + thresholds[targetDiff];
+    }, 0);
+
+    const avgPartyLevel = Math.round(pList.reduce((acc, p) => acc + (p.level || 1), 0) / pList.length);
+
+    // Seleciona candidatos do INITIAL_MONSTERS
+    const available = INITIAL_MONSTERS.map((m) => ({
+      ...m,
+      xpValue: crToXp(m.cr),
+      numericCr: typeof m.cr === 'string' && m.cr.includes('/') 
+        ? (m.cr === '1/2' ? 0.5 : m.cr === '1/4' ? 0.25 : 0.125) 
+        : Number(m.cr)
+    })).filter((m) => m.numericCr <= avgPartyLevel + (targetDiff === 'deadly' ? 3 : 1));
+
+    if (available.length === 0) {
+      toast.error('Não há monstros compatíveis no bestiário.');
+      return;
+    }
+
+    const strategy = Math.random() > 0.4 ? 'group' : 'solo';
+    const chosenMonsters: typeof INITIAL_MONSTERS[0][] = [];
+
+    if (strategy === 'solo') {
+      const sorted = [...available].sort((a, b) => 
+        Math.abs(a.xpValue - targetXpBudget) - Math.abs(b.xpValue - targetXpBudget)
+      );
+      if (sorted[0]) chosenMonsters.push(sorted[0]);
+    } else {
+      const count = Math.floor(Math.random() * 3) + 2; // 2, 3 ou 4
+      const mult = getEncounterMultiplier(count, pList.length);
+      const targetPerMonsterXp = targetXpBudget / (count * mult);
+
+      const sorted = [...available].sort((a, b) => 
+        Math.abs(a.xpValue - targetPerMonsterXp) - Math.abs(b.xpValue - targetPerMonsterXp)
+      );
+      const basePick = sorted[0] || available[0];
+      for (let i = 0; i < count; i++) {
+        chosenMonsters.push(basePick);
+      }
+    }
+
+    // Mantém os jogadores e substitui os monstros antigos pelos novos gerados
+    const currentPlayers = sceneCombatants.filter((c) => c.type === 'player');
+    const newCombatants: Combatant[] = [];
+
+    chosenMonsters.forEach((m) => {
+      const sameName = newCombatants.filter((c) => c.name.startsWith(m.name)).length;
+      const finalName = chosenMonsters.filter((x) => x.name === m.name).length > 1 
+        ? `${m.name} ${sameName + 1}` 
+        : m.name;
+
+      newCombatants.push({
+        id: `c-sc-${Date.now()}-${Math.random()}-${Math.floor(Math.random() * 1000)}`,
+        name: finalName,
+        type: 'monster',
+        hp: m.hp,
+        maxHp: m.hp,
+        ac: m.ac,
+        initiative: Math.floor(Math.random() * 20) + 1,
+        conditions: [],
+        cr: m.cr,
+        size: m.size,
+        tokenImageUrl: m.tokenImageUrl,
+        modelUrl: m.modelUrl,
+        tokenType: m.tokenType,
+      });
+    });
+
+    setSceneCombatants([...currentPlayers, ...newCombatants]);
+    toast.success(`Encontro ${targetDiff.toUpperCase()} gerado com sucesso (${newCombatants.length} criaturas)!`);
+  };
 
   if (!activeCampaign) {
     return (
@@ -428,20 +543,20 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
     .filter((e) => e.category === 'npc')
     .filter(
       (npc) =>
-        npc.name.toLowerCase().includes(npcSearchQuery.toLowerCase()) ||
-        (npc.subType && npc.subType.toLowerCase().includes(npcSearchQuery.toLowerCase()))
+        npc.name.toLowerCase().includes(combatSearchQuery.toLowerCase()) ||
+        (npc.subType && npc.subType.toLowerCase().includes(combatSearchQuery.toLowerCase()))
     );
 
   const filteredMonsters = INITIAL_MONSTERS.filter(
     (m) =>
-      m.name.toLowerCase().includes(monsterSearchQuery.toLowerCase()) ||
-      (m.type && m.type.toLowerCase().includes(monsterSearchQuery.toLowerCase()))
+      m.name.toLowerCase().includes(combatSearchQuery.toLowerCase()) ||
+      (m.type && m.type.toLowerCase().includes(combatSearchQuery.toLowerCase()))
   );
 
   const filteredCustomMonsters = customMonsters.filter(
     (m) =>
-      m.name.toLowerCase().includes(monsterSearchQuery.toLowerCase()) ||
-      (m.type && m.type.toLowerCase().includes(monsterSearchQuery.toLowerCase()))
+      m.name.toLowerCase().includes(combatSearchQuery.toLowerCase()) ||
+      (m.type && m.type.toLowerCase().includes(combatSearchQuery.toLowerCase()))
   );
 
   const handleAddPlayerToScene = (mem: typeof campaignMembers[0]) => {
@@ -1336,284 +1451,392 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                     <div className={`space-y-3.5 bg-[#121824]/90 p-4 rounded-2xl border border-[#2a3449] shadow-xl transition-all duration-300 ${
                       areMenusCollapsed ? 'lg:col-span-4' : 'lg:col-span-5'
                     }`}>
-                      {/* Add Player Characters Section */}
-                      {campaignMembers.length > 0 && (
-                        <div className="p-3 bg-[#161c28] border border-cyan-500/30 rounded-xl space-y-2">
-                          <div className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider flex items-center justify-between gap-2">
-                            <span className="flex items-center gap-1.5">
-                              <UserCheck className="w-3.5 h-3.5" /> Adicionar Jogadores Conectados ao Combate:
-                            </span>
+                      {/* Medidor de Dificuldade de Encontros (CR/XP D&D 5e) */}
+                      <EncounterDifficultyMeter
+                        party={encounterPartyList}
+                        monsters={encounterMonstersList}
+                        onRemoveMonster={(id) => setSceneCombatants((prev) => prev.filter((c) => c.id !== id))}
+                      />
+
+                      {/* Gerador Rápido de Encontros por Dificuldade */}
+                      <div className="p-3 bg-[#161c28] border border-amber-500/30 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between text-xs font-bold text-amber-300">
+                          <span className="flex items-center gap-1.5 font-serif">
+                            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                            Gerador Rápido de Encontros (D&D 5e):
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            Auto Balanceado
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleAutoGenerateEncounter('easy')}
+                            className="px-2 py-1.5 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-700/60 text-emerald-300 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
+                            title="Gerar encontro com dificuldade Fácil para a party"
+                          >
+                            <Shield className="w-3 h-3" /> Fácil
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAutoGenerateEncounter('medium')}
+                            className="px-2 py-1.5 bg-amber-950/60 hover:bg-amber-900/80 border border-amber-700/60 text-amber-300 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
+                            title="Gerar encontro com dificuldade Média para a party"
+                          >
+                            <Swords className="w-3 h-3" /> Médio
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAutoGenerateEncounter('hard')}
+                            className="px-2 py-1.5 bg-orange-950/60 hover:bg-orange-900/80 border border-orange-700/60 text-orange-300 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
+                            title="Gerar encontro com dificuldade Difícil para a party"
+                          >
+                            <Flame className="w-3 h-3" /> Difícil
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAutoGenerateEncounter('deadly')}
+                            className="px-2 py-1.5 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-700/60 text-rose-300 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
+                            title="Gerar encontro com dificuldade Mortal para a party"
+                          >
+                            <Skull className="w-3 h-3" /> Mortal
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Widget Unificado de Adição de Combatentes (SRD, Mundo, NPCs e Jogadores) */}
+                      <div className="p-3 bg-[#161c28] border border-[#2a3449] hover:border-amber-500/30 rounded-xl space-y-2.5 relative combat-dropdown-container transition-all">
+                        {/* Tab Bar / Segmented Control */}
+                        <div className="flex items-center justify-between border-b border-[#2a3449] pb-2 gap-1 overflow-x-auto scrollbar-none">
+                          <div className="flex gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCombatAddTab('srd');
+                                setCombatSearchQuery('');
+                                setShowCombatDropdown(false);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                                combatAddTab === 'srd'
+                                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm'
+                                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                              }`}
+                            >
+                              <Skull className="w-3 h-3 text-rose-400" />
+                              <span>SRD (5e)</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCombatAddTab('world');
+                                setCombatSearchQuery('');
+                                setShowCombatDropdown(false);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                                combatAddTab === 'world'
+                                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm'
+                                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                              }`}
+                            >
+                              <Sparkles className="w-3 h-3 text-amber-400" />
+                              <span>Mundo ({customMonsters.length})</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCombatAddTab('npcs');
+                                setCombatSearchQuery('');
+                                setShowCombatDropdown(false);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                                combatAddTab === 'npcs'
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                              }`}
+                            >
+                              <User className="w-3 h-3 text-amber-400" />
+                              <span>NPCs ({filteredNpcs.length})</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCombatAddTab('players');
+                                setCombatSearchQuery('');
+                                setShowCombatDropdown(false);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                                combatAddTab === 'players'
+                                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                              }`}
+                            >
+                              <Shield className="w-3 h-3 text-cyan-400" />
+                              <span>Jogadores ({campaignMembers.length})</span>
+                            </button>
+                          </div>
+
+                          {combatAddTab === 'players' && campaignMembers.length > 0 && (
                             <button
                               type="button"
                               onClick={handleAddAllPlayersToScene}
-                              className="px-2 py-0.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 rounded text-[9px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1 shrink-0 font-sans"
+                              className="px-2 py-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 rounded-lg text-[9px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1 shrink-0 font-sans cursor-pointer"
+                              title="Adicionar todos os jogadores ao combate com 1 clique"
                             >
                               <Users className="w-2.5 h-2.5" /> Importar Grupo
                             </button>
-                          </div>
-                          <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto custom-scrollbar p-0.5">
-                            {campaignMembers.map((mem) => (
-                              <button
-                                key={mem.id}
-                                type="button"
-                                onClick={() => handleAddPlayerToScene(mem)}
-                                className="px-3 py-1.5 bg-[#0a0d14] hover:bg-[#121824] border border-cyan-500/40 rounded-xl text-xs font-bold text-cyan-300 hover:text-cyan-200 transition-all flex items-center gap-1 shadow-sm active:scale-95"
-                              >
-                                <Shield className="w-3.5 h-3.5 text-cyan-400" />
-                                <span>+ {mem.characterName || mem.displayName}</span>
-                              </button>
-                            ))}
-                          </div>
+                          )}
                         </div>
-                      )}
 
-                      {/* Add SRD Monsters Section */}
-                      <div className="p-3 bg-[#161c28] border border-[#2a3449] hover:border-rose-500/20 rounded-xl space-y-2 relative monster-dropdown-container transition-all">
-                        {/* Tab selectors */}
-                        <div className="flex items-center justify-between border-b border-[#2a3449] pb-2 mb-1">
-                          <div className="flex gap-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMonsterSourceTab('srd');
-                                setMonsterSearchQuery('');
-                                setShowMonsterDropdown(false);
-                              }}
-                              className={`text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-                                monsterSourceTab === 'srd' ? 'text-rose-400' : 'text-slate-500 hover:text-slate-400'
-                              }`}
-                            >
-                              Compêndio SRD
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMonsterSourceTab('world');
-                                setMonsterSearchQuery('');
-                                setShowMonsterDropdown(false);
-                              }}
-                              className={`text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-                                monsterSourceTab === 'world' ? 'text-rose-450' : 'text-slate-500 hover:text-slate-400'
-                              }`}
-                            >
-                              Monstros do Mundo
-                            </button>
-                          </div>
-                          <span className="flex items-center gap-1">
-                            <Skull className="w-3 h-3 text-rose-400" />
-                            <span className="text-[9px] text-slate-400 font-mono font-bold">
-                              {monsterSourceTab === 'srd' ? 'SRD' : `${customMonsters.length} Criados`}
-                            </span>
-                          </span>
-                        </div>
-                        
-                        <div className="flex gap-2 items-center">
-                          <div className="relative flex-1">
-                            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                            <input
-                              type="text"
-                              value={monsterSearchQuery}
-                              onChange={(e) => {
-                                setMonsterSearchQuery(e.target.value);
-                                setShowMonsterDropdown(true);
-                              }}
-                              onFocus={() => setShowMonsterDropdown(true)}
-                              placeholder={monsterSourceTab === 'srd' ? "Buscar monstro por nome..." : "Buscar monstro/besta do mundo..."}
-                              className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-xl pl-9 pr-8 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-rose-500/40 font-sans"
-                            />
-                            {monsterSearchQuery && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setMonsterSearchQuery('');
-                                  setShowMonsterDropdown(false);
-                                }}
-                                className="absolute right-3 top-2 text-xs text-slate-400 hover:text-slate-200 font-sans"
-                              >
-                                ✕
-                              </button>
+                        {/* Conteúdo da Aba Jogadores */}
+                        {combatAddTab === 'players' ? (
+                          <div className="space-y-2">
+                            {campaignMembers.length === 0 ? (
+                              <div className="p-3 text-center text-slate-500 text-xs">
+                                Nenhum jogador conectado na campanha
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto custom-scrollbar p-0.5">
+                                {campaignMembers.map((mem) => (
+                                  <button
+                                    key={mem.id}
+                                    type="button"
+                                    onClick={() => handleAddPlayerToScene(mem)}
+                                    className="px-2.5 py-1.5 bg-[#0a0d14] hover:bg-[#121824] border border-cyan-500/40 hover:border-cyan-400 rounded-xl text-xs font-bold text-cyan-300 hover:text-cyan-200 transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                                  >
+                                    <Shield className="w-3 h-3 text-cyan-400" />
+                                    <span>+ {mem.characterName || mem.displayName}</span>
+                                  </button>
+                                ))}
+                              </div>
                             )}
                           </div>
+                        ) : (
+                          /* Conteúdo das Abas SRD, Mundo e NPCs (Campo de busca + Qtd + Dropdown) */
+                          <div className="relative">
+                            <div className="flex gap-2 items-center">
+                              <div className="relative flex-1">
+                                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                                <input
+                                  type="text"
+                                  value={combatSearchQuery}
+                                  onChange={(e) => {
+                                    setCombatSearchQuery(e.target.value);
+                                    setShowCombatDropdown(true);
+                                  }}
+                                  onFocus={() => setShowCombatDropdown(true)}
+                                  placeholder={
+                                    combatAddTab === 'srd'
+                                      ? "Buscar monstro no Compêndio SRD..."
+                                      : combatAddTab === 'world'
+                                      ? "Buscar monstro / homebrew do mundo..."
+                                      : "Buscar NPC por nome ou subtipo..."
+                                  }
+                                  className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-xl pl-9 pr-8 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-rose-500/40 font-sans"
+                                />
+                                {combatSearchQuery && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCombatSearchQuery('');
+                                      setShowCombatDropdown(false);
+                                    }}
+                                    className="absolute right-3 top-2 text-xs text-slate-400 hover:text-slate-200 font-sans cursor-pointer"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
+                              </div>
 
-                          <div className="flex items-center gap-1 shrink-0 bg-[#0a0d14] border border-[#2a3449] rounded-xl px-2 py-1 select-none">
-                            <span className="text-[10px] text-slate-500 font-bold uppercase font-sans">Qtd:</span>
-                            <input
-                              type="number"
-                              min="1"
-                              max="99"
-                              value={monsterQty}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value, 10);
-                                setMonsterQty(isNaN(val) ? 1 : Math.max(1, Math.min(99, val)));
-                              }}
-                              className="w-8 bg-transparent text-xs text-slate-200 text-center font-bold focus:outline-none font-sans"
-                            />
-                            <div className="flex flex-col gap-0.5">
-                              <button
-                                type="button"
-                                onClick={() => setMonsterQty(prev => Math.min(99, prev + 1))}
-                                className="text-[8px] text-slate-400 hover:text-slate-200 px-0.5 leading-none"
-                              >
-                                ▲
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setMonsterQty(prev => Math.max(1, prev - 1))}
-                                className="text-[8px] text-slate-400 hover:text-slate-200 px-0.5 leading-none"
-                              >
-                                ▼
-                              </button>
+                              {combatAddTab !== 'npcs' && (
+                                <div className="flex items-center gap-1 shrink-0 bg-[#0a0d14] border border-[#2a3449] rounded-xl px-2 py-1 select-none">
+                                  <span className="text-[10px] text-slate-500 font-bold uppercase font-sans">Qtd:</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="99"
+                                    value={monsterQty}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value, 10);
+                                      setMonsterQty(isNaN(val) ? 1 : Math.max(1, Math.min(99, val)));
+                                    }}
+                                    className="w-8 bg-transparent text-xs text-slate-200 text-center font-bold focus:outline-none font-sans"
+                                  />
+                                  <div className="flex flex-col gap-0.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => setMonsterQty((prev) => Math.min(99, prev + 1))}
+                                      className="text-[8px] text-slate-400 hover:text-slate-200 px-0.5 leading-none cursor-pointer"
+                                    >
+                                      ▲
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setMonsterQty((prev) => Math.max(1, prev - 1))}
+                                      className="text-[8px] text-slate-400 hover:text-slate-200 px-0.5 leading-none cursor-pointer"
+                                    >
+                                      ▼
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        </div>
-                        
-                        {/* Floating Dropdown List */}
-                        {showMonsterDropdown && (
-                          <div className="absolute left-0 right-0 mt-1.5 bg-[#121824] border border-[#2a3449] rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto custom-scrollbar divide-y divide-slate-800/60">
-                            {monsterSourceTab === 'srd' ? (
-                              filteredMonsters.length === 0 ? (
-                                <div className="p-3 text-center text-slate-500 text-xs font-sans">
-                                  Nenhum monstro encontrado
-                                </div>
-                              ) : (
-                                filteredMonsters.map((m) => (
-                                  <button
-                                    key={m.id}
-                                    type="button"
-                                    onClick={() => {
-                                      handleAddMonsterToScene(m, monsterQty);
-                                      setMonsterSearchQuery('');
-                                      setShowMonsterDropdown(false);
-                                    }}
-                                    className="w-full px-3 py-2 text-left hover:bg-[#1c2436] flex items-center justify-between text-xs transition-colors group font-sans cursor-pointer"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <Skull className="w-3.5 h-3.5 text-rose-400 group-hover:text-rose-300" />
-                                      <span className="font-bold text-slate-200 group-hover:text-slate-100">{m.name}</span>
-                                      <span className="text-[10px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded">
-                                        CR {m.cr} | CA {m.ac}
-                                      </span>
+
+                            {/* Floating Dropdown List */}
+                            {showCombatDropdown && (
+                              <div className="absolute left-0 right-0 mt-1.5 bg-[#121824] border border-[#2a3449] rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto custom-scrollbar divide-y divide-slate-800/60">
+                                {combatAddTab === 'srd' && (
+                                  filteredMonsters.length === 0 ? (
+                                    <div className="p-3 text-center text-slate-500 text-xs font-sans">
+                                      Nenhum monstro encontrado
                                     </div>
-                                    <span className="text-[10px] text-rose-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                                      + Adicionar ({monsterQty})
-                                    </span>
-                                  </button>
-                                ))
-                              )
-                            ) : (
-                              filteredCustomMonsters.length === 0 ? (
-                                <div className="p-3 text-center text-slate-500 text-xs font-sans">
-                                  Nenhum monstro/besta encontrado
-                                </div>
-                              ) : (
-                                filteredCustomMonsters.map((m) => (
-                                  <button
-                                    key={m.id}
-                                    type="button"
-                                    onClick={() => {
-                                      handleAddCustomMonsterToScene(m, monsterQty);
-                                      setMonsterSearchQuery('');
-                                      setShowMonsterDropdown(false);
-                                    }}
-                                    className="w-full px-3 py-2 text-left hover:bg-[#1c2436] flex items-center justify-between text-xs transition-colors group font-sans cursor-pointer"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <Skull className="w-3.5 h-3.5 text-amber-500 group-hover:text-amber-400" />
-                                      <span className="font-bold text-slate-200 group-hover:text-slate-100">{m.name}</span>
-                                      <span className="text-[10px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded">
-                                        CR {m.cr} | CA {m.ac}
-                                      </span>
-                                      {m.type && (
-                                        <span className="text-[9px] text-amber-400 bg-amber-950/40 border border-amber-500/20 px-1 py-0.5 rounded uppercase font-mono">
-                                          {m.type}
-                                        </span>
-                                      )}
+                                  ) : (
+                                    filteredMonsters.map((m) => {
+                                      const monsterXp = crToXp(m.cr) * monsterQty;
+                                      const preview = previewEncounterWithNewMonster(encounterPartyList, encounterMonstersList, { cr: m.cr, xp: monsterXp });
+                                      return (
+                                        <button
+                                          key={m.id}
+                                          type="button"
+                                          onClick={() => {
+                                            handleAddMonsterToScene(m, monsterQty);
+                                            setCombatSearchQuery('');
+                                            setShowCombatDropdown(false);
+                                          }}
+                                          className="w-full px-3 py-2 text-left hover:bg-[#1c2436] flex items-center justify-between text-xs transition-colors group font-sans cursor-pointer gap-2"
+                                        >
+                                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                            <Skull className="w-3.5 h-3.5 text-rose-400 group-hover:text-rose-300 shrink-0" />
+                                            <span className="font-bold text-slate-200 group-hover:text-slate-100 truncate">{m.name}</span>
+                                            <span className="text-[10px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded font-mono shrink-0">
+                                              CR {m.cr} • {crToXp(m.cr).toLocaleString()} XP
+                                            </span>
+                                            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+                                              preview.difficulty === 'deadly' ? 'bg-rose-950/60 text-rose-300 border-rose-800/60' :
+                                              preview.difficulty === 'hard' ? 'bg-orange-950/60 text-orange-300 border-orange-800/60' :
+                                              preview.difficulty === 'medium' ? 'bg-amber-950/60 text-amber-300 border-amber-800/60' :
+                                              preview.difficulty === 'easy' ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60' :
+                                              'bg-cyan-950/60 text-cyan-300 border-cyan-800/60'
+                                            }`}>
+                                              +{monsterXp.toLocaleString()} XP → {preview.difficultyLabel}
+                                            </span>
+                                          </div>
+                                          <span className="text-[10px] text-rose-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                            + Adicionar ({monsterQty})
+                                          </span>
+                                        </button>
+                                      );
+                                    })
+                                  )
+                                )}
+
+                                {combatAddTab === 'world' && (
+                                  filteredCustomMonsters.length === 0 ? (
+                                    <div className="p-3 text-center text-slate-500 text-xs font-sans">
+                                      Nenhum monstro/besta encontrado
                                     </div>
-                                    <span className="text-[10px] text-amber-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                                      + Adicionar ({monsterQty})
-                                    </span>
-                                  </button>
-                                ))
-                              )
+                                  ) : (
+                                    filteredCustomMonsters.map((m) => {
+                                      const monsterXp = crToXp(m.cr) * monsterQty;
+                                      const preview = previewEncounterWithNewMonster(encounterPartyList, encounterMonstersList, { cr: m.cr, xp: monsterXp });
+                                      return (
+                                        <button
+                                          key={m.id}
+                                          type="button"
+                                          onClick={() => {
+                                            handleAddCustomMonsterToScene(m, monsterQty);
+                                            setCombatSearchQuery('');
+                                            setShowCombatDropdown(false);
+                                          }}
+                                          className="w-full px-3 py-2 text-left hover:bg-[#1c2436] flex items-center justify-between text-xs transition-colors group font-sans cursor-pointer gap-2"
+                                        >
+                                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                            <Skull className="w-3.5 h-3.5 text-purple-400 group-hover:text-purple-300 shrink-0" />
+                                            <span className="font-bold text-slate-200 group-hover:text-slate-100 truncate">{m.name}</span>
+                                            <span className="text-[10px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded font-mono shrink-0">
+                                              CR {m.cr} • {crToXp(m.cr).toLocaleString()} XP
+                                            </span>
+                                            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+                                              preview.difficulty === 'deadly' ? 'bg-rose-950/60 text-rose-300 border-rose-800/60' :
+                                              preview.difficulty === 'hard' ? 'bg-orange-950/60 text-orange-300 border-orange-800/60' :
+                                              preview.difficulty === 'medium' ? 'bg-amber-950/60 text-amber-300 border-amber-800/60' :
+                                              preview.difficulty === 'easy' ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60' :
+                                              'bg-cyan-950/60 text-cyan-300 border-cyan-800/60'
+                                            }`}>
+                                              +{monsterXp.toLocaleString()} XP → {preview.difficultyLabel}
+                                            </span>
+                                            {m.type && (
+                                              <span className="text-[9px] text-purple-400 bg-purple-950/40 border border-purple-500/20 px-1 py-0.5 rounded uppercase font-mono">
+                                                {m.type}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <span className="text-[10px] text-purple-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                            + Adicionar ({monsterQty})
+                                          </span>
+                                        </button>
+                                      );
+                                    })
+                                  )
+                                )}
+
+                                {combatAddTab === 'npcs' && (
+                                  filteredNpcs.length === 0 ? (
+                                    <div className="p-3 text-center text-slate-500 text-xs">
+                                      Nenhum NPC encontrado
+                                    </div>
+                                  ) : (
+                                    filteredNpcs.map((npc) => {
+                                      const npcCr = (npc.attributes?.cr || npc.attributes?.nd || '1/2') as string;
+                                      const npcXp = crToXp(npcCr);
+                                      const preview = previewEncounterWithNewMonster(encounterPartyList, encounterMonstersList, { cr: npcCr, xp: npcXp });
+                                      return (
+                                        <button
+                                          key={npc.id}
+                                          type="button"
+                                          onClick={() => {
+                                            handleAddNpcToScene(npc);
+                                            setCombatSearchQuery('');
+                                            setShowCombatDropdown(false);
+                                          }}
+                                          className="w-full px-3 py-2 text-left hover:bg-[#1c2436] flex items-center justify-between text-xs transition-colors group cursor-pointer gap-2"
+                                        >
+                                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                            <User className="w-3.5 h-3.5 text-amber-400 group-hover:text-amber-300 shrink-0" />
+                                            <span className="font-bold text-slate-200 group-hover:text-slate-100 truncate">{npc.name}</span>
+                                            <span className="text-[10px] font-mono text-amber-400 bg-amber-950/40 px-1 py-0.5 rounded border border-amber-500/20 shrink-0">
+                                              ND {npcCr} • {npcXp.toLocaleString()} XP
+                                            </span>
+                                            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+                                              preview.difficulty === 'deadly' ? 'bg-rose-950/60 text-rose-300 border-rose-800/60' :
+                                              preview.difficulty === 'hard' ? 'bg-orange-950/60 text-orange-300 border-orange-800/60' :
+                                              preview.difficulty === 'medium' ? 'bg-amber-950/60 text-amber-300 border-amber-800/60' :
+                                              preview.difficulty === 'easy' ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60' :
+                                              'bg-cyan-950/60 text-cyan-300 border-cyan-800/60'
+                                            }`}>
+                                              +{npcXp.toLocaleString()} XP → {preview.difficultyLabel}
+                                            </span>
+                                            {npc.subType && (
+                                              <span className="text-[10px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded">
+                                                {npc.subType}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <span className="text-[10px] text-amber-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                            + Adicionar
+                                          </span>
+                                        </button>
+                                      );
+                                    })
+                                  )
+                                )}
+                              </div>
                             )}
                           </div>
                         )}
-                      </div>
-
-                      {/* Add World NPCs Section */}
-                      <div className="p-3 bg-[#161c28] border border-[#2a3449] hover:border-amber-500/20 rounded-xl space-y-2 relative npc-dropdown-container transition-all">
-                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 justify-between">
-                          <span className="flex items-center gap-1.5">
-                            <User className="w-3.5 h-3.5 text-amber-400" />
-                            Adicionar NPCs do Mundo:
-                          </span>
-                        </div>
-                        
-                        <div className="relative">
-                          <div className="relative">
-                            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                            <input
-                              type="text"
-                              value={npcSearchQuery}
-                              onChange={(e) => {
-                                setNpcSearchQuery(e.target.value);
-                                setShowNpcDropdown(true);
-                              }}
-                              onFocus={() => setShowNpcDropdown(true)}
-                              placeholder="Buscar NPC por nome ou subtipo..."
-                              className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-xl pl-9 pr-8 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/40 font-sans"
-                            />
-                            {npcSearchQuery && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setNpcSearchQuery('');
-                                  setShowNpcDropdown(false);
-                                }}
-                                className="absolute right-3 top-2 text-xs text-slate-400 hover:text-slate-200"
-                              >
-                                ✕
-                              </button>
-                            )}
-                          </div>
-                          
-                          {/* Floating Dropdown List */}
-                          {showNpcDropdown && (
-                            <div className="absolute left-0 right-0 mt-1.5 bg-[#121824] border border-[#2a3449] rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto custom-scrollbar divide-y divide-slate-800/60">
-                              {filteredNpcs.length === 0 ? (
-                                <div className="p-3 text-center text-slate-500 text-xs">
-                                  Nenhum NPC encontrado
-                                </div>
-                              ) : (
-                                filteredNpcs.map((npc) => (
-                                  <button
-                                    key={npc.id}
-                                    type="button"
-                                    onClick={() => {
-                                      handleAddNpcToScene(npc);
-                                      setNpcSearchQuery('');
-                                      setShowNpcDropdown(false);
-                                    }}
-                                    className="w-full px-3 py-2 text-left hover:bg-[#1c2436] flex items-center justify-between text-xs transition-colors group"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <User className="w-3.5 h-3.5 text-amber-400 group-hover:text-amber-300" />
-                                      <span className="font-bold text-slate-200 group-hover:text-slate-100">{npc.name}</span>
-                                      {npc.subType && (
-                                        <span className="text-[10px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded">
-                                          {npc.subType}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <span className="text-[10px] text-amber-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                                      + Adicionar
-                                    </span>
-                                  </button>
-                                ))
-                              )}
-                            </div>
-                          )}
-                        </div>
                       </div>
 
                       {/* Scene Combatants List */}
@@ -1624,7 +1847,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                             <button
                               type="button"
                               onClick={() => setSceneCombatants([])}
-                              className="text-[10px] text-rose-400 hover:underline font-normal"
+                              className="text-[10px] text-rose-400 hover:underline font-normal cursor-pointer"
                             >
                               Limpar Todos
                             </button>
@@ -1638,8 +1861,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                             </div>
                           ) : (
                             sceneCombatants.map((c, idx) => (
-                              <div key={idx} className="p-2.5 bg-[#161c28] border border-[#2a3449] hover:border-slate-600 rounded-xl flex items-center justify-between shadow-sm transition-all">
-                                <div className="flex items-center gap-2 min-w-0">
+                              <div key={idx} className="p-2.5 bg-[#161c28] border border-[#2a3449] hover:border-slate-600 rounded-xl flex items-center justify-between shadow-sm transition-all gap-2">
+                                <div className="flex items-center gap-2 min-w-0 flex-wrap">
                                   {c.type === 'player' ? (
                                     <Shield className="w-4 h-4 text-cyan-400 shrink-0" />
                                   ) : c.type === 'npc' ? (
@@ -1649,6 +1872,11 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                                   )}
                                   <span className="text-xs font-bold text-slate-100 truncate">{c.name}</span>
                                   <span className="text-[10px] text-slate-400 font-mono shrink-0">HP: {c.hp} | CA: {c.ac}</span>
+                                  {c.type !== 'player' && (
+                                    <span className="text-[9px] font-mono text-rose-400 bg-rose-950/40 px-1 py-0.5 rounded border border-rose-900/50 shrink-0">
+                                      CR {c.cr || '0'} • {crToXp(c.cr).toLocaleString()} XP
+                                    </span>
+                                  )}
                                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${
                                     c.type === 'player' 
                                       ? 'bg-cyan-500/20 text-cyan-300' 
@@ -1662,7 +1890,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                                 <button
                                   type="button"
                                   onClick={() => setSceneCombatants((prev) => prev.filter((_, i) => i !== idx))}
-                                  className="text-slate-500 hover:text-rose-400 p-1 rounded transition-colors"
+                                  className="text-slate-500 hover:text-rose-400 p-1 rounded transition-colors cursor-pointer shrink-0"
                                   title="Remover combatente"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
