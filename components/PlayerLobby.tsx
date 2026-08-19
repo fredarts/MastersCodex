@@ -1433,6 +1433,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                           combatants={combatants}
                           currentTurnIndex={currentTurnIndex}
                           selectedTargetId={selectedTargetId || undefined}
+                          isBattleStarted={currentScene?.isBattleStarted}
                           onAttackTarget={handlePlayerAttackTarget}
                           timeOfDayHour={currentScene?.timeOfDayHour}
                           timeOfDayPreset={currentScene?.timeOfDay}

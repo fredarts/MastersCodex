@@ -238,6 +238,7 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                   onUpdateCombatants={(updated) => setCombatants(updated)}
                   currentTurnIndex={currentTurnIndex}
                   selectedTargetId={selectedTargetId}
+                  isBattleStarted={isBattleStarted}
                   onSelectTarget={(target) => {
                     setSelectedTargetId(target?.id);
                     broadcastToPlayerView({ targetId: target?.id });

@@ -44,6 +44,7 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
   } = useLiveCockpit();
 
   const {
+    isBattleStarted,
     expandedId,
     statusMenuOpen,
     openSpellDropdownId,
@@ -63,6 +64,7 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
   const isTarget = c.id === selectedTargetId;
   const isExpanded = expandedId === c.id;
   const isStatusOpen = statusMenuOpen === c.id;
+  const isAttackDisabled = !isBattleStarted || c.actionUsed;
 
   // Find matching Character Sheet
   const matchingSheet = characterSheets.find((s) => {
@@ -468,89 +470,23 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                 </button>
               )}
 
+              {/* Botão compacto para habilitar ações lendárias em monstros/NPCs */}
+              {isMonsterOrLegendary && !isLegendaryActive && (
+                <button
+                  type="button"
+                  onClick={handleToggleLegendaryFeature}
+                  className="px-2 py-0.5 text-[9px] font-extrabold text-amber-400/80 hover:text-amber-300 bg-amber-950/20 hover:bg-amber-950/40 border border-amber-500/30 hover:border-amber-500/60 rounded transition-all flex items-center gap-1 cursor-pointer"
+                  title="Habilitar Ações Lendárias (3/rodada) para este monstro/NPC"
+                >
+                  <Zap className="w-2.5 h-2.5 text-amber-400" />
+                  <span>+ Lendário</span>
+                </button>
+              )}
+
               <span className="text-[9px] text-slate-400 font-mono ml-1.5 font-bold">
                 Mov: {remainingMovement.toFixed(1)}m / {maxSpeed.toFixed(1)}m
               </span>
             </div>
-
-            {/* Legendary Actions Tracker (Para Monstros/NPCs e Chefes Lendários) */}
-            {isMonsterOrLegendary && (
-              <div className="mt-2 select-none" onClick={(e) => e.stopPropagation()}>
-                {isLegendaryActive ? (
-                  <div className="p-1.5 bg-[#0a0d14]/90 border border-amber-500/40 rounded-xl flex items-center justify-between gap-2 shadow-sm">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0 fill-amber-400 animate-pulse" />
-                      <span className="text-[10px] font-bold font-serif text-amber-300 tracking-wide truncate">
-                        Ações Lendárias:
-                      </span>
-                      <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-600/40">
-                        {currentLegendary}/{maxLegendary}
-                      </span>
-                    </div>
-
-                    {/* Interactive Slots & Fast Buttons */}
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: maxLegendary }).map((_, slotIdx) => {
-                        const isActive = slotIdx < currentLegendary;
-                        return (
-                          <button
-                            key={slotIdx}
-                            type="button"
-                            onClick={() => handleToggleLegendarySlot(slotIdx)}
-                            className={`w-5 h-5 rounded-full flex items-center justify-center transition-all cursor-pointer ${
-                              isActive
-                                ? 'bg-amber-500/20 text-amber-400 border border-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.35)] hover:bg-amber-500/40 hover:scale-105'
-                                : 'bg-slate-900/80 text-slate-600 border border-slate-800 hover:border-amber-500/40'
-                            }`}
-                            title={isActive ? `Gastar ação lendária #${slotIdx + 1}` : `Recuperar ação lendária #${slotIdx + 1}`}
-                          >
-                            <Zap className={`w-2.5 h-2.5 ${isActive ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`} />
-                          </button>
-                        );
-                      })}
-
-                      <div className="flex items-center gap-0.5 ml-1 border-l border-amber-500/20 pl-1">
-                        <button
-                          type="button"
-                          onClick={() => handleSpendLegendary(1)}
-                          disabled={currentLegendary <= 0}
-                          className="px-1.5 py-0.5 text-[8px] font-bold text-amber-300 bg-amber-950/40 hover:bg-amber-900/50 border border-amber-600/30 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                          title="Gastar 1 ação lendária"
-                        >
-                          -1
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSpendLegendary(2)}
-                          disabled={currentLegendary < 2}
-                          className="px-1.5 py-0.5 text-[8px] font-bold text-amber-300 bg-amber-950/40 hover:bg-amber-900/50 border border-amber-600/30 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                          title="Gastar 2 ações lendárias (ex: Golpe de Asas)"
-                        >
-                          -2
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleResetLegendary}
-                          className="px-1.5 py-0.5 text-[8px] font-bold text-slate-400 hover:text-amber-300 hover:bg-amber-950/40 rounded transition-colors cursor-pointer font-mono"
-                          title="Restaurar todas as ações lendárias para o máximo"
-                        >
-                          ↺
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleToggleLegendaryFeature}
-                    className="text-[9px] font-bold text-amber-400/80 hover:text-amber-300 bg-amber-950/20 hover:bg-amber-950/40 border border-amber-500/30 hover:border-amber-500/60 px-2 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-                  >
-                    <Zap className="w-3 h-3 text-amber-400" />
-                    <span>+ Habilitar Ações Lendárias (3/rodada)</span>
-                  </button>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
@@ -576,6 +512,85 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
         </div>
       </div>
 
+      {/* Legendary Actions Tracker (Linha dedicada em largura total para evitar sobreposição) */}
+      {isMonsterOrLegendary && isLegendaryActive && (
+        <div
+          className="w-full px-2.5 py-1.5 bg-[#0a0d14]/95 border border-amber-500/40 rounded-xl flex items-center justify-between gap-2 shadow-sm select-none"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0 fill-amber-400 animate-pulse" />
+            <span className="text-[10px] font-bold font-serif text-amber-300 tracking-wide shrink-0">
+              Ações Lendárias:
+            </span>
+            <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-950/70 px-1.5 py-0.5 rounded border border-amber-600/40 shrink-0">
+              {currentLegendary}/{maxLegendary}
+            </span>
+          </div>
+
+          {/* Interactive Slots & Fast Buttons */}
+          <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
+              {Array.from({ length: maxLegendary }).map((_, slotIdx) => {
+                const isActive = slotIdx < currentLegendary;
+                return (
+                  <button
+                    key={slotIdx}
+                    type="button"
+                    onClick={() => handleToggleLegendarySlot(slotIdx)}
+                    className={`w-5 h-5 rounded-full flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                      isActive
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.35)] hover:bg-amber-500/40 hover:scale-105'
+                        : 'bg-slate-900/80 text-slate-600 border border-slate-800 hover:border-amber-500/40'
+                    }`}
+                    title={isActive ? `Gastar ação lendária #${slotIdx + 1}` : `Recuperar ação lendária #${slotIdx + 1}`}
+                  >
+                    <Zap className={`w-2.5 h-2.5 shrink-0 ${isActive ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`} />
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-0.5 ml-1 border-l border-amber-500/20 pl-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleSpendLegendary(1)}
+                disabled={currentLegendary <= 0}
+                className="px-1.5 py-0.5 text-[8px] font-bold text-amber-300 bg-amber-950/40 hover:bg-amber-900/50 border border-amber-600/30 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shrink-0"
+                title="Gastar 1 ação lendária"
+              >
+                -1
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSpendLegendary(2)}
+                disabled={currentLegendary < 2}
+                className="px-1.5 py-0.5 text-[8px] font-bold text-amber-300 bg-amber-950/40 hover:bg-amber-900/50 border border-amber-600/30 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shrink-0"
+                title="Gastar 2 ações lendárias (ex: Golpe de Asas)"
+              >
+                -2
+              </button>
+              <button
+                type="button"
+                onClick={handleResetLegendary}
+                className="px-1.5 py-0.5 text-[8px] font-bold text-slate-400 hover:text-amber-300 hover:bg-amber-950/40 rounded transition-colors cursor-pointer font-mono shrink-0"
+                title="Restaurar todas as ações lendárias para o máximo"
+              >
+                ↺
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleLegendaryFeature}
+                className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors ml-0.5 cursor-pointer shrink-0"
+                title="Desabilitar Ações Lendárias"
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Precise HP System (Modular Component) */}
       <CombatantHpManager combatant={c} onHpChange={handleHpChange} />
 
@@ -591,18 +606,18 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
             return (
               <button
                 key={atk.id}
-                disabled={c.actionUsed}
+                disabled={isAttackDisabled}
                 onClick={() => {
                   if (rollDice(`Ataque: ${atk.name}`, bonus, c, atk.damage)) {
                     deductAction(c.id, 'action');
                   }
                 }}
                 className={`px-2.5 py-1 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border ${
-                  c.actionUsed
-                    ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+                  isAttackDisabled
+                    ? 'bg-slate-800/80 border-slate-700 text-slate-500 cursor-not-allowed opacity-60'
                     : 'bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-slate-950 border-rose-400/40 cursor-pointer animate-fade-in'
                 }`}
-                title={`Rolar ${atk.name} (${atk.damage} de dano)`}
+                title={!isBattleStarted ? 'Inicie a batalha no topo para realizar ataques' : `Rolar ${atk.name} (${atk.damage} de dano)`}
               >
                 <Swords className="w-3 h-3 text-slate-950" />
                 <span>
@@ -618,18 +633,18 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
             return (
               <button
                 key={act.name}
-                disabled={c.actionUsed}
+                disabled={isAttackDisabled}
                 onClick={() => {
                   if (rollDice(`Ataque: ${act.name}`, bonus, c, act.desc)) {
                     deductAction(c.id, 'action');
                   }
                 }}
                 className={`px-2.5 py-1 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border ${
-                  c.actionUsed
-                    ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+                  isAttackDisabled
+                    ? 'bg-slate-800/80 border-slate-700 text-slate-500 cursor-not-allowed opacity-60'
                     : 'bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-slate-950 border-rose-400/40 cursor-pointer'
                 }`}
-                title={act.desc}
+                title={!isBattleStarted ? 'Inicie a batalha no topo para realizar ataques' : act.desc}
               >
                 <Swords className="w-3 h-3 text-slate-950" />
                 <span>
@@ -640,17 +655,18 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
           })
         ) : (
           <button
-            disabled={c.actionUsed}
+            disabled={isAttackDisabled}
             onClick={() => {
               if (rollDice(`Ataque: Corpo a Corpo`, getMod(c.str), c, '1d8')) {
                 deductAction(c.id, 'action');
               }
             }}
             className={`px-2.5 py-1 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border ${
-              c.actionUsed
-                ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+              isAttackDisabled
+                ? 'bg-slate-800/80 border-slate-700 text-slate-500 cursor-not-allowed opacity-60'
                 : 'bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-slate-950 border-rose-400/40 cursor-pointer'
             }`}
+            title={!isBattleStarted ? 'Inicie a batalha no topo para realizar ataques' : 'Ataque corpo a corpo padrão'}
           >
             <Swords className="w-3 h-3 text-slate-950" />
             <span>
@@ -664,8 +680,14 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
         {matchingSheet && matchingSheet.spells && matchingSheet.spells.length > 0 && (
           <div className="relative inline-block">
             <button
+              disabled={!isBattleStarted}
               onClick={() => setOpenSpellDropdownId(openSpellDropdownId === c.id ? null : c.id)}
-              className="px-2.5 py-1 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-500 hover:to-indigo-600 text-slate-950 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border border-sky-400/40"
+              className={`px-2.5 py-1 font-black text-[10px] rounded-lg shadow-md flex items-center gap-1.5 transition-all active:scale-95 border ${
+                !isBattleStarted
+                  ? 'bg-slate-800/80 border-slate-700 text-slate-500 cursor-not-allowed opacity-60'
+                  : 'bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-500 hover:to-indigo-600 text-slate-950 border-sky-400/40 cursor-pointer'
+              }`}
+              title={!isBattleStarted ? 'Inicie a batalha no topo para conjurar magias' : 'Grimório de Magias'}
             >
               <Sparkles className="w-3 h-3 text-slate-950" />
               <span>Magias</span>
@@ -857,8 +879,14 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                           const bonus = parseInt(match[1]);
                           return (
                             <button
+                              disabled={isAttackDisabled}
                               onClick={() => rollDice(`Ataque: ${act.name}`, bonus, c, act.desc)}
-                              className="text-[8px] px-1.5 py-0.5 bg-rose-600 hover:bg-rose-500 text-white rounded font-bold"
+                              className={`text-[8px] px-1.5 py-0.5 rounded font-bold transition-colors ${
+                                isAttackDisabled
+                                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
+                                  : 'bg-rose-600 hover:bg-rose-500 text-white cursor-pointer'
+                              }`}
+                              title={!isBattleStarted ? 'Inicie a batalha no topo para realizar ataques' : `Rolar Atq +${bonus}`}
                             >
                               Atq +{bonus}
                             </button>

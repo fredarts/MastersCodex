@@ -610,6 +610,12 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     forceNoTarget: boolean = false,
     explicitTarget?: Combatant
   ): boolean => {
+    const isAttack = title.startsWith('Ataque');
+    if (isAttack && !isBattleStarted) {
+      toast.warning('A batalha ainda não foi iniciada! Clique em "Iniciar Batalha" no topo para combater.');
+      return false;
+    }
+
     const currentActor = actorCombatant || combatants[currentTurnIndex];
     const target = explicitTarget || combatants.find((c) => c.id === selectedTargetId);
 
@@ -619,7 +625,6 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       return false;
     }
 
-    const isAttack = title.startsWith('Ataque');
     const { formula: dmgFormula, damageType: dmgType } = parseDamageInfo(actionDesc);
 
     // Open BG3 Overlay in unrolled state, passing onRollComplete callback
@@ -728,6 +733,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   };
 
   const handleCastSpellFromCard = (c: Combatant, sheet: CharacterSheet, spell: CharacterSpell) => {
+    if (!isBattleStarted) {
+      toast.warning('A batalha ainda não foi iniciada! Clique em "Iniciar Batalha" no topo para conjurar magias em combate.');
+      return;
+    }
+
     const aoe = getSpellAoEDefinition(spell.name);
 
     if (aoe) {
@@ -1113,6 +1123,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   };
 
   const handleAttackFromWidget = (target: Combatant) => {
+    if (!isBattleStarted) {
+      toast.warning('A batalha ainda não foi iniciada! Clique em "Iniciar Batalha" no topo para combater.');
+      return;
+    }
+
     setSelectedTargetId(target.id);
     broadcastToPlayerView({ targetId: target.id });
 

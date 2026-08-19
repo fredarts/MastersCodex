@@ -106,6 +106,7 @@ export interface BattleGrid3DProps {
   floorTextureUrl?: string;
   onFloorTextureChange?: (url: string) => void;
   onAttackTarget?: (target: Combatant) => void;
+  isBattleStarted?: boolean;
 }
 
 const getDirectionLabel = (angleDeg: number): string => {
@@ -140,6 +141,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   onUpdateCombatants,
   interactive = true,
   isPlacementPhase = false,
+  isBattleStarted = false,
   setupMode = 'normal',
   timeOfDayPreset: propTimeOfDayPreset = 'day',
   timeOfDayHour: propTimeOfDayHour = 12,
@@ -468,7 +470,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       highlightGroupRef.current = null;
     }
 
-    if (isPlacementPhase || remainingMeters <= 0) return;
+    if (isPlacementPhase || !isBattleStarted || remainingMeters <= 0) return;
 
     const maxSquares = Math.floor(remainingMeters / 1.5);
     if (maxSquares < 0) return;
@@ -517,7 +519,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         }
       }
     }
-  }, [isPlacementPhase]);
+  }, [isPlacementPhase, isBattleStarted]);
 
   // Helper to render active movement drag trail
   const renderDragTrail = useCallback((trail: { x: number; z: number }[]) => {
@@ -624,6 +626,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
   const callbacksRef = useRef({
     combatants,
     currentTurnIndex,
+    isBattleStarted,
     setSelectedCombatantId,
     onSelectCombatant,
     onSelectTarget,
@@ -646,6 +649,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     callbacksRef.current = {
       combatants,
       currentTurnIndex,
+      isBattleStarted,
       setSelectedCombatantId,
       onSelectCombatant,
       onSelectTarget,
@@ -754,7 +758,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
       const options: TokenMeshOptions = {
         combatant: c,
-        isCurrentTurn: idx === currentTurnIndex,
+        isCurrentTurn: isBattleStarted ? (idx === currentTurnIndex) : false,
         isSelectedTarget: targetIdState === c.id,
         isSelectedForRotation: selectedCombatantId === key,
         isControlledByUser: canUserControlCombatant(c),
@@ -1249,7 +1253,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
               lastDragSnapRef.current = { x: startSnapX, z: startSnapZ };
 
               const currentActor = activeCombatants[turnIdx];
-              if (currentActor && clicked.id !== currentActor.id) {
+              if (callbacksRef.current.isBattleStarted && currentActor && clicked.id !== currentActor.id) {
                 const { pendingAttack: currentPending, targetIdState: currentTargetId, propOnAttackTarget: attackCb } = callbacksRef.current;
                 if (currentTargetId === clicked.id) {
                   isDraggingRef.current = false;
@@ -1309,14 +1313,14 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
                 }
               }
             } else {
-              const { pendingAttack: currentPending, targetIdState: currentTargetId, propOnAttackTarget: attackCb } = callbacksRef.current;
+              const { pendingAttack: currentPending, targetIdState: currentTargetId, propOnAttackTarget: attackCb, isBattleStarted: battleStarted } = callbacksRef.current;
               if (currentTargetId === clicked.id) {
                 isDraggingRef.current = false;
                 draggedTokenKeyRef.current = null;
                 controls.enabled = true;
                 setTargetIdState(undefined);
                 if (onSelT) onSelT(undefined);
-              } else if (currentPending) {
+              } else if (battleStarted && currentPending) {
                 const currentActor = activeCombatants[turnIdx];
                 if (currentActor) {
                   const attackerPos2D = getPos(currentActor.id || currentActor.name);
@@ -1525,7 +1529,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         const activeC = activeCombatants[turnIdx];
         const targetC = activeCombatants.find((c) => c.id === key || c.name === key || (c.id || c.name) === key) || activeC;
 
-        if (targetC && !isPlacementPhase) {
+        if (targetC && !isPlacementPhase && callbacksRef.current.isBattleStarted) {
           const speedVal = getSpeedInMeters(targetC.speed || targetC.notes) * (targetC.hasDashed ? 2 : 1);
           const remainingMovementTotal = Math.max(0, speedVal - (targetC.movementUsed || 0));
 
@@ -1609,7 +1613,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
           return;
         }
 
-        // Non-active combatant drag or placement phase
+        // Non-active combatant drag, placement phase or before battle starts
         lastDragSnapRef.current = { x: snappedX, z: snappedZ };
 
         const group = tokenMeshMapRef.current.get(key);
@@ -1636,11 +1640,11 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
             const snappedX = group.position.x;
             const snappedZ = group.position.z;
 
-            const { combatants: activeCombatants } = callbacksRef.current;
+            const { combatants: activeCombatants, isBattleStarted: battleStarted } = callbacksRef.current;
             const targetC = activeCombatants.find((c) => c.id === key || c.name === key || (c.id || c.name) === key);
             if (targetC) {
-              if (isPlacementPhase) {
-                // Placement phase: only update position without tracking movement cost
+              if (isPlacementPhase || !battleStarted) {
+                // Placement phase or before battle starts: only update position without tracking movement cost
                 // Use strict ID match only — prevents same-named monsters from all moving together
                 const nextCombatants = activeCombatants.map((c) => {
                   if (c.id === targetC.id) {
@@ -1986,7 +1990,15 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
   // Reachable movement range highlighting meshes dynamically
   useEffect(() => {
-    if (isPlacementPhase || isDraggingRef.current) return;
+    if (isPlacementPhase || isDraggingRef.current || !isBattleStarted) {
+      const scene = sceneRef.current;
+      if (scene && highlightGroupRef.current) {
+        scene.remove(highlightGroupRef.current);
+        disposeHierarchy(highlightGroupRef.current);
+        highlightGroupRef.current = null;
+      }
+      return;
+    }
 
     const activeC = combatants[currentTurnIndex];
     if (!activeC) return;
@@ -1998,13 +2010,13 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     const remainingMovement = Math.max(0, speedVal - (activeC.movementUsed || 0));
 
     renderMovementHighlights(currentX, currentZ, remainingMovement);
-  }, [combatants, currentTurnIndex, isPlacementPhase, getCombatantPos, renderMovementHighlights]);
+  }, [combatants, currentTurnIndex, isPlacementPhase, isBattleStarted, getCombatantPos, renderMovementHighlights]);
 
   // 3.5 Smoothly auto-center 3D camera on active turn combatant on turn change
   const prevTurnIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (isPlacementPhase) return;
+    if (isPlacementPhase || !isBattleStarted) return;
     if (currentTurnIndex === undefined || !combatants || combatants.length === 0) return;
 
     if (prevTurnIndexRef.current === currentTurnIndex) return;
