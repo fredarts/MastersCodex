@@ -76,6 +76,20 @@ export const LiveCockpitModalManager: React.FC<LiveCockpitModalManagerProps> = (
         isOpen={showAddCombatantModal}
         onClose={() => setShowAddCombatantModal(false)}
         campaignMembers={campaignMembers || []}
+        currentCombatants={combatants || []}
+        onRemoveCombatant={(id) => {
+          setCombatants((prev) => {
+            const removed = prev.find((c) => c.id === id);
+            const next = prev.filter((c) => c.id !== id);
+            if (activeScene) {
+              updateScene({ ...activeScene, combatants: next });
+            }
+            if (removed) {
+              toast.info(`${removed.name} removido do combate!`);
+            }
+            return next;
+          });
+        }}
         onAddCombatant={(newCombatant) => {
           setCombatants((prev) => {
             const currentActiveId = prev[currentTurnIndex]?.id;
@@ -94,7 +108,6 @@ export const LiveCockpitModalManager: React.FC<LiveCockpitModalManagerProps> = (
             return next;
           });
           toast.success(`${newCombatant.name} adicionado ao combate!`);
-          setShowAddCombatantModal(false);
         }}
       />
 

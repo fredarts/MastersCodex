@@ -11,6 +11,7 @@ import { setGlobalBroadcaster } from '@/lib/dnd5e-dice';
 import { CRDTSolver } from '@/lib/sync/CRDTSolver';
 
 import { useBattleGridStore } from '@/lib/stores/useBattleGridStore';
+import { rollHistoryService } from '@/lib/services/rollHistoryService';
 
 export interface ActiveSheetState {
   id: string;
@@ -558,6 +559,26 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       broadcastLiveProjection({ targetId: selectedTargetId });
     }
   }, [selectedTargetId, activeCampaign?.role, broadcastLiveProjection]);
+
+  // Carrega o histórico de rolagens persistido na inicialização da campanha
+  useEffect(() => {
+    if (!campaignId) return;
+    const persisted = rollHistoryService.loadRollHistory(campaignId);
+    if (persisted.length > 0) {
+      setCombatLogs((prev) => {
+        if (prev.length === 0) return persisted;
+        const ids = new Set(prev.map((l) => l.id));
+        const missing = persisted.filter((l) => !ids.has(l.id));
+        return [...missing, ...prev];
+      });
+    }
+  }, [campaignId]);
+
+  // Salva o histórico de rolagens sempre que for atualizado
+  useEffect(() => {
+    if (!campaignId || combatLogs.length === 0) return;
+    rollHistoryService.saveRollHistory(campaignId, combatLogs);
+  }, [campaignId, combatLogs]);
 
   // Presence Heartbeat
   useEffect(() => {

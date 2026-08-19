@@ -899,11 +899,39 @@ export interface CharacterSheet {
 
   classResources?: Record<string, CharacterResource>;
   activeClassBuffs?: ActiveClassBuff[];
+  activeWildShape?: ActiveWildShapeState;
   classFeatures?: ClassFeature[];
   feats?: CharacterFeat[];
   conditions?: ConditionType[];
 
   updatedAt?: string;
+}
+
+export interface ActiveWildShapeState {
+  beastId: string;
+  beastName: string;
+  beastType: 'beast' | 'elemental';
+  currentBeastHp: number;
+  maxBeastHp: number;
+  beastAc: number;
+  beastSpeed: string;
+  str: number;
+  dex: number;
+  con: number;
+  originalAttributes: CharacterAttributes;
+  originalSpeed: string;
+  originalAc: number;
+  originalMaxHp: number;
+  originalCurrentHp: number;
+  originalAttacks: CharacterWeaponAttack[];
+  originalAvatarUrl?: string;
+  originalModelUrl?: string;
+  originalTokenType?: 'billboard' | '3d';
+  actions: CharacterWeaponAttack[];
+  abilities: { name: string; desc: string }[];
+  tokenImageUrl?: string;
+  modelUrl?: string;
+  transformedAt: string;
 }
 
 export interface CharacterFeat {

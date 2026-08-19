@@ -1,5 +1,6 @@
-import { AttributeKey, CharacterSheet, DndSkillKey, SkillProficiencyLevel, ClassFeature, CharacterResource, CharacterClassProgress, CharacterAttributes, CharacterCurrency, CharacterWeaponAttack, CharacterEquipmentItem } from './types';
+import { AttributeKey, CharacterSheet, DndSkillKey, SkillProficiencyLevel, ClassFeature, CharacterResource, CharacterClassProgress, CharacterAttributes, CharacterCurrency, CharacterWeaponAttack, CharacterEquipmentItem, ActiveWildShapeState } from './types';
 import { DND_CLASSES, DND_RACES, SKILL_DEFINITIONS, CLASS_FEATURES_DB } from './dnd5e-data';
+import { WildShapeBeast, WILD_SHAPE_BEASTS } from './dnd5e-wild-shape-data';
 
 /**
  * Retorna o Modificador de Atributo padrão D&D 5e: floor((score - 10) / 2)
@@ -33,7 +34,14 @@ export function calculateProficiencyBonus(level: number): number {
  * (como o Campeão Primitivo do Bárbaro lvl 20 que aumenta Força e Constituição em +4 com limite de 24).
  */
 export function getEffectiveAttributeScore(sheet: CharacterSheet, attrKey: AttributeKey): number {
-  if (!sheet || !sheet.attributes) return 10;
+  if (!sheet) return 10;
+
+  // Se Forma Selvagem estiver ativa, substitui atributos físicos (str, dex, con) pelos da Besta
+  if (sheet.activeWildShape && (attrKey === 'str' || attrKey === 'dex' || attrKey === 'con')) {
+    return sheet.activeWildShape[attrKey];
+  }
+
+  if (!sheet.attributes) return 10;
   const attr = sheet.attributes[attrKey];
   if (!attr) return 10;
   
@@ -901,6 +909,11 @@ export function calculateArmorClass(
   armorName: string = 'Nenhuma',
   hasShield: boolean = false,
 ): number {
+  // Se estiver em Forma Selvagem, usa a CA natural da Besta
+  if (sheet.activeWildShape) {
+    return sheet.activeWildShape.beastAc;
+  }
+
   const dexMod = getAttributeModifier(sheet, 'dex');
   const armor = findArmorInfo(armorName);
   let ac: number;
@@ -1243,6 +1256,11 @@ export function isHeavilyEncumbered(sheet: CharacterSheet): boolean {
  * Calcula dinamicamente o deslocamento do personagem, aplicando bônus e penalidades de carga
  */
 export function calculateDynamicSpeed(sheet: CharacterSheet): string {
+  // Se estiver em Forma Selvagem, usa a velocidade da Besta
+  if (sheet.activeWildShape) {
+    return sheet.activeWildShape.beastSpeed;
+  }
+
   const raceData = DND_RACES[sheet.race];
   if (!raceData) return sheet.speed || '9m (30ft)';
 
@@ -1804,3 +1822,231 @@ export function resetSheetToLevel1(sheet: CharacterSheet): CharacterSheet {
 
   return recalculateSheetDerivedStats(resetSheet);
 }
+
+/**
+ * Retorna o ND máximo e restrições de locomoção para Forma Selvagem de acordo com o nível e subclasse do Druida
+ */
+export function getWildShapeLimits(sheet: CharacterSheet): {
+  maxCR: number;
+  maxCRLabel: string;
+  allowSwim: boolean;
+  allowFly: boolean;
+  allowElemental: boolean;
+  isMoonDruid: boolean;
+} {
+  const druidLevel = getClassLevel(sheet, 'Druida');
+  const classes = getCharacterClasses(sheet);
+  const druidClass = classes.find(c => c.name === 'Druida');
+  const isMoon = druidClass?.subclass === 'Círculo da Lua' || sheet.subclass === 'Círculo da Lua';
+
+  if (druidLevel < 2) {
+    return { maxCR: 0, maxCRLabel: '0', allowSwim: false, allowFly: false, allowElemental: false, isMoonDruid: false };
+  }
+
+  if (isMoon) {
+    const maxCR = druidLevel >= 6 ? Math.floor(druidLevel / 3) : 1;
+    const maxCRLabel = druidLevel >= 6 ? `${maxCR}` : '1';
+    return {
+      maxCR,
+      maxCRLabel,
+      allowSwim: druidLevel >= 4,
+      allowFly: druidLevel >= 8,
+      allowElemental: druidLevel >= 10,
+      isMoonDruid: true,
+    };
+  }
+
+  // Druida Padrão (Terra ou outros)
+  let maxCR = 0.25;
+  let maxCRLabel = '1/4';
+  let allowSwim = false;
+  let allowFly = false;
+
+  if (druidLevel >= 8) {
+    maxCR = 1;
+    maxCRLabel = '1';
+    allowSwim = true;
+    allowFly = true;
+  } else if (druidLevel >= 4) {
+    maxCR = 0.5;
+    maxCRLabel = '1/2';
+    allowSwim = true;
+    allowFly = false;
+  }
+
+  return {
+    maxCR,
+    maxCRLabel,
+    allowSwim,
+    allowFly,
+    allowElemental: false,
+    isMoonDruid: false,
+  };
+}
+
+/**
+ * Verifica se uma besta específica é elegível para o Druida
+ */
+export function isBeastEligibleForWildShape(
+  sheet: CharacterSheet,
+  beast: WildShapeBeast
+): { eligible: boolean; reason?: string } {
+  const limits = getWildShapeLimits(sheet);
+  const druidLevel = getClassLevel(sheet, 'Druida');
+
+  if (druidLevel < 2) {
+    return { eligible: false, reason: 'Requer Druida Nível 2' };
+  }
+
+  if (beast.type === 'elemental') {
+    if (!limits.allowElemental) {
+      return { eligible: false, reason: 'Requer Círculo da Lua Nível 10' };
+    }
+    return { eligible: true };
+  }
+
+  if (beast.crNumber > limits.maxCR) {
+    return { eligible: false, reason: `ND ${beast.cr} excede seu limite atual (ND máx ${limits.maxCRLabel})` };
+  }
+
+  if (beast.hasFly && !limits.allowFly) {
+    return { eligible: false, reason: 'Formas com deslocamento de voo requerem Druida Nível 8' };
+  }
+
+  if (beast.hasSwim && !limits.allowSwim) {
+    return { eligible: false, reason: 'Formas com deslocamento de natação requerem Druida Nível 4' };
+  }
+
+  return { eligible: true };
+}
+
+/**
+ * Transforma o personagem em uma Besta/Elemental na Forma Selvagem, sobrepondo estatísticas físicas
+ */
+export function transformIntoWildShape(
+  sheet: CharacterSheet,
+  beast: WildShapeBeast
+): CharacterSheet {
+  const cost = beast.type === 'elemental' ? 2 : 1;
+  const currentFS = sheet.classResources?.['forma_selvagem']?.current ?? 2;
+  const maxFS = sheet.classResources?.['forma_selvagem']?.max ?? 2;
+
+  const newFS = maxFS === 9999 ? 9999 : Math.max(0, currentFS - cost);
+
+  const beastAttacks: CharacterWeaponAttack[] = beast.actions.map((act, idx) => ({
+    id: `wildshape-atk-${beast.id}-${idx}`,
+    name: `${act.name} (${beast.name})`,
+    atkBonus: act.atkBonus >= 0 ? `+${act.atkBonus}` : `${act.atkBonus}`,
+    damage: act.damage,
+    type: act.damageType,
+  }));
+
+  const activeWildShape: ActiveWildShapeState = {
+    beastId: beast.id,
+    beastName: beast.name,
+    beastType: beast.type,
+    currentBeastHp: beast.hp,
+    maxBeastHp: beast.hp,
+    beastAc: beast.ac,
+    beastSpeed: beast.speed,
+    str: beast.str,
+    dex: beast.dex,
+    con: beast.con,
+    originalAttributes: { ...sheet.attributes },
+    originalSpeed: sheet.speed,
+    originalAc: sheet.armorClass,
+    originalMaxHp: sheet.maxHp,
+    originalCurrentHp: sheet.currentHp,
+    originalAttacks: [...sheet.attacks],
+    originalAvatarUrl: sheet.avatarUrl,
+    originalModelUrl: sheet.modelUrl,
+    originalTokenType: sheet.tokenType,
+    actions: beastAttacks,
+    abilities: beast.abilities,
+    tokenImageUrl: beast.tokenImageUrl,
+    modelUrl: beast.modelUrl,
+    transformedAt: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+  };
+
+  const updatedSheet: CharacterSheet = {
+    ...sheet,
+    activeWildShape,
+    armorClass: beast.ac,
+    speed: beast.speed,
+    attacks: [...beastAttacks, ...sheet.attacks],
+    classResources: {
+      ...sheet.classResources,
+      forma_selvagem: {
+        name: 'forma_selvagem',
+        label: 'Forma Selvagem',
+        current: newFS,
+        max: maxFS,
+      },
+    },
+  };
+
+  return updatedSheet;
+}
+
+/**
+ * Reverte a Forma Selvagem para a forma humanoide original do Druida
+ */
+export function revertWildShape(sheet: CharacterSheet): CharacterSheet {
+  if (!sheet.activeWildShape) return sheet;
+
+  const original = sheet.activeWildShape;
+
+  const updatedSheet: CharacterSheet = {
+    ...sheet,
+    activeWildShape: undefined,
+    armorClass: original.originalAc,
+    speed: original.originalSpeed,
+    attacks: original.originalAttacks,
+  };
+
+  return recalculateSheetDerivedStats(updatedSheet);
+}
+
+/**
+ * Aplica dano à forma de Besta, transferindo qualquer dano excedente aos PVs do Druida e revertendo
+ */
+export function applyWildShapeDamage(
+  sheet: CharacterSheet,
+  damage: number
+): { updatedSheet: CharacterSheet; reverted: boolean; carryoverDamage: number } {
+  if (!sheet.activeWildShape) {
+    const newHp = Math.max(0, sheet.currentHp - damage);
+    return {
+      updatedSheet: { ...sheet, currentHp: newHp },
+      reverted: false,
+      carryoverDamage: 0,
+    };
+  }
+
+  const currentBeastHp = sheet.activeWildShape.currentBeastHp;
+
+  if (damage >= currentBeastHp) {
+    const carryover = damage - currentBeastHp;
+    const revertedSheet = revertWildShape(sheet);
+    const newDruidHp = Math.max(0, revertedSheet.currentHp - carryover);
+    return {
+      updatedSheet: { ...revertedSheet, currentHp: newDruidHp },
+      reverted: true,
+      carryoverDamage: carryover,
+    };
+  } else {
+    const updatedBeastHp = currentBeastHp - damage;
+    return {
+      updatedSheet: {
+        ...sheet,
+        activeWildShape: {
+          ...sheet.activeWildShape,
+          currentBeastHp: updatedBeastHp,
+        },
+      },
+      reverted: false,
+      carryoverDamage: 0,
+    };
+  }
+}
+

@@ -1,9 +1,9 @@
 /* eslint-disable react-hooks/purity */
 import React, { useState } from 'react';
 import { AdvantageMode, AttributeKey, CharacterSheet, CharacterWeaponAttack, DiceRollEvent } from '@/lib/types';
-import { formatModifier, getAttributeModifier, getEffectiveAttributeScore, recalculateSheetDerivedStats, ARMOR_TABLE, calculateArmorClass, hasClass, getJackOfAllTradesBonus, getClassLevel, WEAPON_TABLE } from '@/lib/dnd5e-calculator';
+import { formatModifier, getAttributeModifier, getEffectiveAttributeScore, recalculateSheetDerivedStats, ARMOR_TABLE, calculateArmorClass, hasClass, getJackOfAllTradesBonus, getClassLevel, WEAPON_TABLE, revertWildShape } from '@/lib/dnd5e-calculator';
 import { executeCheckRoll, executeWeaponAttackRoll, broadcastDiceRoll, executeSneakAttackRoll, getSneakAttackDice } from '@/lib/dnd5e-dice';
-import { Shield, Heart, Zap, Crosshair, Plus, Minus, Trash2, Skull, Dices, Lock, Unlock, RotateCcw, CheckCircle2, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
+import { Shield, Heart, Zap, Crosshair, Plus, Minus, Trash2, Skull, Dices, Lock, Unlock, RotateCcw, CheckCircle2, AlertCircle, RefreshCw, Sparkles, PawPrint } from 'lucide-react';
 import { WeaponCompendiumModal } from '../Modals/WeaponCompendiumModal';
 
 interface CombatSectionProps {
@@ -615,6 +615,39 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
   return (
     <div className="space-y-6 pb-20 lg:pb-0 animate-fade-in select-none lg:grid lg:grid-cols-3 lg:gap-4 lg:h-full lg:overflow-hidden">
       
+      {/* Banner de Forma Selvagem Ativa */}
+      {sheet.activeWildShape && (
+        <div className="lg:col-span-3 bg-gradient-to-r from-emerald-950/80 via-[#0d1624] to-amber-950/70 border border-emerald-500/50 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-xl animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold shrink-0">
+              <PawPrint className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-white uppercase tracking-wider font-serif">
+                  🐾 Forma Selvagem Ativa: {sheet.activeWildShape.beastName}
+                </span>
+                <span className="text-[9px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                  {sheet.activeWildShape.beastType === 'elemental' ? 'Elemental' : 'Besta'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 font-mono mt-0.5">
+                PV da Besta: <strong className="text-emerald-400">{sheet.activeWildShape.currentBeastHp} / {sheet.activeWildShape.maxBeastHp}</strong> • CA: <strong className="text-cyan-300">{sheet.activeWildShape.beastAc}</strong> • Deslocamento: <strong className="text-amber-300">{sheet.activeWildShape.beastSpeed}</strong>
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onChange(revertWildShape(sheet))}
+            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow-md transition-all active:scale-95 cursor-pointer font-serif flex items-center gap-1.5"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reverter Forma</span>
+          </button>
+        </div>
+      )}
+
       {/* COLUNA 1: ATRIBUTOS PRINCIPAIS */}
       <div className="space-y-4 lg:overflow-y-auto lg:h-full lg:pr-2 bg3-scrollbar lg:pb-6">
         <div className="bg3-panel rounded-2xl p-4 space-y-3">

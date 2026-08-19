@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { CharacterSheet } from '@/lib/types';
 import { DND_ALIGNMENTS, DND_BACKGROUNDS, DND_CLASSES, DND_RACES } from '@/lib/dnd5e-data';
-import { applyClassPreset, applyLevelChange, applyRacePreset, calculateLevelFromXP, resetSheetToLevel1 } from '@/lib/dnd5e-calculator';
-import { User, Shield, Sparkles, Award, Image as ImageIcon, Box, Check, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { applyClassPreset, applyLevelChange, applyRacePreset, calculateLevelFromXP, resetSheetToLevel1, revertWildShape } from '@/lib/dnd5e-calculator';
+import { User, Shield, Sparkles, Award, Image as ImageIcon, Box, Check, ChevronLeft, ChevronRight, RotateCcw, PawPrint } from 'lucide-react';
 import { CHARACTER_MODELS_3D, getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { storageService } from '@/lib/services/storageService';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -217,6 +217,39 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
             setLevelUpTarget(null);
           }}
         />
+      )}
+
+      {/* Banner de Forma Selvagem Ativa */}
+      {sheet.activeWildShape && (
+        <div className="lg:col-span-2 bg-gradient-to-r from-emerald-950/80 via-[#0d1624] to-amber-950/70 border border-emerald-500/50 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-xl animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold shrink-0">
+              <PawPrint className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-white uppercase tracking-wider font-serif">
+                  🐾 Forma Selvagem Ativa: {sheet.activeWildShape.beastName}
+                </span>
+                <span className="text-[9px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                  {sheet.activeWildShape.beastType === 'elemental' ? 'Elemental' : 'Besta'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 font-mono mt-0.5">
+                PV da Besta: <strong className="text-emerald-400">{sheet.activeWildShape.currentBeastHp} / {sheet.activeWildShape.maxBeastHp}</strong> • CA: <strong className="text-cyan-300">{sheet.activeWildShape.beastAc}</strong> • Deslocamento: <strong className="text-amber-300">{sheet.activeWildShape.beastSpeed}</strong>
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onChange(revertWildShape(sheet))}
+            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow-md transition-all active:scale-95 cursor-pointer font-serif flex items-center gap-1.5"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reverter Forma</span>
+          </button>
+        </div>
       )}
 
       {/* COLUNA ESQUERDA: APARÊNCIA E MODELO */}

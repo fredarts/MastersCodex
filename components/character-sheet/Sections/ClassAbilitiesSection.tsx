@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { CharacterSheet, ClassFeature, CharacterResource, ActiveClassBuff } from '@/lib/types';
-import { getAttributeModifier, recalculateSheetDerivedStats, hasClass } from '@/lib/dnd5e-calculator';
+import { getAttributeModifier, recalculateSheetDerivedStats, hasClass, revertWildShape, applyWildShapeDamage, getWildShapeLimits } from '@/lib/dnd5e-calculator';
 import { executeCheckRoll, broadcastDiceRoll } from '@/lib/dnd5e-dice';
-import { Zap, Flame, Shield, Plus, Minus, Heart, Swords, ShieldAlert, Sparkles, Wand2, Award } from 'lucide-react';
+import { Zap, Flame, Shield, Plus, Minus, Heart, Swords, ShieldAlert, Sparkles, Wand2, Award, PawPrint, RotateCcw, HeartCrack, Wind } from 'lucide-react';
 import { useCustomDialog } from '@/context/CustomDialogContext';
+import { WildShapeModal } from '../Modals/WildShapeModal';
 
 interface ClassAbilitiesSectionProps {
   sheet: CharacterSheet;
@@ -19,6 +20,8 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
   const [layOnHandsAmount, setLayOnHandsAmount] = useState<number>(5);
   const [showSmiteModal, setShowSmiteModal] = useState<boolean>(false);
   const [showHandsModal, setShowHandsModal] = useState<boolean>(false);
+  const [showWildShapeModal, setShowWildShapeModal] = useState<boolean>(false);
+  const [beastDamageInput, setBeastDamageInput] = useState<number>(5);
 
   const resources = sheet.classResources || {};
   const activeBuffs = sheet.activeClassBuffs || [];
@@ -292,6 +295,51 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
     });
   };
 
+  // Reverter da Forma Selvagem
+  const handleRevertWildShape = () => {
+    if (!sheet.activeWildShape) return;
+    const beastName = sheet.activeWildShape.beastName;
+    const reverted = revertWildShape(sheet);
+
+    try {
+      const bc = new BroadcastChannel('masters_codex_sync');
+      bc.postMessage({
+        type: 'SYSTEM_MESSAGE',
+        content: `🌿 ${sheet.characterName} reverte da Forma Selvagem de ${beastName} para sua forma original!`,
+      });
+      bc.close();
+    } catch (e) {}
+
+    onChange(reverted);
+  };
+
+  // Aplicar dano aos PVs da Besta
+  const handleApplyBeastDamage = (damage: number) => {
+    if (!sheet.activeWildShape || damage <= 0) return;
+    const result = applyWildShapeDamage(sheet, damage);
+    if (result.reverted) {
+      showAlert({
+        title: 'Forma Selvagem Encerrada!',
+        message: `Os PVs da Besta foram zerados! Você reverteu para sua forma original.${result.carryoverDamage > 0 ? ` Dano excedente de ${result.carryoverDamage} transferido para seus PVs normais.` : ''}`,
+        variant: 'warning',
+      });
+    }
+    onChange(result.updatedSheet);
+  };
+
+  // Curar a Besta (ex: Forma Selvagem de Combate - Círculo da Lua)
+  const handleHealBeast = (amount: number) => {
+    if (!sheet.activeWildShape || amount <= 0) return;
+    const newBeastHp = Math.min(sheet.activeWildShape.maxBeastHp, sheet.activeWildShape.currentBeastHp + amount);
+    onChange({
+      ...sheet,
+      activeWildShape: {
+        ...sheet.activeWildShape,
+        currentBeastHp: newBeastHp,
+      },
+    });
+  };
+
   // Adjust resource values manually
   const adjustResource = (key: string, amount: number) => {
     const res = resources[key];
@@ -533,7 +581,124 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
               </>
             )}
 
-            {!hasClass(sheet, 'Bárbaro') && !hasClass(sheet, 'Paladino') && !hasClass(sheet, 'Bruxo') && (
+            {/* Druida - Forma Selvagem (Wild Shape) */}
+            {hasClass(sheet, 'Druida') && (
+              <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-3 flex flex-col justify-between gap-3 shadow-inner">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <PawPrint className={`w-4 h-4 ${sheet.activeWildShape ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
+                      <span className="text-xs font-black text-white font-serif">Forma Selvagem (Wild Shape)</span>
+                    </div>
+
+                    {sheet.activeWildShape ? (
+                      <span className="text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full animate-pulse">
+                        ATIVO: {sheet.activeWildShape.beastName}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-mono text-slate-400">
+                        Usos: <strong className="text-amber-400">{resources['forma_selvagem']?.max === 9999 ? '∞' : `${resources['forma_selvagem']?.current ?? 2}/${resources['forma_selvagem']?.max ?? 2}`}</strong>
+                      </span>
+                    )}
+                  </div>
+
+                  {sheet.activeWildShape ? (
+                    <div className="bg-[#12192b] border border-emerald-500/30 rounded-xl p-3 space-y-2.5">
+                      {/* Beast HP Bar & Damage Input */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-bold text-slate-300 flex items-center gap-1">
+                            <Heart className="w-3.5 h-3.5 text-rose-400" /> PV da Besta:
+                          </span>
+                          <span className="font-black font-mono text-emerald-300">
+                            {sheet.activeWildShape.currentBeastHp} / {sheet.activeWildShape.maxBeastHp}
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                          <div
+                            className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-300"
+                            style={{
+                              width: `${Math.min(100, Math.max(0, (sheet.activeWildShape.currentBeastHp / sheet.activeWildShape.maxBeastHp) * 100))}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Beast Physical Stats */}
+                      <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] font-mono bg-slate-950/60 p-1.5 rounded-lg border border-slate-800">
+                        <div>
+                          <span className="text-slate-500 block">CA</span>
+                          <strong className="text-white">{sheet.activeWildShape.beastAc}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block">Desloc.</span>
+                          <strong className="text-white truncate block">{sheet.activeWildShape.beastSpeed}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block">FOR/DES/CON</span>
+                          <strong className="text-amber-400">{sheet.activeWildShape.str}/{sheet.activeWildShape.dex}/{sheet.activeWildShape.con}</strong>
+                        </div>
+                      </div>
+
+                      {/* Quick Damage & Heal Controls for Beast */}
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="number"
+                          min={1}
+                          max={99}
+                          value={beastDamageInput}
+                          onChange={(e) => setBeastDamageInput(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                          className="w-12 bg-slate-900 border border-slate-700 rounded-lg text-center text-xs font-mono font-bold text-white py-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleApplyBeastDamage(beastDamageInput)}
+                          className="flex-1 py-1 bg-rose-950/80 hover:bg-rose-900 border border-rose-700/60 text-rose-200 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <HeartCrack className="w-3 h-3 text-rose-400" />
+                          <span>Tomar Dano</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleHealBeast(beastDamageInput)}
+                          className="flex-1 py-1 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/60 text-emerald-200 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <Heart className="w-3 h-3 text-emerald-400" />
+                          <span>Curar Besta</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-slate-400 leading-normal font-serif">
+                      Assuma a forma de uma besta conhecida, sobrepondo seus atributos físicos (FOR, DES, CON), CA, velocidade e ações de ataque.
+                    </p>
+                  )}
+                </div>
+
+                {sheet.activeWildShape ? (
+                  <button
+                    type="button"
+                    onClick={handleRevertWildShape}
+                    className="w-full py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs font-serif flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reverter para Forma Original</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowWildShapeModal(true)}
+                    disabled={(resources['forma_selvagem']?.current ?? 2) <= 0 && resources['forma_selvagem']?.max !== 9999}
+                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-black rounded-xl text-xs font-serif flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer"
+                  >
+                    <PawPrint className="w-3.5 h-3.5" />
+                    <span>Assumir Forma Selvagem</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {!hasClass(sheet, 'Bárbaro') && !hasClass(sheet, 'Paladino') && !hasClass(sheet, 'Bruxo') && !hasClass(sheet, 'Druida') && (
               <div className="text-center py-6 text-xs text-slate-500 italic font-serif">
                 Esta classe não possui habilidades de combate ativas integradas.
               </div>
@@ -749,6 +914,16 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Seleção de Forma Selvagem */}
+      {showWildShapeModal && (
+        <WildShapeModal
+          isOpen={showWildShapeModal}
+          onClose={() => setShowWildShapeModal(false)}
+          sheet={sheet}
+          onChange={onChange}
+        />
       )}
     </div>
   );

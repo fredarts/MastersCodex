@@ -136,6 +136,10 @@ export const CombatInitiativePanel: React.FC<CombatInitiativePanelProps> = ({
         <SharedGameLog
           combatLogs={combatLogs}
           chatMessages={chatMessages}
+          campaignName={activeScene?.title || 'Sessão Ativa'}
+          campaignId={activeScene?.id || 'default-session'}
+          isDm={true}
+          onClearLogs={() => setCombatLogs([])}
         />
       ) : rightPanelTab === 'chat' ? (
         <LiveChatPanel />
