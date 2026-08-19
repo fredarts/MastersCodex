@@ -50,7 +50,26 @@ export type WorldEntityCategory =
   | 'magic_system'
   | 'plane'
   | 'cosmology'
-  | 'monster';
+  | 'monster'
+  | 'quest';
+
+export type QuestStatus = 'not_started' | 'in_progress' | 'completed' | 'failed';
+export type QuestDifficulty = 'easy' | 'medium' | 'hard' | 'deadly';
+export type QuestType = 'main' | 'side' | 'faction' | 'personal';
+
+export interface QuestObjective {
+  id: string;
+  description: string;
+  isCompleted: boolean;
+  optional?: boolean;
+}
+
+export interface QuestReward {
+  xp?: number;
+  gold?: number; // PO (Peças de Ouro)
+  items?: string;
+  reputation?: string;
+}
 
 export interface WorldMapPin {
   id: string;

@@ -79,13 +79,17 @@ REGRAS VITAIS:
     for (const provider of providers) {
       try {
         const result = await provider.generateNarrative(systemPrompt);
-        
-        let jsonText = result.text;
-        // Limpar markdown de bloco de código JSON caso a IA tenha ignorado a instrução
+        let jsonText = result.text.trim();
+        // Limpar markdown de bloco de código JSON caso a IA tenha incluído tags
         if (jsonText.includes('```json')) {
-          jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+          jsonText = jsonText.replace(/```json/gi, '').replace(/```/g, '').trim();
         } else if (jsonText.includes('```')) {
           jsonText = jsonText.replace(/```/g, '').trim();
+        }
+
+        const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          jsonText = jsonMatch[0];
         }
         
         const parsedJson = JSON.parse(jsonText);

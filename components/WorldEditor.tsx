@@ -39,10 +39,13 @@ import {
   Coins,
   Compass,
   PawPrint,
-  Trees
+  Trees,
+  Target,
+  Award,
+  CheckSquare,
 } from 'lucide-react';
 import { useWorld } from '@/lib/hooks/useWorld';
-import { WorldEntityCategory, WorldEntity } from '@/lib/types';
+import { WorldEntityCategory, WorldEntity, QuestObjective } from '@/lib/types';
 import { WorldEntityModal } from '@/components/WorldEntityModal';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
 import { LoreGraph } from '@/components/LoreGraph';
@@ -72,13 +75,14 @@ interface CategoryGroup {
 export const WorldEditor: React.FC<WorldEditorProps> = ({
   onOpenCreateCampaignWithWorld,
 }) => {
-  const { activeWorld, updateWorld, worldEntities, deleteWorldEntity, createWorldEntity } = useWorld();
+  const { activeWorld, updateWorld, worldEntities, deleteWorldEntity, createWorldEntity, updateWorldEntity } = useWorld();
   const [activeTab, setActiveTab] = useState<ActiveViewTab>('npc');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingEntity, setEditingEntity] = useState<WorldEntity | null>(null);
   const [modalCategory, setModalCategory] = useState<WorldEntityCategory>('npc');
   const [searchQuery, setSearchQuery] = useState('');
+  const [questStatusFilter, setQuestStatusFilter] = useState<'all' | 'in_progress' | 'not_started' | 'completed' | 'failed'>('all');
 
   // Lightbox State for Cards
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
@@ -107,6 +111,7 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
 
   // Accordion collapsed state for groups
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    aventuras: true,
     economia: true,
     bestiario: true,
     sobrenatural: true,
@@ -171,6 +176,13 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
 
   // Category Groups Mapping
   const categoryGroups: { key: string; title: string; items: CategoryMenuItem[] }[] = [
+    {
+      key: 'aventuras',
+      title: 'Aventuras & Campanhas',
+      items: [
+        { id: 'quest', label: 'Missões & Quests', icon: <Target className="w-3.5 h-3.5 text-amber-400" /> },
+      ],
+    },
     {
       key: 'economia',
       title: 'Economia & Comércio',
@@ -560,6 +572,310 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
                   <div className="text-[10px] text-slate-500 mt-1">Cria localização com clima e população</div>
                 </button>
               </div>
+            </div>
+          ) : activeTab === 'quest' ? (
+            <div className="space-y-4">
+              {/* Quest Filter Bar & Summary */}
+              <div className="p-3 bg-[#121824] border border-[#2a3449] rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-sm">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[
+                    { id: 'all', label: 'Todas as Missões', count: worldEntities.filter((e) => e.category === 'quest').length },
+                    { id: 'in_progress', label: 'Em Progresso', count: worldEntities.filter((e) => e.category === 'quest' && e.attributes?.questStatus === 'in_progress').length },
+                    { id: 'not_started', label: 'Disponíveis', count: worldEntities.filter((e) => e.category === 'quest' && (!e.attributes?.questStatus || e.attributes?.questStatus === 'not_started')).length },
+                    { id: 'completed', label: 'Concluídas', count: worldEntities.filter((e) => e.category === 'quest' && e.attributes?.questStatus === 'completed').length },
+                    { id: 'failed', label: 'Falhou', count: worldEntities.filter((e) => e.category === 'quest' && e.attributes?.questStatus === 'failed').length },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setQuestStatusFilter(tab.id as any)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        questStatusFilter === tab.id
+                          ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                          : 'bg-[#0a0d14] text-slate-400 hover:text-slate-200 border border-[#2a3449]'
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${questStatusFilter === tab.id ? 'bg-slate-950/40 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'}`}>
+                        {tab.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => openModalForCategory('quest')}
+                  className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Nova Missão</span>
+                </button>
+              </div>
+
+              {/* Quest Cards Grid */}
+              {(() => {
+                const questEntities = worldEntities
+                  .filter((e) => e.category === 'quest')
+                  .filter((e) => {
+                    if (questStatusFilter === 'all') return true;
+                    const status = e.attributes?.questStatus || 'not_started';
+                    return status === questStatusFilter;
+                  })
+                  .filter((e) => searchQuery === '' || e.name.toLowerCase().includes(searchQuery.toLowerCase()) || (e.shortDesc && e.shortDesc.toLowerCase().includes(searchQuery.toLowerCase())));
+
+                if (questEntities.length === 0) {
+                  return (
+                    <div className="border-2 border-dashed border-[#2a3449] rounded-2xl p-10 text-center text-slate-500 bg-[#0f141d]/40 max-w-xl mx-auto space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
+                        <Target className="w-6 h-6" />
+                      </div>
+                      <p className="font-semibold text-slate-200 text-sm">
+                        Nenhuma missão encontrada {questStatusFilter !== 'all' ? `com status '${questStatusFilter}'` : 'no mundo'}.
+                      </p>
+                      <p className="text-xs text-slate-400 max-w-md mx-auto">
+                        Crie missões e objetivos para conduzir os jogadores através de masmorras, conspirações e caçadas com recompensas de XP e ouro.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openModalForCategory('quest')}
+                        className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+                      >
+                        + Criar Primeira Missão
+                      </button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {questEntities.map((quest) => {
+                      const qStatus = (quest.attributes?.questStatus as string) || 'not_started';
+                      const qDiff = (quest.attributes?.questDifficulty as string) || 'medium';
+                      const qType = (quest.attributes?.questType as string) || 'main';
+                      const xpReward = Number(quest.attributes?.questXpReward || 0);
+                      const goldReward = Number(quest.attributes?.questGoldReward || 0);
+                      const itemReward = quest.attributes?.questItemReward as string | undefined;
+                      const giverNpcId = quest.attributes?.questGiverNpcId as string | undefined;
+                      const targetLocId = quest.attributes?.questTargetLocationId as string | undefined;
+
+                      const giverNpc = giverNpcId ? worldEntities.find((e) => e.id === giverNpcId) : undefined;
+                      const targetLoc = targetLocId ? worldEntities.find((e) => e.id === targetLocId) : undefined;
+
+                      let parsedObjectives: QuestObjective[] = [];
+                      try {
+                        parsedObjectives = typeof quest.attributes?.questObjectives === 'string'
+                          ? JSON.parse(quest.attributes.questObjectives)
+                          : (Array.isArray(quest.attributes?.questObjectives) ? quest.attributes.questObjectives : []);
+                      } catch {
+                        parsedObjectives = [];
+                      }
+
+                      const completedCount = parsedObjectives.filter((o) => o.isCompleted).length;
+                      const totalCount = parsedObjectives.length;
+                      const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : (qStatus === 'completed' ? 100 : 0);
+
+                      return (
+                        <div
+                          key={quest.id}
+                          className="p-4 rounded-2xl bg-[#161c28] border border-[#2a3449] hover:border-amber-500/50 transition-all flex flex-col justify-between overflow-hidden group shadow-md space-y-3"
+                        >
+                          <div>
+                            {/* Card Header (Status, Difficulty, Type, Actions) */}
+                            <div className="flex items-center justify-between gap-1 mb-2">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {/* Quick status dropdown */}
+                                <select
+                                  value={qStatus}
+                                  onChange={async (e) => {
+                                    const nextStatus = e.target.value;
+                                    const updated: WorldEntity = {
+                                      ...quest,
+                                      attributes: {
+                                        ...quest.attributes,
+                                        questStatus: nextStatus,
+                                      },
+                                    };
+                                    await updateWorldEntity(updated);
+                                  }}
+                                  className={`text-[9px] font-bold px-2 py-0.5 rounded-full border focus:outline-none cursor-pointer ${
+                                    qStatus === 'completed'
+                                      ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
+                                      : qStatus === 'failed'
+                                      ? 'bg-rose-950/80 text-rose-300 border-rose-500/40'
+                                      : qStatus === 'in_progress'
+                                      ? 'bg-amber-950/80 text-amber-300 border-amber-500/40'
+                                      : 'bg-slate-900 text-slate-400 border-slate-700'
+                                  }`}
+                                >
+                                  <option value="not_started">⚪ Disponível</option>
+                                  <option value="in_progress">🟡 Em Progresso</option>
+                                  <option value="completed">🟢 Concluída</option>
+                                  <option value="failed">🔴 Falhou</option>
+                                </select>
+
+                                {/* Difficulty badge */}
+                                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                                  qDiff === 'deadly' ? 'bg-rose-950/60 text-rose-300 border-rose-800/60' :
+                                  qDiff === 'hard' ? 'bg-orange-950/60 text-orange-300 border-orange-800/60' :
+                                  qDiff === 'medium' ? 'bg-amber-950/60 text-amber-300 border-amber-800/60' :
+                                  'bg-emerald-950/60 text-emerald-300 border-emerald-800/60'
+                                }`}>
+                                  {qDiff === 'deadly' ? 'Mortal' : qDiff === 'hard' ? 'Difícil' : qDiff === 'medium' ? 'Média' : 'Fácil'}
+                                </span>
+
+                                {/* Type badge */}
+                                {qType && (
+                                  <span className="text-[9px] font-sans font-bold text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                                    {qType === 'main' ? '⭐ Principal' : qType === 'side' ? '📜 Secundária' : qType === 'faction' ? '🛡️ Facção' : '👤 Pessoal'}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingEntity(quest);
+                                    setModalCategory('quest');
+                                    setShowAddModal(true);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-amber-400 rounded transition-colors cursor-pointer"
+                                  title="Editar Missão"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (confirm(`Tem certeza que deseja excluir a missão '${quest.name}'?`)) {
+                                      await deleteWorldEntity(quest.id);
+                                    }
+                                  }}
+                                  className="p-1 text-slate-500 hover:text-rose-400 rounded transition-colors cursor-pointer"
+                                  title="Excluir Missão"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Quest Title & Description */}
+                            <h4
+                              onClick={() => {
+                                setEditingEntity(quest);
+                                setModalCategory('quest');
+                                setShowAddModal(true);
+                              }}
+                              className="font-bold text-base text-slate-100 hover:text-amber-300 cursor-pointer transition-colors"
+                            >
+                              {quest.name}
+                            </h4>
+                            <p className="text-xs text-slate-300 mt-1 font-serif leading-relaxed line-clamp-2">
+                              {quest.shortDesc || 'Nenhuma descrição detalhada.'}
+                            </p>
+
+                            {/* Giver NPC & Target Location */}
+                            {(giverNpc || targetLoc) && (
+                              <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-[#2a3449]/60 text-[10px]">
+                                {giverNpc && (
+                                  <div className="flex items-center gap-1 text-amber-300 bg-amber-950/40 border border-amber-500/20 px-1.5 py-0.5 rounded">
+                                    <Users className="w-3 h-3 text-amber-400" />
+                                    <span className="truncate max-w-[130px]">{giverNpc.name}</span>
+                                  </div>
+                                )}
+                                {targetLoc && (
+                                  <div className="flex items-center gap-1 text-cyan-300 bg-cyan-950/40 border border-cyan-500/20 px-1.5 py-0.5 rounded">
+                                    <MapPin className="w-3 h-3 text-cyan-400" />
+                                    <span className="truncate max-w-[130px]">{targetLoc.name}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Rewards Summary */}
+                            {(xpReward > 0 || goldReward > 0 || itemReward) && (
+                              <div className="flex flex-wrap items-center gap-1.5 mt-2 bg-[#0a0d14] p-1.5 rounded-xl border border-[#2a3449] text-[10px]">
+                                <span className="font-bold text-amber-400/90 font-mono">Recompensas:</span>
+                                {goldReward > 0 && (
+                                  <span className="text-amber-300 font-mono font-bold bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-600/30">
+                                    🪙 {goldReward.toLocaleString()} PO
+                                  </span>
+                                )}
+                                {xpReward > 0 && (
+                                  <span className="text-cyan-300 font-mono font-bold bg-cyan-950/60 px-1.5 py-0.2 rounded border border-cyan-600/30">
+                                    ⭐ {xpReward.toLocaleString()} XP
+                                  </span>
+                                )}
+                                {itemReward && (
+                                  <span className="text-slate-300 font-sans truncate max-w-[140px] bg-slate-900 px-1.5 py-0.2 rounded border border-slate-800">
+                                    🎁 {itemReward}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Interactive Checklist of Objectives */}
+                            {parsedObjectives.length > 0 && (
+                              <div className="mt-3 space-y-1.5 bg-[#0e121a] p-2.5 rounded-xl border border-[#2a3449]/80">
+                                <div className="flex items-center justify-between text-[10px] font-bold text-slate-300">
+                                  <span className="flex items-center gap-1">
+                                    <CheckSquare className="w-3 h-3 text-amber-400" /> Objetivos ({completedCount}/{totalCount}):
+                                  </span>
+                                  <span className="font-mono text-amber-400">{progressPct}%</span>
+                                </div>
+
+                                {/* Progress bar */}
+                                <div className="w-full bg-[#1a2233] h-1.5 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full transition-all duration-300 ${
+                                      progressPct === 100 ? 'bg-emerald-500' : 'bg-amber-500'
+                                    }`}
+                                    style={{ width: `${progressPct}%` }}
+                                  />
+                                </div>
+
+                                {/* Objectives list */}
+                                <div className="space-y-1 pt-1 max-h-32 overflow-y-auto custom-scrollbar">
+                                  {parsedObjectives.map((obj, oIdx) => (
+                                    <label
+                                      key={obj.id || oIdx}
+                                      className="flex items-start gap-1.5 text-[11px] cursor-pointer group/chk select-none hover:bg-[#151c2a] p-1 rounded transition-colors"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={obj.isCompleted}
+                                        onChange={async (e) => {
+                                          const checked = e.target.checked;
+                                          const updatedList = parsedObjectives.map((o, i) => (i === oIdx ? { ...o, isCompleted: checked } : o));
+                                          const allDone = updatedList.every((o) => o.isCompleted);
+                                          const updated: WorldEntity = {
+                                            ...quest,
+                                            attributes: {
+                                              ...quest.attributes,
+                                              questObjectives: JSON.stringify(updatedList),
+                                              questStatus: allDone && qStatus !== 'failed' ? 'completed' : qStatus,
+                                            },
+                                          };
+                                          await updateWorldEntity(updated);
+                                        }}
+                                        className="w-3.5 h-3.5 mt-0.5 rounded border-slate-700 text-amber-500 focus:ring-0 cursor-pointer accent-amber-500 shrink-0"
+                                      />
+                                      <span className={`leading-snug ${obj.isCompleted ? 'line-through text-slate-500' : 'text-slate-200 group-hover/chk:text-slate-100'}`}>
+                                        {obj.description} {obj.optional ? <span className="text-[9px] text-cyan-400 font-mono">(Opcional)</span> : ''}
+                                      </span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           ) : (
             <div className="space-y-4">

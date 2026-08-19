@@ -2,9 +2,9 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Sparkles, Layers, BookOpen, FileText, Image as ImageIcon, Trash2, Upload, AlertCircle, Wand2, Network } from 'lucide-react';
+import { X, Plus, Sparkles, Layers, BookOpen, FileText, Image as ImageIcon, Trash2, Upload, AlertCircle, Wand2, Network, Target, CheckSquare, Award, Coins, MapPin, Users, Check } from 'lucide-react';
 import { useWorld } from '@/lib/hooks/useWorld';
-import { WorldEntityCategory, WorldEntity, EntityConnection, ConnectionType, EntityStatSheet } from '@/lib/types';
+import { WorldEntityCategory, WorldEntity, EntityConnection, ConnectionType, EntityStatSheet, QuestObjective, QuestReward, QuestStatus, QuestDifficulty, QuestType } from '@/lib/types';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
 import { storageService } from '@/lib/services/storageService';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -41,6 +41,19 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   const [connections, setConnections] = useState<EntityConnection[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+
+  // Quest Tracker States
+  const [questStatus, setQuestStatus] = useState<QuestStatus>('not_started');
+  const [questDifficulty, setQuestDifficulty] = useState<QuestDifficulty>('medium');
+  const [questType, setQuestType] = useState<QuestType>('main');
+  const [questXpReward, setQuestXpReward] = useState<number>(100);
+  const [questGoldReward, setQuestGoldReward] = useState<number>(50);
+  const [questItemReward, setQuestItemReward] = useState<string>('');
+  const [questGiverNpcId, setQuestGiverNpcId] = useState<string>('');
+  const [questTargetLocationId, setQuestTargetLocationId] = useState<string>('');
+  const [questObjectives, setQuestObjectives] = useState<QuestObjective[]>([]);
+  const [newObjectiveDesc, setNewObjectiveDesc] = useState<string>('');
+  const [newObjectiveOptional, setNewObjectiveOptional] = useState<boolean>(false);
   
   // Lista de todas as outras entidades no mundo atual
   const { worldEntities } = useWorld();
@@ -118,6 +131,26 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       if (keys.length > 0) setExtraAttr1(String(attrs[keys[0]] || ''));
       if (keys.length > 1) setExtraAttr2(String(attrs[keys[1]] || ''));
 
+      if (editingEntity.category === 'quest') {
+        const qData = editingEntity.attributes || {};
+        setQuestStatus((qData.questStatus as QuestStatus) || 'not_started');
+        setQuestDifficulty((qData.questDifficulty as QuestDifficulty) || 'medium');
+        setQuestType((qData.questType as QuestType) || 'main');
+        setQuestXpReward(Number(qData.questXpReward || 100));
+        setQuestGoldReward(Number(qData.questGoldReward || 50));
+        setQuestItemReward(String(qData.questItemReward || ''));
+        setQuestGiverNpcId(String(qData.questGiverNpcId || ''));
+        setQuestTargetLocationId(String(qData.questTargetLocationId || ''));
+        try {
+          const parsed = typeof qData.questObjectives === 'string'
+            ? JSON.parse(qData.questObjectives)
+            : (Array.isArray(qData.questObjectives) ? qData.questObjectives : []);
+          setQuestObjectives(parsed);
+        } catch {
+          setQuestObjectives([]);
+        }
+      }
+
       // Fetch combat stats if entity has them
       const hasStats = ['npc', 'monster', 'beast'].includes(editingEntity.category);
       if (hasStats) {
@@ -156,6 +189,17 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       setImages([]);
       setConnections([]);
       setTags([]);
+      setQuestStatus('not_started');
+      setQuestDifficulty('medium');
+      setQuestType('main');
+      setQuestXpReward(100);
+      setQuestGoldReward(50);
+      setQuestItemReward('');
+      setQuestGiverNpcId('');
+      setQuestTargetLocationId('');
+      setQuestObjectives([]);
+      setNewObjectiveDesc('');
+      setNewObjectiveOptional(false);
       resetStatSheetDefaults();
     }
   }, [editingEntity, defaultCategory, isOpen]);
@@ -253,6 +297,28 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
     if (extraAttr1.trim()) attributes[getAttrKey1()] = extraAttr1.trim();
     if (extraAttr2.trim()) attributes[getAttrKey2()] = extraAttr2.trim();
 
+    if (category === 'quest') {
+      attributes.questStatus = questStatus;
+      attributes.questDifficulty = questDifficulty;
+      attributes.questType = questType;
+      attributes.questXpReward = String(questXpReward);
+      attributes.questGoldReward = String(questGoldReward);
+      attributes.questItemReward = questItemReward;
+      attributes.questGiverNpcId = questGiverNpcId;
+      attributes.questTargetLocationId = questTargetLocationId;
+      attributes.questObjectives = JSON.stringify(questObjectives);
+    }
+
+    const finalConnections = [...connections];
+    if (category === 'quest') {
+      if (questGiverNpcId && !finalConnections.some((c) => c.targetId === questGiverNpcId)) {
+        finalConnections.push({ targetId: questGiverNpcId, type: 'allied' });
+      }
+      if (questTargetLocationId && !finalConnections.some((c) => c.targetId === questTargetLocationId)) {
+        finalConnections.push({ targetId: questTargetLocationId, type: 'location' });
+      }
+    }
+
     let savedEntity: WorldEntity | null = null;
 
     if (editingEntity) {
@@ -264,7 +330,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         shortDesc: shortDesc.trim(),
         fullContent: fullContent.trim() || undefined,
         images: images.length > 0 ? images : undefined,
-        connections: connections,
+        connections: finalConnections,
         attributes,
         tags: tags.length > 0 ? tags : undefined,
       };
@@ -280,7 +346,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         shortDesc: shortDesc.trim(),
         fullContent: fullContent.trim() || undefined,
         images: images.length > 0 ? images : undefined,
-        connections: connections,
+        connections: finalConnections,
         attributes,
         tags: tags.length > 0 ? tags : undefined,
       });
@@ -358,6 +424,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       case 'magic_system': return 'Adicionar Sistema de Magia ou Lei Física';
       case 'plane': return 'Adicionar Plano de Existência ou Dimensão';
       case 'cosmology': return 'Adicionar Mito de Criação ou Cosmologia';
+      case 'quest': return 'Adicionar Nova Missão / Quest';
     }
   };
 
@@ -394,6 +461,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       case 'magic_system': return 'Ex: Magia Rúnica Ancestral / Canalização Cósmica de Éter';
       case 'plane': return 'Ex: Plano das Sombras Reais / Dimensão das Nuvens Astral';
       case 'cosmology': return 'Ex: Mito da Grande Forja Elemental / Deuses Primordiais do Vazio';
+      case 'quest': return 'Ex: O Segredo da Mina Abandonada / Resgate em Valíria / Caçada ao Basilisco';
     }
   };
 
@@ -426,6 +494,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       case 'magic_system': return 'Fonte de Poder / Custo ou Limitação:';
       case 'plane': return 'Acessibilidade / Leis Físicas:';
       case 'cosmology': return 'Era da Criação / Forças Primordiais:';
+      case 'quest': return 'Dificuldade / Tipo da Missão:';
     }
   };
 
@@ -458,6 +527,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       case 'magic_system': return 'fonte_poder';
       case 'plane': return 'acessibilidade';
       case 'cosmology': return 'forcas_primordiais';
+      case 'quest': return 'dificuldade_tipo';
     }
   };
 
@@ -490,6 +560,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       case 'magic_system': return 'Regras Físicas / Consequências de Uso:';
       case 'plane': return 'Habitantes Primordiais / Clima:';
       case 'cosmology': return 'Verdade vs Lenda / Registros:';
+      case 'quest': return 'Recompensas (XP / Ouro):';
     }
   };
 
@@ -522,6 +593,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       case 'magic_system': return 'consequencias';
       case 'plane': return 'habitantes';
       case 'cosmology': return 'verdade_lenda';
+      case 'quest': return 'recompensas';
     }
   };
 
@@ -594,6 +666,9 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
               onChange={(e) => setCategory(e.target.value as WorldEntityCategory)}
               className="w-full bg-[#0a0d14] border-2 border-[#2a3449] focus:border-amber-500 rounded-xl px-4 py-2.5 text-sm text-amber-300 font-bold focus:outline-none transition-all cursor-pointer shadow-inner"
             >
+              <optgroup label="Aventuras & Campanhas">
+                <option value="quest">Missão & Quest (Objetivos & Recompensas)</option>
+              </optgroup>
               <optgroup label="Economia & Comércio">
                 <option value="currency">Sistemas Monetários & Moedas</option>
                 <option value="trade_route">Rotas Comercial & Mercados</option>
@@ -669,6 +744,266 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
               />
             </div>
           </div>
+
+          {/* Dedicated Quest Tracker Form Fields when category === 'quest' */}
+          {category === 'quest' && (
+            <div className="p-4 bg-[#0a0d14]/90 border-2 border-amber-500/40 rounded-2xl space-y-4 shadow-xl">
+              <div className="flex items-center justify-between border-b border-[#2a3449] pb-2">
+                <div className="flex items-center gap-2">
+                  <Target className="w-4 h-4 text-amber-400" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                    Configuração da Missão / Quest
+                  </h4>
+                </div>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  Objetivos: {questObjectives.filter((o) => o.isCompleted).length}/{questObjectives.length} concluídos
+                </span>
+              </div>
+
+              {/* Status, Dificuldade e Tipo */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                    Status da Missão:
+                  </label>
+                  <select
+                    value={questStatus}
+                    onChange={(e) => setQuestStatus(e.target.value as QuestStatus)}
+                    className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-200 font-bold focus:outline-none cursor-pointer"
+                  >
+                    <option value="not_started">⚪ Não Iniciada / Disponível</option>
+                    <option value="in_progress">🟡 Em Progresso</option>
+                    <option value="completed">🟢 Concluída</option>
+                    <option value="failed">🔴 Falhou</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                    Dificuldade Estimada:
+                  </label>
+                  <select
+                    value={questDifficulty}
+                    onChange={(e) => setQuestDifficulty(e.target.value as QuestDifficulty)}
+                    className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-200 font-bold focus:outline-none cursor-pointer"
+                  >
+                    <option value="easy">🟢 Fácil</option>
+                    <option value="medium">🟡 Média</option>
+                    <option value="hard">🟠 Difícil</option>
+                    <option value="deadly">🔴 Mortal</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                    Tipo de Missão:
+                  </label>
+                  <select
+                    value={questType}
+                    onChange={(e) => setQuestType(e.target.value as QuestType)}
+                    className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-200 font-bold focus:outline-none cursor-pointer"
+                  >
+                    <option value="main">⭐ Missão Principal</option>
+                    <option value="side">📜 Missão Secundária</option>
+                    <option value="faction">🛡️ Missão de Facção</option>
+                    <option value="personal">👤 Missão Pessoal</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Recompensas: XP, PO e Itens */}
+              <div className="p-3 bg-[#121824] border border-[#2a3449] rounded-xl space-y-2">
+                <div className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Award className="w-3.5 h-3.5" /> Recompensas da Missão:
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      ⭐ Recompensa em XP:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={questXpReward}
+                      onChange={(e) => setQuestXpReward(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      🪙 Recompensa em Ouro (PO):
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={questGoldReward}
+                      onChange={(e) => setQuestGoldReward(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-1.5 text-xs text-amber-300 font-mono focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      🎁 Itens / Artefatos / Espólios:
+                    </label>
+                    <input
+                      type="text"
+                      value={questItemReward}
+                      onChange={(e) => setQuestItemReward(e.target.value)}
+                      placeholder="Ex: Poção de Cura, Mapa Antigo..."
+                      className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Vínculos: NPC Doador e Local de Destino */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-amber-400" /> NPC Doador da Missão:
+                  </label>
+                  <select
+                    value={questGiverNpcId}
+                    onChange={(e) => setQuestGiverNpcId(e.target.value)}
+                    className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none cursor-pointer"
+                  >
+                    <option value="">-- Nenhum NPC Vinculado --</option>
+                    {worldEntities.filter((e) => e.category === 'npc').map((npc) => (
+                      <option key={npc.id} value={npc.id}>{npc.name} {npc.subType ? `(${npc.subType})` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-cyan-400" /> Local de Destino / Masmorra:
+                  </label>
+                  <select
+                    value={questTargetLocationId}
+                    onChange={(e) => setQuestTargetLocationId(e.target.value)}
+                    className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none cursor-pointer"
+                  >
+                    <option value="">-- Nenhum Local Vinculado --</option>
+                    {worldEntities.filter((e) => e.category === 'location').map((loc) => (
+                      <option key={loc.id} value={loc.id}>{loc.name} {loc.subType ? `(${loc.subType})` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Checklist Dinâmico de Objetivos */}
+              <div className="p-3 bg-[#121824] border border-[#2a3449] rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <CheckSquare className="w-3.5 h-3.5" /> Checklist de Objetivos:
+                  </div>
+                </div>
+
+                {/* Lista de Objetivos */}
+                <div className="space-y-1.5">
+                  {questObjectives.length === 0 ? (
+                    <div className="p-3 text-center text-slate-500 text-xs italic">
+                      Nenhum objetivo cadastrado ainda. Adicione abaixo o passo a passo da missão.
+                    </div>
+                  ) : (
+                    questObjectives.map((obj, idx) => (
+                      <div
+                        key={obj.id}
+                        className="flex items-center justify-between gap-2 p-2 bg-[#0a0d14] border border-[#2a3449] rounded-xl hover:border-amber-500/40 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={obj.isCompleted}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setQuestObjectives((prev) => prev.map((o, i) => (i === idx ? { ...o, isCompleted: checked } : o)));
+                            }}
+                            className="w-4 h-4 rounded border-slate-700 text-amber-500 focus:ring-0 cursor-pointer accent-amber-500"
+                          />
+                          <span className={`text-xs font-sans truncate ${obj.isCompleted ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                            {obj.description}
+                          </span>
+                          {obj.optional && (
+                            <span className="text-[9px] font-mono text-cyan-400 bg-cyan-950/60 px-1 py-0.2 rounded border border-cyan-500/30 shrink-0">
+                              Opcional
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setQuestObjectives((prev) => prev.filter((_, i) => i !== idx))}
+                          className="text-slate-500 hover:text-rose-400 p-1 text-xs cursor-pointer"
+                          title="Remover objetivo"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Adicionar Novo Objetivo */}
+                <div className="flex gap-2 items-center pt-1 border-t border-[#2a3449]/60">
+                  <input
+                    type="text"
+                    value={newObjectiveDesc}
+                    onChange={(e) => setNewObjectiveDesc(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (!newObjectiveDesc.trim()) return;
+                        setQuestObjectives((prev) => [
+                          ...prev,
+                          {
+                            id: `obj-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+                            description: newObjectiveDesc.trim(),
+                            isCompleted: false,
+                            optional: newObjectiveOptional,
+                          },
+                        ]);
+                        setNewObjectiveDesc('');
+                        setNewObjectiveOptional(false);
+                      }
+                    }}
+                    placeholder="Descrição do novo objetivo (ex: Resgatar o prisioneiro)..."
+                    className="flex-1 bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
+                  />
+                  <label className="flex items-center gap-1 text-[10px] font-bold text-slate-400 cursor-pointer shrink-0 select-none">
+                    <input
+                      type="checkbox"
+                      checked={newObjectiveOptional}
+                      onChange={(e) => setNewObjectiveOptional(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded accent-cyan-500 cursor-pointer"
+                    />
+                    <span>Opcional</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!newObjectiveDesc.trim()) return;
+                      setQuestObjectives((prev) => [
+                        ...prev,
+                        {
+                          id: `obj-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+                          description: newObjectiveDesc.trim(),
+                          isCompleted: false,
+                          optional: newObjectiveOptional,
+                        },
+                      ]);
+                      setNewObjectiveDesc('');
+                      setNewObjectiveOptional(false);
+                    }}
+                    className="px-3 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow transition-all cursor-pointer shrink-0"
+                  >
+                    + Adicionar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Tags Chips Input */}
           <div>

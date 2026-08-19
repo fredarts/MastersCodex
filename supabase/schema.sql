@@ -61,7 +61,7 @@ ON public.campaign_members (campaign_id, user_id, character_name);
 CREATE TABLE IF NOT EXISTS public.world_entities (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   world_id UUID NOT NULL REFERENCES public.worlds(id) ON DELETE CASCADE,
-  category TEXT NOT NULL CHECK (category IN ('npc', 'location', 'faction', 'religion', 'lore_event', 'species', 'ethnicity', 'tradition', 'profession', 'natural_law', 'spell', 'disease', 'item', 'material', 'technology', 'document', 'language', 'military_conflict', 'military_unit', 'currency', 'trade_route', 'beast', 'flora', 'magic_system', 'plane', 'cosmology', 'monster')),
+  category TEXT NOT NULL CHECK (category IN ('npc', 'location', 'faction', 'religion', 'lore_event', 'species', 'ethnicity', 'tradition', 'profession', 'natural_law', 'spell', 'disease', 'item', 'material', 'technology', 'document', 'language', 'military_conflict', 'military_unit', 'currency', 'trade_route', 'beast', 'flora', 'magic_system', 'plane', 'cosmology', 'monster', 'quest')),
   name TEXT NOT NULL,
   sub_type TEXT,
   status TEXT DEFAULT 'active',
@@ -83,7 +83,7 @@ ALTER TABLE public.world_entities ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT
 -- Garantir que a constraint de category esteja atualizada para todas as categorias
 ALTER TABLE public.world_entities DROP CONSTRAINT IF EXISTS world_entities_category_check;
 ALTER TABLE public.world_entities ADD CONSTRAINT world_entities_category_check 
-CHECK (category IN ('npc', 'location', 'faction', 'religion', 'lore_event', 'species', 'ethnicity', 'tradition', 'profession', 'natural_law', 'spell', 'disease', 'item', 'material', 'technology', 'document', 'language', 'military_conflict', 'military_unit', 'currency', 'trade_route', 'beast', 'flora', 'magic_system', 'plane', 'cosmology', 'monster'));
+CHECK (category IN ('npc', 'location', 'faction', 'religion', 'lore_event', 'species', 'ethnicity', 'tradition', 'profession', 'natural_law', 'spell', 'disease', 'item', 'material', 'technology', 'document', 'language', 'military_conflict', 'military_unit', 'currency', 'trade_route', 'beast', 'flora', 'magic_system', 'plane', 'cosmology', 'monster', 'quest'));
 
 -- 1.6 Tabela Sessions
 CREATE TABLE IF NOT EXISTS public.sessions (

@@ -59,37 +59,35 @@ export function useUserSettings() {
   }, []);
 
   const updateSetting = <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => {
-    setSettings((prev) => {
-      const updated = { ...prev, [key]: value };
-      try {
-        const localStorageKey = getLocalStorageKey(key);
-        if (localStorageKey) {
-          localStorage.setItem(localStorageKey, String(value));
-          window.dispatchEvent(new Event('codex_user_settings_updated'));
-        }
-      } catch (e) {
-        console.error(`Error saving ${key} to localStorage:`, e);
+    try {
+      const localStorageKey = getLocalStorageKey(key);
+      if (localStorageKey) {
+        localStorage.setItem(localStorageKey, String(value));
       }
-      return updated;
-    });
+    } catch (e) {
+      console.error(`Error saving ${key} to localStorage:`, e);
+    }
+    setSettings((prev) => ({ ...prev, [key]: value }));
+    setTimeout(() => {
+      window.dispatchEvent(new Event('codex_user_settings_updated'));
+    }, 0);
   };
 
   const saveSettings = (newSettings: Partial<UserSettings>) => {
-    setSettings((prev) => {
-      const updated = { ...prev, ...newSettings };
-      try {
-        Object.entries(newSettings).forEach(([key, val]) => {
-          const localStorageKey = getLocalStorageKey(key as keyof UserSettings);
-          if (localStorageKey) {
-            localStorage.setItem(localStorageKey, String(val));
-          }
-        });
-        window.dispatchEvent(new Event('codex_user_settings_updated'));
-      } catch (e) {
-        console.error('Error saving settings to localStorage:', e);
-      }
-      return updated;
-    });
+    try {
+      Object.entries(newSettings).forEach(([key, val]) => {
+        const localStorageKey = getLocalStorageKey(key as keyof UserSettings);
+        if (localStorageKey) {
+          localStorage.setItem(localStorageKey, String(val));
+        }
+      });
+    } catch (e) {
+      console.error('Error saving settings to localStorage:', e);
+    }
+    setSettings((prev) => ({ ...prev, ...newSettings }));
+    setTimeout(() => {
+      window.dispatchEvent(new Event('codex_user_settings_updated'));
+    }, 0);
   };
 
   return {
