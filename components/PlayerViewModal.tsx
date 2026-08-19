@@ -26,6 +26,7 @@ import { revealVisionWithLOS, getTokenVisionRadius } from '@/components/map/visi
 import { Cell } from '@/components/MapMaker';
 import { DmCursorOverlay } from '@/components/live-cockpit/DmCursorOverlay';
 import { PingEffect } from '@/components/live-cockpit/PingEffect';
+import { XCardButton } from '@/components/safety/XCardButton';
 
 interface PlayerViewModalProps {
   isOpen: boolean;
@@ -61,6 +62,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
     broadcastStateRequest,
     drawings,
     updateCombatantState,
+    broadcastXCardAlert,
   } = useLiveCockpit();
   const { user } = useAuth();
 
@@ -363,6 +365,13 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
 
         <div className="flex items-center gap-3">
           <PresenceIndicator users={onlineUsers} className="border-r border-[#2a3449] pr-3 mr-1" />
+
+          <XCardButton
+            campaignId={activeCampaign?.id}
+            playerName={playerCharName}
+            safetySettings={activeCampaign?.safetySettings}
+            onSendAlert={(alert) => broadcastXCardAlert({ alert })}
+          />
 
           <button
             onClick={() => setIsSheetModalOpen(true)}

@@ -19,6 +19,7 @@ import { FloatingDiceRollerHUD } from '@/components/live-cockpit/FloatingDiceRol
 import { LiveCockpitModalManager } from '@/components/live-cockpit/LiveCockpitModalManager';
 import { DMNotebookDrawer } from '@/components/live-cockpit/DMNotebookDrawer';
 import { AudioMaestro } from '@/components/AudioMaestro';
+import { XCardAlertBanner } from '@/components/safety/XCardAlertBanner';
 
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { useCombatEngine } from '@/lib/hooks/useCombatEngine';
@@ -73,6 +74,8 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     broadcastCombatLogEntry,
     setCombatLogs,
     broadcastCombatUpdate,
+    activeXCardAlert,
+    setActiveXCardAlert,
   } = useLiveCockpit();
 
   const { user } = useAuth();
@@ -1238,6 +1241,20 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
 
       {/* 4. Overlay: Floating d20 Results / BG3 roller canvas */}
       <FloatingDiceRollerHUD />
+
+      {/* Safety Tools: X-Card / Pause Alert for DM */}
+      <XCardAlertBanner
+        alert={activeXCardAlert}
+        onDismiss={() => setActiveXCardAlert(null)}
+        onPauseSession={() => {
+          toast.info('⏸️ Sessão pausada por 2 minutos. Respirem!');
+          setActiveXCardAlert(null);
+        }}
+        onFadeToBlack={() => {
+          toast.info('🌑 Cena esmaecida (Fade to Black). Encerrando a descrição.');
+          setActiveXCardAlert(null);
+        }}
+      />
 
       {/* DM Notebook Persistent Drawer */}
       <DMNotebookDrawer

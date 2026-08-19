@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { Combatant, CombatLogEntry, ChatMessage, PlayerRollEvent, DmCursorPayload, PingLocationPayload, VoiceSignalPayload, PresencePayload } from '@/lib/types';
+import { Combatant, CombatLogEntry, ChatMessage, PlayerRollEvent, DmCursorPayload, PingLocationPayload, VoiceSignalPayload, PresencePayload, XCardAlertPayload } from '@/lib/types';
 import { useRealtimeSync } from '@/lib/hooks/useRealtimeSync';
 import { useCampaign } from '@/context/CampaignContext';
 import { useAuth } from '@/context/AuthContext';
@@ -75,6 +75,9 @@ interface LiveCockpitContextType {
   updateCombatantState: (id: string, update: Partial<Combatant>) => void;
   selectedTargetId: string | null;
   setSelectedTargetId: React.Dispatch<React.SetStateAction<string | null>>;
+  activeXCardAlert: XCardAlertPayload | null;
+  setActiveXCardAlert: React.Dispatch<React.SetStateAction<XCardAlertPayload | null>>;
+  broadcastXCardAlert: (payload: { alert: XCardAlertPayload }) => void;
 }
 
 const LiveCockpitContext = createContext<LiveCockpitContextType | undefined>(undefined);
@@ -106,6 +109,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [pings, setPings] = useState<PingLocationPayload[]>([]);
   const [voiceSignal, setVoiceSignal] = useState<VoiceSignalPayload | null>(null);
   const [drawings, setDrawings] = useState<any[]>([]);
+  const [activeXCardAlert, setActiveXCardAlert] = useState<XCardAlertPayload | null>(null);
 
   // Ref to track the last synchronized combat state to avoid feedback loops
   const lastSyncStateRef = useRef<{
@@ -333,6 +337,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     broadcastStateRequest,
     broadcastStateSnapshot,
     broadcastDrawingAction: syncBroadcastDrawingAction,
+    broadcastXCardAlert,
   } = useRealtimeSync({
     campaignId,
     onTokenMove: (payload) => {
@@ -465,6 +470,11 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         audio.volume = 0.3;
         audio.play().catch(() => {});
       } catch (e) {}
+    },
+    onXCardAlert: (payload) => {
+      if (payload.alert) {
+        setActiveXCardAlert(payload.alert);
+      }
     },
     onVoiceSignal: (payload) => {
       setVoiceSignal(payload);
@@ -881,6 +891,9 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         },
         selectedTargetId,
         setSelectedTargetId,
+        activeXCardAlert,
+        setActiveXCardAlert,
+        broadcastXCardAlert,
       }}
     >
       {children}

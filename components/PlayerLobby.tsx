@@ -58,6 +58,7 @@ import { SharedGameLog } from './live-cockpit/SharedGameLog';
 import { LiveChatPanel } from './live-cockpit/LiveChatPanel';
 import { BattleGrid3D } from './BattleGrid3D';
 import { ThreeErrorBoundary } from './ThreeErrorBoundary';
+import { XCardButton } from './safety/XCardButton';
 import { DysonCanvas } from './map/DysonCanvas';
 import { MagicShaderSlideshow } from './MagicShaderSlideshow';
 import { normalizeImageUrl, getYouTubeEmbedUrl } from '@/lib/imageUtils';
@@ -93,6 +94,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     drawings,
     broadcastStateRequest,
     selectedTargetId,
+    broadcastXCardAlert,
   } = useLiveCockpit();
   const { activeScene, fetchSceneMap, campaignMaps } = useSession();
   const { user } = useAuth();
@@ -1359,8 +1361,15 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             })()}
 
             {/* Right Header Actions & Online Avatars */}
-            <div className="flex items-center gap-3">
-              <PresenceIndicator users={onlineUsers} className="border-r border-[#2a3449] pr-3" />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <PresenceIndicator users={onlineUsers} className="border-r border-[#2a3449] pr-2 sm:pr-3" />
+
+              <XCardButton
+                campaignId={currentCampaign?.id}
+                playerName={resolveCharName(currentCampaign)}
+                safetySettings={currentCampaign?.safetySettings}
+                onSendAlert={(alert) => broadcastXCardAlert({ alert })}
+              />
 
               <button
                 onClick={() => handleOpenSheetForCampaign(currentCampaign || undefined)}

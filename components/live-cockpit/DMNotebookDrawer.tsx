@@ -1,7 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { BookOpen, X, Save, Trash2, Copy, Check } from 'lucide-react';
+import { BookOpen, X, Save, Trash2, Copy, Check, Eye, Edit3 } from 'lucide-react';
+import { MentionTextarea } from '@/components/ui/MentionTextarea';
+import { WikiTextRenderer } from '@/components/ui/WikiTextRenderer';
+import { useWorld } from '@/lib/hooks/useWorld';
 
 interface DMNotebookDrawerProps {
   isOpen: boolean;
@@ -18,6 +21,8 @@ export const DMNotebookDrawer: React.FC<DMNotebookDrawerProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [copied, setCopied] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [isReadingMode, setIsReadingMode] = useState(false);
+  const { worldEntities } = useWorld();
 
   useEffect(() => {
     try {
@@ -28,8 +33,7 @@ export const DMNotebookDrawer: React.FC<DMNotebookDrawerProps> = ({
     } catch (_e) {}
   }, [storageKey]);
 
-  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
+  const handleNotesChange = (val: string) => {
     setNotes(val);
     try {
       localStorage.setItem(storageKey, val);
@@ -66,6 +70,17 @@ export const DMNotebookDrawer: React.FC<DMNotebookDrawerProps> = ({
         </div>
         <div className="flex items-center gap-1">
           <button
+            onClick={() => setIsReadingMode(!isReadingMode)}
+            className={`p-1.5 rounded transition-colors text-xs font-bold flex items-center gap-1 ${
+              isReadingMode
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            }`}
+            title={isReadingMode ? 'Voltar para Edição' : 'Modo Leitura com Links Wiki'}
+          >
+            {isReadingMode ? <Edit3 className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          </button>
+          <button
             onClick={handleCopy}
             className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition-colors"
             title="Copiar Anotações"
@@ -88,14 +103,27 @@ export const DMNotebookDrawer: React.FC<DMNotebookDrawerProps> = ({
         </div>
       </div>
 
-      {/* Editor Content Area */}
-      <div className="flex-1 p-3 flex flex-col gap-2">
-        <textarea
-          value={notes}
-          onChange={handleNotesChange}
-          placeholder="Escreva aqui suas ideias rápidas, reviravoltas, estatísticas secretas ou lembretes para a sessão..."
-          className="w-full h-full bg-[#05080f] border border-[#1e293b] rounded-lg p-3 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-500/50 resize-none font-mono leading-relaxed custom-scrollbar"
-        />
+      {/* Editor or Wiki Reading Area */}
+      <div className="flex-1 p-3 flex flex-col gap-2 overflow-hidden">
+        {isReadingMode ? (
+          <div className="w-full h-full bg-[#05080f] border border-[#1e293b] rounded-lg p-3 text-xs text-slate-200 overflow-y-auto font-serif leading-relaxed custom-scrollbar">
+            {notes.trim() ? (
+              <WikiTextRenderer text={notes} worldEntities={worldEntities} />
+            ) : (
+              <p className="text-slate-600 italic">Caderno vazio. Alterne para o modo de edição para escrever.</p>
+            )}
+          </div>
+        ) : (
+          <MentionTextarea
+            value={notes}
+            onChangeValue={handleNotesChange}
+            worldEntities={worldEntities}
+            placeholder="Escreva aqui suas ideias rápidas, reviravoltas, estatísticas secretas... Digite @ para vincular monstros, magias, itens e NPCs."
+            className="h-full resize-none font-mono leading-relaxed"
+            containerClassName="h-full flex-1"
+            rows={15}
+          />
+        )}
       </div>
 
       {/* Footer Info */}

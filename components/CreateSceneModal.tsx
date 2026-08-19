@@ -5,6 +5,7 @@ import { X, Plus, Sparkles, Swords, MessageSquare, Beer, Compass } from 'lucide-
 import { useSession } from '@/lib/hooks/useSession';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { SceneType, Combatant } from '@/lib/types';
+import { MentionTextarea } from '@/components/ui/MentionTextarea';
 
 interface CreateSceneModalProps {
   isOpen: boolean;
@@ -221,14 +222,18 @@ export const CreateSceneModal: React.FC<CreateSceneModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1">Texto Sensorial para Ler em Voz Alta:</label>
-            <textarea
+            <label className="block text-xs font-semibold text-slate-400 mb-1 flex items-center justify-between">
+              <span>Texto Sensorial para Ler em Voz Alta:</span>
+              <span className="text-[10px] text-amber-400/80 font-mono">Digite @ para mencionar</span>
+            </label>
+            <MentionTextarea
               rows={3}
               value={sensoryText}
-              onChange={(e) => setSensoryText(e.target.value)}
-              placeholder="Ex: O som da chuva bate forte nas janelas de madeira. O taverneiro limpa uma caneca com olhar desconfiado..."
-              className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg p-3 text-xs text-slate-200 focus:outline-none focus:border-amber-500 resize-none font-serif"
-            ></textarea>
+              worldEntities={worldEntities}
+              onChangeValue={(val) => setSensoryText(val)}
+              placeholder="Ex: O som da chuva bate forte nas janelas de madeira. O taverneiro limpa uma caneca... Digite @ para vincular NPCs ou monstros."
+              className="font-serif"
+            />
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

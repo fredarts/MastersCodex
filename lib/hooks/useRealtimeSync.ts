@@ -4,9 +4,11 @@ import { useEffect, useRef, useCallback } from 'react';
 import { offlineQueue } from '@/lib/sync/OfflineQueueManager';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { ChatMessage, CombatLogEntry, PlayerRollEvent, PartyLootSession, DirectTransferPayload, DmCursorPayload, PingLocationPayload, VoiceSignalPayload, PresencePayload, CharacterCurrency } from '@/lib/types';
+import { ChatMessage, CombatLogEntry, PlayerRollEvent, PartyLootSession, DirectTransferPayload, DmCursorPayload, PingLocationPayload, VoiceSignalPayload, PresencePayload, CharacterCurrency, XCardAlertPayload, CampaignSafetySettings } from '@/lib/types';
 
 export interface RealtimeSyncPayloads {
+  SAFETY_X_CARD_TRIGGERED: { alert: XCardAlertPayload };
+  SAFETY_SETTINGS_UPDATED: { settings: CampaignSafetySettings };
   TOKEN_MOVE_3D: { combatantId: string; characterName?: string; newX: number; newZ: number; timestamp?: number };
   TOKEN_ROTATE_3D: { combatantId: string; characterName?: string; angle: number; timestamp?: number };
   LIVE_PROJECTION_UPDATE: { 
@@ -97,6 +99,8 @@ export interface UseRealtimeSyncOptions {
   onStateRequest?: (payload: RealtimeSyncPayloads['STATE_REQUEST']) => void;
   onStateSnapshot?: (payload: RealtimeSyncPayloads['STATE_SNAPSHOT']) => void;
   onDrawingAction?: (payload: RealtimeSyncPayloads['DRAWING_ACTION']) => void;
+  onXCardAlert?: (payload: RealtimeSyncPayloads['SAFETY_X_CARD_TRIGGERED']) => void;
+  onSafetySettingsUpdated?: (payload: RealtimeSyncPayloads['SAFETY_SETTINGS_UPDATED']) => void;
 }
 
 export function useRealtimeSync({
@@ -120,12 +124,14 @@ export function useRealtimeSync({
   onStateRequest,
   onStateSnapshot,
   onDrawingAction,
+  onXCardAlert,
+  onSafetySettingsUpdated,
 }: UseRealtimeSyncOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const isSubscribedRef = useRef<boolean>(false);
 
   // Store latest callbacks in refs to prevent constant re-subscriptions when references change
-  const callbacksRef = useRef({
+  const callbacksRef = useRef<UseRealtimeSyncOptions>({
     onTokenMove,
     onTokenRotate,
     onLiveProjectionChange,
@@ -145,6 +151,8 @@ export function useRealtimeSync({
     onStateRequest,
     onStateSnapshot,
     onDrawingAction,
+    onXCardAlert,
+    onSafetySettingsUpdated,
   });
 
   useEffect(() => {
@@ -168,6 +176,8 @@ export function useRealtimeSync({
       onStateRequest,
       onStateSnapshot,
       onDrawingAction,
+      onXCardAlert,
+      onSafetySettingsUpdated,
     };
   }, [
     onTokenMove,
@@ -189,6 +199,8 @@ export function useRealtimeSync({
     onStateRequest,
     onStateSnapshot,
     onDrawingAction,
+    onXCardAlert,
+    onSafetySettingsUpdated,
   ]);
 
   // Cross-tab BroadcastChannel fallback
@@ -219,6 +231,8 @@ export function useRealtimeSync({
         if (type === 'STATE_REQUEST' && cb.onStateRequest) cb.onStateRequest(data as any);
         if (type === 'STATE_SNAPSHOT' && cb.onStateSnapshot) cb.onStateSnapshot(data as any);
         if (type === 'DRAWING_ACTION' && cb.onDrawingAction) cb.onDrawingAction(data as any);
+        if (type === 'SAFETY_X_CARD_TRIGGERED' && cb.onXCardAlert) cb.onXCardAlert(data as any);
+        if (type === 'SAFETY_SETTINGS_UPDATED' && cb.onSafetySettingsUpdated) cb.onSafetySettingsUpdated(data as any);
       };
     } catch (e) {}
 
@@ -317,6 +331,14 @@ export function useRealtimeSync({
       .on('broadcast', { event: 'DRAWING_ACTION' }, ({ payload }) => {
         const cb = callbacksRef.current;
         if (cb.onDrawingAction) cb.onDrawingAction(payload);
+      })
+      .on('broadcast', { event: 'SAFETY_X_CARD_TRIGGERED' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onXCardAlert) cb.onXCardAlert(payload);
+      })
+      .on('broadcast', { event: 'SAFETY_SETTINGS_UPDATED' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onSafetySettingsUpdated) cb.onSafetySettingsUpdated(payload);
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -468,6 +490,14 @@ export function useRealtimeSync({
     sendBroadcast('DRAWING_ACTION', payload);
   }, [sendBroadcast]);
 
+  const broadcastXCardAlert = useCallback((payload: RealtimeSyncPayloads['SAFETY_X_CARD_TRIGGERED']) => {
+    sendBroadcast('SAFETY_X_CARD_TRIGGERED', payload);
+  }, [sendBroadcast]);
+
+  const broadcastSafetySettingsUpdated = useCallback((payload: RealtimeSyncPayloads['SAFETY_SETTINGS_UPDATED']) => {
+    sendBroadcast('SAFETY_SETTINGS_UPDATED', payload);
+  }, [sendBroadcast]);
+
   return {
     sendBroadcast,
     broadcastTokenMove,
@@ -489,5 +519,7 @@ export function useRealtimeSync({
     broadcastStateRequest,
     broadcastStateSnapshot,
     broadcastDrawingAction,
+    broadcastXCardAlert,
+    broadcastSafetySettingsUpdated,
   };
 }

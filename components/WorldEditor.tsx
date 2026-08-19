@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { WikiTextRenderer } from '@/components/ui/WikiTextRenderer';
 import { 
   Globe, 
   Plus, 
@@ -771,9 +772,9 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
                             >
                               {quest.name}
                             </h4>
-                            <p className="text-xs text-slate-300 mt-1 font-serif leading-relaxed line-clamp-2">
-                              {quest.shortDesc || 'Nenhuma descrição detalhada.'}
-                            </p>
+                            <div className="text-xs text-slate-300 mt-1 font-serif leading-relaxed line-clamp-3">
+                              <WikiTextRenderer text={quest.shortDesc || 'Nenhuma descrição detalhada.'} worldEntities={worldEntities} />
+                            </div>
 
                             {/* Giver NPC & Target Location */}
                             {(giverNpc || targetLoc) && (
@@ -1041,7 +1042,9 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
                         >
                           {ent.name}
                         </h4>
-                        <p className="text-xs text-slate-300 mt-1 font-serif leading-relaxed line-clamp-3">{ent.shortDesc}</p>
+                        <div className="text-xs text-slate-300 mt-1 font-serif leading-relaxed line-clamp-3">
+                          <WikiTextRenderer text={ent.shortDesc || ''} worldEntities={worldEntities} />
+                        </div>
 
                         {ent.attributes && Object.keys(ent.attributes).length > 0 && (
                           <div className="mt-3 p-2 bg-[#0a0d14] rounded-lg border border-[#2a3449] space-y-1 text-[11px]">

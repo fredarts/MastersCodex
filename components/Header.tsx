@@ -8,6 +8,7 @@ import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { useAudio } from '@/context/AudioContext';
 import { usePartyLoot } from '@/context/PartyLootContext';
+import { PWAInstallButton } from '@/components/ui/PWAInstallButton';
 
 interface HeaderProps {
   onOpenSearch: () => void;
@@ -158,6 +159,9 @@ export const Header: React.FC<HeaderProps> = ({
             Ctrl + Espaço
           </kbd>
         </button>
+
+        {/* PWA Install Button */}
+        <PWAInstallButton variant="compact" />
 
         {/* Party Loot Button */}
         <button

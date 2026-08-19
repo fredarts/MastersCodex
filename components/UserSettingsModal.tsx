@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Shield, Key, Sparkles, Cpu, Image as ImageIcon, Save, CheckCircle } from 'lucide-react';
 import { useUserSettings, UserSettings } from '@/lib/hooks/useUserSettings';
+import { PWAInstallButton } from '@/components/ui/PWAInstallButton';
 
 interface UserSettingsModalProps {
   isOpen: boolean;
@@ -273,6 +274,9 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, on
                   </select>
                 </div>
               </div>
+
+              {/* PWA App Installation Option */}
+              <PWAInstallButton variant="card" />
 
               {/* Save Button */}
               <div className="flex justify-end gap-2 pt-2 flex-shrink-0">

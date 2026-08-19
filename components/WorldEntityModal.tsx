@@ -12,6 +12,10 @@ import { useUserSettings } from '@/lib/hooks/useUserSettings';
 import { WorldEntityAiGeneratorModal } from '@/components/WorldEntityAiGeneratorModal';
 import { worldService } from '@/lib/services/worldService';
 
+import { MentionTextarea } from '@/components/ui/MentionTextarea';
+import { WikiTextRenderer } from '@/components/ui/WikiTextRenderer';
+import { Eye, Edit3 } from 'lucide-react';
+
 const generateTimestampId = (prefix: string) => `${prefix}-${Date.now()}`;
 
 interface WorldEntityModalProps {
@@ -34,6 +38,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   const [subType, setSubType] = useState('');
   const [shortDesc, setShortDesc] = useState('');
   const [fullContent, setFullContent] = useState('');
+  const [isPreviewFullContent, setIsPreviewFullContent] = useState(false);
   const [extraAttr1, setExtraAttr1] = useState('');
   const [extraAttr2, setExtraAttr2] = useState('');
   const [images, setImages] = useState<string[]>([]);
@@ -1079,19 +1084,21 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
           {(!['npc', 'monster', 'beast'].includes(category) || activeTab === 'description') ? (
             <>
               <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                  Descrição Curta / Resumo Rápido:
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>Descrição Curta / Resumo Rápido:</span>
+                  <span className="text-[10px] text-amber-400/80 font-mono font-normal">Digite @ para mencionar entidades</span>
                 </label>
-                <textarea
+                <MentionTextarea
                   rows={3}
                   required
                   value={shortDesc}
-                  onChange={(e) => {
-                    setShortDesc(e.target.value);
+                  worldEntities={worldEntities}
+                  onChangeValue={(val) => {
+                    setShortDesc(val);
                     if (aiWarningMessage) setAiWarningMessage(null);
                   }}
-                  placeholder="Resumo de fácil leitura em poucas frases para consulta rápida durante o jogo..."
-                  className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-3 text-xs text-slate-200 font-serif leading-relaxed focus:outline-none transition-all resize-none shadow-inner"
+                  placeholder="Resumo de fácil leitura em poucas frases para consulta rápida. Digite @ para vincular NPCs, locais, monstros..."
+                  className="font-serif leading-relaxed"
                 />
               </div>
 
@@ -1123,22 +1130,51 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                 </div>
               </div>
 
-              {/* Row 4: Full Lore & Master Secrets Large Textarea Textbox */}
+              {/* Row 4: Full Lore & Master Secrets Large Textarea Textbox with Wiki Preview Toggle */}
               <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-amber-400" />
-                  <span>Conteúdo Completo, Lore Detalhada & Segredos (Opcional):</span>
-                </label>
-                <textarea
-                  rows={5}
-                  value={fullContent}
-                  onChange={(e) => {
-                    setFullContent(e.target.value);
-                    if (aiWarningMessage) setAiWarningMessage(null);
-                  }}
-                  placeholder="Aprofundamento de história, regras de RPG, tabelas, encontros ou segredos exclusivos do Mestre..."
-                  className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-4 text-xs text-slate-200 font-serif leading-relaxed focus:outline-none transition-all resize-none shadow-inner"
-                ></textarea>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-amber-400" />
+                    <span>Conteúdo Completo, Lore Detalhada & Segredos (Opcional):</span>
+                  </label>
+                  {fullContent && (
+                    <button
+                      type="button"
+                      onClick={() => setIsPreviewFullContent(!isPreviewFullContent)}
+                      className="px-2 py-0.5 rounded-lg bg-[#161f30] hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 border border-[#2a3449] hover:border-amber-500/40 text-[11px] font-semibold flex items-center gap-1.5 transition-colors"
+                    >
+                      {isPreviewFullContent ? (
+                        <>
+                          <Edit3 className="w-3 h-3 text-amber-400" />
+                          <span>Modo Editor</span>
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-3 h-3 text-cyan-400" />
+                          <span>Preview Wiki Links</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {isPreviewFullContent && fullContent ? (
+                  <div className="w-full min-h-[120px] bg-[#0a0d14] border border-amber-500/40 rounded-xl p-4 text-xs text-slate-200 font-serif leading-relaxed shadow-inner">
+                    <WikiTextRenderer text={fullContent} worldEntities={worldEntities} />
+                  </div>
+                ) : (
+                  <MentionTextarea
+                    rows={5}
+                    value={fullContent}
+                    worldEntities={worldEntities}
+                    onChangeValue={(val) => {
+                      setFullContent(val);
+                      if (aiWarningMessage) setAiWarningMessage(null);
+                    }}
+                    placeholder="Aprofundamento de história, regras de RPG, segredos do Mestre... Digite @ para linkar qualquer entidade ou magia/item."
+                    className="font-serif leading-relaxed"
+                  />
+                )}
               </div>
 
               {/* Row 5: Connections & Relationships */}

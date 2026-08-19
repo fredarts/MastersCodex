@@ -38,6 +38,8 @@ import { useWorld } from '@/lib/hooks/useWorld';
 import { GameScene, SceneType, Combatant, SceneImage, WorldEntity, CustomMonster } from '@/lib/types';
 import { INITIAL_MONSTERS, SFX_BUTTONS, BGM_TRACKS } from '@/lib/srd-data';
 import { storageService } from '@/lib/services/storageService';
+import { MentionTextarea } from '@/components/ui/MentionTextarea';
+import { WikiTextRenderer } from '@/components/ui/WikiTextRenderer';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
 import { customMonsterService } from '@/lib/services/customMonsterService';
@@ -2002,29 +2004,35 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                 {activeSubTab === 'notes' && (
                   <div className="max-w-2xl mx-auto space-y-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-400 mb-1">
-                        Texto Sensorial (Para ler em voz alta aos jogadores):
+                      <label className="block text-xs font-semibold text-slate-400 mb-1 flex items-center justify-between">
+                        <span>Texto Sensorial (Para ler em voz alta aos jogadores):</span>
+                        <span className="text-[10px] text-amber-400/80 font-mono">Digite @ para mencionar</span>
                       </label>
-                      <textarea
+                      <MentionTextarea
                         rows={4}
                         value={sensoryText}
-                        onChange={(e) => setSensoryText(e.target.value)}
-                        placeholder="Ex: O som da chuva bate forte nas janelas de madeira..."
-                        className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-xl p-3 text-xs text-slate-200 focus:outline-none focus:border-purple-500 font-serif resize-none"
-                      ></textarea>
+                        worldEntities={worldEntities}
+                        onChangeValue={(val) => setSensoryText(val)}
+                        placeholder="Ex: O som da chuva bate forte nas janelas de madeira... Digite @ para vincular NPCs ou itens."
+                        className="font-serif leading-relaxed"
+                      />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-amber-400 mb-1 flex items-center gap-1">
-                        <Lock className="w-3.5 h-3.5" /> Notas Secretas do Mestre (Apenas você visualiza):
+                      <label className="block text-xs font-semibold text-amber-400 mb-1 flex items-center justify-between">
+                        <span className="flex items-center gap-1">
+                          <Lock className="w-3.5 h-3.5" /> Notas Secretas do Mestre (Apenas você visualiza):
+                        </span>
+                        <span className="text-[10px] text-amber-400/80 font-mono">Digite @ para mencionar</span>
                       </label>
-                      <textarea
+                      <MentionTextarea
                         rows={4}
                         value={secretNotes}
-                        onChange={(e) => setSecretNotes(e.target.value)}
-                        placeholder="Ex: O mordomo carrega uma chave secreta no bolso direito..."
-                        className="w-full bg-[#0a0d14] border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200 focus:outline-none focus:border-amber-500 font-serif resize-none"
-                      ></textarea>
+                        worldEntities={worldEntities}
+                        onChangeValue={(val) => setSecretNotes(val)}
+                        placeholder="Ex: O mordomo carrega uma chave secreta... Digite @ para vincular monstros, magias e estatísticas."
+                        className="border-amber-500/30 text-amber-200 font-serif leading-relaxed focus:border-amber-500"
+                      />
                     </div>
                   </div>
                 )}

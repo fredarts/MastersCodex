@@ -246,6 +246,8 @@ export interface CampaignPartyMember {
   avatarUrl?: string;
 }
 
+export * from './types/safety';
+
 export interface UserCampaign {
   id: string;
   dmId: string;
@@ -256,6 +258,7 @@ export interface UserCampaign {
   role: UserRoleMode;
   characterName?: string;
   partyMembers?: CampaignPartyMember[];
+  safetySettings?: import('./types/safety').CampaignSafetySettings;
 }
 
 export interface StatusDuration {

@@ -4,6 +4,7 @@ import React from 'react';
 import { BookOpen } from 'lucide-react';
 import { useSession } from '@/lib/hooks/useSession';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
+import { WikiTextRenderer } from '@/components/ui/WikiTextRenderer';
 
 interface NarratorTeleprompterPanelProps {
   onSlideChange: (index: number) => Promise<void>;
@@ -26,17 +27,16 @@ export const NarratorTeleprompterPanel: React.FC<NarratorTeleprompterPanelProps>
           </span>
 
           {/* Font Size controls */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <button
-              onClick={() => setTeleprompterFontSize((prev) => Math.max(12, prev - 2))}
+              onClick={() => setTeleprompterFontSize(Math.max(12, teleprompterFontSize - 2))}
               className="w-6 h-6 rounded bg-[#161c28] border border-[#2a3449] hover:border-slate-500 text-xs font-bold text-slate-300 flex items-center justify-center transition-all cursor-pointer"
               title="Diminuir Fonte"
             >
               A-
             </button>
-            <span className="text-[10px] text-slate-400 font-bold font-mono">{teleprompterFontSize}px</span>
             <button
-              onClick={() => setTeleprompterFontSize((prev) => Math.min(32, prev + 2))}
+              onClick={() => setTeleprompterFontSize(Math.min(28, teleprompterFontSize + 2))}
               className="w-6 h-6 rounded bg-[#161c28] border border-[#2a3449] hover:border-slate-500 text-xs font-bold text-slate-300 flex items-center justify-center transition-all cursor-pointer"
               title="Aumentar Fonte"
             >
@@ -48,7 +48,7 @@ export const NarratorTeleprompterPanel: React.FC<NarratorTeleprompterPanelProps>
         {/* Teleprompter text content */}
         {activeScene ? (
           <div
-            className="font-serif leading-relaxed italic text-amber-200 select-text p-3 rounded-xl bg-[#121824]/40 border border-[#2a3449]/40 min-h-[120px] whitespace-pre-wrap"
+            className="font-serif leading-relaxed italic text-amber-200 select-text p-3 rounded-xl bg-[#121824]/40 border border-[#2a3449]/40 min-h-[120px]"
             style={{ fontSize: `${teleprompterFontSize}px` }}
           >
             {(() => {
@@ -56,9 +56,13 @@ export const NarratorTeleprompterPanel: React.FC<NarratorTeleprompterPanelProps>
               const targetText = slideObj
                 ? slideObj.secretNotes || slideObj.overlayText || activeScene.sensoryText
                 : activeScene.sensoryText;
-              return targetText
-                ? `"${targetText}"`
-                : 'Nenhum texto sensorial ou nota de teleprompter configurada para este slide.';
+              return targetText ? (
+                <WikiTextRenderer text={targetText} />
+              ) : (
+                <span className="text-slate-500 font-sans not-italic text-xs">
+                  Nenhum texto sensorial ou nota de teleprompter configurada para este slide.
+                </span>
+              );
             })()}
           </div>
         ) : (
@@ -73,7 +77,9 @@ export const NarratorTeleprompterPanel: React.FC<NarratorTeleprompterPanelProps>
             <div className="text-[9px] font-bold text-purple-400 uppercase tracking-widest font-mono">
               🔑 Notas Secretas da Cena (Apenas Narrador)
             </div>
-            <p className="text-xs text-purple-200 leading-relaxed font-serif">{activeScene.secretNotes}</p>
+            <div className="text-xs text-purple-200 leading-relaxed font-serif">
+              <WikiTextRenderer text={activeScene.secretNotes} />
+            </div>
           </div>
         )}
       </div>

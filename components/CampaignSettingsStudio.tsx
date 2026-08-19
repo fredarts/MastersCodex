@@ -24,8 +24,10 @@ import {
   RefreshCw,
   Pencil,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ShieldAlert,
 } from 'lucide-react';
+import { LinesAndVeilsPanel } from '@/components/safety/LinesAndVeilsPanel';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useWorld } from '@/lib/hooks/useWorld';
@@ -61,7 +63,7 @@ export const CampaignSettingsStudio: React.FC = () => {
     return !c.worldId || c.worldId === activeWorld.id;
   });
 
-  const [activeTab, setActiveTab] = useState<'feed' | 'roster' | 'party' | 'houserules' | 'ai' | 'export'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'roster' | 'party' | 'houserules' | 'safety' | 'ai' | 'export'>('feed');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('masters_codex_campaign_settings_sidebar_collapsed');
@@ -477,6 +479,19 @@ export const CampaignSettingsStudio: React.FC = () => {
               >
                 <Scroll className={`w-4 h-4 flex-shrink-0 ${activeTab === 'houserules' ? 'text-slate-950' : 'text-purple-400'}`} />
                 {!isSidebarCollapsed && <span className="truncate">Regras da Casa ({houseRules.length})</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('safety')}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'safety'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                }`}
+                title="Limites & Segurança (Safety Tools)"
+              >
+                <ShieldAlert className={`w-4 h-4 flex-shrink-0 ${activeTab === 'safety' ? 'text-slate-950' : 'text-rose-400'}`} />
+                {!isSidebarCollapsed && <span className="truncate">Limites & Segurança</span>}
               </button>
 
               <button
@@ -911,6 +926,20 @@ export const CampaignSettingsStudio: React.FC = () => {
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'safety' && (
+          <div className="max-w-4xl mx-auto p-6">
+            <LinesAndVeilsPanel
+              campaign={activeCampaign}
+              onSave={async (newSettings) => {
+                await updateCampaign({
+                  ...activeCampaign,
+                  safetySettings: newSettings,
+                });
+              }}
+            />
           </div>
         )}
 
