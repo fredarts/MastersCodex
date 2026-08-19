@@ -26,9 +26,9 @@ import { useCombatEngine } from '@/lib/hooks/useCombatEngine';
 import { useSceneProjection } from '@/lib/hooks/useSceneProjection';
 import { getAttributeModifier } from '@/lib/dnd5e-calculator';
 import { getSpellAoEDefinition } from '@/lib/dnd5e-spells-shapes';
-import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { Combatant, CharacterSheet, CharacterSpell, CombatLogEntry, ConditionType } from '@/lib/types';
 import { BattleSetupMode } from '@/components/live-cockpit/BattleSetupModal';
+import { parseDamageInfo, calculateEffectiveDamage } from '@/lib/dnd5e-damage-resolver';
 
 interface LiveCockpitStudioProps {
   onGenerateLoot: () => void;
@@ -620,18 +620,46 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     }
 
     const isAttack = title.startsWith('Ataque');
+    const { formula: dmgFormula, damageType: dmgType } = parseDamageInfo(actionDesc);
 
     // Open BG3 Overlay in unrolled state, passing onRollComplete callback
     setBg3DiceOverlay({
       title,
       actorName: currentActor?.name,
       targetName: target?.name,
+      targetCombatant: target,
       modifier: mod,
       targetAc: target?.ac,
       difficultyClass: target?.ac,
-      damageDiceFormula: actionDesc || '1d8',
+      damageDiceFormula: dmgFormula,
+      damageType: dmgType,
       isRolling: false,
       phase: 'd20',
+      onApplyDamage: (targetId: string, effectiveAmount: number, explanation?: string) => {
+        const currentTarget = combatants.find((c) => c.id === targetId) || target;
+        const prevHp = currentTarget ? currentTarget.hp : 0;
+        handleHpChange(targetId, -effectiveAmount);
+        const newHp = Math.max(0, prevHp - effectiveAmount);
+
+        addLogEntry({
+          actorId: currentActor?.id,
+          actorName: currentActor?.name,
+          targetId,
+          targetName: currentTarget?.name,
+          eventType: 'damage',
+          amount: effectiveAmount,
+          description: `💥 ${currentActor?.name} causou ${effectiveAmount} de dano (${dmgType}) em ${currentTarget?.name} (HP: ${prevHp} → ${newHp}). ${explanation || ''}`,
+        });
+
+        if (newHp === 0 && currentTarget) {
+          addLogEntry({
+            actorId: currentTarget.id,
+            actorName: currentTarget.name,
+            eventType: 'death',
+            description: `💀 ${currentTarget.name} foi derrotado em combate!`,
+          });
+        }
+      },
       onRollComplete: (finalTotal: number, isHitResult: boolean, roll: number) => {
         const isCrit = roll === 20;
         const isFail = roll === 1;
@@ -665,33 +693,6 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
               isFail,
               description: desc,
             });
-
-            if (isHit) {
-              const dmg = parseAndRollDamage(actionDesc, mod, false);
-              const prevHp = target.hp;
-              handleHpChange(target.id, -dmg);
-              const newHp = Math.max(0, target.hp - dmg);
-              setBg3DiceOverlay((prev) => (prev ? { ...prev, damageAmount: dmg } : null));
-
-              addLogEntry({
-                actorId: currentActor.id,
-                actorName: currentActor.name,
-                targetId: target.id,
-                targetName: target.name,
-                eventType: 'damage',
-                amount: dmg,
-                description: `💥 ${currentActor.name} causou ${dmg} de dano em ${target.name} (HP: ${prevHp} → ${newHp})`,
-              });
-
-              if (newHp === 0) {
-                addLogEntry({
-                  actorId: target.id,
-                  actorName: target.name,
-                  eventType: 'death',
-                  description: `💀 ${target.name} foi derrotado em combate!`,
-                });
-              }
-            }
           } else {
             addLogEntry({
               actorId: currentActor.id,

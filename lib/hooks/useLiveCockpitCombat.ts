@@ -5,6 +5,8 @@ import { Combatant } from '@/lib/types';
 import { useAudio } from '@/context/AudioContext';
 import { Bg3DiceOverlayState } from '@/lib/stores/useLiveCockpitStudioStore';
 
+import { parseDamageInfo } from '@/lib/dnd5e-damage-resolver';
+
 export type { Bg3DiceOverlayState };
 
 export function useLiveCockpitCombat(
@@ -82,13 +84,7 @@ export function useLiveCockpitCombat(
       isHit = isCrit || (!isFail && total >= targetAc);
     }
 
-    let damageFormula: string | undefined = undefined;
-    if (actionDesc) {
-      const dmgMatch = actionDesc.match(/(\d+)d\d+(?:\s*[\+\-]\s*\d+)?/i);
-      if (dmgMatch) {
-        damageFormula = actionDesc.match(/(\d+d\d+(?:\s*[\+\-]\s*\d+)?)/i)?.[1];
-      }
-    }
+    const { formula: damageFormula, damageType } = parseDamageInfo(actionDesc);
 
     playDiceSound(1);
 
@@ -97,6 +93,7 @@ export function useLiveCockpitCombat(
       title,
       actorName: currentActor?.name || 'Combatente',
       targetName: target?.name,
+      targetCombatant: target,
       d20Roll: d20,
       modifier: mod,
       totalRoll: total,
@@ -105,6 +102,7 @@ export function useLiveCockpitCombat(
       isCrit,
       isFail,
       damageDiceFormula: damageFormula,
+      damageType,
       isRolling: true,
       phase: 'd20',
     });

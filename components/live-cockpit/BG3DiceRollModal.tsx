@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Lock, Shield, Check, X, Plus, Minus, ArrowUpRight, Award, Zap } from 'lucide-react';
+import { Sparkles, Lock, Shield, Check, X, Plus, Minus, ArrowUpRight, Award, Zap, Flame, ShieldAlert, HeartCrack } from 'lucide-react';
 import { Dice3DCanvas, DieType } from '@/components/Dice3DCanvas';
 import { Bg3DiceOverlayState } from '@/lib/stores/useLiveCockpitStudioStore';
 import { Bg3RollModifierCard } from '@/lib/types';
 import { useAudio } from '@/context/AudioContext';
+import { calculateEffectiveDamage } from '@/lib/dnd5e-damage-resolver';
+import { toast } from 'sonner';
 
 interface BG3DiceRollModalProps {
   state: Bg3DiceOverlayState | null;
@@ -114,6 +116,7 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
   const [hasDamageRolled, setHasDamageRolled] = useState<boolean>(false);
   const [damageRollResult, setDamageRollResult] = useState<number>(0);
   const [animatedDamageDie, setAnimatedDamageDie] = useState<number>(1);
+  const [manualDamageModifierRatio, setManualDamageModifierRatio] = useState<number | null>(null);
 
   // Helper: Parse formula like "1d8+3"
   const dmgInfo = React.useMemo(() => {
@@ -136,6 +139,35 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
 
     return { dieType, count, sides, bonus };
   }, [state?.damageDiceFormula]);
+
+  // Cálculo de Dano Efetivo considerando defesas (Resistências, Imunidades, Vulnerabilidades)
+  const effectiveDamageData = React.useMemo(() => {
+    const baseResult = calculateEffectiveDamage({
+      rawDamage: damageRollResult,
+      damageType: state?.damageType,
+      target: state?.targetCombatant,
+    });
+
+    if (manualDamageModifierRatio !== null) {
+      const overrideVal = Math.floor(damageRollResult * manualDamageModifierRatio);
+      return {
+        ...baseResult,
+        effectiveDamage: overrideVal,
+        multiplier: manualDamageModifierRatio,
+        badgeLabel:
+          manualDamageModifierRatio === 0
+            ? `🛡️ Imunidade (0%)`
+            : manualDamageModifierRatio === 0.5
+            ? `🛡️ Resistência (50%)`
+            : manualDamageModifierRatio === 2
+            ? `⚠️ Vulnerabilidade (200%)`
+            : `Integral (100%)`,
+        explanation: `Multiplicador manual (${manualDamageModifierRatio * 100}%) aplicado pelo Mestre: ${damageRollResult} ➔ ${overrideVal}.`,
+      };
+    }
+
+    return baseResult;
+  }, [damageRollResult, state?.damageType, state?.targetCombatant, manualDamageModifierRatio]);
 
   const isCrit = winningD20 === 20;
   const isFail = winningD20 === 1;
@@ -178,6 +210,33 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
       handleStartDamageRoll();
     }
   }, [modalPhase, hasDamageRolled, isDamageRolling, handleStartDamageRoll]);
+
+  // Aplicar dano ao alvo
+  const handleApplyDamage = () => {
+    const targetId = state?.targetCombatant?.id;
+    const targetName = state?.targetCombatant?.name || state?.targetName || 'o alvo';
+    const effectiveVal = effectiveDamageData.effectiveDamage;
+
+    if (state?.onApplyDamage && targetId) {
+      state.onApplyDamage(targetId, effectiveVal, effectiveDamageData.explanation);
+    } else if (targetId) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('masters_codex_combat_text', {
+          detail: { combatantId: targetId, type: 'damage', amount: effectiveVal }
+        }));
+        window.dispatchEvent(new CustomEvent('masters_codex_apply_damage', {
+          detail: { targetId, amount: effectiveVal, damageType: effectiveDamageData.damageType }
+        }));
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('masters_codex_clear_target_selection'));
+    }
+
+    toast.success(`💥 ${effectiveVal} de dano (${effectiveDamageData.damageType}) aplicado em ${targetName}!`);
+    onClose();
+  };
 
   // Handler para quando o dado D20 para fisicamente na face superior
   const handleD20Settled = React.useCallback((dieIndex: 1 | 2, result: { value: number; isCrit: boolean; isFail: boolean }) => {
@@ -480,91 +539,172 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
 
         {/* Phase 2 Post-Roll Damage Result Display */}
         {modalPhase === 'damage' && hasDamageRolled && (
-          <div className="mt-3 text-center space-y-1 animate-in zoom-in-95 duration-300">
-            <div className="text-2xl font-serif font-black text-amber-400 uppercase tracking-wider drop-shadow-[0_0_15px_rgba(245,158,11,0.8)] animate-bounce">
-              💥 {damageRollResult} DANO CAUSADO!
+          <div className="mt-3 text-center space-y-2.5 animate-in zoom-in-95 duration-300 w-full">
+            {/* Dano Efetivo Final */}
+            <div className="space-y-1">
+              <div className="text-3xl md:text-4xl font-serif font-black text-amber-300 uppercase tracking-wider drop-shadow-[0_0_15px_rgba(245,158,11,0.8)]">
+                💥 {effectiveDamageData.effectiveDamage} DANO
+              </div>
+              <div className="text-xs font-mono text-slate-300">
+                Fórmula: <strong className="text-amber-300">{state.damageDiceFormula}</strong> • Tipo: <strong className="text-amber-200">{effectiveDamageData.damageType}</strong>
+                {effectiveDamageData.rawDamage !== effectiveDamageData.effectiveDamage && (
+                  <span className="text-slate-400 ml-1 font-mono">
+                    (Rolado: {effectiveDamageData.rawDamage})
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="text-xs font-mono text-slate-300">
-              Fórmula de Dano: <strong className="text-amber-300">{state.damageDiceFormula}</strong>
+
+            {/* Badge de Resistência / Imunidade / Vulnerabilidade */}
+            {effectiveDamageData.modifierType !== 'none' && (
+              <div className={`mx-auto max-w-sm px-3 py-1.5 rounded-xl border text-xs font-sans flex items-center justify-center gap-1.5 shadow-md ${
+                effectiveDamageData.modifierType === 'immunity'
+                  ? 'bg-indigo-950/80 border-indigo-500/50 text-indigo-200'
+                  : effectiveDamageData.modifierType === 'resistance'
+                  ? 'bg-cyan-950/80 border-cyan-500/50 text-cyan-200'
+                  : 'bg-rose-950/80 border-rose-500/50 text-rose-200'
+              }`}>
+                {effectiveDamageData.modifierType === 'immunity' && <Shield className="w-4 h-4 text-indigo-400 shrink-0" />}
+                {effectiveDamageData.modifierType === 'resistance' && <ShieldAlert className="w-4 h-4 text-cyan-400 shrink-0" />}
+                {effectiveDamageData.modifierType === 'vulnerability' && <HeartCrack className="w-4 h-4 text-rose-400 shrink-0" />}
+                <span className="font-bold">{effectiveDamageData.badgeLabel}</span>
+                <span className="text-[10px] opacity-80 ml-1">({effectiveDamageData.explanation})</span>
+              </div>
+            )}
+
+            {/* Ajuste Rápido do Mestre (Multiplicadores Manuais) */}
+            <div className="pt-1 border-t border-slate-800/80">
+              <div className="text-[9px] font-mono uppercase text-slate-400 mb-1">Ajuste de Dano (Mestre):</div>
+              <div className="flex items-center justify-center gap-1">
+                {[
+                  { label: 'Auto', ratio: null },
+                  { label: '100%', ratio: 1 },
+                  { label: 'Metade (50%)', ratio: 0.5 },
+                  { label: 'Dobro (200%)', ratio: 2 },
+                  { label: 'Imune (0%)', ratio: 0 },
+                ].map((item) => {
+                  const isActive = manualDamageModifierRatio === item.ratio;
+                  return (
+                    <button
+                      key={item.label}
+                      type="button"
+                      onClick={() => setManualDamageModifierRatio(item.ratio)}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                        isActive
+                          ? 'bg-amber-500 text-slate-950 shadow-sm'
+                          : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 border border-slate-700/60'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Bottom Modifier Cards Array (Cartas de Bônus estilo BG3) */}
-      <div className="z-10 mt-6 w-full max-w-xl space-y-2 animate-in slide-in-from-bottom-6 duration-300">
-        <div className="flex items-center justify-between px-2">
-          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">
-            Bônus & Modificadores Ativos
-          </span>
-          <span className="text-xs font-serif font-bold text-amber-300">
-            Total Bônus: {totalEnabledModifier >= 0 ? `+${totalEnabledModifier}` : totalEnabledModifier}
-          </span>
-        </div>
+      {/* Bottom Modifier Cards Array (Cartas de Bônus estilo BG3) - Apenas na fase d20 */}
+      {modalPhase === 'd20' && (
+        <div className="z-10 mt-6 w-full max-w-xl space-y-2 animate-in slide-in-from-bottom-6 duration-300">
+          <div className="flex items-center justify-between px-2">
+            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">
+              Bônus & Modificadores Ativos
+            </span>
+            <span className="text-xs font-serif font-bold text-amber-300">
+              Total Bônus: {totalEnabledModifier >= 0 ? `+${totalEnabledModifier}` : totalEnabledModifier}
+            </span>
+          </div>
 
-        <div className="flex items-center justify-center gap-2 overflow-x-auto py-1 scrollbar-none">
-          {modifierCards.map((card, idx) => {
-            const isEnabled = card.isEnabled !== false;
-            const isHighlighted = activeBonusIndex === idx;
+          <div className="flex items-center justify-center gap-2 overflow-x-auto py-1 scrollbar-none">
+            {modifierCards.map((card, idx) => {
+              const isEnabled = card.isEnabled !== false;
+              const isHighlighted = activeBonusIndex === idx;
 
-            return (
-              <div
-                key={card.id}
-                className={`relative group min-w-[100px] max-w-[130px] p-2.5 rounded-2xl border transition-all duration-300 flex flex-col items-center text-center ${
-                  isHighlighted
-                    ? 'bg-amber-500/30 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.6)] scale-105'
-                    : isEnabled
-                    ? 'bg-[#121826]/90 border-amber-500/40 text-slate-200'
-                    : 'bg-slate-900/50 border-slate-800 text-slate-600 opacity-60'
-                }`}
-              >
-                {/* Optional Toggle (- / +) Button */}
-                {card.isOptional && !hasRolled && !isRolling && (
-                  <button
-                    type="button"
-                    onClick={() => handleToggleCard(card.id)}
-                    className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold border transition-colors ${
-                      isEnabled
-                        ? 'bg-rose-900/80 border-rose-500 text-rose-200 hover:bg-rose-700'
-                        : 'bg-emerald-900/80 border-emerald-500 text-emerald-200 hover:bg-emerald-700'
-                    }`}
-                    title={isEnabled ? 'Remover bônus' : 'Ativar bônus'}
-                  >
-                    {isEnabled ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                  </button>
-                )}
+              return (
+                <div
+                  key={card.id}
+                  className={`relative group min-w-[100px] max-w-[130px] p-2.5 rounded-2xl border transition-all duration-300 flex flex-col items-center text-center ${
+                    isHighlighted
+                      ? 'bg-amber-500/30 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.6)] scale-105'
+                      : isEnabled
+                      ? 'bg-[#121826]/90 border-amber-500/40 text-slate-200'
+                      : 'bg-slate-900/50 border-slate-800 text-slate-600 opacity-60'
+                  }`}
+                >
+                  {/* Optional Toggle (- / +) Button */}
+                  {card.isOptional && !hasRolled && !isRolling && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCard(card.id)}
+                      className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold border transition-colors ${
+                        isEnabled
+                          ? 'bg-rose-900/80 border-rose-500 text-rose-200 hover:bg-rose-700'
+                          : 'bg-emerald-900/80 border-emerald-500 text-emerald-200 hover:bg-emerald-700'
+                      }`}
+                      title={isEnabled ? 'Remover bônus' : 'Ativar bônus'}
+                    >
+                      {isEnabled ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                    </button>
+                  )}
 
-                {/* Card Numeric Value */}
-                <div className={`text-base font-serif font-black ${isEnabled ? 'text-amber-300' : 'text-slate-500'}`}>
-                  {card.value}
-                </div>
-
-                {/* Icon */}
-                <div className="my-1 text-amber-400/80">
-                  {card.iconType === 'attribute' && <Award className="w-4 h-4" />}
-                  {card.iconType === 'proficiency' && <Award className="w-4 h-4 text-emerald-400" />}
-                  {card.iconType === 'spell' && <Sparkles className="w-4 h-4 text-cyan-400" />}
-                  {card.iconType === 'item' && <Zap className="w-4 h-4 text-orange-400" />}
-                  {card.iconType === 'advantage' && <Zap className="w-4 h-4 text-purple-400" />}
-                  {card.iconType === 'condition' && <Shield className="w-4 h-4 text-rose-400" />}
-                </div>
-
-                {/* Label & Source */}
-                <div className="text-[10px] font-bold truncate max-w-full leading-tight">{card.label}</div>
-                {card.sourceName && (
-                  <div className="text-[8px] text-slate-400 truncate max-w-full italic mt-0.5">
-                    {card.sourceName}
+                  {/* Card Numeric Value */}
+                  <div className={`text-base font-serif font-black ${isEnabled ? 'text-amber-300' : 'text-slate-500'}`}>
+                    {card.value}
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
-      {/* Bottom Dismiss / Continue Action */}
+                  {/* Icon */}
+                  <div className="my-1 text-amber-400/80">
+                    {card.iconType === 'attribute' && <Award className="w-4 h-4" />}
+                    {card.iconType === 'proficiency' && <Award className="w-4 h-4 text-emerald-400" />}
+                    {card.iconType === 'spell' && <Sparkles className="w-4 h-4 text-cyan-400" />}
+                    {card.iconType === 'item' && <Zap className="w-4 h-4 text-orange-400" />}
+                    {card.iconType === 'advantage' && <Zap className="w-4 h-4 text-purple-400" />}
+                    {card.iconType === 'condition' && <Shield className="w-4 h-4 text-rose-400" />}
+                  </div>
+
+                  {/* Label & Source */}
+                  <div className="text-[10px] font-bold truncate max-w-full leading-tight">{card.label}</div>
+                  {card.sourceName && (
+                    <div className="text-[8px] text-slate-400 truncate max-w-full italic mt-0.5">
+                      {card.sourceName}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Dismiss / Apply Damage Action Buttons */}
       <div className="z-10 mt-6 flex flex-col items-center gap-2">
-        {hasRolled ? (
+        {modalPhase === 'damage' && hasDamageRolled ? (
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={handleApplyDamage}
+              className="px-10 py-3 bg-gradient-to-r from-rose-500 via-amber-500 to-amber-600 hover:from-rose-400 hover:to-amber-400 text-slate-950 font-serif font-black text-sm uppercase tracking-wider rounded-2xl shadow-2xl transition-all transform hover:scale-105 active:scale-95 border border-amber-200 cursor-pointer flex items-center gap-2"
+            >
+              <span>💥 Aplicar Dano no Alvo</span>
+              <span className="bg-slate-950 text-amber-300 px-2 py-0.5 rounded-lg text-xs font-mono">
+                -{effectiveDamageData.effectiveDamage} PV
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('masters_codex_clear_target_selection'));
+                }
+                onClose();
+              }}
+              className="text-xs text-slate-400 hover:text-slate-200 uppercase tracking-widest font-mono underline cursor-pointer"
+            >
+              Fechar sem aplicar dano
+            </button>
+          </div>
+        ) : hasRolled ? (
           <>
             {!(modalPhase === 'd20' && isSuccess && state.damageDiceFormula) && (
               <button

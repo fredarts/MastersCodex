@@ -11,10 +11,14 @@ import {
   Eye, 
   EyeOff, 
   Skull,
-  Plus
+  Plus,
+  ShieldAlert,
+  HeartCrack,
+  Flame
 } from 'lucide-react';
 import { Combatant } from '@/lib/types';
 import { INITIAL_MONSTERS } from '@/lib/srd-data';
+import { DND5E_DAMAGE_TYPES } from '@/lib/dnd5e-damage-resolver';
 
 interface MonsterStatBlockModalProps {
   combatant: Combatant;
@@ -35,6 +39,7 @@ export const MonsterStatBlockModal: React.FC<MonsterStatBlockModalProps> = ({
 }) => {
   const [isPrivate, setIsPrivate] = useState(true);
   const [hpInput, setHpInput] = useState('');
+  const [showDefenseMenu, setShowDefenseMenu] = useState<'res' | 'imm' | 'vuln' | null>(null);
 
   if (!isOpen) return null;
 
@@ -59,12 +64,26 @@ export const MonsterStatBlockModal: React.FC<MonsterStatBlockModalProps> = ({
     int: combatant.int ?? srd?.int ?? 10,
     wis: combatant.wis ?? srd?.wis ?? 10,
     cha: combatant.cha ?? srd?.cha ?? 10,
+    damageResistances: combatant.damageResistances || srd?.damageResistances || [],
+    damageImmunities: combatant.damageImmunities || srd?.damageImmunities || [],
+    damageVulnerabilities: combatant.damageVulnerabilities || srd?.damageVulnerabilities || [],
   };
 
   const getMod = (val: number) => Math.floor((val - 10) / 2);
   const formatMod = (val: number) => {
     const mod = getMod(val);
     return mod >= 0 ? `+${mod}` : `${mod}`;
+  };
+
+  // Toggle Resistências
+  const handleToggleDefense = (type: 'damageResistances' | 'damageImmunities' | 'damageVulnerabilities', dmgName: string) => {
+    const currentList = combatant[type] || [];
+    const exists = currentList.some((x) => x.toLowerCase() === dmgName.toLowerCase());
+    const nextList = exists
+      ? currentList.filter((x) => x.toLowerCase() !== dmgName.toLowerCase())
+      : [...currentList, dmgName];
+
+    onUpdateCombatant({ ...combatant, [type]: nextList });
   };
 
   // Rolagem rápida de Atributos/Testes
@@ -216,6 +235,131 @@ export const MonsterStatBlockModal: React.FC<MonsterStatBlockModalProps> = ({
               >
                 Cura
               </button>
+            </div>
+          </div>
+
+          {/* Defesas & Imunidades Elementais */}
+          <div className="bg-[#121824]/60 border border-slate-800/80 p-2.5 rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                <ShieldAlert className="w-3 h-3 text-amber-400" />
+                Defesas Elementais (5e)
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setShowDefenseMenu(showDefenseMenu === 'res' ? null : 'res')}
+                  className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-800/60 text-cyan-300 transition-colors"
+                >
+                  + Resistência
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDefenseMenu(showDefenseMenu === 'imm' ? null : 'imm')}
+                  className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-950/60 hover:bg-indigo-900/80 border border-indigo-800/60 text-indigo-300 transition-colors"
+                >
+                  + Imunidade
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDefenseMenu(showDefenseMenu === 'vuln' ? null : 'vuln')}
+                  className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/60 text-rose-300 transition-colors"
+                >
+                  + Vulnerabilidade
+                </button>
+              </div>
+            </div>
+
+            {/* Menu seletor rápido de tipos de dano */}
+            {showDefenseMenu && (
+              <div className="p-2 bg-[#0d121c] border border-amber-500/30 rounded-xl space-y-1.5 animate-in fade-in duration-200">
+                <div className="text-[9px] font-mono text-amber-300 font-bold uppercase">
+                  Selecionar tipo de dano para {showDefenseMenu === 'res' ? 'Resistência' : showDefenseMenu === 'imm' ? 'Imunidade' : 'Vulnerabilidade'}:
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {DND5E_DAMAGE_TYPES.map((dt) => {
+                    const currentTypeKey = showDefenseMenu === 'res'
+                      ? 'damageResistances'
+                      : showDefenseMenu === 'imm'
+                      ? 'damageImmunities'
+                      : 'damageVulnerabilities';
+                    const isSelected = (combatant[currentTypeKey] || []).some(x => x.toLowerCase() === dt.labelPt.toLowerCase());
+
+                    return (
+                      <button
+                        key={dt.id}
+                        type="button"
+                        onClick={() => handleToggleDefense(currentTypeKey, dt.labelPt)}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-all ${
+                          isSelected
+                            ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                        }`}
+                      >
+                        {dt.labelPt}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Badges de Defesas Ativas */}
+            <div className="space-y-1">
+              {/* Resistências */}
+              {stats.damageResistances.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[9px] font-mono font-bold text-cyan-400 uppercase">Resistências (50%):</span>
+                  {stats.damageResistances.map((res: string) => (
+                    <span
+                      key={res}
+                      onClick={() => handleToggleDefense('damageResistances', res)}
+                      className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-cyan-950/80 border border-cyan-800/80 text-cyan-300 cursor-pointer hover:bg-rose-950 hover:border-rose-700 hover:text-rose-300 transition-colors"
+                      title="Clique para remover"
+                    >
+                      {res} ×
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Imunidades */}
+              {stats.damageImmunities.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[9px] font-mono font-bold text-indigo-400 uppercase">Imunidades (0%):</span>
+                  {stats.damageImmunities.map((imm: string) => (
+                    <span
+                      key={imm}
+                      onClick={() => handleToggleDefense('damageImmunities', imm)}
+                      className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-950/80 border border-indigo-800/80 text-indigo-300 cursor-pointer hover:bg-rose-950 hover:border-rose-700 hover:text-rose-300 transition-colors"
+                      title="Clique para remover"
+                    >
+                      {imm} ×
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Vulnerabilidades */}
+              {stats.damageVulnerabilities.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[9px] font-mono font-bold text-rose-400 uppercase">Vulnerabilidades (200%):</span>
+                  {stats.damageVulnerabilities.map((vuln: string) => (
+                    <span
+                      key={vuln}
+                      onClick={() => handleToggleDefense('damageVulnerabilities', vuln)}
+                      className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-950/80 border border-rose-800/80 text-rose-300 cursor-pointer hover:bg-slate-900 hover:border-slate-700 hover:text-slate-300 transition-colors"
+                      title="Clique para remover"
+                    >
+                      {vuln} ×
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {stats.damageResistances.length === 0 && stats.damageImmunities.length === 0 && stats.damageVulnerabilities.length === 0 && (
+                <div className="text-[10px] text-slate-500 italic">Nenhuma resistência ou imunidade cadastrada.</div>
+              )}
             </div>
           </div>
 

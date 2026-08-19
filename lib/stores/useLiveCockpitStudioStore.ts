@@ -31,10 +31,13 @@ export interface Bg3DiceOverlayState {
   isCrit?: boolean;
   isFail?: boolean;
   damageDiceFormula?: string;
+  damageType?: string;
   damageAmount?: number;
+  targetCombatant?: Combatant;
   isRolling: boolean;
   phase: 'd20' | 'damage';
   onRollComplete?: (finalTotal: number, isHit: boolean, d20Value: number) => void;
+  onApplyDamage?: (targetId: string, amount: number, explanation?: string) => void;
 }
 
 import { RangeInfo, RangeStatus } from '../utils/dndRangeUtils';

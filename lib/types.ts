@@ -312,6 +312,10 @@ export interface Combatant {
   maxLegendaryActions?: number; // Máximo por rodada (padrão: 3)
   hasLairActions?: boolean;
   lairActions?: { name: string; desc: string }[];
+  damageResistances?: string[];
+  damageImmunities?: string[];
+  damageVulnerabilities?: string[];
+  conditionImmunities?: string[];
 }
 
 export type WallType = 'wall' | 'door' | 'secret_door' | 'window' | 'terrain' | 'illusion';
@@ -416,6 +420,10 @@ export interface SRDMonster {
   tokenImageUrl?: string;
   modelUrl?: string;
   tokenType?: 'billboard' | '3d';
+  damageResistances?: string[];
+  damageImmunities?: string[];
+  damageVulnerabilities?: string[];
+  conditionImmunities?: string[];
 }
 
 export interface CustomMonsterAction {
@@ -460,6 +468,10 @@ export interface CustomMonster {
   abilities?: { name: string; desc: string }[];
   actions?: CustomMonsterAction[];
   spells?: CustomMonsterSpell[];
+  damageResistances?: string[];
+  damageImmunities?: string[];
+  damageVulnerabilities?: string[];
+  conditionImmunities?: string[];
   createdAt?: string;
 }
 
@@ -930,6 +942,10 @@ export interface CharacterSheet {
   classFeatures?: ClassFeature[];
   feats?: CharacterFeat[];
   conditions?: ConditionType[];
+  damageResistances?: string[];
+  damageImmunities?: string[];
+  damageVulnerabilities?: string[];
+  conditionImmunities?: string[];
 
   updatedAt?: string;
 }
