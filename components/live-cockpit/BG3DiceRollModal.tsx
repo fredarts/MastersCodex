@@ -149,37 +149,28 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
     );
   };
 
+  const diceRollsRef = React.useRef({ d1: state?.d20Roll || 1, d2: state?.secondD20Roll || 1 });
+
+  // Handler para quando o dado de dano 3D para fisicamente
+  const handleDamageDieSettled = React.useCallback((result: { value: number }) => {
+    setIsDamageRolling(false);
+    setHasDamageRolled(true);
+
+    const baseVal = result.value;
+    const finalDamage = state?.damageAmount !== undefined
+      ? state.damageAmount
+      : Math.max(1, baseVal + dmgInfo.bonus);
+
+    setDamageRollResult(finalDamage);
+  }, [state, dmgInfo]);
+
   // Trigger Phase 2 3D Damage Roll
   const handleStartDamageRoll = React.useCallback(() => {
     if (isDamageRolling || hasDamageRolled) return;
 
     playDiceSound(dmgInfo.count);
     setIsDamageRolling(true);
-
-    const interval = setInterval(() => {
-      setAnimatedDamageDie(Math.floor(Math.random() * dmgInfo.sides) + 1);
-    }, 60);
-
-    let rawTotal = 0;
-    for (let i = 0; i < dmgInfo.count; i++) {
-      rawTotal += Math.floor(Math.random() * dmgInfo.sides) + 1;
-    }
-    if (isCrit) {
-      for (let i = 0; i < dmgInfo.count; i++) {
-        rawTotal += Math.floor(Math.random() * dmgInfo.sides) + 1;
-      }
-    }
-    const finalDamage = state?.damageAmount !== undefined
-      ? state.damageAmount
-      : Math.max(1, rawTotal + dmgInfo.bonus);
-
-    setTimeout(() => {
-      clearInterval(interval);
-      setIsDamageRolling(false);
-      setHasDamageRolled(true);
-      setDamageRollResult(finalDamage);
-    }, 1600);
-  }, [isDamageRolling, hasDamageRolled, dmgInfo, playDiceSound, isCrit, state]);
+  }, [isDamageRolling, hasDamageRolled, dmgInfo, playDiceSound]);
 
   // Auto-start damage roll as soon as modal transitions to 'damage' phase
   useEffect(() => {
@@ -188,63 +179,65 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
     }
   }, [modalPhase, hasDamageRolled, isDamageRolling, handleStartDamageRoll]);
 
+  // Handler para quando o dado D20 para fisicamente na face superior
+  const handleD20Settled = React.useCallback((dieIndex: 1 | 2, result: { value: number; isCrit: boolean; isFail: boolean }) => {
+    if (dieIndex === 1) {
+      diceRollsRef.current.d1 = result.value;
+      setActualD1(result.value);
+    }
+    if (dieIndex === 2) {
+      diceRollsRef.current.d2 = result.value;
+      setActualD2(result.value);
+    }
+
+    const d1Val = dieIndex === 1 ? result.value : diceRollsRef.current.d1;
+    const d2Val = dieIndex === 2 ? result.value : diceRollsRef.current.d2;
+
+    let winning = d1Val;
+    if (isDualDice) {
+      if (isAdvantage) winning = Math.max(d1Val, d2Val);
+      if (isDisadvantage) winning = Math.min(d1Val, d2Val);
+    }
+
+    setIsRolling(false);
+    setHasRolled(true);
+    setCurrentDisplayTotal(winning);
+
+    const computedFinalTotal = winning + totalEnabledModifier;
+    const isWinCrit = winning === 20;
+    const isWinFail = winning === 1;
+    const isWinSuccess = isWinCrit || (!isWinFail && computedFinalTotal >= dc);
+
+    // Animação sequencial dos bônus estilo BG3
+    const enabledCount = modifierCards.filter((c) => c.isEnabled !== false).length;
+    if (enabledCount > 0) {
+      let step = 0;
+      const bonusInterval = setInterval(() => {
+        if (step < enabledCount) {
+          setActiveBonusIndex(step);
+          step++;
+        } else {
+          clearInterval(bonusInterval);
+          setCurrentDisplayTotal(computedFinalTotal);
+          if (onRollComplete) onRollComplete(computedFinalTotal, isWinSuccess);
+          if (state?.onRollComplete) state.onRollComplete(computedFinalTotal, isWinSuccess, winning);
+        }
+      }, 350);
+    } else {
+      setCurrentDisplayTotal(computedFinalTotal);
+      if (onRollComplete) onRollComplete(computedFinalTotal, isWinSuccess);
+      if (state?.onRollComplete) state.onRollComplete(computedFinalTotal, isWinSuccess, winning);
+    }
+  }, [isDualDice, isAdvantage, isDisadvantage, totalEnabledModifier, dc, modifierCards, onRollComplete, state]);
+
   // Trigger 3D d20 roll action
   const handleStartRoll = () => {
     if (isRolling || hasRolled) return;
 
     // Play dice sound ONLY when roll action starts
     playDiceSound(isDualDice ? 2 : 1);
-
-    // Generate fresh d20 rolls upon clicking "Clique para Rolar"
-    const newD1 = Math.floor(Math.random() * 20) + 1;
-    const newD2 = Math.floor(Math.random() * 20) + 1;
-    setActualD1(newD1);
-    setActualD2(newD2);
-
-    let newWinning = newD1;
-    if (isDualDice) {
-      if (isAdvantage) newWinning = Math.max(newD1, newD2);
-      if (isDisadvantage) newWinning = Math.min(newD1, newD2);
-    }
-    const newFinalTotal = newWinning + totalEnabledModifier;
-    const newIsCrit = newWinning === 20;
-    const newIsFail = newWinning === 1;
-    const newIsSuccess = newIsCrit || (!newIsFail && newFinalTotal >= dc);
-
     setIsRolling(true);
-
-    // Random dice flicker animation while rolling
-    const interval = setInterval(() => {
-      setAnimatedDice1(Math.floor(Math.random() * 20) + 1);
-      setAnimatedDice2(Math.floor(Math.random() * 20) + 1);
-    }, 60);
-
-    setTimeout(() => {
-      clearInterval(interval);
-      setIsRolling(false);
-      setHasRolled(true);
-      setCurrentDisplayTotal(newWinning);
-
-      // Sequential bonus tally animation
-      const enabledCount = modifierCards.filter((c) => c.isEnabled !== false).length;
-      if (enabledCount > 0) {
-        let step = 0;
-        const bonusInterval = setInterval(() => {
-          if (step < enabledCount) {
-            setActiveBonusIndex(step);
-            step++;
-          } else {
-            clearInterval(bonusInterval);
-            setCurrentDisplayTotal(newFinalTotal);
-            if (onRollComplete) onRollComplete(newFinalTotal, newIsSuccess);
-            if (state.onRollComplete) state.onRollComplete(newFinalTotal, newIsSuccess, newWinning);
-          }
-        }, 500);
-      } else {
-        if (onRollComplete) onRollComplete(newFinalTotal, newIsSuccess);
-        if (state.onRollComplete) state.onRollComplete(newFinalTotal, newIsSuccess, newWinning);
-      }
-    }, 1800);
+    setHasRolled(false);
   };
 
   return (
@@ -349,40 +342,43 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
             <Dice3DCanvas
               dieType={dmgInfo.dieType}
               isRolling={isDamageRolling}
-              number={isDamageRolling ? animatedDamageDie : damageRollResult}
+              number={damageRollResult}
               isCrit={isCrit}
               showNumber={hasDamageRolled}
+              onSettled={handleDamageDieSettled}
             />
           ) : isDualDice ? (
             /* Dual 3D D20 Canvases for Advantage / Disadvantage */
             <>
               <div
                 className={`transition-all duration-300 ${
-                  hasRolled && d1 !== winningD20 ? 'opacity-30 scale-90 grayscale' : 'scale-105'
+                  hasRolled && actualD1 !== winningD20 ? 'opacity-30 scale-90 grayscale' : 'scale-105'
                 }`}
               >
                 <Dice3DCanvas
                   dieType="d20"
                   isRolling={isRolling}
-                  number={isRolling ? animatedDice1 : d1}
-                  isCrit={d1 === 20}
-                  isFail={d1 === 1}
+                  number={actualD1}
+                  isCrit={actualD1 === 20}
+                  isFail={actualD1 === 1}
                   showNumber={hasRolled}
+                  onSettled={(res) => handleD20Settled(1, res)}
                 />
               </div>
 
               <div
                 className={`transition-all duration-300 ${
-                  hasRolled && d2 !== winningD20 ? 'opacity-30 scale-90 grayscale' : 'scale-105'
+                  hasRolled && actualD2 !== winningD20 ? 'opacity-30 scale-90 grayscale' : 'scale-105'
                 }`}
               >
                 <Dice3DCanvas
                   dieType="d20"
                   isRolling={isRolling}
-                  number={isRolling ? animatedDice2 : d2}
-                  isCrit={d2 === 20}
-                  isFail={d2 === 1}
+                  number={actualD2}
+                  isCrit={actualD2 === 20}
+                  isFail={actualD2 === 1}
                   showNumber={hasRolled}
+                  onSettled={(res) => handleD20Settled(2, res)}
                 />
               </div>
             </>
@@ -391,10 +387,11 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
             <Dice3DCanvas
               dieType="d20"
               isRolling={isRolling}
-              number={isRolling ? animatedDice1 : d1}
-              isCrit={winningD20 === 20}
-              isFail={winningD20 === 1}
+              number={actualD1}
+              isCrit={actualD1 === 20}
+              isFail={actualD1 === 1}
               showNumber={hasRolled}
+              onSettled={(res) => handleD20Settled(1, res)}
             />
           )}
         </div>
@@ -571,7 +568,12 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
           <>
             {!(modalPhase === 'd20' && isSuccess && state.damageDiceFormula) && (
               <button
-                onClick={onClose}
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('masters_codex_clear_target_selection'));
+                  }
+                  onClose();
+                }}
                 className="px-10 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-serif font-black text-sm uppercase tracking-wider rounded-xl shadow-xl transition-all active:scale-95 border border-amber-200 cursor-pointer"
               >
                 Continuar
@@ -580,7 +582,12 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
             {modalPhase === 'd20' && isSuccess && state.damageDiceFormula && (
               <button
                 type="button"
-                onClick={onClose}
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('masters_codex_clear_target_selection'));
+                  }
+                  onClose();
+                }}
                 className="text-xs text-slate-500 hover:text-slate-300 uppercase tracking-widest font-mono underline cursor-pointer mt-1"
               >
                 Fechar sem rolar dano
@@ -589,7 +596,12 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
           </>
         ) : (
           <button
-            onClick={onClose}
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('masters_codex_clear_target_selection'));
+              }
+              onClose();
+            }}
             className="text-xs text-slate-500 hover:text-slate-300 uppercase tracking-widest font-mono underline cursor-pointer"
           >
             Cancelar

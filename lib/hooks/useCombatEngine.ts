@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { Combatant, ConditionType } from '@/lib/types';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
+import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 
 export interface UseCombatEngineProps {
   initialCombatants?: Combatant[];
@@ -27,6 +28,12 @@ export function useCombatEngine() {
 
   const handleNextTurn = useCallback(() => {
     if (combatants.length === 0) return;
+
+    // Limpar alvo selecionado e mira de ataque ao trocar de turno
+    setSelectedTargetId(null);
+    useLiveCockpitStudioStore.getState().setSelectedTargetId(undefined);
+    useLiveCockpitStudioStore.getState().setPendingAttack(null);
+
     let nextIndex = currentTurnIndex + 1;
     let nextRound = roundCount;
 
@@ -91,6 +98,11 @@ export function useCombatEngine() {
 
   const handlePrevTurn = useCallback(() => {
     if (combatants.length === 0) return;
+
+    setSelectedTargetId(null);
+    useLiveCockpitStudioStore.getState().setSelectedTargetId(undefined);
+    useLiveCockpitStudioStore.getState().setPendingAttack(null);
+
     let prevIndex = currentTurnIndex - 1;
     let prevRound = roundCount;
 

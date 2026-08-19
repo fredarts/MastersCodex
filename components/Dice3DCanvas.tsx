@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { patchWebGLContext } from '@/lib/webgl-utils';
+import { DieType, createDieNumberTexture } from '@/lib/dice-physics/dice-topologies';
+import { createDicePhysicsSimulator, DicePhysicsResult, ThrowOptions } from '@/lib/dice-physics/dice-physics-engine';
 
-export type DieType = 'd20' | 'd12' | 'd10' | 'd8' | 'd6' | 'd4';
+export type { DieType, DicePhysicsResult };
 
 interface Dice3DCanvasProps {
   dieType: DieType;
@@ -12,9 +14,11 @@ interface Dice3DCanvasProps {
   isHit?: boolean;
   isFail?: boolean;
   isCrit?: boolean;
-  number: number;
+  number?: number;
   modifier?: number;
   showNumber?: boolean;
+  physicsSeed?: number;
+  onSettled?: (result: DicePhysicsResult) => void;
 }
 
 export const Dice3DCanvas: React.FC<Dice3DCanvasProps> = ({
@@ -26,26 +30,53 @@ export const Dice3DCanvas: React.FC<Dice3DCanvasProps> = ({
   number,
   modifier,
   showNumber = true,
+  physicsSeed,
+  onSettled,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [currentResult, setCurrentResult] = useState<number | null>(number ?? null);
+  const [isPhysicsSettled, setIsPhysicsSettled] = useState(!isRolling);
 
-  // Store latest dynamic props in a mutable ref to avoid destroying & recreating WebGLRenderer on every state flicker
-  const propsRef = useRef({ isRolling, isHit, isFail, isCrit, number });
+  // References for animation loop
+  const propsRef = useRef({
+    isRolling,
+    isHit,
+    isFail,
+    isCrit,
+    number,
+    physicsSeed,
+    onSettled,
+  });
+
   useEffect(() => {
-    propsRef.current = { isRolling, isHit, isFail, isCrit, number };
-  }, [isRolling, isHit, isFail, isCrit, number]);
+    propsRef.current = {
+      isRolling,
+      isHit,
+      isFail,
+      isCrit,
+      number,
+      physicsSeed,
+      onSettled,
+    };
+  }, [isRolling, isHit, isFail, isCrit, number, physicsSeed, onSettled]);
+
+  // Flag to guarantee onSettled is ONLY dispatched after an active launch
+  const isActivelyRollingRef = useRef(false);
+
+  // Ref to trigger physical throw imperatively
+  const launchRef = useRef<((options?: ThrowOptions) => void) | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     const container = containerRef.current;
-    const width = container.clientWidth || 120;
-    const height = container.clientHeight || 120;
+    const width = container.clientWidth || 130;
+    const height = container.clientHeight || 130;
 
-    // Scene, Camera, Renderer (Initialized ONCE per container/dieType)
+    // 1. Scene, Camera, Renderer
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    camera.position.set(0, 0, 4.2);
+    camera.position.set(0, 0, 4.4);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -61,68 +92,58 @@ export const Dice3DCanvas: React.FC<Dice3DCanvasProps> = ({
     }
     container.appendChild(renderer.domElement);
 
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 2.2);
+    // 2. Lighting Setup
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2.4);
     scene.add(ambientLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 3.5);
-    dirLight1.position.set(5, 5, 5);
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 3.2);
+    dirLight1.position.set(5, 6, 5);
     scene.add(dirLight1);
 
     const initialHit = propsRef.current.isHit || propsRef.current.isCrit;
     const initialFail = propsRef.current.isFail;
-    const dirLight2 = new THREE.DirectionalLight(
+    const accentLight = new THREE.DirectionalLight(
       initialHit ? 0xfbbf24 : initialFail ? 0xf43f5e : 0x38bdf8,
-      3.0
+      2.8
     );
-    dirLight2.position.set(-5, -5, 2);
-    scene.add(dirLight2);
+    accentLight.position.set(-5, -4, 3);
+    scene.add(accentLight);
 
-    // Geometry based on Die Type (3D Polyhedra)
-    let geometry: THREE.BufferGeometry;
-    switch (dieType) {
-      case 'd20':
-        geometry = new THREE.IcosahedronGeometry(1.25, 0);
-        break;
-      case 'd12':
-        geometry = new THREE.DodecahedronGeometry(1.15, 0);
-        break;
-      case 'd10':
-      case 'd8':
-        geometry = new THREE.OctahedronGeometry(1.25, 0);
-        break;
-      case 'd6':
-        geometry = new THREE.BoxGeometry(1.4, 1.4, 1.4);
-        break;
-      case 'd4':
-        geometry = new THREE.TetrahedronGeometry(1.4, 0);
-        break;
-      default:
-        geometry = new THREE.IcosahedronGeometry(1.25, 0);
+    // 3. Physics Simulator Setup
+    const { body, topology, bounds } = createDicePhysicsSimulator(dieType);
+
+    // If a default number is provided in non-rolling state, align that face to front
+    if (propsRef.current.number && propsRef.current.number > 0) {
+      const matchFace = topology.faces.find((f) => f.value === propsRef.current.number);
+      if (matchFace) {
+        body.alignFaceToScreen(matchFace);
+      }
     }
 
-    // Material
+    // 4. Base Mesh and Materials
     const initialCrit = propsRef.current.isCrit;
     const colorHex = initialCrit
       ? 0xf59e0b
       : initialFail
-      ? 0xe11d48
+      ? 0x991b1b
       : initialHit
       ? 0xd97706
       : 0x1e293b;
 
     const material = new THREE.MeshStandardMaterial({
       color: colorHex,
-      metalness: 0.6,
-      roughness: 0.2,
+      metalness: 0.65,
+      roughness: 0.25,
       flatShading: true,
     });
 
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new THREE.Mesh(topology.geometry, material);
+    mesh.position.copy(body.position);
+    mesh.quaternion.copy(body.quaternion);
     scene.add(mesh);
 
-    // Wireframe Overlay Accent
-    const wireGeo = new THREE.WireframeGeometry(geometry);
+    // Wireframe Accent
+    const wireGeo = new THREE.WireframeGeometry(topology.geometry);
     const wireMat = new THREE.LineBasicMaterial({
       color: initialCrit || initialHit ? 0xffedd5 : initialFail ? 0xfecdd3 : 0x38bdf8,
       linewidth: 2,
@@ -131,214 +152,143 @@ export const Dice3DCanvas: React.FC<Dice3DCanvasProps> = ({
     mesh.add(wireframe);
 
     // Track dynamic disposable Three.js resources
-    const disposables: { dispose: () => void }[] = [];
+    const disposables: { dispose: () => void }[] = [material, wireGeo, wireMat];
 
-    // Helper: Create 2D texture for face numbers
-    const createNumberTexture = (text: string, isGold: boolean): THREE.CanvasTexture => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 128;
-      canvas.height = 128;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, 128, 128);
-        ctx.font = '900 64px "Cinzel", "Times New Roman", serif, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+    // 5. Attach Face Numbers Permanently to Centroids
+    const planeGeo = new THREE.PlaneGeometry(0.52, 0.52);
+    disposables.push(planeGeo);
 
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
-        ctx.lineWidth = 9;
-        ctx.strokeText(text, 64, 64);
+    topology.faces.forEach((face) => {
+      const isGoldFace = (dieType === 'd20' && face.value === 20);
+      const isCrimsonFace = (dieType === 'd20' && face.value === 1);
+      const texture = createDieNumberTexture(String(face.value), isGoldFace, isCrimsonFace);
+      disposables.push(texture);
 
-        ctx.fillStyle = isGold ? '#fbbf24' : '#f8fafc';
-        ctx.fillText(text, 64, 64);
-      }
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.needsUpdate = true;
-      return texture;
+      const faceMat = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        depthTest: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      disposables.push(faceMat);
+
+      const numPlane = new THREE.Mesh(planeGeo, faceMat);
+      const offsetPos = face.center.clone().add(face.normal.clone().multiplyScalar(0.018));
+      numPlane.position.copy(offsetPos);
+
+      const up = new THREE.Vector3(0, 0, 1);
+      numPlane.quaternion.setFromUnitVectors(up, face.normal);
+
+      mesh.add(numPlane);
+    });
+
+    // Expose launcher callback
+    launchRef.current = (opts?: ThrowOptions) => {
+      isActivelyRollingRef.current = true;
+      body.launch(opts);
+      setIsPhysicsSettled(false);
     };
 
-    // Extract faces and attach 3D number planes to each centroid
-    try {
-      const nonIndexed = geometry.index ? geometry.toNonIndexed() : geometry.clone();
-      disposables.push(nonIndexed);
-
-      const posAttr = nonIndexed.attributes.position;
-      const count = posAttr.count;
-
-      interface FaceGroup {
-        normal: THREE.Vector3;
-        center: THREE.Vector3;
-        count: number;
-      }
-      const groups: FaceGroup[] = [];
-
-      const v0 = new THREE.Vector3();
-      const v1 = new THREE.Vector3();
-      const v2 = new THREE.Vector3();
-      const triCenter = new THREE.Vector3();
-      const triNormal = new THREE.Vector3();
-
-      for (let i = 0; i < count; i += 3) {
-        v0.fromBufferAttribute(posAttr, i);
-        v1.fromBufferAttribute(posAttr, i + 1);
-        v2.fromBufferAttribute(posAttr, i + 2);
-
-        triCenter.copy(v0).add(v1).add(v2).divideScalar(3);
-        triNormal.copy(triCenter).normalize();
-
-        let matched = false;
-        for (const g of groups) {
-          if (g.normal.dot(triNormal) > 0.92) {
-            g.center.add(triCenter);
-            g.count++;
-            matched = true;
-            break;
-          }
-        }
-
-        if (!matched) {
-          groups.push({
-            normal: triNormal.clone(),
-            center: triCenter.clone(),
-            count: 1,
-          });
-        }
-      }
-
-      groups.forEach((g) => g.center.divideScalar(g.count));
-      groups.sort((a, b) => b.normal.z - a.normal.z);
-
-      const maxSides =
-        dieType === 'd20'
-          ? 20
-          : dieType === 'd12'
-          ? 12
-          : dieType === 'd10'
-          ? 10
-          : dieType === 'd8'
-          ? 8
-          : dieType === 'd6'
-          ? 6
-          : 4;
-
-      const planeGeo = new THREE.PlaneGeometry(0.55, 0.55);
-      disposables.push(planeGeo);
-
-      const targetNum = propsRef.current.number;
-
-      groups.forEach((group, idx) => {
-        let val: number;
-        if (idx === 0 && targetNum > 0) {
-          val = targetNum;
-        } else {
-          let candidate = (idx % maxSides) + 1;
-          if (candidate === targetNum) candidate = (candidate % maxSides) + 1;
-          val = candidate;
-        }
-
-        const texture = createNumberTexture(String(val), initialCrit || val === 20);
-        disposables.push(texture);
-
-        const mat = new THREE.MeshBasicMaterial({
-          map: texture,
-          transparent: true,
-          depthTest: true,
-          depthWrite: false,
-          side: THREE.DoubleSide,
-        });
-        disposables.push(mat);
-
-        const plane = new THREE.Mesh(planeGeo, mat);
-        const offsetPos = group.center.clone().add(group.normal.clone().multiplyScalar(0.015));
-        plane.position.copy(offsetPos);
-
-        const up = new THREE.Vector3(0, 0, 1);
-        plane.quaternion.setFromUnitVectors(up, group.normal);
-
-        mesh.add(plane);
-      });
-    } catch (err) {
-      console.warn('Could not attach face numbers to 3D die:', err);
+    // If initially rolling upon mount, launch immediately
+    if (propsRef.current.isRolling) {
+      isActivelyRollingRef.current = true;
+      body.launch({ seed: propsRef.current.physicsSeed });
+      setIsPhysicsSettled(false);
+    } else {
+      // Resting initial state
+      const initialRes = body.getTopFaceResult('camera');
+      setCurrentResult(propsRef.current.number || initialRes.value);
     }
 
-    // Physics Simulation Variables (Speed, Angular Velocity, Bounce Damping)
     let animationFrameId: number;
-    let angularVelX = (Math.random() - 0.5) * 0.4 + 0.25;
-    let angularVelY = (Math.random() - 0.5) * 0.4 + 0.25;
-    const angularVelZ = (Math.random() - 0.5) * 0.2 + 0.1;
-    let posX = (Math.random() - 0.5) * 0.4;
-    let posY = (Math.random() - 0.5) * 0.4;
-    let velX = (Math.random() - 0.5) * 0.04;
-    let velY = (Math.random() - 0.5) * 0.04;
+    let hasNotifiedSettled = false;
 
+    // 6. Animation and Physics Step Loop
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
 
-      const currentProps = propsRef.current;
+      const dt = 1 / 60;
+      body.update(dt, bounds);
 
-      if (currentProps.isRolling) {
-        // Physics motion simulation
-        mesh.rotation.x += angularVelX;
-        mesh.rotation.y += angularVelY;
-        mesh.rotation.z += angularVelZ;
+      // Sync 3D Mesh with Physics Body
+      mesh.position.copy(body.position);
+      mesh.quaternion.copy(body.quaternion);
 
-        posX += velX;
-        posY += velY;
+      // Check if settled
+      if (body.isSettled) {
+        if (!hasNotifiedSettled && isActivelyRollingRef.current) {
+          hasNotifiedSettled = true;
+          isActivelyRollingRef.current = false;
+          setIsPhysicsSettled(true);
 
-        // Table Boundary collisions
-        if (Math.abs(posX) > 0.3) {
-          velX *= -0.8;
-          angularVelX *= 0.9;
+          const result = body.getTopFaceResult('camera');
+          setCurrentResult(result.value);
+
+          // Disparar resultado físico para o componente pai
+          if (propsRef.current.onSettled) {
+            propsRef.current.onSettled(result);
+          }
         }
-        if (Math.abs(posY) > 0.3) {
-          velY *= -0.8;
-          angularVelY *= 0.9;
-        }
-
-        mesh.position.x = posX;
-        mesh.position.y = posY;
       } else {
-        // Smooth alignment and landing rest
-        mesh.rotation.x += (0 - mesh.rotation.x) * 0.18;
-        mesh.rotation.y += (0 - mesh.rotation.y) * 0.18;
-        mesh.rotation.z += (0 - mesh.rotation.z) * 0.18;
-        mesh.position.x += (0 - mesh.position.x) * 0.18;
-        mesh.position.y += (0 - mesh.position.y) * 0.18;
+        hasNotifiedSettled = false;
+        if (isActivelyRollingRef.current) {
+          const liveResult = body.getTopFaceResult('camera');
+          setCurrentResult(liveResult.value);
+        }
       }
 
       renderer.render(scene, camera);
     };
 
+    animate();
+
     const gl = renderer.getContext();
     const extension = gl ? gl.getExtension('WEBGL_lose_context') : null;
-
-    animate();
 
     return () => {
       cancelAnimationFrame(animationFrameId);
       disposables.forEach((d) => d.dispose());
-      geometry.dispose();
-      material.dispose();
-      wireGeo.dispose();
-      wireMat.dispose();
+      topology.geometry.dispose();
       renderer.dispose();
       if (extension) {
         extension.loseContext();
       }
     };
-  }, [dieType]); // Depend ONLY on dieType to prevent WebGL context destruction leaks!
+  }, [dieType]);
+
+  // Trigger launch when isRolling prop transitions to true
+  useEffect(() => {
+    if (isRolling && launchRef.current && !isActivelyRollingRef.current) {
+      launchRef.current({ seed: physicsSeed });
+      setIsPhysicsSettled(false);
+    }
+  }, [isRolling, physicsSeed]);
 
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center">
-      <div ref={containerRef} className="w-28 h-28 cursor-pointer" />
-      {!isRolling && showNumber && number > 0 && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none animate-fade-in">
-          <div className="text-2xl font-black text-slate-100 font-mono drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)]">
-            {number}
+    <div className="relative w-full h-full flex flex-col items-center justify-center select-none pointer-events-none">
+      <div
+        ref={containerRef}
+        className="w-28 h-28 pointer-events-none cursor-default"
+      />
+
+      {/* Floating Readout when Settled */}
+      {isPhysicsSettled && showNumber && currentResult !== null && currentResult > 0 && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none animate-in fade-in zoom-in-75 duration-200">
+          <div
+            className={`text-2xl font-black font-mono drop-shadow-[0_4px_8px_rgba(0,0,0,0.95)] ${
+              currentResult === 20 && dieType === 'd20'
+                ? 'text-amber-400'
+                : currentResult === 1 && dieType === 'd20'
+                ? 'text-rose-500'
+                : 'text-slate-100'
+            }`}
+          >
+            {currentResult}
           </div>
           {modifier !== undefined && modifier !== 0 && (
             <div className="text-[10px] font-bold text-amber-300 font-mono">
-              ({number + modifier})
+              ({currentResult + modifier})
             </div>
           )}
         </div>

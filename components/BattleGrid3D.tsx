@@ -248,7 +248,22 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
   useEffect(() => {
     setTargetIdState(propSelectedTargetId);
-  }, [propSelectedTargetId]);
+    if (!propSelectedTargetId) {
+      setSelectedCombatantId(null);
+    }
+  }, [propSelectedTargetId, setSelectedCombatantId]);
+
+  // Listener para limpar imediatamente seleção de alvos e tokens quando o ataque finaliza
+  useEffect(() => {
+    const handleClear = () => {
+      setTargetIdState(undefined);
+      setSelectedCombatantId(null);
+      if (onSelectTarget) onSelectTarget(undefined);
+    };
+
+    window.addEventListener('masters_codex_clear_target_selection', handleClear);
+    return () => window.removeEventListener('masters_codex_clear_target_selection', handleClear);
+  }, [onSelectTarget, setSelectedCombatantId]);
 
   // Three.js persistent references
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -1357,6 +1372,12 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
             }
           }
         }
+      } else {
+        // Clique no chão vazio desmarca o alvo e a seleção atual
+        const { setSelectedCombatantId: setSel, onSelectTarget: onSelT } = callbacksRef.current;
+        setSel(null);
+        setTargetIdState(undefined);
+        if (onSelT) onSelT(undefined);
       }
     };
 

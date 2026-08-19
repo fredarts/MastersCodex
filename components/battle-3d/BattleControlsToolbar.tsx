@@ -923,7 +923,7 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
 
         {/* Selected Target HUD Banner */}
         {selectedTarget && (
-          <div className="bg-rose-950/90 backdrop-blur-xl border border-rose-500/50 px-4 py-2 rounded-xl flex items-center gap-4 text-xs shadow-2xl animate-fade-in">
+          <div className="bg-rose-950/90 backdrop-blur-xl border border-rose-500/50 px-4 py-2 rounded-xl flex items-center gap-3 text-xs shadow-2xl animate-fade-in">
             <div className="flex flex-col">
               <span className="text-[10px] uppercase font-bold text-rose-400 tracking-wider flex items-center gap-1">
                 <Target className="w-3 h-3" /> Alvo Selecionado
@@ -940,6 +940,19 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                 <span>Atacar</span>
               </button>
             )}
+
+            <button
+              onClick={() => {
+                import('@/lib/stores/useLiveCockpitStudioStore').then(({ useLiveCockpitStudioStore }) => {
+                  useLiveCockpitStudioStore.getState().setSelectedTargetId(undefined);
+                  useLiveCockpitStudioStore.getState().setPendingAttack(null);
+                });
+              }}
+              className="p-1 text-slate-400 hover:text-white hover:bg-white/10 rounded-md transition-colors ml-1"
+              title="Desmarcar Alvo"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
       </div>

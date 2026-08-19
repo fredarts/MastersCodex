@@ -47,7 +47,11 @@ export const FloatingDiceRollerHUD: React.FC = () => {
       {bg3DiceOverlay && (
         <BG3DiceRollModal
           state={bg3DiceOverlay}
-          onClose={() => setBg3DiceOverlay(null)}
+          onClose={() => {
+            setBg3DiceOverlay(null);
+            useLiveCockpitStudioStore.getState().setSelectedTargetId(undefined);
+            useLiveCockpitStudioStore.getState().setPendingAttack(null);
+          }}
         />
       )}
     </>

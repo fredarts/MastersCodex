@@ -712,6 +712,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
             description: `${currentActor.name} fez teste de ${title}: d20(${roll}) = ${finalTotal}`,
           });
         }
+
+        // Limpa o alvo selecionado e a mira após a finalização do ataque
+        setSelectedTargetId(undefined);
+        setPendingAttack(null);
+        broadcastToPlayerView({ targetId: null });
       },
     });
 
