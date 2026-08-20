@@ -987,9 +987,41 @@ export interface CharacterSheet {
   damageResistances?: string[];
   damageImmunities?: string[];
   damageVulnerabilities?: string[];
-  conditionImmunities?: string[];
+  // Diário & Missões Pessoais
+  journalEntries?: PlayerJournalEntry[];
+  personalQuests?: PersonalQuest[];
 
   updatedAt?: string;
+}
+
+export interface PlayerJournalEntry {
+  id: string;
+  title: string;
+  content: string;
+  sessionNumber?: number;
+  inGameDate?: string;
+  realDate: string;
+  tags?: string[];
+  isPinned?: boolean;
+}
+
+export interface PersonalQuestObjective {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
+export interface PersonalQuest {
+  id: string;
+  title: string;
+  description: string;
+  status: 'in_progress' | 'completed' | 'failed';
+  objectives: PersonalQuestObjective[];
+  rewardsNotes?: string;
+  clues?: string[];
+  category?: 'personal' | 'faction' | 'mystery';
+  createdAt?: string;
+  completedAt?: string;
 }
 
 export interface ActiveWildShapeState {
@@ -1152,3 +1184,82 @@ export interface PresencePayload {
   status: 'online' | 'away' | 'speaking' | 'offline';
   timestamp?: number;
 }
+
+// ==========================================
+// ÁRVORES GENEALÓGICAS & LINHAGENS (FAMILY TREES)
+// ==========================================
+
+export type FamilyRelationType = 
+  | 'parent'        // Pai/Mãe
+  | 'child'         // Filho(a) legítimo(a)
+  | 'spouse'        // Cônjuge / Casamento
+  | 'ex_spouse'     // Ex-cônjuge / Divórcio / Anulação
+  | 'betrothed'     // Prometido(a) em noivado
+  | 'bastard'       // Filho(a) bastardo(a) / Ilegítimo(a)
+  | 'adopted'       // Adotado(a)
+  | 'sibling'       // Irmão / Irmã
+  | 'half_sibling'  // Meio-irmão / Meia-irmã
+  | 'ancestor'      // Antepassado fundador
+  | 'heir'          // Herdeiro direto designado
+  | 'claimant'      // Reivindicante ao trono/liderança
+  | 'usurper';      // Usurpador / Regente ilegítimo
+
+export type SuccessionStatus = 
+  | 'ruling'           // Atual monarca / líder
+  | 'heir_apparent'    // 1º na linha de sucessão
+  | 'heir_presumptive' // Próximo na linha
+  | 'disinherited'     // Deserdado(a)
+  | 'abdicated'        // Abdicou
+  | 'deceased'         // Falecido(a)
+  | 'exiled'           // No exílio
+  | 'missing';         // Desaparecido(a)
+
+export interface FamilyMemberNode {
+  id: string;
+  worldEntityId?: string; // Vínculo com NPC existente no Worldbuilder
+  name: string;
+  title?: string; // Ex: 'Lorde de Winterfell', 'Arquimago', 'Príncipe Herdeiro'
+  race?: string; // Ex: 'Humano', 'Alto Elfo', 'Anão'
+  houseOrDynasty?: string; // Ex: 'Casa Valerius', 'Clã Martelo de Prata'
+  generation: number; // 0 = Raiz/Fundador, 1 = Filhos, 2 = Netos, etc.
+  gender?: 'male' | 'female' | 'other';
+  birthEra?: string; // Ex: 'Ano 120 da 3ª Era'
+  deathEra?: string; // Ex: 'Ano 178 da 3ª Era' ou null se vivo
+  isAlive: boolean;
+  avatarUrl?: string;
+  coatOfArmsUrl?: string; // Brasão / Escudo Heráldico
+  successionStatus?: SuccessionStatus;
+  notes?: string;
+  secrets?: string; // Notas secretas do DM (ex: "Na verdade é filho do conselheiro")
+  customBadge?: string; // Ex: '💀 Assassinado', '👑 Rei Atual'
+}
+
+export interface FamilyRelationshipEdge {
+  id: string;
+  fromId: string;
+  toId: string;
+  type: FamilyRelationType;
+  details?: string; // Ex: 'Casamento político em 142', 'Legitimado por decreto'
+  isSecret?: boolean; // Apenas visível para o DM
+}
+
+export interface FamilyTree {
+  id: string;
+  worldId: string;
+  factionId?: string; // Vinculado a uma facção/reino específico
+  name: string; // Ex: 'Árvore Genealógica da Dinastia Valerius'
+  houseMotto?: string; // Ex: 'Na Sombra Forjamos a Luz'
+  crestUrl?: string; // Imagem do Brasão
+  description?: string;
+  members: FamilyMemberNode[];
+  relationships: FamilyRelationshipEdge[];
+  rootMemberId?: string;
+  layoutDirection?: 'top_bottom' | 'bottom_top' | 'left_right';
+  customStyles?: {
+    theme?: 'parchment' | 'royal_gold' | 'dark_fantasy' | 'cyber_neon' | 'arcane_blue';
+    connectorStyle?: 'smooth' | 'step' | 'straight';
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}
+

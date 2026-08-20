@@ -44,6 +44,7 @@ import {
   Target,
   Award,
   CheckSquare,
+  GitFork,
 } from 'lucide-react';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { WorldEntityCategory, WorldEntity, QuestObjective } from '@/lib/types';
@@ -52,6 +53,7 @@ import { ImageLightboxModal } from '@/components/ImageLightboxModal';
 import { LoreGraph } from '@/components/LoreGraph';
 import { WorldTimelineView } from '@/components/WorldTimelineView';
 import { WorldInteractiveMapView } from '@/components/WorldInteractiveMapView';
+import { FamilyTreeViewer } from '@/components/family-tree/FamilyTreeViewer';
 import { CreateMonsterModal } from '@/components/modals/CreateMonsterModal';
 import { customMonsterService } from '@/lib/services/customMonsterService';
 import { CustomMonster } from '@/lib/types';
@@ -60,7 +62,7 @@ interface WorldEditorProps {
   onOpenCreateCampaignWithWorld: () => void;
 }
 
-type ActiveViewTab = WorldEntityCategory | 'graph' | 'timeline' | 'map' | 'ai';
+type ActiveViewTab = WorldEntityCategory | 'graph' | 'timeline' | 'map' | 'ai' | 'family_tree';
 
 interface CategoryMenuItem {
   id: WorldEntityCategory;
@@ -127,7 +129,7 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
   const [isEditingWorldTitle, setIsEditingWorldTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
 
-  // Event Listener para abrir o modal a partir do LoreGraph
+  // Event Listener para abrir o modal e trocar de abas a partir de outros componentes
   React.useEffect(() => {
     const handleOpenModal = (e: CustomEvent<{ entityId: string }>) => {
       const entity = worldEntities.find((ent) => ent.id === e.detail.entityId);
@@ -138,9 +140,17 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
       }
     };
 
+    const handleSwitchTab = (e: CustomEvent<{ tab: ActiveViewTab }>) => {
+      if (e.detail?.tab) {
+        setActiveTab(e.detail.tab);
+      }
+    };
+
     window.addEventListener('openWorldEntityModal', handleOpenModal as EventListener);
+    window.addEventListener('switchWorldEditorTab', handleSwitchTab as EventListener);
     return () => {
       window.removeEventListener('openWorldEntityModal', handleOpenModal as EventListener);
+      window.removeEventListener('switchWorldEditorTab', handleSwitchTab as EventListener);
     };
   }, [worldEntities]);
 
@@ -341,6 +351,19 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
               </button>
 
               <button
+                onClick={() => setActiveTab('family_tree')}
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'family_tree'
+                    ? 'bg-amber-500 text-slate-950 shadow-md'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                }`}
+                title="Árvores Genealógicas & Sucessão"
+              >
+                <GitFork className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                {!isSidebarCollapsed && <span className="truncate">Árvores Genealógicas</span>}
+              </button>
+
+              <button
                 onClick={() => setActiveTab('timeline')}
                 className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                   activeTab === 'timeline'
@@ -490,7 +513,7 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
-            {activeTab !== 'graph' && activeTab !== 'timeline' && activeTab !== 'map' && activeTab !== 'ai' && (
+            {activeTab !== 'graph' && activeTab !== 'timeline' && activeTab !== 'map' && activeTab !== 'ai' && activeTab !== 'family_tree' && (
               <button
                 onClick={() => {
                   if (activeTab === 'beast') {
@@ -518,8 +541,19 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
         </header>
 
         {/* Main Content Render */}
-        <div className={`flex-1 ${activeTab === 'graph' || activeTab === 'timeline' || activeTab === 'map' ? 'flex flex-col h-full w-full overflow-hidden min-h-0' : 'overflow-y-auto p-6'}`}>
-          {activeTab === 'graph' ? (
+        <div className={`flex-1 ${activeTab === 'graph' || activeTab === 'timeline' || activeTab === 'map' || activeTab === 'family_tree' ? 'flex flex-col h-full w-full overflow-hidden min-h-0' : 'overflow-y-auto p-6'}`}>
+          {activeTab === 'family_tree' ? (
+            <FamilyTreeViewer
+              onOpenNpcModal={(entityId) => {
+                const found = worldEntities.find((e) => e.id === entityId);
+                if (found) {
+                  setEditingEntity(found);
+                  setModalCategory(found.category);
+                  setShowAddModal(true);
+                }
+              }}
+            />
+          ) : activeTab === 'graph' ? (
             <LoreGraph />
           ) : activeTab === 'timeline' ? (
             <WorldTimelineView />

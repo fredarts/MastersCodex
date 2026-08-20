@@ -12,7 +12,8 @@ import {
   ZoomOut, 
   Maximize2, 
   RotateCcw,
-  Hand 
+  Hand,
+  GitFork
 } from 'lucide-react';
 import { LoreNode, WorldEntity, ConnectionType } from '@/lib/types';
 import { useWorld } from '@/context/WorldContext';
@@ -419,7 +420,7 @@ export const LoreGraph: React.FC = () => {
                     <p className="text-xs text-slate-500 italic">Nenhuma conexão estabelecida.</p>
                   )}
                   
-                  <div className="pt-2">
+                  <div className="pt-2 space-y-1.5">
                     <button
                       onClick={() => {
                         const event = new CustomEvent('openWorldEntityModal', { detail: { entityId: selectedNode.id } });
@@ -429,6 +430,17 @@ export const LoreGraph: React.FC = () => {
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Gerenciar Conexões
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        const event = new CustomEvent('switchWorldEditorTab', { detail: { tab: 'family_tree' } });
+                        window.dispatchEvent(event);
+                      }}
+                      className="w-full py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <GitFork className="w-3.5 h-3.5 text-amber-400" />
+                      Ver Árvore Genealógica
                     </button>
                     <p className="text-[9px] text-slate-500 mt-1 text-center">
                       (Para adicionar ou remover, edite a entidade)

@@ -621,6 +621,11 @@ export const CreateSceneModal: React.FC<CreateSceneModalProps> = ({
       return;
     }
 
+    if (!activeSession) {
+      toast.error('Nenhuma sessão ativa encontrada para criar a cena.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const validSlides = slides.filter((s) => s.imageUrl && s.imageUrl.trim() !== '');
@@ -683,7 +688,7 @@ export const CreateSceneModal: React.FC<CreateSceneModalProps> = ({
     }
   };
 
-  if (!isOpen || !activeSession) return null;
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in select-none">
@@ -700,7 +705,7 @@ export const CreateSceneModal: React.FC<CreateSceneModalProps> = ({
                 Forjar Nova Cena para a Sessão
               </h3>
               <p className="text-xs text-slate-400">
-                Sessão: <span className="text-amber-300 font-semibold">{activeSession.title}</span> • {activeWorld ? activeWorld.title : 'Worldbuilding'}
+                Sessão: <span className="text-amber-300 font-semibold">{activeSession?.title || 'Sessão'}</span> • {activeWorld?.title || 'Worldbuilding'}
               </p>
             </div>
           </div>
@@ -1970,7 +1975,7 @@ export const CreateSceneModal: React.FC<CreateSceneModalProps> = ({
         isOpen={isAiModalOpen}
         onClose={() => setIsAiModalOpen(false)}
         onApply={handleApplyAiScene}
-        sessionTitle={activeSession.title}
+        sessionTitle={activeSession?.title || 'Sessão Sem Título'}
         selectedWorld={activeWorld || null}
         worldEntities={worldEntities}
         currentSceneType={sceneType}

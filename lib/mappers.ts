@@ -31,6 +31,7 @@ export function mapWorldRowToDomain(row: WorldRow): World {
 }
 
 export function mapWorldEntityRowToDomain(row: WorldEntityRow): WorldEntity {
+  const rowTags = (row as any).tags || (row.attributes?.tags ? (typeof row.attributes.tags === 'string' ? JSON.parse(row.attributes.tags) : row.attributes.tags) : []);
   return {
     id: row.id,
     worldId: row.world_id,
@@ -48,6 +49,7 @@ export function mapWorldEntityRowToDomain(row: WorldEntityRow): WorldEntity {
       return conn;
     }),
     images: row.images || [],
+    tags: Array.isArray(rowTags) ? rowTags : [],
     createdAt: row.created_at,
   };
 }

@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Sparkles, Layers, BookOpen, FileText, Image as ImageIcon, Trash2, Upload, AlertCircle, Wand2, Network, Target, CheckSquare, Award, Coins, MapPin, Users, Check } from 'lucide-react';
+import { X, Plus, Sparkles, Layers, BookOpen, FileText, Image as ImageIcon, Trash2, Upload, AlertCircle, Wand2, Network, Target, CheckSquare, Award, Coins, MapPin, Users, Check, ZoomIn, RefreshCw, Loader2, Star, Crown, Heart, Skull, Shield, Swords, EyeOff, Lock, User } from 'lucide-react';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { WorldEntityCategory, WorldEntity, EntityConnection, ConnectionType, EntityStatSheet, QuestObjective, QuestReward, QuestStatus, QuestDifficulty, QuestType } from '@/lib/types';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
@@ -46,6 +46,20 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   const [connections, setConnections] = useState<EntityConnection[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+
+  // Dedicated NPC & Genealogy States
+  const [npcRace, setNpcRace] = useState('');
+  const [npcClass, setNpcClass] = useState('');
+  const [npcAlignment, setNpcAlignment] = useState('Neutro');
+  const [npcHouseOrClan, setNpcHouseOrClan] = useState('');
+  const [npcGeneration, setNpcGeneration] = useState(0);
+  const [npcGender, setNpcGender] = useState<'male' | 'female' | 'other'>('male');
+  const [npcIsAlive, setNpcIsAlive] = useState(true);
+  const [npcBirthEra, setNpcBirthEra] = useState('');
+  const [npcDeathEra, setNpcDeathEra] = useState('');
+  const [npcSuccessionStatus, setNpcSuccessionStatus] = useState<string>('none');
+  const [npcCustomBadge, setNpcCustomBadge] = useState('');
+  const [npcSecrets, setNpcSecrets] = useState('');
 
   // Quest Tracker States
   const [questStatus, setQuestStatus] = useState<QuestStatus>('not_started');
@@ -116,6 +130,15 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   const [isGeneratingAiImage, setIsGeneratingAiImage] = useState(false);
   const [aiWarningMessage, setAiWarningMessage] = useState<string | null>(null);
 
+  // AI Image Edit states
+  const [aspectRatio, setAspectRatio] = useState<'1:1' | '9:16' | '16:9' | '3:4' | '4:3'>('9:16');
+  const [editAspectRatio, setEditAspectRatio] = useState<'1:1' | '9:16' | '16:9' | '3:4' | '4:3'>('9:16');
+  const [useCoverAsReference, setUseCoverAsReference] = useState(true);
+  const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null);
+  const [aiEditPrompt, setAiEditPrompt] = useState('');
+  const [isGeneratingAiEdit, setIsGeneratingAiEdit] = useState(false);
+  const [editMode, setEditMode] = useState<'replace' | 'add_new'>('add_new');
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
@@ -129,12 +152,34 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       setFullContent(editingEntity.fullContent || '');
       setImages(editingEntity.images || []);
       setConnections(editingEntity.connections || []);
-      setTags(editingEntity.tags || []);
       
       const attrs = editingEntity.attributes || {};
-      const keys = Object.keys(attrs);
-      if (keys.length > 0) setExtraAttr1(String(attrs[keys[0]] || ''));
-      if (keys.length > 1) setExtraAttr2(String(attrs[keys[1]] || ''));
+      const resolvedTags = (editingEntity.tags && editingEntity.tags.length > 0)
+        ? editingEntity.tags
+        : (attrs.tags ? (typeof attrs.tags === 'string' ? JSON.parse(attrs.tags) : attrs.tags) : []);
+      setTags(Array.isArray(resolvedTags) ? resolvedTags : []);
+
+      if (editingEntity.category === 'npc') {
+        setNpcRace(attrs.npcRace || attrs.race || '');
+        setNpcClass(attrs.npcClass || attrs.class || '');
+        setNpcAlignment(attrs.npcAlignment || attrs.alignment || 'Neutro');
+        setNpcHouseOrClan(attrs.houseOrDynasty || attrs.house || attrs.clan || '');
+        setNpcGeneration(Number(attrs.generation ?? 0));
+        setNpcGender((attrs.gender as any) || 'male');
+        setNpcIsAlive(editingEntity.status === 'active' || editingEntity.status === 'allied' || attrs.isAlive === 'true' || attrs.isAlive === true || (attrs.isAlive === undefined && editingEntity.status !== 'dead'));
+        setNpcBirthEra(attrs.birthEra || '');
+        setNpcDeathEra(attrs.deathEra || '');
+        setNpcSuccessionStatus(attrs.successionStatus || 'none');
+        setNpcCustomBadge(attrs.customBadge || '');
+        setNpcSecrets(attrs.secrets || attrs.dmSecrets || '');
+        setExtraAttr1('');
+        setExtraAttr2('');
+      } else {
+        const k1 = getAttrKey1();
+        const k2 = getAttrKey2();
+        setExtraAttr1(String(attrs[k1] || ''));
+        setExtraAttr2(String(attrs[k2] || ''));
+      }
 
       if (editingEntity.category === 'quest') {
         const qData = editingEntity.attributes || {};
@@ -194,6 +239,18 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       setImages([]);
       setConnections([]);
       setTags([]);
+      setNpcRace('');
+      setNpcClass('');
+      setNpcAlignment('Neutro');
+      setNpcHouseOrClan('');
+      setNpcGeneration(0);
+      setNpcGender('male');
+      setNpcIsAlive(true);
+      setNpcBirthEra('');
+      setNpcDeathEra('');
+      setNpcSuccessionStatus('none');
+      setNpcCustomBadge('');
+      setNpcSecrets('');
       setQuestStatus('not_started');
       setQuestDifficulty('medium');
       setQuestType('main');
@@ -237,6 +294,15 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleSetCoverImage = (index: number) => {
+    if (index === 0) return;
+    setImages((prev) => {
+      const selected = prev[index];
+      const rest = prev.filter((_, i) => i !== index);
+      return [selected, ...rest];
+    });
+  };
+
   // IA Image Generator (Gemini/Nano Banana ou modelo selecionado)
   const handleGenerateAiImage = async () => {
     // Description validation check as requested
@@ -251,14 +317,22 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       const baseDescription = shortDesc.trim() || fullContent.trim();
       const categoryName = getCategoryTitle().replace('Adicionar Novo ', '').replace('Adicionar Nova ', '');
       
-      // Construct rich prompt
-      const promptText = `High detailed fantasy RPG concept art of ${name.trim() || categoryName}: ${baseDescription}. Genre: ${activeWorld.genre}. ${extraPrompt.trim() ? `Additional style details: ${extraPrompt.trim()}` : 'Digital painting, atmospheric lighting, 8k resolution, cinematic composition, white background.'}`;
+      const referenceCoverImage = (images.length > 0 && useCoverAsReference) ? images[0] : undefined;
+
+      // Construct rich prompt (with consistency instructions if reference is active)
+      let promptText = `High detailed fantasy RPG concept art of ${name.trim() || categoryName}: ${baseDescription}. Genre: ${activeWorld.genre}. ${extraPrompt.trim() ? `Additional style details: ${extraPrompt.trim()}` : 'Digital painting, atmospheric lighting, 8k resolution, cinematic composition, white background.'}`;
       
+      if (referenceCoverImage) {
+        promptText = `Character visual consistency artwork of ${name.trim() || categoryName}. Maintain exact facial features, skin tone, hair style, race, physical identity and aesthetic style from the provided reference image. Scene, pose or context details: ${baseDescription}. ${extraPrompt.trim() ? `Additional custom details: ${extraPrompt.trim()}` : ''}. High quality fantasy RPG concept art, cinematic lighting, 8k resolution.`;
+      }
+
       const response = await fetch('/api/ai/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           prompt: promptText,
+          sourceImage: referenceCoverImage,
+          aspectRatio,
           userSettings: settings,
         }),
       });
@@ -292,17 +366,88 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
     }
   };
 
+  // IA Image Editor (Image-to-Image / Prompt Modification)
+  const handleGenerateAiEditImage = async () => {
+    if (editingImageIndex === null || !images[editingImageIndex]) return;
+    if (!aiEditPrompt.trim()) {
+      setAiWarningMessage('Descreva o que deseja alterar na imagem com a IA.');
+      return;
+    }
+
+    setIsGeneratingAiEdit(true);
+    setAiWarningMessage(null);
+
+    try {
+      const sourceImage = images[editingImageIndex];
+      const categoryName = getCategoryTitle().replace('Adicionar Novo ', '').replace('Adicionar Nova ', '');
+      const promptText = `Modify and transform this image of ${name.trim() || categoryName}. Required alterations and visual changes: ${aiEditPrompt.trim()}. Keep fantasy RPG style, high quality digital painting, atmospheric lighting.`;
+
+      const response = await fetch('/api/ai/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: promptText,
+          sourceImage,
+          aspectRatio: editAspectRatio,
+          userSettings: settings,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Falha ao editar imagem com IA.');
+
+      const base64Data = data.base64;
+      let finalUrl = `data:image/jpeg;base64,${base64Data}`;
+
+      if (isSupabaseConfigured()) {
+        try {
+          const res = await fetch(finalUrl);
+          const blob = await res.blob();
+          const file = new File([blob], generateTimestampId(categoryName.toLowerCase().replace(/\s+/g, '-') + '-edited') + '.jpg', { type: 'image/jpeg' });
+          const publicUrl = await storageService.uploadAsset(file, 'avatars');
+          finalUrl = publicUrl;
+        } catch (uploadErr) {
+          console.warn('Failed to upload edited image, falling back to base64', uploadErr);
+        }
+      }
+
+      if (editMode === 'replace') {
+        setImages((prev) => prev.map((img, i) => (i === editingImageIndex ? finalUrl : img)));
+      } else {
+        setImages((prev) => [...prev, finalUrl]);
+      }
+
+      setEditingImageIndex(null);
+      setAiEditPrompt('');
+    } catch (err: unknown) {
+      console.error('Failed to generate AI image edit', err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setAiWarningMessage(errMsg || 'Erro ao editar imagem com IA.');
+    } finally {
+      setIsGeneratingAiEdit(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-
     setIsSubmitting(true);
 
-    const attributes: Record<string, string> = {};
-    if (extraAttr1.trim()) attributes[getAttrKey1()] = extraAttr1.trim();
-    if (extraAttr2.trim()) attributes[getAttrKey2()] = extraAttr2.trim();
+    const attributes: Record<string, string> = { ...(editingEntity?.attributes || {}) };
 
-    if (category === 'quest') {
+    if (category === 'npc') {
+      attributes.npcRace = npcRace.trim();
+      attributes.npcClass = npcClass.trim();
+      attributes.npcAlignment = npcAlignment.trim();
+      attributes.houseOrDynasty = npcHouseOrClan.trim();
+      attributes.generation = String(npcGeneration);
+      attributes.gender = npcGender;
+      attributes.birthEra = npcBirthEra.trim();
+      attributes.deathEra = !npcIsAlive ? npcDeathEra.trim() : '';
+      attributes.successionStatus = npcSuccessionStatus;
+      attributes.customBadge = npcCustomBadge.trim();
+      attributes.secrets = npcSecrets.trim();
+    } else if (category === 'quest') {
       attributes.questStatus = questStatus;
       attributes.questDifficulty = questDifficulty;
       attributes.questType = questType;
@@ -312,6 +457,9 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       attributes.questGiverNpcId = questGiverNpcId;
       attributes.questTargetLocationId = questTargetLocationId;
       attributes.questObjectives = JSON.stringify(questObjectives);
+    } else {
+      if (extraAttr1.trim()) attributes[getAttrKey1()] = extraAttr1.trim();
+      if (extraAttr2.trim()) attributes[getAttrKey2()] = extraAttr2.trim();
     }
 
     const finalConnections = [...connections];
@@ -332,6 +480,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         category,
         name: name.trim(),
         subType: subType.trim() || undefined,
+        status: category === 'npc' ? (npcIsAlive ? 'active' : 'dead') : (editingEntity.status || 'active'),
         shortDesc: shortDesc.trim(),
         fullContent: fullContent.trim() || undefined,
         images: images.length > 0 ? images : undefined,
@@ -342,12 +491,12 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       await updateWorldEntity(updated);
       savedEntity = updated;
     } else {
-      savedEntity = await createWorldEntity({
+      const created = await createWorldEntity({
         worldId: activeWorld.id,
         category,
         name: name.trim(),
         subType: subType.trim() || undefined,
-        status: 'active',
+        status: category === 'npc' ? (npcIsAlive ? 'active' : 'dead') : 'active',
         shortDesc: shortDesc.trim(),
         fullContent: fullContent.trim() || undefined,
         images: images.length > 0 ? images : undefined,
@@ -355,6 +504,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         attributes,
         tags: tags.length > 0 ? tags : undefined,
       });
+      savedEntity = created;
     }
 
     if (savedEntity && ['npc', 'monster', 'beast'].includes(category)) {
@@ -1102,33 +1252,255 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                 />
               </div>
 
-              {/* Grid Row 3: Dynamic Attribute Textboxes */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    {getAttrLabel1()}
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={extraAttr1}
-                    onChange={(e) => setExtraAttr1(e.target.value)}
-                    placeholder="Descreva detalhadamente o valor deste atributo..."
-                    className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-3 text-xs text-slate-200 focus:outline-none transition-all resize-none shadow-inner font-mono leading-relaxed"
-                  />
+              {/* Grid Row 3: Dedicated NPC & Genealogy Panel vs. Dynamic Attribute Textboxes */}
+              {category === 'npc' ? (
+                <div className="space-y-4 p-4 bg-[#0a0d14]/90 border-2 border-amber-500/40 rounded-2xl shadow-xl">
+                  <div className="flex items-center justify-between border-b border-[#2a3449] pb-2">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-amber-400" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                        Perfil de NPC & Dados Genealógicos
+                      </h4>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Integrado com a Árvore Genealógica e LoreGraph
+                    </span>
+                  </div>
+
+                  {/* Row 1: Raça, Classe, Alinhamento e Gênero */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                        Raça / Espécie:
+                      </label>
+                      <input
+                        type="text"
+                        value={npcRace}
+                        onChange={(e) => setNpcRace(e.target.value)}
+                        placeholder="Ex: Humano, Alto Elfo, Anão..."
+                        className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-100 font-bold focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                        Classe / Ocupação / Papel:
+                      </label>
+                      <input
+                        type="text"
+                        value={npcClass}
+                        onChange={(e) => setNpcClass(e.target.value)}
+                        placeholder="Ex: Mago Eremita, Lorde, Comandante..."
+                        className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-100 font-bold focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                        Alinhamento Moral:
+                      </label>
+                      <select
+                        value={npcAlignment}
+                        onChange={(e) => setNpcAlignment(e.target.value)}
+                        className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-200 font-bold focus:outline-none cursor-pointer"
+                      >
+                        <option value="Leal e Bom">Leal e Bom (Lawful Good)</option>
+                        <option value="Neutro e Bom">Neutro e Bom (Neutral Good)</option>
+                        <option value="Caótico e Bom">Caótico e Bom (Chaotic Good)</option>
+                        <option value="Leal e Neutro">Leal e Neutro (Lawful Neutral)</option>
+                        <option value="Neutro">Neutro Puro (True Neutral)</option>
+                        <option value="Caótico e Neutro">Caótico e Neutro (Chaotic Neutral)</option>
+                        <option value="Leal e Mau">Leal e Mau (Lawful Evil)</option>
+                        <option value="Neutro e Mau">Neutro e Mau (Neutral Evil)</option>
+                        <option value="Caótico e Mau">Caótico e Mau (Chaotic Evil)</option>
+                        <option value="Não Alinhado">Não Alinhado (Unaligned)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                        Gênero:
+                      </label>
+                      <select
+                        value={npcGender}
+                        onChange={(e) => setNpcGender(e.target.value as any)}
+                        className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-200 font-bold focus:outline-none cursor-pointer"
+                      >
+                        <option value="male">Masculino</option>
+                        <option value="female">Feminino</option>
+                        <option value="other">Outro / Indefinido</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Casa/Clã, Geração, Status de Vida e Eras */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                        Casa / Clã / Família Nobre:
+                      </label>
+                      <input
+                        type="text"
+                        value={npcHouseOrClan}
+                        onChange={(e) => setNpcHouseOrClan(e.target.value)}
+                        placeholder="Ex: Casa Eldoria, Clã Martelo de Ferro..."
+                        className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-100 font-bold focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                        Geração (Tier Hierárquico):
+                      </label>
+                      <input
+                        type="number"
+                        value={npcGeneration}
+                        onChange={(e) => setNpcGeneration(parseInt(e.target.value) || 0)}
+                        className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-100 font-bold focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                        Status de Vida:
+                      </label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setNpcIsAlive(true)}
+                          className={`py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                            npcIsAlive
+                              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400'
+                              : 'bg-[#121824] hover:bg-slate-800 text-slate-400 border border-[#2a3449]'
+                          }`}
+                        >
+                          <Heart className="w-3 h-3" />
+                          <span>Vivo(a)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNpcIsAlive(false)}
+                          className={`py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                            !npcIsAlive
+                              ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-1 ring-rose-400'
+                              : 'bg-[#121824] hover:bg-slate-800 text-slate-400 border border-[#2a3449]'
+                          }`}
+                        >
+                          <Skull className="w-3 h-3" />
+                          <span>Falecido(a)</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1 truncate" title="Nascimento (Ano/Era)">
+                          Nascimento:
+                        </label>
+                        <input
+                          type="text"
+                          value={npcBirthEra}
+                          onChange={(e) => setNpcBirthEra(e.target.value)}
+                          placeholder="Ex: Ano 20 da 3ª Era"
+                          className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-2.5 py-2 text-xs text-slate-100 font-mono focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1 truncate" title="Morte (se falecido)">
+                          Morte:
+                        </label>
+                        <input
+                          type="text"
+                          disabled={npcIsAlive}
+                          value={npcIsAlive ? '' : npcDeathEra}
+                          onChange={(e) => setNpcDeathEra(e.target.value)}
+                          placeholder={npcIsAlive ? '-- Vivo --' : 'Ex: Ano 50 da 3ª Era'}
+                          className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-2.5 py-2 text-xs text-slate-100 font-mono focus:outline-none disabled:opacity-40"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Linha de Sucessão e Distintivo Customizado */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <Crown className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Posição na Linha de Sucessão:</span>
+                      </label>
+                      <select
+                        value={npcSuccessionStatus}
+                        onChange={(e) => setNpcSuccessionStatus(e.target.value)}
+                        className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-200 font-bold focus:outline-none cursor-pointer"
+                      >
+                        <option value="none">⚪ Nenhum / Cidadão Comum</option>
+                        <option value="ruling">👑 Monarca / Líder Atual</option>
+                        <option value="heir_apparent">🛡️ 1º Herdeiro Direto (Heir Apparent)</option>
+                        <option value="heir_presumptive">⚔️ Linha de Sucessão (Heir Presumptive)</option>
+                        <option value="claimant">🔥 Reivindicante / Pretendente ao Trono</option>
+                        <option value="disinherited">❌ Deserdado(a)</option>
+                        <option value="exiled">🚪 No Exílio</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                        Tag / Distintivo Customizado:
+                      </label>
+                      <input
+                        type="text"
+                        value={npcCustomBadge}
+                        onChange={(e) => setNpcCustomBadge(e.target.value)}
+                        placeholder="Ex: 👁️ Vidente Oculto, 💀 Assassinado, 🧙 Arquimago..."
+                        className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-100 font-bold focus:outline-none font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 4: Segredos do Mestre */}
+                  <div className="p-3 bg-rose-950/20 border border-rose-900/50 rounded-xl space-y-1.5">
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-rose-400">
+                      <Lock className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Segredos do Personagem / Genealógicos (Visível apenas para o Mestre):</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={npcSecrets}
+                      onChange={(e) => setNpcSecrets(e.target.value)}
+                      placeholder="Segredos de linhagem, pactos proibidos, crimes ocultos ou revelações da campanha..."
+                      className="w-full bg-[#0a0d14] border border-rose-900/60 focus:border-rose-500 rounded-xl p-2.5 text-xs text-rose-200 focus:outline-none resize-none font-serif leading-relaxed shadow-inner"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    {getAttrLabel2()}
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={extraAttr2}
-                    onChange={(e) => setExtraAttr2(e.target.value)}
-                    placeholder="Descreva detalhadamente o valor deste atributo..."
-                    className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-3 text-xs text-slate-200 focus:outline-none transition-all resize-none shadow-inner font-mono leading-relaxed"
-                  />
+              ) : (
+                /* Grid Row 3: Dynamic Attribute Textboxes para outras categorias (Local, Facção, Item, etc.) */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                      {getAttrLabel1()}
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={extraAttr1}
+                      onChange={(e) => setExtraAttr1(e.target.value)}
+                      placeholder="Descreva detalhadamente o valor deste atributo..."
+                      className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-3 text-xs text-slate-200 focus:outline-none transition-all resize-none shadow-inner font-mono leading-relaxed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                      {getAttrLabel2()}
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={extraAttr2}
+                      onChange={(e) => setExtraAttr2(e.target.value)}
+                      placeholder="Descreva detalhadamente o valor deste atributo..."
+                      className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl p-3 text-xs text-slate-200 focus:outline-none transition-all resize-none shadow-inner font-mono leading-relaxed"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Row 4: Full Lore & Master Secrets Large Textarea Textbox with Wiki Preview Toggle */}
               <div>
@@ -1261,17 +1633,84 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                   </div>
                 </div>
 
-                {/* AI Image Generation Panel (Nano Banana) */}
+                {/* AI Image Generation Panel */}
                 <div className="bg-[#121824] border border-[#2a3449] p-4 rounded-xl space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-2">
                       <Wand2 className="w-4 h-4 text-purple-400" />
-                      <span className="text-xs font-bold text-slate-200">Gerar Ilustração com IA (Nano Banana)</span>
+                      <span className="text-xs font-bold text-slate-200">Gerar Ilustração com IA</span>
                     </div>
-                    <span className="text-[10px] font-mono text-purple-300 bg-purple-950/60 border border-purple-500/40 px-2 py-0.5 rounded">
-                      Gemini / Nano Banana AI
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-slate-400 font-mono">Modelo ativo:</span>
+                      <span className="text-[10px] font-mono text-purple-300 bg-purple-950/60 border border-purple-500/40 px-2 py-0.5 rounded font-bold">
+                        {settings.imageModel || 'imagen-3.0-generate-002'}
+                      </span>
+                    </div>
                   </div>
+
+                  {/* Aspect Ratio Selector */}
+                  <div className="flex items-center gap-2 flex-wrap bg-[#0a0d14] p-2 rounded-lg border border-[#2a3449]/80">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono mr-1">
+                      Proporção (Aspect Ratio):
+                    </span>
+                    {(
+                      [
+                        { id: '9:16', label: '9:16 Retrato', desc: 'Vertical / Celular' },
+                        { id: '3:4', label: '3:4 Retrato', desc: 'Retrato Clássico' },
+                        { id: '1:1', label: '1:1 Quadrado', desc: 'Avatar' },
+                        { id: '4:3', label: '4:3 Paisagem', desc: 'Cenário Padrão' },
+                        { id: '16:9', label: '16:9 Widescreen', desc: 'Cinemático' },
+                      ] as const
+                    ).map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setAspectRatio(r.id)}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-bold transition-all ${
+                          aspectRatio === r.id
+                            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30 ring-1 ring-purple-400'
+                            : 'bg-[#161c28] hover:bg-[#1f2738] text-slate-300 border border-[#2a3449]'
+                        }`}
+                        title={r.desc}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Visual Consistency Anchor Banner */}
+                  {images.length > 0 && (
+                    <div className="flex items-center justify-between p-2.5 bg-purple-950/30 border border-purple-500/30 rounded-xl">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-10 h-10 rounded-lg overflow-hidden border border-amber-500/50 bg-slate-900 flex-shrink-0 relative">
+                          <img src={images[0]} alt="Referência da Capa" className="w-full h-full object-cover" />
+                          <span className="absolute bottom-0 inset-x-0 bg-black/85 text-[7px] font-mono text-amber-300 text-center font-bold">
+                            CAPA
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-purple-200 block truncate">
+                            Consistência Visual de Personagem/Entidade
+                          </span>
+                          <span className="text-[10px] text-slate-400 block truncate">
+                            A capa (1ª foto) será usada como âncora de referência visual para manter traços, rosto e estética idênticos.
+                          </span>
+                        </div>
+                      </div>
+
+                      <label className="flex items-center gap-2 cursor-pointer select-none ml-2 flex-shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={useCoverAsReference}
+                          onChange={(e) => setUseCoverAsReference(e.target.checked)}
+                          className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 bg-[#0a0d14] border-slate-700"
+                        />
+                        <span className={`text-xs font-bold ${useCoverAsReference ? 'text-purple-300' : 'text-slate-500'}`}>
+                          {useCoverAsReference ? 'Referência Ativa' : 'Desativada'}
+                        </span>
+                      </label>
+                    </div>
+                  )}
 
                   {/* Description Required Alert Warning Banner */}
                   {aiWarningMessage && (
@@ -1295,9 +1734,9 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                       type="button"
                       disabled={isGeneratingAiImage}
                       onClick={handleGenerateAiImage}
-                      className="h-full min-h-[48px] bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
+                      className="h-full min-h-[48px] bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
                     >
-                      <Sparkles className="w-4 h-4 fill-slate-950" />
+                      <Sparkles className="w-4 h-4 text-purple-200" />
                       <span>{isGeneratingAiImage ? 'Gerando Imagem...' : 'Gerar Imagem com IA'}</span>
                     </button>
                   </div>
@@ -1324,36 +1763,91 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                 {/* Image Thumbnails Gallery */}
                 {images.length > 0 && (
                   <div>
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block font-mono">
-                      Imagens da Galeria ({images.length}) — Clique na foto para expandir / dar zoom:
-                    </span>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                        Imagens da Galeria ({images.length})
+                      </span>
+                      <span className="text-[10px] text-amber-400/90 font-mono">
+                        ⭐ Capa • 🔍 Zoom • ✨ Edição com IA • 🗑️ Excluir
+                      </span>
+                    </div>
+
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
                       {images.map((imgUrl, idx) => (
                         <div
                           key={idx}
-                          className="relative group aspect-square rounded-xl overflow-hidden border-2 border-amber-500/40 bg-[#0a0d14] cursor-pointer hover:border-amber-400 transition-all"
+                          className="relative group aspect-square rounded-xl overflow-hidden border-2 border-amber-500/40 bg-[#0a0d14] cursor-pointer hover:border-amber-400 transition-all shadow-md"
                           onClick={() => {
                             setLightboxIndex(idx);
                             setLightboxOpen(true);
                           }}
                         >
                           <img src={imgUrl} alt={`Mídia ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2">
+                          
+                          {/* Hover Actions Overlay */}
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-2 backdrop-blur-[2px]">
+                            {/* Set as Cover Button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSetCoverImage(idx);
+                              }}
+                              className={`p-1.5 rounded-lg shadow transition-all active:scale-95 ${
+                                idx === 0
+                                  ? 'bg-amber-500 text-slate-950 ring-1 ring-amber-300 pointer-events-none'
+                                  : 'bg-amber-950/90 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/60'
+                              }`}
+                              title={idx === 0 ? 'Imagem já é a Capa Principal' : 'Definir como Capa Principal'}
+                            >
+                              <Star className={`w-4 h-4 ${idx === 0 ? 'fill-slate-950' : 'fill-amber-400/30'}`} />
+                            </button>
+
+                            {/* Zoom Button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLightboxIndex(idx);
+                                setLightboxOpen(true);
+                              }}
+                              className="p-1.5 bg-slate-800/90 hover:bg-amber-500 hover:text-slate-950 text-slate-200 rounded-lg shadow transition-all active:scale-95"
+                              title="Dar Zoom / Tela Cheia"
+                            >
+                              <ZoomIn className="w-4 h-4" />
+                            </button>
+
+                            {/* AI Edit / Variation Button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingImageIndex(idx);
+                                setAiEditPrompt('');
+                              }}
+                              className="p-1.5 bg-purple-950/90 hover:bg-purple-600 text-purple-200 border border-purple-700/60 rounded-lg shadow transition-all active:scale-95"
+                              title="Editar / Modificar com IA"
+                            >
+                              <Sparkles className="w-4 h-4 text-purple-300" />
+                            </button>
+
+                            {/* Delete Button */}
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteImage(idx);
                               }}
-                              className="p-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg shadow-md transition-transform active:scale-95"
+                              className="p-1.5 bg-rose-950/90 hover:bg-rose-600 text-rose-200 border border-rose-800/60 rounded-lg shadow transition-all active:scale-95"
                               title="Excluir Imagem"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
+
                           {idx === 0 && (
-                            <span className="absolute top-1 left-1 bg-amber-500 text-slate-950 text-[9px] font-bold px-1.5 py-0.5 rounded shadow font-mono">
-                              CAPA
+                            <span className="absolute top-1 left-1 bg-amber-500 text-slate-950 text-[9px] font-bold px-1.5 py-0.5 rounded shadow font-mono pointer-events-none flex items-center gap-1">
+                              <Star className="w-2.5 h-2.5 fill-slate-950" /> CAPA
                             </span>
                           )}
                         </div>
@@ -1614,6 +2108,160 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
             // We do not overwrite images here.
           }}
         />
+
+        {/* AI Image Edit / Transform Modal */}
+        {editingImageIndex !== null && images[editingImageIndex] && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
+            <div className="relative w-full max-w-lg bg-[#0e131f] border border-purple-500/50 rounded-2xl shadow-[0_0_30px_rgba(168,85,247,0.2)] overflow-hidden flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#141a29]">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-lg bg-purple-500/20 border border-purple-500/40">
+                    <Sparkles className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-100">
+                      Editar Imagem com IA
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Transforme ou altere detalhes visuais desta ilustração.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingImageIndex(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 space-y-4">
+                {/* Source image preview */}
+                <div className="flex items-center gap-3 p-3 bg-[#161c2b] border border-slate-800 rounded-xl">
+                  <div className="w-20 h-20 rounded-lg overflow-hidden border border-purple-500/30 bg-slate-900 flex-shrink-0">
+                    <img
+                      src={images[editingImageIndex]}
+                      alt="Imagem Base"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="flex-1 text-xs">
+                    <span className="font-bold text-purple-300 block mb-0.5">Imagem de Origem #{editingImageIndex + 1}</span>
+                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                      A IA usará a composição e características desta imagem como base para aplicar suas alterações.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Modification prompt textarea */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Quais alterações você deseja aplicar? *
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={aiEditPrompt}
+                    onChange={(e) => setAiEditPrompt(e.target.value)}
+                    placeholder="Ex: adicionar elmo com asas douradas, olhos brilhando em chamas arcanas, manto com capuz rasgado, cicatriz de batalha..."
+                    className="w-full bg-[#121722] border border-[#2a3449] focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none transition-colors"
+                  />
+                </div>
+
+                {/* Aspect Ratio Selector for Edited Image */}
+                <div className="bg-[#121722] p-2.5 rounded-xl border border-[#2a3449]">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider font-mono">
+                      Proporção da Imagem Gerada:
+                    </span>
+                    <span className="text-[10px] font-mono text-purple-300 bg-purple-950/60 border border-purple-500/40 px-1.5 py-0.5 rounded">
+                      {settings.imageModel || 'imagen-3.0-generate-002'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {(
+                      [
+                        { id: '9:16', label: '9:16 Retrato' },
+                        { id: '3:4', label: '3:4 Retrato' },
+                        { id: '1:1', label: '1:1 Quadrado' },
+                        { id: '4:3', label: '4:3 Paisagem' },
+                        { id: '16:9', label: '16:9 Widescreen' },
+                      ] as const
+                    ).map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setEditAspectRatio(r.id)}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-bold transition-all ${
+                          editAspectRatio === r.id
+                            ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 ring-1 ring-purple-400'
+                            : 'bg-[#161c28] hover:bg-[#1f2738] text-slate-300 border border-[#2a3449]'
+                        }`}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Save mode */}
+                <div className="flex items-center gap-4 text-xs text-slate-300">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="editMode"
+                      checked={editMode === 'add_new'}
+                      onChange={() => setEditMode('add_new')}
+                      className="text-purple-600 focus:ring-purple-500"
+                    />
+                    <span>Adicionar como nova variação na galeria</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="editMode"
+                      checked={editMode === 'replace'}
+                      onChange={() => setEditMode('replace')}
+                      className="text-purple-600 focus:ring-purple-500"
+                    />
+                    <span>Substituir imagem atual</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-2.5 px-6 py-4 border-t border-slate-800 bg-[#141a29]">
+                <button
+                  type="button"
+                  onClick={() => setEditingImageIndex(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={isGeneratingAiEdit || !aiEditPrompt.trim()}
+                  onClick={handleGenerateAiEditImage}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-600/30 disabled:opacity-50 transition-all font-mono"
+                >
+                  {isGeneratingAiEdit ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Gerando Alteração...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Gerar com Alterações</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );

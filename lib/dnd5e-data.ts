@@ -491,6 +491,9 @@ export function createEmptyCharacterSheet(userId: string, campaignId?: string): 
     spellSlots: initialSpellSlots,
     spells: [],
 
+    journalEntries: [],
+    personalQuests: [],
+
     updatedAt: new Date().toISOString(),
   };
 }

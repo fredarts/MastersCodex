@@ -6,6 +6,7 @@ import { SkillsSection } from './Sections/SkillsSection';
 import { EquipmentSection } from './Sections/EquipmentSection';
 import { SpellsSection } from './Sections/SpellsSection';
 import { RPSection } from './Sections/RPSection';
+import { JournalSection } from './Sections/JournalSection';
 import { ClassAbilitiesSection } from './Sections/ClassAbilitiesSection';
 import { QuickCombatBar } from './QuickCombatBar';
 import { CharacterBuilderWizardModal } from './Modals/CharacterBuilderWizardModal';
@@ -20,6 +21,7 @@ import {
   Package,
   Sparkles,
   BookOpen,
+  ScrollText,
   Save,
   CheckCircle2,
   ChevronRight,
@@ -47,7 +49,7 @@ interface CharacterSheetModalProps {
   readOnly?: boolean;
 }
 
-type TabType = 'general' | 'combat' | 'skills' | 'abilities' | 'equipment' | 'spells' | 'rp';
+type TabType = 'general' | 'combat' | 'skills' | 'abilities' | 'equipment' | 'spells' | 'rp' | 'journal';
 
 const NAV_TABS: { id: TabType; label: string; icon: React.FC<{ className?: string }> }[] = [
   { id: 'general', label: 'Geral & Identidade', icon: User },
@@ -57,6 +59,7 @@ const NAV_TABS: { id: TabType; label: string; icon: React.FC<{ className?: strin
   { id: 'equipment', label: 'Equipamentos & Tesouros', icon: Package },
   { id: 'spells', label: 'Conjuração & Magias', icon: Sparkles },
   { id: 'rp', label: 'História & RP (Bio)', icon: BookOpen },
+  { id: 'journal', label: 'Diário & Missões', icon: ScrollText },
 ];
 
 export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
@@ -453,6 +456,7 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
           {activeTab === 'equipment' && <EquipmentSection sheet={sheet} onChange={readOnly ? () => {} : setSheet} />}
           {activeTab === 'spells' && <SpellsSection sheet={sheet} onChange={readOnly ? () => {} : setSheet} />}
           {activeTab === 'rp' && <RPSection sheet={sheet} onChange={readOnly ? () => {} : setSheet} />}
+          {activeTab === 'journal' && <JournalSection sheet={sheet} onChange={readOnly ? () => {} : setSheet} />}
         </fieldset>
       </main>
 

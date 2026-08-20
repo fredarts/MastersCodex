@@ -177,11 +177,59 @@ export function exportCharacterToPrintablePdf(sheet: CharacterSheet): void {
 
         <div class="box">
           <h3>Características & História</h3>
-          <p><strong>Tracos de Personalidade:</strong> ${sheet.personalityTraits || '-'}</p>
+          <p><strong>Traços de Personalidade:</strong> ${sheet.personalityTraits || '-'}</p>
           <p><strong>Ideais:</strong> ${sheet.ideals || '-'}</p>
           <p><strong>Vínculos:</strong> ${sheet.bonds || '-'}</p>
           <p><strong>Defeitos:</strong> ${sheet.flaws || '-'}</p>
+          ${sheet.backstory ? `<p><strong>Biografia:</strong> ${sheet.backstory}</p>` : ''}
         </div>
+
+        ${
+          sheet.personalQuests && sheet.personalQuests.length > 0
+            ? `
+        <div class="box full-width" style="grid-column: span 2; margin-top: 15px;">
+          <h3>Missões & Objetivos Pessoais</h3>
+          ${sheet.personalQuests
+            .map(
+              (q) => `
+            <div style="margin-bottom: 10px; border-bottom: 1px dotted #ccc; padding-bottom: 5px;">
+              <strong>${q.title}</strong> (${q.status === 'completed' ? 'Concluída' : q.status === 'failed' ? 'Falhada' : 'Em Andamento'})
+              <p style="margin: 2px 0; font-size: 11px;">${q.description}</p>
+              ${
+                q.objectives && q.objectives.length > 0
+                  ? `<ul style="margin: 4px 0 0 15px; font-size: 11px;">
+                    ${q.objectives.map((o) => `<li>[${o.completed ? 'X' : ' '}] ${o.text}</li>`).join('')}
+                  </ul>`
+                  : ''
+              }
+            </div>
+          `,
+            )
+            .join('')}
+        </div>
+        `
+            : ''
+        }
+
+        ${
+          sheet.journalEntries && sheet.journalEntries.length > 0
+            ? `
+        <div class="box full-width" style="grid-column: span 2; margin-top: 15px;">
+          <h3>Diário de Bordo & Registros de Sessão</h3>
+          ${sheet.journalEntries
+            .map(
+              (j) => `
+            <div style="margin-bottom: 12px; border-bottom: 1px solid #ddd; padding-bottom: 6px;">
+              <strong>${j.title}</strong> - <span style="font-size: 10px; color: #555;">${j.realDate} ${j.sessionNumber ? `(Sessão #${j.sessionNumber})` : ''}</span>
+              <p style="margin: 4px 0; font-size: 11px; white-space: pre-wrap;">${j.content}</p>
+            </div>
+          `,
+            )
+            .join('')}
+        </div>
+        `
+            : ''
+        }
       </div>
 
       <script>
