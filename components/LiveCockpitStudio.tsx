@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useCharacterSync } from '@/lib/hooks/useCharacterSync';
 import { useAudio } from '@/context/AudioContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { toast } from 'sonner';
 
 import { LiveCockpitHeader } from '@/components/live-cockpit/LiveCockpitHeader';

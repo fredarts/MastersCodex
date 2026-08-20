@@ -194,11 +194,38 @@ export interface GameScene {
   updatedAt?: string;
 }
 
+export interface MapLevel {
+  id: string;
+  name: string;
+  order: number;
+  grid: any[][];
+  bgImageUrl?: string | null;
+  gridScale?: number;
+  gridOffsetX?: number;
+  gridOffsetY?: number;
+  vectorWalls?: WallSegment[];
+  lightSources?: LightSource[];
+}
+
+export interface MultiLevelGridData {
+  version?: number;
+  activeLevelId?: string;
+  levels: MapLevel[];
+  // Legacy / fallback fields for single level maps
+  grid?: any[][];
+  bgImageUrl?: string | null;
+  gridScale?: number;
+  gridOffsetX?: number;
+  gridOffsetY?: number;
+  vectorWalls?: WallSegment[];
+  lightSources?: LightSource[];
+}
+
 export interface CampaignMap {
   id: string;
   campaignId: string;
   title: string;
-  gridData: any; // Armazena a grade e metadados de calibração do mapa
+  gridData: MultiLevelGridData | any; // Armazena a grade, andares/níveis e metadados de calibração do mapa
   createdAt?: string;
   updatedAt?: string;
 }

@@ -21,11 +21,17 @@ import {
   Flame,
   FlameKindling,
   Lamp,
-  Zap
+  Zap,
+  Layers,
+  Copy,
+  Edit3,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 
 
-import { Combatant, CampaignMap } from '@/lib/types';
+import { Combatant, CampaignMap, MapLevel, MultiLevelGridData } from '@/lib/types';
+import { normalizeToMultiLevel, createEmptyLevel, duplicateLevel } from '@/lib/map/mapLevelsCore';
 import { useSession } from '@/context/SessionContext';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { useCampaign } from '@/context/CampaignContext';
@@ -348,35 +354,149 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
   const [mapTitle, setMapTitle] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
+  // Multi-level / Floors state
+  const [levels, setLevels] = useState<MapLevel[]>([]);
+  const [activeLevelId, setActiveLevelId] = useState<string>('');
+
   // AI Dungeon Generator State
   const [isAIDungeonModalOpen, setIsAIDungeonModalOpen] = useState(false);
 
-  const handleAIDungeonGenerated = async (generatedFloors: ParsedDungeonMap[]) => {
+  const handleAIDungeonGenerated = async (
+    generatedFloors: ParsedDungeonMap[],
+    targetMode: 'current_floor' | 'append_floors' | 'new_map' = 'current_floor'
+  ) => {
     if (generatedFloors.length === 0) return;
 
-    const floor1 = generatedFloors[0];
-    setGrid(floor1.grid);
-    setVectorWalls(floor1.vectorWalls);
-    setLightSources(floor1.lightSources);
-    setGridScale(40);
-    setGridOffsetX(0);
-    setGridOffsetY(0);
-    if (floor1.title) setMapTitle(floor1.title);
+    if (targetMode === 'current_floor' && activeMap) {
+      // 1. Apply primary generated floor directly to current active floor
+      const floor1 = generatedFloors[0];
+      setGrid(floor1.grid);
+      setVectorWalls(floor1.vectorWalls || []);
+      setLightSources(floor1.lightSources || []);
+      setGridScale(40);
+      setGridOffsetX(0);
+      setGridOffsetY(0);
 
-    // If multi-floor, create additional maps for floors 2+
-    for (let i = 1; i < generatedFloors.length; i++) {
-      const floor = generatedFloors[i];
-      await createCampaignMap(`${floor.title || 'Masmorra'} - Andar ${i + 1}`, {
+      let updatedLevels = levels.map((lvl) => {
+        if (lvl.id === activeLevelId) {
+          return {
+            ...lvl,
+            name: floor1.title || lvl.name,
+            grid: floor1.grid,
+            vectorWalls: floor1.vectorWalls || [],
+            lightSources: floor1.lightSources || [],
+            gridScale: 40,
+            gridOffsetX: 0,
+            gridOffsetY: 0,
+          };
+        }
+        return lvl;
+      });
+
+      // If multiple floors were generated, append floors 2..N as extra floors in this same map
+      for (let i = 1; i < generatedFloors.length; i++) {
+        const floor = generatedFloors[i];
+        const newLvl: MapLevel = {
+          id: 'lvl-gen-' + i + '-' + Date.now().toString(36),
+          name: floor.title || `Andar ${updatedLevels.length + 1}`,
+          order: updatedLevels.length,
+          grid: floor.grid,
+          bgImageUrl: null,
+          gridScale: 40,
+          gridOffsetX: 0,
+          gridOffsetY: 0,
+          vectorWalls: floor.vectorWalls || [],
+          lightSources: floor.lightSources || [],
+        };
+        updatedLevels.push(newLvl);
+      }
+
+      setLevels(updatedLevels);
+      const currentLevelName = levels.find((l) => l.id === activeLevelId)?.name || 'atual';
+      toast.success(
+        generatedFloors.length === 1
+          ? `Andar "${currentLevelName}" atualizado com a masmorra gerada pela IA!`
+          : `Andar "${currentLevelName}" atualizado e mais ${generatedFloors.length - 1} andar(es) adicionado(s) à masmorra!`
+      );
+    } else if (targetMode === 'append_floors' && activeMap) {
+      // 2. Append all generated floors as brand new levels to the active map
+      const currentLevelSnapshot = levels.map((lvl) => {
+        if (lvl.id === activeLevelId) {
+          return {
+            ...lvl,
+            grid,
+            bgImageUrl,
+            vectorWalls,
+            lightSources,
+            gridScale,
+            gridOffsetX,
+            gridOffsetY,
+          };
+        }
+        return lvl;
+      });
+
+      const newLevels: MapLevel[] = generatedFloors.map((floor, idx) => ({
+        id: 'lvl-gen-' + idx + '-' + Date.now().toString(36),
+        name: floor.title || `Andar ${currentLevelSnapshot.length + idx + 1}`,
+        order: currentLevelSnapshot.length + idx,
         grid: floor.grid,
-        vectorWalls: floor.vectorWalls,
-        lightSources: floor.lightSources,
+        bgImageUrl: null,
         gridScale: 40,
         gridOffsetX: 0,
         gridOffsetY: 0,
-      });
-    }
+        vectorWalls: floor.vectorWalls || [],
+        lightSources: floor.lightSources || [],
+      }));
 
-    toast.success(`Masmorra aplicada ao editor! ${generatedFloors.length} andar(es) gerado(s).`);
+      const allLevels = [...currentLevelSnapshot, ...newLevels];
+      setLevels(allLevels);
+      const firstNew = newLevels[0];
+      setActiveLevelId(firstNew.id);
+
+      setGrid(firstNew.grid);
+      setBgImageUrl(null);
+      setVectorWalls(firstNew.vectorWalls || []);
+      setLightSources(firstNew.lightSources || []);
+      setGridScale(40);
+      setGridOffsetX(0);
+      setGridOffsetY(0);
+
+      toast.success(`${generatedFloors.length} novo(s) andar(es) adicionado(s) à masmorra "${activeMap.title}"!`);
+    } else {
+      // 3. Create a whole new CampaignMap with the generated floors
+      const mapTitleName = generatedFloors[0].title || `Masmorra IA ${campaignMaps.length + 1}`;
+      const newLevels: MapLevel[] = generatedFloors.map((floor, idx) => ({
+        id: 'lvl-gen-' + idx + '-' + Date.now().toString(36),
+        name: floor.title || `Andar ${idx + 1}`,
+        order: idx,
+        grid: floor.grid,
+        bgImageUrl: null,
+        gridScale: 40,
+        gridOffsetX: 0,
+        gridOffsetY: 0,
+        vectorWalls: floor.vectorWalls || [],
+        lightSources: floor.lightSources || [],
+      }));
+
+      const multiPayload: MultiLevelGridData = {
+        version: 2,
+        activeLevelId: newLevels[0].id,
+        levels: newLevels,
+        grid: newLevels[0].grid,
+        gridScale: 40,
+        gridOffsetX: 0,
+        gridOffsetY: 0,
+        vectorWalls: newLevels[0].vectorWalls || [],
+        lightSources: newLevels[0].lightSources || [],
+      };
+
+      const newMap = await createCampaignMap(mapTitleName, multiPayload);
+      if (newMap) {
+        selectMap(newMap);
+        toast.success(`Nova masmorra "${mapTitleName}" criada com ${generatedFloors.length} andar(es)!`);
+      }
+    }
   };
 
   // Handle UVTT / Universal VTT file import (.df2vtt, .uvtt, .json)
@@ -412,41 +532,198 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     }
   };
 
+  // Switch between floors/levels in memory (0ms latency, zero database fetch)
+  const handleSwitchLevel = (targetLevelId: string) => {
+    if (targetLevelId === activeLevelId) return;
+
+    // Snapshot current active level into levels list
+    const updatedLevels = levels.map((lvl) => {
+      if (lvl.id === activeLevelId) {
+        return {
+          ...lvl,
+          grid,
+          bgImageUrl,
+          vectorWalls,
+          lightSources,
+          gridScale,
+          gridOffsetX,
+          gridOffsetY,
+        };
+      }
+      return lvl;
+    });
+
+    const target = updatedLevels.find((l) => l.id === targetLevelId);
+    if (!target) return;
+
+    setLevels(updatedLevels);
+    setActiveLevelId(targetLevelId);
+
+    // Load target floor into editor canvas state
+    setGrid(target.grid || createInitialGrid(80, 80));
+    setBgImageUrl(target.bgImageUrl || null);
+    setVectorWalls(target.vectorWalls || []);
+    setLightSources(target.lightSources || []);
+    setGridScale(target.gridScale || 40);
+    setGridOffsetX(target.gridOffsetX || 0);
+    setGridOffsetY(target.gridOffsetY || 0);
+  };
+
+  // Add a new floor/level
+  const handleAddLevel = async () => {
+    const levelName = await showPrompt({
+      title: 'Novo Andar / Nível',
+      message: 'Digite o nome do andar (ex: Subsolo, Térreo, 1º Andar, Telhado):',
+      defaultValue: `Andar ${levels.length + 1}`,
+      confirmText: 'Criar Andar',
+    });
+    if (!levelName || !levelName.trim()) return;
+
+    const duplicateCurrent = levels.length > 0 && await showConfirm({
+      title: 'Copiar Estrutura do Andar Atual?',
+      message: 'Deseja duplicar as paredes e o tamanho do grid do andar atual para este novo piso?',
+      confirmText: 'Sim, duplicar paredes',
+      cancelText: 'Não, criar em branco',
+      variant: 'info',
+    });
+
+    const currentLevel = levels.find(l => l.id === activeLevelId);
+    let newLevel: MapLevel;
+
+    if (duplicateCurrent && currentLevel) {
+      const activeSnapshot: MapLevel = {
+        ...currentLevel,
+        grid,
+        bgImageUrl,
+        vectorWalls,
+        lightSources,
+        gridScale,
+        gridOffsetX,
+        gridOffsetY,
+      };
+      newLevel = duplicateLevel(activeSnapshot, levelName.trim(), levels.length);
+    } else {
+      newLevel = createEmptyLevel(levelName.trim(), levels.length);
+    }
+
+    const updatedLevels = levels.map((lvl) => {
+      if (lvl.id === activeLevelId) {
+        return {
+          ...lvl,
+          grid,
+          bgImageUrl,
+          vectorWalls,
+          lightSources,
+          gridScale,
+          gridOffsetX,
+          gridOffsetY,
+        };
+      }
+      return lvl;
+    });
+
+    updatedLevels.push(newLevel);
+    setLevels(updatedLevels);
+    setActiveLevelId(newLevel.id);
+
+    setGrid(newLevel.grid);
+    setBgImageUrl(newLevel.bgImageUrl || null);
+    setVectorWalls(newLevel.vectorWalls || []);
+    setLightSources(newLevel.lightSources || []);
+    setGridScale(newLevel.gridScale || 40);
+    setGridOffsetX(newLevel.gridOffsetX || 0);
+    setGridOffsetY(newLevel.gridOffsetY || 0);
+
+    toast.success(`Andar "${newLevel.name}" criado!`);
+  };
+
+  // Delete a level
+  const handleDeleteLevel = async (levelId: string) => {
+    if (levels.length <= 1) {
+      toast.error('O mapa precisa conter pelo menos um andar.');
+      return;
+    }
+    const toDelete = levels.find(l => l.id === levelId);
+    if (!toDelete) return;
+
+    const confirmed = await showConfirm({
+      title: 'Excluir Andar',
+      message: `Tem certeza que deseja excluir o andar "${toDelete.name}"? As paredes e salas deste nível serão removidas.`,
+      confirmText: 'Excluir Andar',
+      cancelText: 'Cancelar',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    const updated = levels.filter(l => l.id !== levelId);
+    setLevels(updated);
+
+    if (activeLevelId === levelId) {
+      const nextActive = updated[0];
+      setActiveLevelId(nextActive.id);
+      setGrid(nextActive.grid || createInitialGrid(80, 80));
+      setBgImageUrl(nextActive.bgImageUrl || null);
+      setVectorWalls(nextActive.vectorWalls || []);
+      setLightSources(nextActive.lightSources || []);
+      setGridScale(nextActive.gridScale || 40);
+      setGridOffsetX(nextActive.gridOffsetX || 0);
+      setGridOffsetY(nextActive.gridOffsetY || 0);
+    }
+    toast.info(`Andar "${toDelete.name}" excluído.`);
+  };
+
+  // Rename a level
+  const handleRenameLevel = async (levelId: string) => {
+    const target = levels.find(l => l.id === levelId);
+    if (!target) return;
+
+    const newName = await showPrompt({
+      title: 'Renomear Andar',
+      message: 'Digite o novo nome para este andar:',
+      defaultValue: target.name,
+      confirmText: 'Renomear',
+    });
+    if (newName && newName.trim()) {
+      setLevels(prev => prev.map(l => l.id === levelId ? { ...l, name: newName.trim() } : l));
+      toast.success(`Andar renomeado para "${newName.trim()}".`);
+    }
+  };
+
+  // Helper to switch active map
+  const selectMap = (map: CampaignMap) => {
+    setActiveMap(map);
+    setMapTitle(map.title);
+    const normalized = normalizeToMultiLevel(map.gridData, map.title);
+    const normLevels = normalized.levels || [];
+    setLevels(normLevels);
+    const selectedLvlId = normalized.activeLevelId || normLevels[0]?.id || '';
+    setActiveLevelId(selectedLvlId);
+
+    const currLevel = normLevels.find(l => l.id === selectedLvlId) || normLevels[0];
+    if (currLevel) {
+      setGrid(currLevel.grid || createInitialGrid(80, 80));
+      setBgImageUrl(currLevel.bgImageUrl || null);
+      setVectorWalls(currLevel.vectorWalls || []);
+      setLightSources(currLevel.lightSources || []);
+      setGridScale(currLevel.gridScale || 40);
+      setGridOffsetX(currLevel.gridOffsetX || 0);
+      setGridOffsetY(currLevel.gridOffsetY || 0);
+    }
+  };
+
   // Sync first active map when campaignMaps loads
   useEffect(() => {
     if (campaignMaps.length > 0) {
       if (!activeMap) {
         const firstMap = campaignMaps[0];
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        setActiveMap(firstMap);
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setMapTitle(firstMap.title);
-        if (firstMap.gridData) {
-          setGrid(firstMap.gridData.grid || createInitialGrid(80, 80));
-          setBgImageUrl(firstMap.gridData.bgImageUrl || null);
-          setVectorWalls(firstMap.gridData.vectorWalls || []);
-          setLightSources(firstMap.gridData.lightSources || []);
-          setGridScale(firstMap.gridData.gridScale || 40);
-          setGridOffsetX(firstMap.gridData.gridOffsetX || 0);
-          setGridOffsetY(firstMap.gridData.gridOffsetY || 0);
-        }
+        selectMap(firstMap);
       } else {
         const updated = campaignMaps.find(m => m.id === activeMap.id);
         if (!updated) {
           const firstMap = campaignMaps[0];
           // eslint-disable-next-line react-hooks/set-state-in-effect
-          setActiveMap(firstMap);
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setMapTitle(firstMap.title);
-          if (firstMap.gridData) {
-            setGrid(firstMap.gridData.grid || createInitialGrid(80, 80));
-            setBgImageUrl(firstMap.gridData.bgImageUrl || null);
-            setVectorWalls(firstMap.gridData.vectorWalls || []);
-            setLightSources(firstMap.gridData.lightSources || []);
-            setGridScale(firstMap.gridData.gridScale || 40);
-            setGridOffsetX(firstMap.gridData.gridOffsetX || 0);
-            setGridOffsetY(firstMap.gridData.gridOffsetY || 0);
-          }
+          selectMap(firstMap);
         }
       }
     }
@@ -457,41 +734,33 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
   useEffect(() => {
     if (campaignMaps.length === 0 && !hasAutoCreated.current) {
       hasAutoCreated.current = true;
-      createCampaignMap('Masmorra Inicial', {
-        grid: createInitialGrid(80, 80),
+      const initialLevel = createEmptyLevel('Térreo (Piso 0)', 0);
+      const multiPayload: MultiLevelGridData = {
+        version: 2,
+        activeLevelId: initialLevel.id,
+        levels: [initialLevel],
+        grid: initialLevel.grid,
         gridScale: 40,
         gridOffsetX: 0,
-        gridOffsetY: 0
-      }).then((newMap) => {
+        gridOffsetY: 0,
+      };
+      createCampaignMap('Masmorra Inicial', multiPayload).then((newMap) => {
         if (newMap) {
-          setActiveMap(newMap);
-          setMapTitle(newMap.title);
+          selectMap(newMap);
         }
       });
     }
   }, [campaignMaps, createCampaignMap]);
-
-  // Helper to switch active map
-  const selectMap = (map: CampaignMap) => {
-    setActiveMap(map);
-    setMapTitle(map.title);
-    if (map.gridData) {
-      setGrid(map.gridData.grid || createInitialGrid(80, 80));
-      setBgImageUrl(map.gridData.bgImageUrl || null);
-      setVectorWalls(map.gridData.vectorWalls || []);
-      setLightSources(map.gridData.lightSources || []);
-      setGridScale(map.gridData.gridScale || 40);
-      setGridOffsetX(map.gridData.gridOffsetX || 0);
-      setGridOffsetY(map.gridData.gridOffsetY || 0);
-    }
-  };
 
   // Debounced auto-save to database (campaign_maps table)
   useEffect(() => {
     if (!activeMap) return;
 
     const delayDebounce = setTimeout(() => {
-      const payload = {
+      const currentLevelSnapshot: MapLevel = {
+        id: activeLevelId || 'lvl-default-0',
+        name: levels.find(l => l.id === activeLevelId)?.name || 'Piso Principal',
+        order: levels.find(l => l.id === activeLevelId)?.order ?? 0,
         grid,
         bgImageUrl,
         vectorWalls,
@@ -500,12 +769,32 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
         gridOffsetX,
         gridOffsetY,
       };
-      updateCampaignMap(activeMap.id, mapTitle || activeMap.title, payload).then(() => {
+
+      const updatedLevels = levels.length > 0
+        ? levels.map(l => l.id === activeLevelId ? currentLevelSnapshot : l)
+        : [currentLevelSnapshot];
+
+      const multiLevelPayload: MultiLevelGridData = {
+        version: 2,
+        activeLevelId: activeLevelId || currentLevelSnapshot.id,
+        levels: updatedLevels,
+        // Legacy fallbacks for compatibility
+        grid,
+        bgImageUrl,
+        vectorWalls,
+        lightSources,
+        gridScale,
+        gridOffsetX,
+        gridOffsetY,
+      };
+
+      updateCampaignMap(activeMap.id, mapTitle || activeMap.title, multiLevelPayload).then(() => {
         broadcastToPlayerView({
           mapData: {
-            ...payload,
+            ...multiLevelPayload,
             activeMapId: activeMap.id,
             sceneId: activeScene?.id,
+            currentLevelName: currentLevelSnapshot.name,
           }
         });
       }).catch((e) => {
@@ -514,7 +803,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     }, 1200);
 
     return () => clearTimeout(delayDebounce);
-  }, [grid, bgImageUrl, vectorWalls, lightSources, gridScale, gridOffsetX, gridOffsetY, activeMap, mapTitle, updateCampaignMap, broadcastToPlayerView, activeScene?.id]);
+  }, [grid, bgImageUrl, vectorWalls, lightSources, gridScale, gridOffsetX, gridOffsetY, activeMap, mapTitle, activeLevelId, levels, updateCampaignMap, broadcastToPlayerView, activeScene?.id]);
 
 
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -726,32 +1015,98 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
                          className="opacity-0 group-hover:opacity-100 p-0.5 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded transition-all"
                        >
                          <Trash2 className="w-3.5 h-3.5" />
-                       </button>
-                     )}
-                   </div>
-                 ))
-               )}
-             </div>
-           </div>
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
 
-           {activeMap && (
-             <>
-               {/* Section 2: Active map title */}
-               <div className="space-y-1.5">
-                 <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Título do Mapa Ativo</label>
-                 <input 
-                   type="text"
-                   value={mapTitle}
-                   onChange={(e) => setMapTitle(e.target.value)}
-                   placeholder="Ex: Masmorra do Dragão"
-                   className="w-full bg-[#0a0d14] border border-[#2a3449] rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-semibold"
-                 />
-               </div>
+            {activeMap && (
+              <>
+                {/* Section 2: Active map title */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Título do Mapa Ativo</label>
+                  <input 
+                    type="text"
+                    value={mapTitle}
+                    onChange={(e) => setMapTitle(e.target.value)}
+                    placeholder="Ex: Masmorra do Dragão"
+                    className="w-full bg-[#0a0d14] border border-[#2a3449] rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-semibold"
+                  />
+                </div>
 
-               {/* Section 3: Tools Selectors */}
-               <div className="space-y-2">
-                 <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Ferramentas de Edição</span>
-                 <div className="grid grid-cols-2 gap-1.5">
+                {/* Section 2.5: Andares / Níveis de Cena */}
+                <div className="space-y-2 p-2.5 bg-[#0a0d14]/70 border border-[#2a3449]/60 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-amber-400" />
+                      Andares ({levels.length})
+                    </span>
+                    <button
+                      onClick={handleAddLevel}
+                      className="px-2 py-0.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-[10px] rounded border border-amber-500/30 flex items-center gap-1 transition-all cursor-pointer"
+                      title="Adicionar novo piso/andar"
+                    >
+                      <Plus className="w-3 h-3" /> Andar
+                    </button>
+                  </div>
+
+                  <div className="space-y-1 max-h-[160px] overflow-y-auto pr-0.5 scrollbar-thin scrollbar-thumb-slate-800">
+                    {levels.map((lvl, idx) => {
+                      const isActive = lvl.id === activeLevelId;
+                      return (
+                        <div
+                          key={lvl.id}
+                          onClick={() => handleSwitchLevel(lvl.id)}
+                          className={`flex items-center justify-between p-1.5 rounded-lg cursor-pointer transition-all text-xs group border ${
+                            isActive
+                              ? 'bg-amber-500/20 text-amber-300 font-bold border-amber-500/40'
+                              : 'bg-[#121824]/60 text-slate-400 border-transparent hover:bg-[#1a2234] hover:text-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-400 font-mono">
+                              P{idx}
+                            </span>
+                            <span className="truncate">{lvl.name}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRenameLevel(lvl.id);
+                              }}
+                              className="p-1 text-slate-400 hover:text-cyan-300 rounded hover:bg-cyan-950/40"
+                              title="Renomear andar"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </button>
+                            {levels.length > 1 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteLevel(lvl.id);
+                                }}
+                                className="p-1 text-rose-400 hover:text-rose-300 rounded hover:bg-rose-950/40"
+                                title="Excluir andar"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Section 3: Tools Selectors */}
+                <div className="space-y-2">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Ferramentas de Edição</span>
+                  <div className="grid grid-cols-2 gap-1.5">
                     <button
                       onClick={() => setSelectedTool('paint')}
                       className={`flex items-center gap-1.5 p-2 rounded-lg text-[11px] font-semibold transition-all border ${
@@ -987,6 +1342,32 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
           >
             <Menu className="w-5 h-5" />
           </button>
+        )}
+
+        {/* Floating Quick Floor Switcher */}
+        {levels.length > 1 && (
+          <div className="absolute top-4 right-4 z-30 px-3 py-1.5 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl flex items-center gap-1.5 shadow-2xl animate-in fade-in duration-200">
+            <span className="text-[10px] uppercase font-bold text-amber-400 flex items-center gap-1">
+              <Layers className="w-3.5 h-3.5 text-amber-400" />
+              Andar:
+            </span>
+            <div className="flex items-center gap-1">
+              {levels.map((lvl) => (
+                <button
+                  key={lvl.id}
+                  onClick={() => handleSwitchLevel(lvl.id)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    activeLevelId === lvl.id
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                      : 'bg-slate-950/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-800'
+                  }`}
+                  title={`Alternar para ${lvl.name}`}
+                >
+                  {lvl.name}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Sub-bar options */}
@@ -1228,6 +1609,8 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
           isOpen={isAIDungeonModalOpen}
           onClose={() => setIsAIDungeonModalOpen(false)}
           onDungeonGenerated={handleAIDungeonGenerated}
+          currentLevelName={levels.find((l) => l.id === activeLevelId)?.name}
+          hasActiveMap={Boolean(activeMap)}
         />
       </div>
     </div>

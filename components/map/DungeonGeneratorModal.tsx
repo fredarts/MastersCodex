@@ -30,7 +30,12 @@ import { toast } from 'sonner';
 interface DungeonGeneratorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onDungeonGenerated: (floors: ParsedDungeonMap[]) => void;
+  onDungeonGenerated: (
+    floors: ParsedDungeonMap[],
+    targetMode: 'current_floor' | 'append_floors' | 'new_map'
+  ) => void;
+  currentLevelName?: string;
+  hasActiveMap?: boolean;
 }
 
 const THEMES = [
@@ -45,8 +50,11 @@ export const DungeonGeneratorModal: React.FC<DungeonGeneratorModalProps> = ({
   isOpen,
   onClose,
   onDungeonGenerated,
+  currentLevelName,
+  hasActiveMap = true,
 }) => {
   const [activeTab, setActiveTab] = useState<'generator' | 'vision_learn'>('generator');
+  const [applyMode, setApplyMode] = useState<'current_floor' | 'append_floors' | 'new_map'>('current_floor');
   
   const [prompt, setPrompt] = useState('');
   const [selectedTheme, setSelectedTheme] = useState('gothic');
@@ -147,7 +155,7 @@ export const DungeonGeneratorModal: React.FC<DungeonGeneratorModalProps> = ({
       }
 
       toast.success(`Masmorra gerada com sucesso! ${generatedFloors.length} andar(es) pronto(s).`);
-      onDungeonGenerated(generatedFloors);
+      onDungeonGenerated(generatedFloors, applyMode);
       onClose();
     } catch (err: any) {
       console.error('Erro ao gerar masmorra:', err);
@@ -218,6 +226,69 @@ export const DungeonGeneratorModal: React.FC<DungeonGeneratorModalProps> = ({
         {/* Tab 1: Generator */}
         {activeTab === 'generator' && (
           <div className="p-6 space-y-6 max-h-[72vh] overflow-y-auto custom-scrollbar">
+            {/* Target Destination Selection */}
+            <div className="space-y-2 bg-[#020617] p-3.5 rounded-xl border border-slate-800">
+              <label className="text-xs font-bold text-amber-400 flex items-center gap-2 uppercase tracking-wider">
+                <Layers className="w-4 h-4 text-amber-400" />
+                Destino da Geração / Andares
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setApplyMode('current_floor')}
+                  disabled={isGenerating || !hasActiveMap}
+                  className={`p-2.5 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
+                    applyMode === 'current_floor'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                  } ${!hasActiveMap ? 'opacity-40 cursor-not-allowed' : ''}`}
+                >
+                  <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                    <span>🎯 Andar Atual</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 line-clamp-1">
+                    {currentLevelName ? `Substituir "${currentLevelName}"` : 'Substituir piso atual'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setApplyMode('append_floors')}
+                  disabled={isGenerating || !hasActiveMap}
+                  className={`p-2.5 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
+                    applyMode === 'append_floors'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                  } ${!hasActiveMap ? 'opacity-40 cursor-not-allowed' : ''}`}
+                >
+                  <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                    <span>➕ Novo(s) Andar(es)</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 line-clamp-1">
+                    Adicionar no mapa atual
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setApplyMode('new_map')}
+                  disabled={isGenerating}
+                  className={`p-2.5 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
+                    applyMode === 'new_map'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                    <span>🗺️ Nova Masmorra</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 line-clamp-1">
+                    Criar novo mapa separado
+                  </span>
+                </button>
+              </div>
+            </div>
+
             {/* Pattern Style Selection */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-200 flex items-center gap-2 uppercase tracking-wider">

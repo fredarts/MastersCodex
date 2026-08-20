@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Tv, Swords, Shield, Heart, Sparkles, Map, ScrollText, ListOrdered, FileText, MessageSquare } from 'lucide-react';
+import { X, Tv, Swords, Shield, Heart, Sparkles, Map, ScrollText, ListOrdered, FileText, MessageSquare, Layers } from 'lucide-react';
 import { Combatant, CharacterSheet } from '@/lib/types';
 import { useSession } from '@/context/SessionContext';
 import { useCampaign } from '@/context/CampaignContext';
@@ -340,6 +340,8 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
     vectorWalls?: import('@/lib/types').WallSegment[];
     lightSources?: import('@/lib/types').LightSource[];
     activeMapId?: string;
+    activeLevelId?: string;
+    currentLevelName?: string;
   } | null;
 
   return (
@@ -422,23 +424,31 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
             </ThreeErrorBoundary>
           ) : liveDisplayMode === 'map' ? (
             typedMapData && typedMapData.grid && typedMapData.grid.length > 0 ? (
-              <DysonCanvas
-                key={`${currentScene?.id}_${typedMapData.activeMapId || 'default'}`}
-                grid={typedMapData.grid || []}
-                bgImageUrl={typedMapData.bgImageUrl || null}
-                gridScale={typedMapData.gridScale || 40}
-                gridOffsetX={typedMapData.gridOffsetX || 0}
-                gridOffsetY={typedMapData.gridOffsetY || 0}
-                combatants={combatants}
-                vectorWalls={typedMapData.vectorWalls || []}
-                lightSources={typedMapData.lightSources || []}
-                selectedTool="pan" // Jogador só move a visualização do canvas
-                selectedTileType="floor"
-                selectedTokenCombatant={null}
-                onGridChange={() => {}} // Sem alteração de grid para jogador
-                isPlayerView={true}
-                drawings={drawings}
-              />
+              <div className="w-full h-full relative">
+                {typedMapData.currentLevelName && (
+                  <div className="absolute top-4 left-4 z-20 px-3 py-1.5 bg-slate-950/90 backdrop-blur-md border border-amber-500/30 rounded-2xl flex items-center gap-1.5 text-xs font-bold text-amber-400 shadow-2xl animate-in fade-in duration-200">
+                    <Layers className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Andar: {typedMapData.currentLevelName}</span>
+                  </div>
+                )}
+                <DysonCanvas
+                  key={`${currentScene?.id}_${typedMapData.activeMapId || 'default'}_${typedMapData.activeLevelId || 'floor0'}`}
+                  grid={typedMapData.grid || []}
+                  bgImageUrl={typedMapData.bgImageUrl || null}
+                  gridScale={typedMapData.gridScale || 40}
+                  gridOffsetX={typedMapData.gridOffsetX || 0}
+                  gridOffsetY={typedMapData.gridOffsetY || 0}
+                  combatants={combatants}
+                  vectorWalls={typedMapData.vectorWalls || []}
+                  lightSources={typedMapData.lightSources || []}
+                  selectedTool="pan" // Jogador só move a visualização do canvas
+                  selectedTileType="floor"
+                  selectedTokenCombatant={null}
+                  onGridChange={() => {}} // Sem alteração de grid para jogador
+                  isPlayerView={true}
+                  drawings={drawings}
+                />
+              </div>
             ) : isMapLoading ? (
               <div className="flex flex-col items-center justify-center gap-3 text-slate-400 font-mono animate-pulse">
                 <Map className="w-10 h-10 text-amber-500/60 animate-bounce" />
