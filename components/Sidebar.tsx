@@ -21,14 +21,15 @@ import {
   ChevronLeft,
   ChevronRight,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Calendar
 } from 'lucide-react';
 import { Encounter } from '@/lib/types';
 import { INITIAL_ENCOUNTERS } from '@/lib/srd-data';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useWorld } from '@/lib/hooks/useWorld';
 
-export type ActiveTab = 'worldbuilder' | 'session_studio' | 'campaign_settings' | 'live_cockpit' | 'combat' | 'map' | 'ai' | 'lore' | 'compendium' | 'audio';
+export type ActiveTab = 'worldbuilder' | 'session_studio' | 'campaign_settings' | 'calendar' | 'live_cockpit' | 'combat' | 'map' | 'ai' | 'lore' | 'compendium' | 'audio';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -77,6 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: '📜 Gestão da Campanha',
       items: [
+        { id: 'calendar', label: 'Calendário & Crônica', icon: Calendar, color: 'text-amber-400 font-bold' },
         { id: 'session_studio', label: 'Estúdio de Sessões', icon: Film, color: 'text-indigo-400' },
         { id: 'campaign_settings', label: 'Painel da Campanha', icon: Settings, color: 'text-purple-400' },
       ],

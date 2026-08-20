@@ -230,6 +230,9 @@ export interface CampaignMap {
   updatedAt?: string;
 }
 
+export * from './types/safety';
+export * from './types/calendar';
+
 export interface GameSession {
   id: string;
   campaignId: string;
@@ -237,6 +240,7 @@ export interface GameSession {
   title: string;
   notes?: string;
   scenes?: GameScene[];
+  inGameDate?: string;
   createdAt?: string;
 }
 
@@ -248,6 +252,15 @@ export interface CampaignFeedEvent {
   title: string;
   summary: string;
   details?: Record<string, any>;
+  inGameDate?: string;
+  inGameTimestamp?: {
+    year: number;
+    monthIndex: number;
+    day: number;
+    hour: number;
+    minute: number;
+    formatted: string;
+  };
   isPublic: boolean;
   createdAt?: string;
 }
@@ -273,8 +286,6 @@ export interface CampaignPartyMember {
   avatarUrl?: string;
 }
 
-export * from './types/safety';
-
 export interface UserCampaign {
   id: string;
   dmId: string;
@@ -286,6 +297,8 @@ export interface UserCampaign {
   characterName?: string;
   partyMembers?: CampaignPartyMember[];
   safetySettings?: import('./types/safety').CampaignSafetySettings;
+  calendarConfig?: import('./types/calendar').CampaignCalendarConfig;
+  calendarState?: import('./types/calendar').CampaignCalendarState;
 }
 
 export interface StatusDuration {

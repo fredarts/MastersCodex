@@ -4,6 +4,7 @@ import { Tv, Play, Swords, Map as MapIcon, Image as ImageIcon, Sparkles, Radio, 
 import { GameScene } from '@/lib/types';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { PresenceIndicator } from '@/components/live-cockpit/PresenceIndicator';
+import { LiveCalendarWidget } from '@/components/live-cockpit/LiveCalendarWidget';
 
 interface LiveCockpitHeaderProps {
   activeScene: GameScene | null;
@@ -41,6 +42,9 @@ export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
           </p>
         </div>
       </div>
+
+      {/* Campaign In-Game Calendar & Time Widget */}
+      <LiveCalendarWidget />
 
       {/* Controles de Projeção */}
       <div className="flex items-center gap-2 bg-zinc-950/80 p-1.5 rounded-xl border border-zinc-800">

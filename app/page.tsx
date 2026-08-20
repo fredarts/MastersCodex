@@ -34,6 +34,11 @@ import { MonsterStatBlockModal } from '@/components/live-cockpit/MonsterStatBloc
 import { MinimizedSheetsDock } from '@/components/live-cockpit/MinimizedSheetsDock';
 import { UserSettingsModal } from '@/components/UserSettingsModal';
 import { LandingPage } from '@/components/LandingPage';
+import { CampaignCalendarStudio } from '@/components/calendar/CampaignCalendarStudio';
+import { RestModal } from '@/components/calendar/RestModal';
+import { TimeAdvanceModal } from '@/components/calendar/TimeAdvanceModal';
+import { CalendarDayModal } from '@/components/calendar/CalendarDayModal';
+import { CalendarSettingsModal } from '@/components/calendar/CalendarSettingsModal';
 
 function MainApp() {
   const { user, roleMode, setRoleMode, loadDemoEverything } = useAuth();
@@ -301,6 +306,10 @@ function MainApp() {
                 />
               )}
 
+              {activeTab === 'calendar' && (
+                <CampaignCalendarStudio />
+              )}
+
               {activeTab === 'session_studio' && (
                 <SessionStudio onEquipScene={handleEquipScene} />
               )}
@@ -343,8 +352,8 @@ function MainApp() {
                 <AudioMaestroPanel />
               )}
 
-              {/* Right Panel AI Assistant always accessible on desktop when not on AI, Worldbuilder, SessionStudio, Campaign Settings or Compendium tab */}
-              {activeTab !== 'ai' && activeTab !== 'worldbuilder' && activeTab !== 'session_studio' && activeTab !== 'campaign_settings' && activeTab !== 'compendium' && (
+              {/* Right Panel AI Assistant always accessible on desktop when not on AI, Worldbuilder, Calendar, SessionStudio, Campaign Settings or Compendium tab */}
+              {activeTab !== 'ai' && activeTab !== 'worldbuilder' && activeTab !== 'calendar' && activeTab !== 'session_studio' && activeTab !== 'campaign_settings' && activeTab !== 'compendium' && (
                 !isAIPanelCollapsed ? (
                   <div className="hidden xl:block h-full transition-all duration-300">
                     <AICoPilot
@@ -468,6 +477,12 @@ function MainApp() {
             />
           );
         })}
+
+      {/* Campaign Calendar & Chronology Modals */}
+      <RestModal />
+      <TimeAdvanceModal />
+      <CalendarDayModal />
+      <CalendarSettingsModal />
     </div>
   );
 }

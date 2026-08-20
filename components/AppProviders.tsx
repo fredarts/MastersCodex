@@ -17,25 +17,29 @@ import { ItemTransferModal } from '@/components/loot/ItemTransferModal';
 import { CustomDialogProvider } from '@/context/CustomDialogContext';
 import { CustomDialogModal } from '@/components/CustomDialogModal';
 
+import { CalendarProvider } from '@/context/CalendarContext';
+
 function InnerProviders({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   return (
     <CustomDialogProvider>
       <WorldProvider currentUserId={user?.id}>
         <CampaignProvider currentUserId={user?.id}>
-          <PartyLootProvider>
-            <SessionProvider>
-              <AudioProvider>
-                <LiveCockpitProvider>{children}</LiveCockpitProvider>
-              </AudioProvider>
-            </SessionProvider>
+          <CalendarProvider>
+            <PartyLootProvider>
+              <SessionProvider>
+                <AudioProvider>
+                  <LiveCockpitProvider>{children}</LiveCockpitProvider>
+                </AudioProvider>
+              </SessionProvider>
 
-            {/* Modais Globais de Loot e Transferência */}
-            <DmLootCreatorModal />
-            <PartyLootModal currentUserId={user?.id} />
-            <ItemTransferModal />
-            <CustomDialogModal />
-          </PartyLootProvider>
+              {/* Modais Globais de Loot e Transferência */}
+              <DmLootCreatorModal />
+              <PartyLootModal currentUserId={user?.id} />
+              <ItemTransferModal />
+              <CustomDialogModal />
+            </PartyLootProvider>
+          </CalendarProvider>
         </CampaignProvider>
       </WorldProvider>
     </CustomDialogProvider>
