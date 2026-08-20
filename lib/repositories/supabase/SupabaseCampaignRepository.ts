@@ -38,7 +38,7 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
     return allCamps;
   }
 
-  async createCampaign(title: string, worldId?: string, description = '', userId?: string): Promise<UserCampaign> {
+  async createCampaign(title: string, worldId?: string, description = '', userId?: string, coverImageUrl?: string, themeTone?: string): Promise<UserCampaign> {
     if (!userId || !isValidUuid(userId)) {
       throw new Error('User ID inválido para persistência no Supabase.');
     }
@@ -46,15 +46,39 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
     const code = `${title.slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
     const insertPayload: Record<string, any> = { dm_id: userId, title, description, invite_code: code };
     if (worldId && isValidUuid(worldId)) insertPayload.world_id = worldId;
+    if (coverImageUrl) insertPayload.cover_image_url = coverImageUrl;
+    if (themeTone) insertPayload.theme_tone = themeTone;
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('campaigns')
       .insert(insertPayload)
       .select()
       .single();
 
-    if (error) throw error;
-    return mapCampaignRowToDomain(data as CampaignRow, 'dm');
+    // Fallback gracioso se a coluna cover_image_url ou theme_tone ainda não foi criada no banco
+    if (error && (error.message?.includes('cover_image_url') || error.message?.includes('schema cache') || error.code === 'PGRST204')) {
+      console.warn('Coluna cover_image_url ausente no Supabase. Executando inserção de fallback sem a coluna...', error.message);
+      const fallbackPayload = { dm_id: userId, title, description, invite_code: code, ...(worldId && isValidUuid(worldId) ? { world_id: worldId } : {}) };
+      const fallbackRes = await supabase
+        .from('campaigns')
+        .insert(fallbackPayload)
+        .select()
+        .single();
+
+      if (fallbackRes.error) throw fallbackRes.error;
+      data = fallbackRes.data;
+    } else if (error) {
+      throw error;
+    }
+
+    const domainCamp = mapCampaignRowToDomain(data as CampaignRow, 'dm');
+    if (coverImageUrl && !domainCamp.coverImageUrl) {
+      domainCamp.coverImageUrl = coverImageUrl;
+    }
+    if (themeTone && !domainCamp.themeTone) {
+      domainCamp.themeTone = themeTone;
+    }
+    return domainCamp;
   }
 
   async fetchCampaignMembers(campaignId: string): Promise<CampaignMember[]> {

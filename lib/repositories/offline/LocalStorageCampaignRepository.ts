@@ -20,7 +20,7 @@ export class LocalStorageCampaignRepository implements ICampaignRepository {
     }
   }
 
-  async createCampaign(title: string, worldId?: string, description = '', userId = 'demo-dm-user-123'): Promise<UserCampaign> {
+  async createCampaign(title: string, worldId?: string, description = '', userId = 'demo-dm-user-123', coverImageUrl?: string, themeTone?: string): Promise<UserCampaign> {
     const code = `${title.slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
     const newCamp: UserCampaign = {
       id: `camp-${Date.now()}`,
@@ -28,6 +28,8 @@ export class LocalStorageCampaignRepository implements ICampaignRepository {
       worldId,
       title,
       description,
+      coverImageUrl,
+      themeTone,
       inviteCode: code,
       role: 'dm',
     };

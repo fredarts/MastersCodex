@@ -59,6 +59,8 @@ export function mapCampaignRowToDomain(row: CampaignRow, role: 'dm' | 'player' =
     worldId: row.world_id || undefined,
     title: row.title,
     description: row.description || undefined,
+    coverImageUrl: row.cover_image_url || undefined,
+    themeTone: row.theme_tone || undefined,
     inviteCode: row.invite_code,
     role,
     characterName: characterName || undefined,

@@ -11,6 +11,7 @@ import { useAudio } from '@/context/AudioContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { toast } from 'sonner';
+import { Tv, Play } from 'lucide-react';
 
 import { LiveCockpitHeader } from '@/components/live-cockpit/LiveCockpitHeader';
 import { SceneTimelinePanel } from '@/components/live-cockpit/SceneTimelinePanel';
@@ -42,7 +43,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   onOpenPlayerView,
   onOpenAudioPanel,
 }) => {
-  const { worldEntities } = useWorld();
+  const { worldEntities, activeWorld } = useWorld();
   const { activeCampaign, campaignMembers, createFeedEvent } = useCampaign();
   const {
     activeSession,
@@ -1212,6 +1213,22 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     setActiveScene(scene);
     sceneProjection.projectSceneToPlayerView(scene);
   };
+
+  if (!activeCampaign || (activeWorld && activeCampaign.worldId !== activeWorld.id)) {
+    return (
+      <div className="flex-1 bg-[#0a0d14] flex flex-col items-center justify-center p-8 text-center select-none">
+        <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4 shadow-xl">
+          <Tv className="w-8 h-8" />
+        </div>
+        <h3 className="font-bold text-slate-200 text-lg">
+          {activeWorld ? `Nenhuma Campanha no Mundo: ${activeWorld.title}` : 'Nenhuma Campanha Ativa'}
+        </h3>
+        <p className="text-xs text-slate-400 mt-1 max-w-md">
+          Inicie ou selecione uma campanha de RPG neste mundo para controlar a sessão ao vivo, combate e mapa de batalha.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full w-full bg-[#0a0d14] overflow-hidden text-slate-100 font-sans">

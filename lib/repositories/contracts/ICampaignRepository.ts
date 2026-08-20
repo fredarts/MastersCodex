@@ -2,7 +2,7 @@ import { UserCampaign, CampaignMember, CampaignFeedEvent } from '@/lib/types';
 
 export interface ICampaignRepository {
   fetchUserCampaigns(userId?: string): Promise<UserCampaign[]>;
-  createCampaign(title: string, worldId?: string, description?: string, userId?: string): Promise<UserCampaign>;
+  createCampaign(title: string, worldId?: string, description?: string, userId?: string, coverImageUrl?: string, themeTone?: string): Promise<UserCampaign>;
   updateCampaign(campaign: UserCampaign): Promise<UserCampaign>;
   fetchCampaignMembers(campaignId: string): Promise<CampaignMember[]>;
   addCampaignMember(campaignId: string, characterName: string, role?: 'dm' | 'player', userId?: string): Promise<CampaignMember>;

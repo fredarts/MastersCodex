@@ -14,7 +14,8 @@ import {
   Sparkles,
   Layers,
   Edit3,
-  Check
+  Check,
+  Crown
 } from 'lucide-react';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -28,7 +29,7 @@ interface SessionNavigatorProps {
 
 export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene }) => {
   const { activeWorld, updateWorld } = useWorld();
-  const { activeCampaign } = useCampaign();
+  const { userCampaigns, activeCampaign, setActiveCampaign, updateCampaign, createCampaign } = useCampaign();
   const {
     sessions, 
     activeSession, 
@@ -45,9 +46,15 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
   const [showNewSessionInput, setShowNewSessionInput] = useState(false);
   const [newSessionTitle, setNewSessionTitle] = useState('');
 
-  // Editing states for World, Session, and Scene
+  const [showNewCampaignInput, setShowNewCampaignInput] = useState(false);
+  const [newCampaignTitle, setNewCampaignTitle] = useState('');
+
+  // Editing states for World, Campaign, Session, and Scene
   const [editingWorldId, setEditingWorldId] = useState<string | null>(null);
   const [editedWorldTitle, setEditedWorldTitle] = useState('');
+
+  const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
+  const [editedCampaignTitle, setEditedCampaignTitle] = useState('');
 
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editedSessionTitle, setEditedSessionTitle] = useState('');
@@ -55,7 +62,21 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
   const [editedSceneTitle, setEditedSceneTitle] = useState('');
 
-  if (!activeCampaign) return null;
+  if (!activeCampaign || (activeWorld && activeCampaign.worldId !== activeWorld.id)) return null;
+
+  const worldCampaigns = userCampaigns.filter((c) => {
+    if (c.role !== 'dm') return false;
+    if (!activeWorld) return true;
+    return c.worldId === activeWorld.id;
+  });
+
+  const handleCreateCampaignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCampaignTitle.trim()) return;
+    await createCampaign(newCampaignTitle.trim(), activeWorld?.id);
+    setNewCampaignTitle('');
+    setShowNewCampaignInput(false);
+  };
 
   const handleCreateSessionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +91,13 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
       await updateWorld({ ...activeWorld, title: editedWorldTitle.trim() });
     }
     setEditingWorldId(null);
+  };
+
+  const handleSaveCampaignTitle = async () => {
+    if (activeCampaign && editedCampaignTitle.trim()) {
+      await updateCampaign({ ...activeCampaign, title: editedCampaignTitle.trim() });
+    }
+    setEditingCampaignId(null);
   };
 
   const handleSaveSessionTitle = async () => {
@@ -143,11 +171,98 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
           </div>
         )}
 
-        {/* Breadcrumb: Active Campaign */}
-        <div className="flex items-center gap-1 text-slate-300 font-bold font-mono text-[11px]">
-          <span className="truncate max-w-[120px] text-amber-300">{activeCampaign.title}</span>
-          <ChevronRight className="w-3 h-3 text-slate-600" />
-        </div>
+        {/* Breadcrumb: Active Campaign Selector */}
+        {editingCampaignId && activeCampaign ? (
+          <div className="flex items-center gap-1 bg-[#161c28] border border-amber-500 rounded-lg px-2 py-0.5">
+            <input
+              type="text"
+              autoFocus
+              value={editedCampaignTitle}
+              onChange={(e) => setEditedCampaignTitle(e.target.value)}
+              className="bg-[#0a0d14] border border-amber-500/50 rounded px-1.5 py-0.5 text-xs text-amber-300 font-bold focus:outline-none w-36"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveCampaignTitle();
+                if (e.key === 'Escape') setEditingCampaignId(null);
+              }}
+            />
+            <button onClick={handleSaveCampaignTitle} className="p-0.5 text-emerald-400 hover:text-emerald-300" title="Salvar Nome da Campanha">
+              <Check className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 bg-[#161c28] border border-amber-500/30 rounded-lg px-2 py-0.5 shadow-sm">
+            <Crown className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+            <select
+              value={activeCampaign?.id || ''}
+              onChange={(e) => {
+                const selected = userCampaigns.find((c) => c.id === e.target.value);
+                if (selected) setActiveCampaign(selected);
+              }}
+              className="bg-transparent text-xs text-amber-300 font-bold focus:outline-none max-w-[150px] truncate cursor-pointer"
+              title="Alternar Campanha"
+            >
+              {worldCampaigns.length === 0 ? (
+                <option value={activeCampaign.id} className="bg-[#161c28] text-slate-300">{activeCampaign.title}</option>
+              ) : (
+                worldCampaigns.map((c) => (
+                  <option key={c.id} value={c.id} className="bg-[#161c28] text-slate-200">
+                    {c.title}
+                  </option>
+                ))
+              )}
+            </select>
+
+            {activeCampaign && (
+              <button
+                onClick={() => {
+                  setEditingCampaignId(activeCampaign.id);
+                  setEditedCampaignTitle(activeCampaign.title);
+                }}
+                className="p-0.5 hover:bg-[#1f2738] rounded text-slate-400 hover:text-amber-400 transition-colors"
+                title="Editar Nome da Campanha Ativa"
+              >
+                <Edit3 className="w-3 h-3" />
+              </button>
+            )}
+
+            <button
+              onClick={() => setShowNewCampaignInput(true)}
+              className="p-0.5 hover:bg-[#1f2738] rounded text-slate-300 transition-colors"
+              title="Criar Nova Campanha neste Mundo"
+            >
+              <Plus className="w-3 h-3 text-amber-400" />
+            </button>
+          </div>
+        )}
+        <ChevronRight className="w-3 h-3 text-slate-600" />
+
+        {/* Modal / Form Inline to Create Campaign */}
+        {showNewCampaignInput && (
+          <form onSubmit={handleCreateCampaignSubmit} className="flex items-center gap-1 animate-fade-in">
+            <input
+              type="text"
+              required
+              autoFocus
+              value={newCampaignTitle}
+              onChange={(e) => setNewCampaignTitle(e.target.value)}
+              placeholder="Ex: Campanha 2: A Queda"
+              className="bg-[#0a0d14] border border-amber-500 rounded px-2 py-0.5 text-xs text-slate-100 font-bold focus:outline-none w-36"
+            />
+            <button
+              type="submit"
+              className="px-2 py-0.5 bg-amber-500 text-slate-950 font-bold text-xs rounded"
+            >
+              Criar
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowNewCampaignInput(false)}
+              className="px-1.5 py-0.5 text-slate-400 hover:text-slate-200 text-xs"
+            >
+              ✕
+            </button>
+          </form>
+        )}
 
         {/* Active Session Dropdown & Edit */}
         {editingSessionId && activeSession ? (

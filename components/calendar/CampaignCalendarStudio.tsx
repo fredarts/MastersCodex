@@ -19,10 +19,12 @@ import {
   Flag, 
   Waves,
   CalendarDays,
-  ListOrdered
+  ListOrdered,
+  Crown
 } from 'lucide-react';
 import { useCampaignCalendar } from '@/lib/hooks/useCampaignCalendar';
 import { useCampaign } from '@/lib/hooks/useCampaign';
+import { useWorld } from '@/lib/hooks/useWorld';
 import { 
   calculateMoonPhases, 
   calculateTide, 
@@ -44,7 +46,14 @@ export const CampaignCalendarStudio: React.FC = () => {
     setInGameDate,
   } = useCampaignCalendar();
 
-  const { activeCampaign, feedEvents } = useCampaign();
+  const { activeWorld } = useWorld();
+  const { userCampaigns, activeCampaign, setActiveCampaign, feedEvents } = useCampaign();
+
+  const dmCampaigns = userCampaigns.filter((c) => {
+    if (c.role !== 'dm') return false;
+    if (!activeWorld) return true;
+    return c.worldId === activeWorld.id;
+  });
 
   // Navigation State
   const [viewYear, setViewYear] = useState<number>(calendarState.currentYear);
@@ -53,11 +62,11 @@ export const CampaignCalendarStudio: React.FC = () => {
   const [chronicleFilter, setChronicleFilter] = useState<string>('all');
   const [chronicleSearch, setChronicleSearch] = useState<string>('');
 
-  // Keep view in sync if year/month changes
+  // Keep view in sync if year/month changes or activeCampaign changes
   React.useEffect(() => {
     setViewYear(calendarState.currentYear);
     setViewMonthIndex(calendarState.currentMonthIndex);
-  }, [calendarState.currentYear, calendarState.currentMonthIndex]);
+  }, [calendarState.currentYear, calendarState.currentMonthIndex, activeCampaign?.id]);
 
   const currentMonth = calendarConfig.months[viewMonthIndex] || calendarConfig.months[0] || { name: 'Mês', days: 30 };
   const totalMonths = calendarConfig.months.length || 1;
@@ -95,7 +104,7 @@ export const CampaignCalendarStudio: React.FC = () => {
   const firstDayAbs = dateToAbsoluteDays(calendarConfig, viewYear, viewMonthIndex, 1);
   const firstDayWeekOffset = ((firstDayAbs % daysOfWeek.length) + daysOfWeek.length) % daysOfWeek.length;
 
-  // Filtered chronicle items
+  // Filtered chronicle items strictly for active campaign
   const allChronicleItems = [
     ...calendarNotes.map((n) => ({
       id: n.id,
@@ -136,6 +145,22 @@ export const CampaignCalendarStudio: React.FC = () => {
     return true;
   });
 
+  if (!activeCampaign || (activeWorld && activeCampaign.worldId !== activeWorld.id)) {
+    return (
+      <div className="flex-1 bg-[#0a0d14] flex flex-col items-center justify-center p-8 text-center select-none">
+        <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4 shadow-xl">
+          <CalendarIcon className="w-8 h-8" />
+        </div>
+        <h3 className="font-bold text-slate-200 text-lg">
+          {activeWorld ? `Nenhuma Campanha no Mundo: ${activeWorld.title}` : 'Nenhuma Campanha Selecionada'}
+        </h3>
+        <p className="text-xs text-slate-400 mt-1 max-w-md">
+          Inicie ou selecione uma campanha de RPG neste mundo para visualizar o calendário astronômico, fases lunares, clima e os anais da crônica.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col h-full bg-[#0a0d14] overflow-hidden select-none">
       {/* Top Studio Header */}
@@ -149,12 +174,29 @@ export const CampaignCalendarStudio: React.FC = () => {
               <span className="text-[10px] font-bold uppercase tracking-widest bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-mono">
                 SISTEMA CRONOLÓGICO
               </span>
-              <h1 className="text-base font-bold text-slate-100">
-                Calendário & Crônica da Campanha
-              </h1>
+              {dmCampaigns.length > 0 && (
+                <div className="flex items-center gap-1.5 bg-[#0a0d14] border border-amber-500/40 rounded-lg px-2 py-0.5 shadow-sm">
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  <select
+                    value={activeCampaign?.id || ''}
+                    onChange={(e) => {
+                      const selected = dmCampaigns.find((c) => c.id === e.target.value);
+                      if (selected) setActiveCampaign(selected);
+                    }}
+                    className="bg-transparent text-xs text-amber-300 font-bold focus:outline-none max-w-[180px] truncate cursor-pointer"
+                    title="Alternar Campanha Ativa"
+                  >
+                    {dmCampaigns.map((c) => (
+                      <option key={c.id} value={c.id} className="bg-[#161c28] text-slate-200">
+                        {c.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
-            <p className="text-xs text-slate-400">
-              Campanha Ativa: <span className="text-amber-300 font-medium">{activeCampaign?.title || 'Campanha Principal'}</span> • Calendário: <span className="text-slate-200">{calendarConfig.name}</span>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Mundo: <span className="text-slate-200 font-medium">{activeWorld?.title || 'Sem mundo'}</span> • Calendário da Mesa: <span className="text-amber-300 font-medium">{calendarConfig.name}</span>
             </p>
           </div>
         </div>

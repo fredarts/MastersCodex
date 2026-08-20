@@ -365,13 +365,15 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
     toast.success(`Encontro ${targetDiff.toUpperCase()} gerado com sucesso (${newCombatants.length} criaturas)!`);
   };
 
-  if (!activeCampaign) {
+  if (!activeCampaign || (activeWorld && activeCampaign.worldId !== activeWorld.id)) {
     return (
       <div className="flex-1 bg-[#0a0d14] flex flex-col items-center justify-center p-8 text-center select-none">
         <Film className="w-12 h-12 text-slate-600 mb-3" />
-        <h3 className="font-bold text-slate-300 text-base">Nenhuma Campanha Selecionada</h3>
+        <h3 className="font-bold text-slate-300 text-base">
+          {activeWorld ? `Nenhuma Campanha no Mundo: ${activeWorld.title}` : 'Nenhuma Campanha Selecionada'}
+        </h3>
         <p className="text-xs text-slate-500 mt-1 max-w-sm">
-          Selecione uma campanha na barra lateral para acessar o Estúdio de Sessões & Designer de Cenas.
+          Inicie ou selecione uma campanha de RPG neste mundo para planejar sessões e projetar cenas cinematográficas.
         </p>
       </div>
     );

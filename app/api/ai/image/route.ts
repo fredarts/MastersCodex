@@ -4,7 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { prompt } = body;
+    const { prompt, aspectRatio: requestedAspectRatio } = body;
 
     if (!prompt) {
       return NextResponse.json({ error: 'O prompt é obrigatório.' }, { status: 400 });
@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     const imageModel = userSettings.imageModel || 'imagen-3.0-generate-001';
+    const finalAspectRatio = requestedAspectRatio || '9:16';
 
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
         contents: [prompt],
         config: {
           imageConfig: {
-            aspectRatio: '9:16'
+            aspectRatio: finalAspectRatio
           }
         }
       });
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
         config: {
           numberOfImages: 1,
           outputMimeType: 'image/jpeg',
-          aspectRatio: '9:16',
+          aspectRatio: finalAspectRatio,
         }
       });
 

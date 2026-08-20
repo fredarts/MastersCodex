@@ -22,9 +22,10 @@ export class LocalStorageSessionRepository implements ISessionRepository {
     };
 
     try {
-      const sessions = await this.fetchSessions(campaignId);
-      sessions.push(newSession);
-      localStorage.setItem('codex_sessions', JSON.stringify(sessions));
+      const saved = localStorage.getItem('codex_sessions');
+      const all: GameSession[] = saved ? JSON.parse(saved) : [];
+      all.push(newSession);
+      localStorage.setItem('codex_sessions', JSON.stringify(all));
     } catch (_e) {}
 
     return newSession;

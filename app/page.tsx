@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
+import { useWorld } from '@/lib/hooks/useWorld';
 import { Header } from '@/components/Header';
 import { Sidebar, ActiveTab } from '@/components/Sidebar';
 import { SessionNavigator } from '@/components/SessionNavigator';
@@ -42,6 +43,7 @@ import { CalendarSettingsModal } from '@/components/calendar/CalendarSettingsMod
 
 function MainApp() {
   const { user, roleMode, setRoleMode, loadDemoEverything } = useAuth();
+  const { activeWorld } = useWorld();
   const { activeCampaign, setActiveCampaign, createFeedEvent } = useCampaign();
   const [activeTab, setActiveTab] = useState<ActiveTab>('live_cockpit');
   const [isLandingPage, setIsLandingPage] = useState<boolean>(true);
@@ -274,7 +276,7 @@ function MainApp() {
             setActiveTab={setActiveTab}
             onLoadEncounter={handleLoadEncounter}
             onOpenCreateCampaign={() => {
-              setSelectedWorldForCampaign(null);
+              setSelectedWorldForCampaign(activeWorld);
               setIsCreateCampaignOpen(true);
             }}
             onLoadDemoEverything={handleLoadDemoEverything}

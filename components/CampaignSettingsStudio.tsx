@@ -24,8 +24,14 @@ import {
   RefreshCw,
   Pencil,
   ChevronLeft,
-  ChevronRight,
   ShieldAlert,
+  Globe,
+  Compass,
+  Flame,
+  LayoutDashboard,
+  Image as ImageIcon,
+  Wand2,
+  ArrowRight,
 } from 'lucide-react';
 import { LinesAndVeilsPanel } from '@/components/safety/LinesAndVeilsPanel';
 import { useAuth } from '@/context/AuthContext';
@@ -60,10 +66,10 @@ export const CampaignSettingsStudio: React.FC = () => {
   const worldCampaigns = userCampaigns.filter((c) => {
     if (c.role !== 'dm') return false;
     if (!activeWorld) return true;
-    return !c.worldId || c.worldId === activeWorld.id;
+    return c.worldId === activeWorld.id;
   });
 
-  const [activeTab, setActiveTab] = useState<'feed' | 'roster' | 'party' | 'houserules' | 'safety' | 'ai' | 'export'>('feed');
+  const [activeTab, setActiveTab] = useState<'overview' | 'feed' | 'roster' | 'party' | 'houserules' | 'safety' | 'ai' | 'export'>('overview');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('masters_codex_campaign_settings_sidebar_collapsed');
@@ -120,7 +126,7 @@ export const CampaignSettingsStudio: React.FC = () => {
   const [aiTone, setAiTone] = useState<'heroic' | 'dark' | 'gritty' | 'funny'>('heroic');
 
   // Empty State: Allow selecting or creating campaigns directly from here!
-  if (!activeCampaign || activeCampaign.role !== 'dm') {
+  if (!activeCampaign || activeCampaign.role !== 'dm' || (activeWorld && activeCampaign.worldId !== activeWorld.id)) {
     return (
       <div className="flex-1 bg-[#0a0d14] flex flex-col p-6 overflow-y-auto select-none">
         <div className="bg-gradient-to-r from-[#161c28] via-[#1a2234] to-[#0f141d] border border-amber-500/30 p-6 rounded-2xl mb-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
@@ -173,25 +179,37 @@ export const CampaignSettingsStudio: React.FC = () => {
               <div
                 key={camp.id}
                 onClick={() => setActiveCampaign(camp)}
-                className="p-5 rounded-2xl bg-[#161c28] border border-[#2a3449] hover:border-amber-500 transition-all cursor-pointer flex flex-col justify-between group"
+                className="rounded-2xl bg-[#161c28] border border-[#2a3449] hover:border-amber-500 transition-all cursor-pointer flex flex-col justify-between group overflow-hidden shadow-lg"
               >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-mono font-bold bg-[#0a0d14] text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded">
-                      CÓDIGO: {camp.inviteCode}
-                    </span>
-                    <Crown className="w-4 h-4 text-amber-400" />
+                {camp.coverImageUrl && (
+                  <div className="w-full aspect-video relative overflow-hidden bg-black/40 border-b border-[#2a3449]">
+                    <img 
+                      src={camp.coverImageUrl} 
+                      alt={camp.title} 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#161c28] via-transparent to-transparent"></div>
                   </div>
-                  <h4 className="font-bold text-base text-slate-100 group-hover:text-amber-300 transition-colors">{camp.title}</h4>
-                  <p className="text-xs text-slate-400 line-clamp-2 mt-1 font-serif">{camp.description}</p>
-                </div>
+                )}
+                <div className="p-5 flex-1 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-mono font-bold bg-[#0a0d14] text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded">
+                        CÓDIGO: {camp.inviteCode}
+                      </span>
+                      <Crown className="w-4 h-4 text-amber-400" />
+                    </div>
+                    <h4 className="font-bold text-base text-slate-100 group-hover:text-amber-300 transition-colors">{camp.title}</h4>
+                    <p className="text-xs text-slate-400 line-clamp-2 mt-1 font-serif">{camp.description}</p>
+                  </div>
 
-                <div className="pt-4 mt-4 border-t border-[#2a3449] flex items-center justify-between">
-                  <span className="text-[11px] text-slate-500 font-semibold">Mesa de RPG D&D 5e</span>
-                  <span className="text-xs text-amber-400 font-bold flex items-center gap-1">
-                    <span>Entrar na Campanha</span>
-                    <Play className="w-3.5 h-3.5 fill-amber-400" />
-                  </span>
+                  <div className="pt-4 mt-4 border-t border-[#2a3449] flex items-center justify-between">
+                    <span className="text-[11px] text-slate-500 font-semibold">Mesa de RPG D&D 5e</span>
+                    <span className="text-xs text-amber-400 font-bold flex items-center gap-1">
+                      <span>Entrar na Campanha</span>
+                      <Play className="w-3.5 h-3.5 fill-amber-400" />
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -289,8 +307,14 @@ export const CampaignSettingsStudio: React.FC = () => {
   return (
     <div className="flex-1 bg-[#0a0d14] flex flex-col overflow-hidden select-none">
       {/* Top Banner */}
-      <div className="bg-gradient-to-r from-[#161c28] via-[#1a2234] to-[#0f141d] border-b border-[#2a3449] p-5 shadow-lg flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
+      <div className="relative bg-gradient-to-r from-[#161c28] via-[#1a2234] to-[#0f141d] border-b border-[#2a3449] p-5 shadow-lg flex flex-wrap items-center justify-between gap-4 overflow-hidden">
+        {activeCampaign.coverImageUrl && (
+          <div 
+            className="absolute inset-0 opacity-15 bg-cover bg-center pointer-events-none filter blur-[1px]" 
+            style={{ backgroundImage: `url(${activeCampaign.coverImageUrl})` }}
+          />
+        )}
+        <div className="flex items-center gap-3.5 relative z-10">
           <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-inner">
             <Settings className="w-6 h-6" />
           </div>
@@ -326,12 +350,12 @@ export const CampaignSettingsStudio: React.FC = () => {
                   className="w-full text-base font-bold bg-[#0a0d14] border border-amber-500/60 focus:border-amber-400 text-slate-100 px-3 py-1 rounded-xl outline-none shadow-inner"
                   autoFocus
                 />
-                <input
-                  type="text"
+                <textarea
+                  rows={4}
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
-                  placeholder="Descrição da Campanha (opcional)"
-                  className="w-full text-xs bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500/50 text-slate-300 px-3 py-1 rounded-xl outline-none"
+                  placeholder="Descrição da Campanha / Sinopse"
+                  className="w-full text-xs bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500/50 text-slate-300 p-2.5 rounded-xl outline-none resize-none font-serif leading-relaxed"
                 />
                 <div className="flex items-center gap-2 pt-0.5">
                   <button
@@ -430,6 +454,19 @@ export const CampaignSettingsStudio: React.FC = () => {
             {/* Vertical Menu Buttons */}
             <div className="p-2 space-y-1">
               <button
+                onClick={() => setActiveTab('overview')}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'overview'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                }`}
+                title="Visão Geral da Campanha"
+              >
+                <LayoutDashboard className={`w-4 h-4 flex-shrink-0 ${activeTab === 'overview' ? 'text-slate-950' : 'text-amber-400'}`} />
+                {!isSidebarCollapsed && <span className="truncate">Visão Geral & Capa</span>}
+              </button>
+
+              <button
                 onClick={() => setActiveTab('feed')}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
                   activeTab === 'feed'
@@ -524,6 +561,330 @@ export const CampaignSettingsStudio: React.FC = () => {
         </aside>
 
         {/* Main Tab Content */}
+        {activeTab === 'overview' && (() => {
+          const rawDesc = activeCampaign.description || '';
+          let synopsisText = rawDesc;
+          let hookText = '';
+          if (rawDesc.includes('**Gancho Inicial:**')) {
+            const parts = rawDesc.split('**Gancho Inicial:**');
+            synopsisText = parts[0].trim();
+            hookText = parts[1].trim();
+          } else if (rawDesc.includes('Gancho Inicial:')) {
+            const parts = rawDesc.split('Gancho Inicial:');
+            synopsisText = parts[0].trim();
+            hookText = parts[1].trim();
+          }
+
+          return (
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#0a0d14]">
+              
+              {/* Hero Panoramic Cover Banner */}
+              <div className="relative w-full rounded-2xl overflow-hidden border border-amber-500/40 bg-[#111622] shadow-2xl group">
+                {activeCampaign.coverImageUrl ? (
+                  <div className="relative w-full aspect-[21/9] min-h-[240px] max-h-[360px] overflow-hidden bg-black/60">
+                    <img 
+                      src={activeCampaign.coverImageUrl} 
+                      alt={activeCampaign.title} 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 filter brightness-95" 
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0a0d14] via-[#0a0d14]/40 to-transparent"></div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#0a0d14]/80 via-transparent to-transparent"></div>
+
+                    {/* Overlay Content */}
+                    <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                      <div className="space-y-2 max-w-2xl">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="px-2.5 py-1 bg-amber-500/30 border border-amber-400/40 text-amber-300 text-xs font-bold rounded-lg uppercase tracking-wider backdrop-blur-md flex items-center gap-1.5 shadow-sm">
+                            <Globe className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{activeWorld ? activeWorld.title : 'Mundo Avulso'}</span>
+                          </span>
+
+                          {activeCampaign.themeTone && (
+                            <span className="px-2.5 py-1 bg-slate-900/70 border border-slate-700 text-slate-200 text-xs font-medium rounded-lg backdrop-blur-md flex items-center gap-1.5">
+                              <Crown className="w-3.5 h-3.5 text-amber-400" />
+                              <span>{activeCampaign.themeTone}</span>
+                            </span>
+                          )}
+
+                          <span className="px-2.5 py-1 bg-slate-900/70 border border-slate-700 text-cyan-300 text-xs font-medium rounded-lg backdrop-blur-md flex items-center gap-1.5">
+                            <Users className="w-3.5 h-3.5" />
+                            <span>{rosterMembers.length} no Elenco</span>
+                          </span>
+                        </div>
+
+                        <h1 className="text-2xl md:text-4xl font-extrabold text-white tracking-wide drop-shadow-lg font-serif">
+                          {activeCampaign.title}
+                        </h1>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => setShowCreateCampaignModal(true)}
+                          className="px-4 py-2 bg-[#161c28]/90 hover:bg-[#1f2738] border border-amber-500/40 text-amber-300 text-xs font-bold rounded-xl transition-all shadow-md backdrop-blur-md flex items-center gap-1.5"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Nova Campanha</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-8 md:p-10 flex flex-col md:flex-row items-center justify-between gap-6 bg-gradient-to-r from-[#161c28] via-[#1a2234] to-[#0f141d]">
+                    <div className="space-y-3 text-center md:text-left">
+                      <div className="flex items-center justify-center md:justify-start gap-2">
+                        <span className="px-2.5 py-1 bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-bold rounded-lg uppercase tracking-wider">
+                          {activeWorld ? activeWorld.title : 'Campanha de RPG'}
+                        </span>
+                        {activeCampaign.themeTone && (
+                          <span className="text-xs text-slate-400 font-medium">— {activeCampaign.themeTone}</span>
+                        )}
+                      </div>
+                      <h1 className="text-2xl md:text-3xl font-extrabold text-slate-100 font-serif">
+                        {activeCampaign.title}
+                      </h1>
+                      <p className="text-xs text-slate-400 max-w-xl">
+                        Nenhuma capa panorâmica configurada para esta mesa. Você pode forjar uma arte 16:9 personalizada com IA.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-3">
+                      <button
+                        onClick={() => {
+                          setEditTitle(activeCampaign.title);
+                          setEditDescription(activeCampaign.description || '');
+                          setIsEditingHeader(true);
+                        }}
+                        className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg flex items-center gap-1.5 transition-all"
+                      >
+                        <Pencil className="w-4 h-4" />
+                        <span>Editar Detalhes</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Main Content Grid: 2 Columns */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Left Column (2 Cols): Synopsis, Lore & Adventure Hook */}
+                <div className="lg:col-span-2 space-y-6">
+                  
+                  {/* Synopsis Panel */}
+                  <div className="bg-[#141a27] border border-[#252f44] rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-[#252f44] pb-3 mb-4">
+                      <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                        <Scroll className="w-4 h-4 text-amber-400" />
+                        <span>Sinopse & Diário de Abertura da Mesa</span>
+                      </h3>
+                      <button
+                        onClick={() => {
+                          setEditTitle(activeCampaign.title);
+                          setEditDescription(activeCampaign.description || '');
+                          setIsEditingHeader(true);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-[#1b2336] rounded-lg transition-colors flex items-center gap-1 text-xs"
+                        title="Editar Sinopse"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Editar</span>
+                      </button>
+                    </div>
+
+                    {synopsisText ? (
+                      <div className="text-xs text-slate-200 font-serif leading-relaxed space-y-3 whitespace-pre-line bg-[#0d121c] p-4 rounded-xl border border-[#252f44]/80">
+                        {synopsisText}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-slate-500">
+                        <p className="text-xs italic mb-3">Nenhuma sinopse cadastrada para esta campanha ainda.</p>
+                        <button
+                          onClick={() => {
+                            setEditTitle(activeCampaign.title);
+                            setEditDescription(activeCampaign.description || '');
+                            setIsEditingHeader(true);
+                          }}
+                          className="px-3.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold rounded-lg transition-all"
+                        >
+                          + Adicionar Sinopse
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Adventure Hook Card (Call to Action / Session 0) */}
+                  {hookText && (
+                    <div className="bg-gradient-to-br from-[#192233] to-[#121724] border border-amber-500/40 rounded-2xl p-5 shadow-xl space-y-2">
+                      <div className="flex items-center gap-2 text-amber-400">
+                        <Compass className="w-4 h-4 text-amber-400" />
+                        <h4 className="text-xs font-extrabold uppercase tracking-wider text-amber-300">
+                          Gancho Inicial de Aventura (Sessão 0 / Call to Action)
+                        </h4>
+                      </div>
+                      <p className="text-xs text-slate-200 font-sans italic bg-[#0a0e17]/80 p-3.5 rounded-xl border border-amber-500/20 leading-relaxed">
+                        "{hookText}"
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Campaign Quick Actions Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      onClick={() => setActiveTab('feed')}
+                      className="p-4 rounded-xl bg-[#141a27] border border-[#252f44] hover:border-amber-500/60 text-left transition-all group flex items-start justify-between shadow-md"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
+                          <BookOpen className="w-4 h-4" />
+                          <span>Diário da Jornada & Feed</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          {feedEvents.length} registros, recaps de sessão e batalhas.
+                        </p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('roster')}
+                      className="p-4 rounded-xl bg-[#141a27] border border-[#252f44] hover:border-cyan-500/60 text-left transition-all group flex items-start justify-between shadow-md"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-cyan-400 font-bold text-xs">
+                          <Users className="w-4 h-4" />
+                          <span>Elenco & Jogadores</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          {rosterMembers.length} membros conectados à mesa.
+                        </p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-1 transition-all" />
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('party')}
+                      className="p-4 rounded-xl bg-[#141a27] border border-[#252f44] hover:border-rose-500/60 text-left transition-all group flex items-start justify-between shadow-md"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-rose-400 font-bold text-xs">
+                          <Swords className="w-4 h-4" />
+                          <span>Party & Inventário</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          {activeCampaign?.partyMembers?.length || 0} heróis e tesouro do grupo.
+                        </p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-rose-400 group-hover:translate-x-1 transition-all" />
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('houserules')}
+                      className="p-4 rounded-xl bg-[#141a27] border border-[#252f44] hover:border-purple-500/60 text-left transition-all group flex items-start justify-between shadow-md"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-purple-400 font-bold text-xs">
+                          <Scroll className="w-4 h-4" />
+                          <span>Regras da Casa</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          {houseRules.length} diretrizes e regras customizadas.
+                        </p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
+                    </button>
+                  </div>
+
+                </div>
+
+                {/* Right Column (1 Col): Roster & Table Metadata */}
+                <div className="space-y-6">
+                  
+                  {/* Table Info & Invite Card */}
+                  <div className="bg-[#141a27] border border-[#252f44] rounded-2xl p-5 shadow-xl space-y-4">
+                    <div className="flex items-center justify-between border-b border-[#252f44] pb-2.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                        Código de Convite
+                      </span>
+                      <Crown className="w-4 h-4 text-amber-400" />
+                    </div>
+
+                    <div className="p-3 bg-[#0a0d14] border border-amber-500/30 rounded-xl flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase block">Código da Mesa:</span>
+                        <span className="text-sm font-mono font-bold text-amber-400 tracking-wider">
+                          {activeCampaign.inviteCode}
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleCopyCode}
+                        className="px-3 py-1.5 bg-[#161c28] hover:bg-[#1f2738] text-slate-200 rounded-lg text-xs font-bold transition-all border border-[#2a3449] flex items-center gap-1.5"
+                      >
+                        {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-amber-400" />}
+                        <span>{copiedCode ? 'Copiado!' : 'Copiar'}</span>
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Compartilhe este código com seus jogadores para que eles possam ingressar nesta mesa pelo Dashboard do Jogador.
+                    </p>
+                  </div>
+
+                  {/* Connected Players Widget */}
+                  <div className="bg-[#141a27] border border-[#252f44] rounded-2xl p-5 shadow-xl space-y-3">
+                    <div className="flex items-center justify-between border-b border-[#252f44] pb-2.5">
+                      <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                        <Users className="w-4 h-4 text-cyan-400" />
+                        <span>Elenco da Mesa ({rosterMembers.length})</span>
+                      </span>
+                      <button
+                        onClick={() => setShowAddMemberModal(true)}
+                        className="text-[11px] font-bold text-amber-400 hover:text-amber-300 transition-colors"
+                      >
+                        + Convidar
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 max-h-56 overflow-y-auto">
+                      {rosterMembers.map((member) => (
+                        <div
+                          key={member.id}
+                          className="flex items-center justify-between p-2.5 rounded-xl bg-[#0a0d14] border border-[#252f44]"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs ${
+                              member.role === 'dm' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
+                            }`}>
+                              {member.displayName ? member.displayName.charAt(0).toUpperCase() : 'J'}
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-slate-200">
+                                {member.displayName || member.characterName || 'Jogador Anônimo'}
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                {member.role === 'dm' ? '👑 Mestre de RPG' : `⚔️ ${member.characterName || 'Personagem não definido'}`}
+                              </div>
+                            </div>
+                          </div>
+
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${
+                            member.role === 'dm' ? 'text-amber-300 bg-amber-500/10 border-amber-500/30' : 'text-cyan-300 bg-cyan-500/10 border-cyan-500/30'
+                          }`}>
+                            {member.role === 'dm' ? 'DM' : 'Jogador'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+          );
+        })()}
+
+        {/* Feed Tab Content */}
         {activeTab === 'feed' && (
           <div className="flex flex-col md:flex-row w-full min-h-full">
             {/* Collapsible Secondary Sidebar for Filters */}

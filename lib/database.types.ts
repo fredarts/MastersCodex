@@ -29,6 +29,8 @@ export interface CampaignRow {
   title: string;
   description?: string | null;
   invite_code: string;
+  cover_image_url?: string | null;
+  theme_tone?: string | null;
   created_at?: string;
   party_members?: any[];
 }

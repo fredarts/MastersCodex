@@ -50,15 +50,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed = false,
   onToggleCollapse,
 }) => {
-  const { userCampaigns, activeCampaign, setActiveCampaign } = useCampaign();
-  const { userWorlds, activeWorld, updateWorld } = useWorld();
+  const { userCampaigns, activeCampaign, setActiveCampaign, updateCampaign } = useCampaign();
+  const { userWorlds, activeWorld, setActiveWorld, updateWorld } = useWorld();
   const [isEditingWorld, setIsEditingWorld] = useState(false);
   const [editedWorldTitle, setEditedWorldTitle] = useState('');
+  const [showOtherWorldsCampaigns, setShowOtherWorldsCampaigns] = useState(false);
 
+  // Campaigns belonging to the active world (or unassigned one-shots)
   const dmCampaigns = userCampaigns.filter((c) => {
     if (c.role !== 'dm') return false;
     if (!activeWorld) return true;
     return !c.worldId || c.worldId === activeWorld.id;
+  });
+
+  // Other campaigns from different worlds
+  const otherCampaigns = userCampaigns.filter((c) => {
+    if (c.role !== 'dm') return false;
+    return activeWorld && c.worldId && c.worldId !== activeWorld.id;
   });
 
   const handleSaveWorldTitle = async () => {
@@ -66,6 +74,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       await updateWorld({ ...activeWorld, title: editedWorldTitle.trim() });
     }
     setIsEditingWorld(false);
+  };
+
+  const handleSelectOtherCampaign = (camp: typeof userCampaigns[0]) => {
+    if (camp.worldId) {
+      const matchingWorld = userWorlds.find((w) => w.id === camp.worldId);
+      if (matchingWorld) setActiveWorld(matchingWorld);
+    }
+    setActiveCampaign(camp);
   };
 
   const navigationHubs = [
@@ -117,7 +133,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* World indicator */}
+        {/* World indicator & Switcher */}
         {activeWorld && (
           isCollapsed ? (
             <div className="flex justify-center" title={`Mundo Ativo: ${activeWorld.title}`}>
@@ -128,7 +144,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ) : (
             <div className="p-2.5 bg-gradient-to-r from-amber-950/40 to-[#161c28] border border-amber-500/30 rounded-xl">
               <div className="text-[10px] font-bold uppercase text-amber-400 font-mono flex items-center justify-between">
-                <span>MUNDO ATIVO:</span>
+                <div className="flex items-center gap-1">
+                  <Globe className="w-3 h-3 text-amber-400" />
+                  <span>MUNDO ATIVO:</span>
+                </div>
                 {!isEditingWorld && (
                   <button
                     onClick={() => {
@@ -160,6 +179,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <Check className="w-3.5 h-3.5" />
                   </button>
                 </div>
+              ) : userWorlds.length > 1 ? (
+                <select
+                  value={activeWorld.id}
+                  onChange={(e) => {
+                    const selected = userWorlds.find((w) => w.id === e.target.value);
+                    if (selected) setActiveWorld(selected);
+                  }}
+                  className="w-full bg-transparent text-xs font-bold text-slate-100 truncate mt-0.5 focus:outline-none cursor-pointer"
+                  title="Trocar Mundo Ativo"
+                >
+                  {userWorlds.map((w) => (
+                    <option key={w.id} value={w.id} className="bg-[#161c28] text-slate-200">
+                      {w.title}
+                    </option>
+                  ))}
+                </select>
               ) : (
                 <div className="text-xs font-bold text-slate-100 truncate mt-0.5">{activeWorld.title}</div>
               )}
@@ -183,19 +218,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {dmCampaigns.length === 0 ? (
               <div className="p-3 bg-[#161c28] border border-dashed border-[#2a3449] rounded-xl text-center space-y-2">
-                <p className="text-xs text-slate-400 font-semibold">Nenhuma campanha criada.</p>
+                <p className="text-xs text-slate-400 font-semibold">Nenhuma campanha neste mundo.</p>
                 <button
                   onClick={onOpenCreateCampaign}
                   className="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] rounded-lg shadow"
                 >
                   + Iniciar Campanha
                 </button>
-                <button
-                  onClick={onLoadDemoEverything}
-                  className="w-full py-1 bg-[#0f141d] hover:bg-[#1f2738] text-slate-400 hover:text-slate-200 text-[10px] rounded border border-[#2a3449]"
-                >
-                  Carregar Exemplo de Demo
-                </button>
+                {otherCampaigns.length > 0 && (
+                  <button
+                    onClick={() => setShowOtherWorldsCampaigns(!showOtherWorldsCampaigns)}
+                    className="w-full py-1 bg-[#0f141d] hover:bg-[#1f2738] text-slate-400 hover:text-slate-200 text-[10px] rounded border border-[#2a3449]"
+                  >
+                    Ver outras campanhas ({otherCampaigns.length})
+                  </button>
+                )}
+                {otherCampaigns.length === 0 && (
+                  <button
+                    onClick={onLoadDemoEverything}
+                    className="w-full py-1 bg-[#0f141d] hover:bg-[#1f2738] text-slate-400 hover:text-slate-200 text-[10px] rounded border border-[#2a3449]"
+                  >
+                    Carregar Exemplo de Demo
+                  </button>
+                )}
               </div>
             ) : (
               <div className="space-y-1">
@@ -216,6 +261,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </button>
                   );
                 })}
+
+                {otherCampaigns.length > 0 && (
+                  <div className="pt-1">
+                    <button
+                      onClick={() => setShowOtherWorldsCampaigns(!showOtherWorldsCampaigns)}
+                      className="w-full text-[10px] text-slate-500 hover:text-slate-300 py-0.5 text-left px-2 flex items-center justify-between"
+                    >
+                      <span>Outras Campanhas ({otherCampaigns.length})</span>
+                      <span>{showOtherWorldsCampaigns ? '▲' : '▼'}</span>
+                    </button>
+
+                    {showOtherWorldsCampaigns && (
+                      <div className="space-y-1 mt-1 pl-1 border-l-2 border-[#2a3449]">
+                        {otherCampaigns.map((camp) => (
+                          <button
+                            key={camp.id}
+                            onClick={() => handleSelectOtherCampaign(camp)}
+                            className="w-full text-left px-2 py-1.5 rounded bg-[#0c0f17] hover:bg-[#161c28] text-[11px] text-slate-400 hover:text-amber-300 truncate block border border-transparent hover:border-[#2a3449]"
+                            title={`Alternar para ${camp.title}`}
+                          >
+                            {camp.title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

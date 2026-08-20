@@ -15,10 +15,10 @@ export const campaignService = {
     }
   },
 
-  async createCampaign(title: string, worldId?: string, description = '', userId?: string): Promise<Result<UserCampaign>> {
+  async createCampaign(title: string, worldId?: string, description = '', userId?: string, coverImageUrl?: string, themeTone?: string): Promise<Result<UserCampaign>> {
     try {
       const repo = RepositoryFactory.getCampaignRepository(userId);
-      const data = await repo.createCampaign(title, worldId, description, userId);
+      const data = await repo.createCampaign(title, worldId, description, userId, coverImageUrl, themeTone);
       return { ok: true, value: data };
     } catch (e: any) {
       return {

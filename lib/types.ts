@@ -296,6 +296,8 @@ export interface UserCampaign {
   role: UserRoleMode;
   characterName?: string;
   partyMembers?: CampaignPartyMember[];
+  coverImageUrl?: string; // Capa panorâmica / Banner 16:9
+  themeTone?: string; // Tom narrativo (Heroico, Dark Fantasy, etc.)
   safetySettings?: import('./types/safety').CampaignSafetySettings;
   calendarConfig?: import('./types/calendar').CampaignCalendarConfig;
   calendarState?: import('./types/calendar').CampaignCalendarState;

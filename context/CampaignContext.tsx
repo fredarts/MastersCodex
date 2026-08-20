@@ -6,6 +6,8 @@ import { campaignService } from '@/lib/services/campaignService';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 
+import { useWorld } from '@/context/WorldContext';
+
 interface CampaignContextType {
   userCampaigns: UserCampaign[];
   setUserCampaigns: React.Dispatch<React.SetStateAction<UserCampaign[]>>;
@@ -17,7 +19,7 @@ interface CampaignContextType {
   addCampaignMember: (campaignId: string, characterName: string, role?: 'dm' | 'player') => Promise<void>;
   removeCampaignMember: (memberId: string) => Promise<void>;
   updateCampaignMemberModelUrl: (campaignId: string, characterName: string, modelUrl: string) => Promise<void>;
-  createCampaign: (title: string, worldId?: string, description?: string) => Promise<UserCampaign | null>;
+  createCampaign: (title: string, worldId?: string, description?: string, coverImageUrl?: string, themeTone?: string) => Promise<UserCampaign | null>;
   updateCampaign: (updatedCampaign: UserCampaign) => Promise<void>;
   joinCampaignByCode: (code: string, characterName?: string, modelUrl?: string) => Promise<boolean>;
   leaveCampaign: (campaignId: string) => Promise<void>;
@@ -40,6 +42,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
   const [feedEvents, setFeedEvents] = useState<CampaignFeedEvent[]>([]);
 
   const { roleMode } = useAuth();
+  const { activeWorld } = useWorld();
 
   useEffect(() => {
     if (!currentUserId) {
@@ -57,7 +60,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
     });
   }, [currentUserId]);
 
-  // Scope active campaign by roleMode (dm vs player)
+  // Scope active campaign by roleMode (dm vs player) and activeWorld
   useEffect(() => {
     if (!currentUserId || userCampaigns.length === 0) {
       setActiveCampaignState(null);
@@ -66,35 +69,61 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
       return;
     }
 
-    const key = `codex_activeCampaignId_${roleMode}`;
-    const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
     const filteredCamps = userCampaigns.filter((c) => c.role === roleMode);
 
     if (filteredCamps.length > 0) {
-      const found = savedActiveId ? filteredCamps.find((c) => c.id === savedActiveId) : null;
-      const target = found || filteredCamps[0];
+      let target: UserCampaign | null = null;
+
+      if (roleMode === 'dm' && activeWorld) {
+        // Find campaigns strictly associated with the active world
+        const worldCamps = filteredCamps.filter((c) => c.worldId === activeWorld.id);
+        const worldSavedId = typeof window !== 'undefined' ? localStorage.getItem(`codex_activeCampaignId_world_${activeWorld.id}`) : null;
+        
+        if (worldSavedId) {
+          target = worldCamps.find((c) => c.id === worldSavedId) || null;
+        }
+        if (!target && worldCamps.length > 0) {
+          target = worldCamps[0];
+        }
+        // If the active world has 0 campaigns, target stays null! Do NOT fall back to other worlds!
+      } else {
+        const key = `codex_activeCampaignId_${roleMode}`;
+        const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+        const found = savedActiveId ? filteredCamps.find((c) => c.id === savedActiveId) : null;
+        target = found || filteredCamps[0];
+      }
       
       setActiveCampaignState(target);
-      campaignService.fetchCampaignMembers(target.id, currentUserId).then((mRes) => {
-        if (mRes.ok) setCampaignMembers(mRes.value);
-        else toast.error(mRes.error.message);
-      });
-      campaignService.fetchFeedEvents(target.id, currentUserId).then((fRes) => {
-        if (fRes.ok) setFeedEvents(fRes.value);
-        else toast.error(fRes.error.message);
-      });
+      if (target) {
+        campaignService.fetchCampaignMembers(target.id, currentUserId).then((mRes) => {
+          if (mRes.ok) setCampaignMembers(mRes.value);
+          else toast.error(mRes.error.message);
+        });
+        campaignService.fetchFeedEvents(target.id, currentUserId).then((fRes) => {
+          if (fRes.ok) setFeedEvents(fRes.value);
+          else toast.error(fRes.error.message);
+        });
+      } else {
+        setCampaignMembers([]);
+        setFeedEvents([]);
+      }
     } else {
       setActiveCampaignState(null);
       setCampaignMembers([]);
       setFeedEvents([]);
     }
-  }, [roleMode, userCampaigns, currentUserId]);
+  }, [roleMode, activeWorld?.id, userCampaigns, currentUserId]);
 
   const setActiveCampaign = (camp: UserCampaign | null) => {
     setActiveCampaignState(camp);
     try {
       if (camp) {
         localStorage.setItem(`codex_activeCampaignId_${roleMode}`, camp.id);
+        if (camp.worldId) {
+          localStorage.setItem(`codex_activeCampaignId_world_${camp.worldId}`, camp.id);
+        } else if (activeWorld) {
+          localStorage.setItem(`codex_activeCampaignId_world_${activeWorld.id}`, camp.id);
+        }
         campaignService.fetchCampaignMembers(camp.id, currentUserId).then((mRes) => {
           if (mRes.ok) setCampaignMembers(mRes.value);
           else toast.error(mRes.error.message);
@@ -105,6 +134,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
         });
       } else {
         localStorage.removeItem(`codex_activeCampaignId_${roleMode}`);
+        if (activeWorld) {
+          localStorage.removeItem(`codex_activeCampaignId_world_${activeWorld.id}`);
+        }
       }
     } catch (e) {}
   };
@@ -154,8 +186,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
     );
   };
 
-  const createCampaign = async (title: string, worldId?: string, description = ''): Promise<UserCampaign | null> => {
-    const res = await campaignService.createCampaign(title, worldId, description, currentUserId);
+  const createCampaign = async (title: string, worldId?: string, description?: string, coverImageUrl?: string, themeTone?: string): Promise<UserCampaign | null> => {
+    const targetWorldId = worldId !== undefined ? worldId : activeWorld?.id;
+    const res = await campaignService.createCampaign(title, targetWorldId, description, currentUserId, coverImageUrl, themeTone);
     if (!res.ok) {
       toast.error(res.error.message);
       return null;

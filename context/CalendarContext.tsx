@@ -64,7 +64,7 @@ const CalendarContext = createContext<CalendarContextType | undefined>(undefined
 
 export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { activeCampaign, createFeedEvent } = useCampaign();
-  const campaignId = activeCampaign?.id || 'default_campaign';
+  const campaignId = activeCampaign?.id || '';
 
   const [calendarConfig, setCalendarConfig] = useState<CampaignCalendarConfig>(DEFAULT_CALENDAR_CONFIG);
   const [calendarState, setCalendarState] = useState<CampaignCalendarState>({
@@ -90,16 +90,36 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isDayModalOpen, setIsDayModalOpen] = useState(false);
   const [selectedDayForModal, setSelectedDayForModal] = useState<{ monthIndex: number; day: number } | null>(null);
 
-  // Carregar dados da campanha ativa
+  // Carregar dados estritamente isolados da campanha ativa
   useEffect(() => {
     let isMounted = true;
     setIsLoading(true);
 
     async function load() {
       if (!campaignId) {
-        setIsLoading(false);
+        if (isMounted) {
+          setCalendarConfig(DEFAULT_CALENDAR_CONFIG);
+          setCalendarState({
+            currentYear: DEFAULT_CALENDAR_CONFIG.startingYear,
+            currentMonthIndex: DEFAULT_CALENDAR_CONFIG.startingMonthIndex,
+            currentDay: DEFAULT_CALENDAR_CONFIG.startingDay,
+            currentHour: DEFAULT_CALENDAR_CONFIG.startingHour,
+            currentMinute: DEFAULT_CALENDAR_CONFIG.startingMinute,
+            totalDaysElapsed: dateToAbsoluteDays(
+              DEFAULT_CALENDAR_CONFIG,
+              DEFAULT_CALENDAR_CONFIG.startingYear,
+              DEFAULT_CALENDAR_CONFIG.startingMonthIndex,
+              DEFAULT_CALENDAR_CONFIG.startingDay
+            ),
+          });
+          setCalendarNotes([]);
+          setIsLoading(false);
+        }
         return;
       }
+
+      // Limpar notas anteriores antes do carregamento da nova campanha
+      setCalendarNotes([]);
 
       const [configRes, stateRes, notesRes] = await Promise.all([
         calendarService.fetchCalendarConfig(campaignId),
@@ -109,10 +129,10 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       if (!isMounted) return;
 
-      const loadedConfig = configRes.ok ? configRes.value : DEFAULT_CALENDAR_CONFIG;
+      const loadedConfig = configRes.ok && configRes.value ? configRes.value : DEFAULT_CALENDAR_CONFIG;
       setCalendarConfig(loadedConfig);
 
-      if (stateRes.ok) {
+      if (stateRes.ok && stateRes.value) {
         setCalendarState(stateRes.value);
       } else {
         setCalendarState({
@@ -130,8 +150,10 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
       }
 
-      if (notesRes.ok) {
+      if (notesRes.ok && Array.isArray(notesRes.value)) {
         setCalendarNotes(notesRes.value);
+      } else {
+        setCalendarNotes([]);
       }
 
       setIsLoading(false);

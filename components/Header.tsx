@@ -83,8 +83,8 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <div className="text-xs text-slate-400 flex items-center gap-2">
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Mesa: <span className="text-amber-300 font-semibold">{activeCampaign ? activeCampaign.title : 'Nenhuma'}</span>
+                <span className={`w-2 h-2 rounded-full ${activeCampaign && (!activeWorld || activeCampaign.worldId === activeWorld.id) ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></span>
+                Mesa: <span className="text-amber-300 font-semibold">{activeCampaign && (!activeWorld || activeCampaign.worldId === activeWorld.id) ? activeCampaign.title : 'Nenhuma'}</span>
               </span>
               {activeWorld && (
                 <span className="hidden md:inline-block text-[11px] text-slate-400 border-l border-[#2a3449] pl-2 font-mono">
