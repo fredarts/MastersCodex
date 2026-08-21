@@ -526,19 +526,36 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
   };
 
   const handleAddNpcToScene = (npc: WorldEntity) => {
-    const hp = Number(npc.attributes?.hp || npc.attributes?.pv || npc.attributes?.PV || 20);
-    const ac = Number(npc.attributes?.ac || npc.attributes?.ca || npc.attributes?.CA || 12);
+    const cs = npc.characterSheet || npc.attributes?.characterSheet;
+    const hp = cs?.currentHp ?? Number(npc.attributes?.hp || npc.attributes?.pv || npc.attributes?.PV || npc.statSheet?.hp || 20);
+    const maxHp = cs?.maxHp ?? Number(npc.attributes?.maxHp || npc.statSheet?.maxHp || hp);
+    const ac = cs?.armorClass ?? Number(npc.attributes?.ac || npc.attributes?.ca || npc.attributes?.CA || npc.statSheet?.ac || 12);
+    const dexVal = cs ? (cs.attributes?.dex?.score || 10) : (npc.statSheet?.dex || 10);
+    const dexMod = Math.floor((dexVal - 10) / 2);
 
     const newC: Combatant = {
       id: `c-npc-${Date.now()}-${Math.random()}`,
       name: npc.name,
       type: 'npc',
       hp: hp,
-      maxHp: hp,
+      maxHp: maxHp,
       ac: ac,
-      initiative: Math.floor(Math.random() * 20) + 1,
+      speed: cs?.speed ?? npc.statSheet?.speed ?? '9m (30ft)',
+      initiative: Math.floor(Math.random() * 20) + 1 + dexMod,
       conditions: [],
       modelUrl: getModelUrlByNameOrPath(npc.name),
+      str: cs ? cs.attributes?.str?.score : npc.statSheet?.str,
+      dex: cs ? cs.attributes?.dex?.score : npc.statSheet?.dex,
+      con: cs ? cs.attributes?.con?.score : npc.statSheet?.con,
+      int: cs ? cs.attributes?.int?.score : npc.statSheet?.int,
+      wis: cs ? cs.attributes?.wis?.score : npc.statSheet?.wis,
+      cha: cs ? cs.attributes?.cha?.score : npc.statSheet?.cha,
+      avatarUrl: npc.images?.[0] || cs?.avatarUrl,
+      actions: cs?.attacks && cs.attacks.length > 0 ? cs.attacks.map((atk: any) => ({
+        name: atk.name,
+        desc: `Ataque: ${atk.atkBonus} para acertar. Dano: ${atk.damage} (${atk.type || 'Físico'}).`
+      })) : npc.statSheet?.actions,
+      characterSheet: cs,
     };
     setSceneCombatants((prev) => [...prev, newC]);
   };

@@ -42,6 +42,8 @@ export function mapWorldEntityRowToDomain(row: WorldEntityRow): WorldEntity {
     shortDesc: row.short_desc || '',
     fullContent: row.full_content || undefined,
     attributes: row.attributes || {},
+    characterSheet: row.attributes?.characterSheet || undefined,
+    statSheetMode: row.attributes?.statSheetMode || (row.attributes?.characterSheet ? 'full' : 'statblock'),
     connections: (row.connections || []).map((conn: any) => {
       if (typeof conn === 'string') {
         return { targetId: conn, type: 'neutral' };

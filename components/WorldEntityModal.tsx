@@ -2,19 +2,46 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Sparkles, Layers, BookOpen, FileText, Image as ImageIcon, Trash2, Upload, AlertCircle, Wand2, Network, Target, CheckSquare, Award, Coins, MapPin, Users, Check, ZoomIn, RefreshCw, Loader2, Star, Crown, Heart, Skull, Shield, Swords, EyeOff, Lock, User } from 'lucide-react';
+import { X, Plus, Sparkles, Layers, BookOpen, FileText, Image as ImageIcon, Trash2, Upload, AlertCircle, Wand2, Network, Target, CheckSquare, Award, Coins, MapPin, Users, Check, ZoomIn, RefreshCw, Loader2, Star, Crown, Heart, Skull, Shield, Swords, EyeOff, Lock, User, Palette, Package, Activity, Zap, Play } from 'lucide-react';
 import { useWorld } from '@/lib/hooks/useWorld';
-import { WorldEntityCategory, WorldEntity, EntityConnection, ConnectionType, EntityStatSheet, QuestObjective, QuestReward, QuestStatus, QuestDifficulty, QuestType } from '@/lib/types';
+import { WorldEntityCategory, WorldEntity, EntityConnection, ConnectionType, EntityStatSheet, QuestObjective, QuestReward, QuestStatus, QuestDifficulty, QuestType, CharacterSheet } from '@/lib/types';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
 import { storageService } from '@/lib/services/storageService';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useUserSettings } from '@/lib/hooks/useUserSettings';
 import { WorldEntityAiGeneratorModal } from '@/components/WorldEntityAiGeneratorModal';
 import { worldService } from '@/lib/services/worldService';
+import { CharacterSheetModal } from '@/components/character-sheet/CharacterSheetModal';
+import { CharacterBuilderWizardModal } from '@/components/character-sheet/Modals/CharacterBuilderWizardModal';
+import { NPC_EQUIPMENT_PRESETS, applyNpcEquipmentPreset } from '@/lib/npc-equipment-presets';
+import { createEmptyCharacterSheet } from '@/lib/dnd5e-data';
+import { recalculateSheetDerivedStats, getEffectiveAttributeScore, getAttributeModifier } from '@/lib/dnd5e-calculator';
 
 import { MentionTextarea } from '@/components/ui/MentionTextarea';
 import { WikiTextRenderer } from '@/components/ui/WikiTextRenderer';
 import { Eye, Edit3 } from 'lucide-react';
+
+export const RPG_IMAGE_STYLES = [
+  { id: 'none', label: '🎨 Estilo Padrão / Automático', prompt: '' },
+  { id: 'dark_fantasy', label: '🌑 Dark Fantasy & Grimdark (Elden Ring / Souls)', prompt: 'Dark fantasy art, gritty atmosphere, shadows, high contrast oil painting, Elden Ring and Dark Souls aesthetic, moody chiaroscuro lighting, highly detailed' },
+  { id: 'classic_dnd', label: '⚔️ D&D Clássico & MTG (Pintura a Óleo)', prompt: 'Classic high fantasy oil painting, Magic The Gathering card art style, rich pigments, master brushwork, detailed textures, heroic composition' },
+  { id: 'cyberpunk', label: '🌆 Cyberpunk & Shadowrun (Arcanopunk)', prompt: 'Cyberpunk fantasy, neon reflections, holographic arcane glyphs, high-tech cybernetics, volumetric rain, dynamic cinematic lighting' },
+  { id: 'anime_jrpg', label: '✨ Anime & JRPG Fantasia (Ghibli / Final Fantasy)', prompt: 'High quality anime fantasy concept art, vibrant colors, detailed cel shading, expressive character design, cinematic anime lighting' },
+  { id: 'watercolor_parchment', label: '📜 Aquarela em Pergaminho Nobre', prompt: 'Delicate vintage watercolor illustration, aged parchment paper texture, ink wash accents, medieval illuminated manuscript style' },
+  { id: 'hyper_cinematic', label: '🎬 Arte Conceitual Hiper-Realista 8K', prompt: 'Cinematic concept art, hyper-realistic, 8k Unreal Engine 5 render, raytraced subsurface scattering, IMAX lighting, photorealistic textures' },
+  { id: 'cosmic_horror', label: '🐙 Terror Cósmico / Lovecraftiano (Bloodborne)', prompt: 'Eldritch cosmic horror, sanity-draining atmosphere, eerie glowing runes, tentacles, deep abyss shadows, Bloodborne aesthetic' },
+  { id: 'steampunk', label: '⚙️ Steampunk & Engenhocas de Éter (Eberron)', prompt: 'Arcanopunk steampunk fantasy, brass gears, glowing aether crystals, leather and copper mechanisms, smoky Victorian lighting' },
+  { id: 'medieval_woodcut', label: '✒️ Gravura Medieval em Madeira / Xilogravura', prompt: 'Black ink linework, medieval woodcut engraving style, hatching cross-hatch shading, gothic grimoire illustration' },
+  { id: 'high_epic_fantasy', label: '👑 Alta Fantasia Radiante / Épica', prompt: 'High epic fantasy, radiant golden sunlight, ethereal aura, heroic majestic lighting, pristine crystalline elements, legendary atmosphere' },
+  { id: 'gothic_victorian', label: '🦇 Gótico Vitoriano & Vampírico (Castlevania)', prompt: 'Victorian gothic fantasy, Castlevania aesthetic, moonlit velvet textures, wrought iron, crimson accents, baroque architecture' },
+  { id: 'nordic_viking', label: '❄️ Nórdico / Mitologia Viking & Gélida', prompt: 'Norse mythology pagan fantasy, frosty blizzard, carved ancient runes, furs, cold blue tones, raw barbaric atmosphere' },
+  { id: 'spelljammer_astral', label: '🌌 Mar Astral & Spelljammer Cósmico', prompt: 'Space opera fantasy, astral sea, stardust nebula backdrop, cosmic arcane energies, glowing planetary horizons' },
+  { id: 'retro_80s', label: '🛡️ Retrô Fantasia Anos 80 (Frazetta / Elmore)', prompt: 'Retro 1980s fantasy book cover art, Frank Frazetta and Larry Elmore style, dramatic acrylic painting, heroic fantasy' },
+  { id: 'solarpunk_druidic', label: '🌿 Druídico Solarpunk & Bio-Mágico', prompt: 'Druidic Solarpunk fantasy, bioluminescent flora, living moss, sun-dappled ancient forest, harmonious nature magic' },
+  { id: 'pixel_art', label: '👾 Pixel Art HD-2D / 16-Bit RPG', prompt: 'HD-2D Octopath style pixel art, modern dynamic lighting, retro fantasy aesthetic, rich pixel depth, detailed sprites' },
+  { id: 'renaissance_portrait', label: '🕯️ Retrato Renascentista (Rembrandt)', prompt: 'Renaissance master portrait, Rembrandt style chiaroscuro, warm candlelight, dramatic deep shadows, velvet texture' },
+  { id: 'synthwave_retro', label: '🔮 Synthwave / Synth-Fantasy Arcano', prompt: 'Synthwave fantasy, vibrant magenta and cyan neon glow, retrofuturistic arcane grid, 80s aesthetic' },
+];
 
 const generateTimestampId = (prefix: string) => `${prefix}-${Date.now()}`;
 
@@ -102,6 +129,14 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   const [newActionName, setNewActionName] = useState('');
   const [newActionDesc, setNewActionDesc] = useState('');
 
+  // Full D&D 5e Character Sheet states for NPCs
+  const [npcSheetMode, setNpcSheetMode] = useState<'statblock' | 'full'>('full');
+  const [npcCharacterSheet, setNpcCharacterSheet] = useState<CharacterSheet | null>(null);
+  const [isNpcSheetModalOpen, setIsNpcSheetModalOpen] = useState(false);
+  const [isNpcWizardModalOpen, setIsNpcWizardModalOpen] = useState(false);
+  const [selectedPresetKit, setSelectedPresetKit] = useState<string>(NPC_EQUIPMENT_PRESETS[0]?.id || 'guard_soldier');
+  const [presetFeedback, setPresetFeedback] = useState<string | null>(null);
+
   const resetStatSheetDefaults = () => {
     setAc(10);
     setHp(10);
@@ -117,6 +152,9 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
     setCha(10);
     setAbilities([]);
     setActions([]);
+    setNpcCharacterSheet(null);
+    setNpcSheetMode('full');
+    setPresetFeedback(null);
   };
 
   const handleClose = () => {
@@ -131,6 +169,8 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   const [aiWarningMessage, setAiWarningMessage] = useState<string | null>(null);
 
   // AI Image Edit states
+  const [selectedArtStyle, setSelectedArtStyle] = useState<string>('none');
+  const [editSelectedArtStyle, setEditSelectedArtStyle] = useState<string>('none');
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '9:16' | '16:9' | '3:4' | '4:3'>('9:16');
   const [editAspectRatio, setEditAspectRatio] = useState<'1:1' | '9:16' | '16:9' | '3:4' | '4:3'>('9:16');
   const [useCoverAsReference, setUseCoverAsReference] = useState(true);
@@ -228,6 +268,25 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       } else {
         resetStatSheetDefaults();
       }
+
+      // Initialize full character sheet for NPCs if available
+      const rawSheet = editingEntity.characterSheet || attrs.characterSheet;
+      if (rawSheet) {
+        setNpcCharacterSheet(rawSheet);
+        setNpcSheetMode(editingEntity.statSheetMode || attrs.statSheetMode || 'full');
+      } else if (editingEntity.category === 'npc') {
+        const initSheet = createEmptyCharacterSheet('dm', activeWorld?.id);
+        initSheet.characterName = editingEntity.name;
+        initSheet.race = attrs.npcRace || attrs.race || 'Humano';
+        initSheet.className = attrs.npcClass || attrs.class || 'Guerreiro';
+        initSheet.alignment = attrs.npcAlignment || attrs.alignment || 'Neutro';
+        initSheet.avatarUrl = editingEntity.images?.[0] || '';
+        setNpcCharacterSheet(initSheet);
+        setNpcSheetMode(editingEntity.statSheetMode || attrs.statSheetMode || 'full');
+      } else {
+        setNpcCharacterSheet(null);
+        setNpcSheetMode('statblock');
+      }
     } else {
       setCategory(defaultCategory);
       setName('');
@@ -319,11 +378,16 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       
       const referenceCoverImage = (images.length > 0 && useCoverAsReference) ? images[0] : undefined;
 
+      const chosenStyle = RPG_IMAGE_STYLES.find((s) => s.id === selectedArtStyle);
+      const stylePromptPart = chosenStyle?.prompt ? `Art style & aesthetic: ${chosenStyle.prompt}.` : '';
+
+      const noTextRule = 'No text, no typography, no letters, no words, no watermark, no signatures, no UI borders.';
+
       // Construct rich prompt (with consistency instructions if reference is active)
-      let promptText = `High detailed fantasy RPG concept art of ${name.trim() || categoryName}: ${baseDescription}. Genre: ${activeWorld.genre}. ${extraPrompt.trim() ? `Additional style details: ${extraPrompt.trim()}` : 'Digital painting, atmospheric lighting, 8k resolution, cinematic composition, white background.'}`;
+      let promptText = `High detailed fantasy RPG concept art of ${name.trim() || categoryName}: ${baseDescription}. Genre: ${activeWorld.genre}. ${stylePromptPart} ${extraPrompt.trim() ? `Additional style details: ${extraPrompt.trim()}` : 'Digital painting, atmospheric lighting, 8k resolution, cinematic composition.'} ${noTextRule}`;
       
       if (referenceCoverImage) {
-        promptText = `Character visual consistency artwork of ${name.trim() || categoryName}. Maintain exact facial features, skin tone, hair style, race, physical identity and aesthetic style from the provided reference image. Scene, pose or context details: ${baseDescription}. ${extraPrompt.trim() ? `Additional custom details: ${extraPrompt.trim()}` : ''}. High quality fantasy RPG concept art, cinematic lighting, 8k resolution.`;
+        promptText = `Character visual consistency artwork of ${name.trim() || categoryName}. Maintain exact facial features, skin tone, hair style, race, physical identity and aesthetic style from the provided reference image. Scene, pose or context details: ${baseDescription}. ${stylePromptPart} ${extraPrompt.trim() ? `Additional custom details: ${extraPrompt.trim()}` : ''}. High quality fantasy RPG concept art, cinematic lighting, 8k resolution. ${noTextRule}`;
       }
 
       const response = await fetch('/api/ai/image', {
@@ -380,7 +444,10 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
     try {
       const sourceImage = images[editingImageIndex];
       const categoryName = getCategoryTitle().replace('Adicionar Novo ', '').replace('Adicionar Nova ', '');
-      const promptText = `Modify and transform this image of ${name.trim() || categoryName}. Required alterations and visual changes: ${aiEditPrompt.trim()}. Keep fantasy RPG style, high quality digital painting, atmospheric lighting.`;
+      const chosenEditStyle = RPG_IMAGE_STYLES.find((s) => s.id === editSelectedArtStyle);
+      const editStylePromptPart = chosenEditStyle?.prompt ? `Art style & aesthetic: ${chosenEditStyle.prompt}.` : '';
+
+      const promptText = `Modify and transform this image of ${name.trim() || categoryName}. Required alterations and visual changes: ${aiEditPrompt.trim()}. ${editStylePromptPart} Keep fantasy RPG style, high quality digital painting, atmospheric lighting. No text, no typography, no words, no letters, no watermark.`;
 
       const response = await fetch('/api/ai/image', {
         method: 'POST',
@@ -433,7 +500,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
     if (!name.trim()) return;
     setIsSubmitting(true);
 
-    const attributes: Record<string, string> = { ...(editingEntity?.attributes || {}) };
+    const attributes: Record<string, any> = { ...(editingEntity?.attributes || {}) };
 
     if (category === 'npc') {
       attributes.npcRace = npcRace.trim();
@@ -447,6 +514,21 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       attributes.successionStatus = npcSuccessionStatus;
       attributes.customBadge = npcCustomBadge.trim();
       attributes.secrets = npcSecrets.trim();
+
+      if (npcCharacterSheet) {
+        const synchedSheet: CharacterSheet = {
+          ...npcCharacterSheet,
+          characterName: name.trim() || npcCharacterSheet.characterName,
+          race: npcRace.trim() || npcCharacterSheet.race,
+          className: npcClass.trim() || npcCharacterSheet.className,
+          alignment: npcAlignment || npcCharacterSheet.alignment,
+          avatarUrl: images[0] || npcCharacterSheet.avatarUrl,
+          backstory: shortDesc.trim() || npcCharacterSheet.backstory,
+        };
+        const recalculated = recalculateSheetDerivedStats(synchedSheet);
+        attributes.characterSheet = recalculated;
+        attributes.statSheetMode = npcSheetMode;
+      }
     } else if (category === 'quest') {
       attributes.questStatus = questStatus;
       attributes.questDifficulty = questDifficulty;
@@ -486,6 +568,8 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         images: images.length > 0 ? images : undefined,
         connections: finalConnections,
         attributes,
+        characterSheet: (attributes.characterSheet as CharacterSheet) || undefined,
+        statSheetMode: (attributes.statSheetMode as 'statblock' | 'full') || undefined,
         tags: tags.length > 0 ? tags : undefined,
       };
       await updateWorldEntity(updated);
@@ -508,23 +592,57 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
     }
 
     if (savedEntity && ['npc', 'monster', 'beast'].includes(category)) {
+      let finalAc = ac;
+      let finalHp = hp;
+      let finalMaxHp = maxHp;
+      let finalSpeed = speed;
+      let finalStr = str;
+      let finalDex = dex;
+      let finalCon = con;
+      let finalInt = int;
+      let finalWis = wis;
+      let finalCha = cha;
+      let finalActions = actions;
+      let finalAbilities = abilities;
+
+      if (category === 'npc' && attributes.characterSheet) {
+        const cs: CharacterSheet = attributes.characterSheet as CharacterSheet;
+        finalAc = cs.armorClass || ac;
+        finalHp = cs.currentHp || hp;
+        finalMaxHp = cs.maxHp || maxHp;
+        finalSpeed = cs.speed || speed;
+        finalStr = getEffectiveAttributeScore(cs, 'str');
+        finalDex = getEffectiveAttributeScore(cs, 'dex');
+        finalCon = getEffectiveAttributeScore(cs, 'con');
+        finalInt = getEffectiveAttributeScore(cs, 'int');
+        finalWis = getEffectiveAttributeScore(cs, 'wis');
+        finalCha = getEffectiveAttributeScore(cs, 'cha');
+
+        if (cs.attacks && cs.attacks.length > 0) {
+          finalActions = cs.attacks.map((atk) => ({
+            name: atk.name,
+            desc: `Ataque: ${atk.atkBonus} para acertar. Dano: ${atk.damage} (${atk.type || 'Físico'}).`
+          }));
+        }
+      }
+
       const sheet: EntityStatSheet = {
         id: editingEntity?.statSheet?.id || generateTimestampId('sheet'),
         entityId: savedEntity.id,
-        ac,
-        hp,
-        maxHp,
-        speed,
+        ac: finalAc,
+        hp: finalHp,
+        maxHp: finalMaxHp,
+        speed: finalSpeed,
         cr,
         xp,
-        str,
-        dex,
-        con,
-        int,
-        wis,
-        cha,
-        abilities,
-        actions,
+        str: finalStr,
+        dex: finalDex,
+        con: finalCon,
+        int: finalInt,
+        wis: finalWis,
+        cha: finalCha,
+        abilities: finalAbilities,
+        actions: finalActions,
       };
       const res = await worldService.saveEntityStatSheet(sheet);
       if (!res.ok) {
@@ -1648,34 +1766,56 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Aspect Ratio Selector */}
-                  <div className="flex items-center gap-2 flex-wrap bg-[#0a0d14] p-2 rounded-lg border border-[#2a3449]/80">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono mr-1">
-                      Proporção (Aspect Ratio):
-                    </span>
-                    {(
-                      [
-                        { id: '9:16', label: '9:16 Retrato', desc: 'Vertical / Celular' },
-                        { id: '3:4', label: '3:4 Retrato', desc: 'Retrato Clássico' },
-                        { id: '1:1', label: '1:1 Quadrado', desc: 'Avatar' },
-                        { id: '4:3', label: '4:3 Paisagem', desc: 'Cenário Padrão' },
-                        { id: '16:9', label: '16:9 Widescreen', desc: 'Cinemático' },
-                      ] as const
-                    ).map((r) => (
-                      <button
-                        key={r.id}
-                        type="button"
-                        onClick={() => setAspectRatio(r.id)}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-bold transition-all ${
-                          aspectRatio === r.id
-                            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30 ring-1 ring-purple-400'
-                            : 'bg-[#161c28] hover:bg-[#1f2738] text-slate-300 border border-[#2a3449]'
-                        }`}
-                        title={r.desc}
+                  {/* Style & Aspect Ratio Controls */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+                    {/* Art Style Preset Dropdown */}
+                    <div className="flex items-center gap-2 bg-[#0a0d14] p-2 rounded-lg border border-[#2a3449]/80 min-w-0">
+                      <Palette className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                      <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider font-mono shrink-0">
+                        Estilo RPG:
+                      </span>
+                      <select
+                        value={selectedArtStyle}
+                        onChange={(e) => setSelectedArtStyle(e.target.value)}
+                        className="flex-1 min-w-0 bg-[#121824] border border-[#2a3449] focus:border-purple-500 rounded-md px-2.5 py-1 text-xs text-slate-100 font-bold focus:outline-none cursor-pointer truncate"
                       >
-                        {r.label}
-                      </button>
-                    ))}
+                        {RPG_IMAGE_STYLES.map((style) => (
+                          <option key={style.id} value={style.id}>
+                            {style.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Aspect Ratio Selector */}
+                    <div className="flex items-center gap-1.5 flex-wrap bg-[#0a0d14] p-2 rounded-lg border border-[#2a3449]/80">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono mr-1 shrink-0">
+                        Proporção:
+                      </span>
+                      {(
+                        [
+                          { id: '9:16', label: '9:16 Retrato', desc: 'Vertical / Celular' },
+                          { id: '3:4', label: '3:4 Retrato', desc: 'Retrato Clássico' },
+                          { id: '1:1', label: '1:1 Quadrado', desc: 'Avatar' },
+                          { id: '4:3', label: '4:3 Paisagem', desc: 'Cenário Padrão' },
+                          { id: '16:9', label: '16:9 Widescreen', desc: 'Cinemático' },
+                        ] as const
+                      ).map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => setAspectRatio(r.id)}
+                          className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold transition-all ${
+                            aspectRatio === r.id
+                              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30 ring-1 ring-purple-400'
+                              : 'bg-[#161c28] hover:bg-[#1f2738] text-slate-300 border border-[#2a3449]'
+                          }`}
+                          title={r.desc}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Visual Consistency Anchor Banner */}
@@ -1860,220 +2000,639 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
           ) : (
             /* Stats sheet block */
             <div className="space-y-6 animate-fade-in pb-4">
-              {/* Combat Values Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 bg-[#0a0d14] border border-[#2a3449] p-4 rounded-xl">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Classe de Armadura (CA):</label>
-                  <input
-                    type="number"
-                    value={ac}
-                    onChange={(e) => setAc(Math.max(1, parseInt(e.target.value) || 0))}
-                    className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-2 text-sm text-slate-100 font-bold focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">PV Atuais (HP):</label>
-                  <input
-                    type="number"
-                    value={hp}
-                    onChange={(e) => setHp(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-2 text-sm text-slate-100 font-bold focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">PV Máximos (Max HP):</label>
-                  <input
-                    type="number"
-                    value={maxHp}
-                    onChange={(e) => setMaxHp(Math.max(1, parseInt(e.target.value) || 0))}
-                    className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-2 text-sm text-slate-100 font-bold focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Velocidade (Speed):</label>
-                  <input
-                    type="text"
-                    value={speed}
-                    onChange={(e) => setSpeed(e.target.value)}
-                    className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none"
-                  />
-                </div>
-                <div className="col-span-2 sm:col-span-1 grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">ND (CR):</label>
-                    <input
-                      type="text"
-                      value={cr}
-                      onChange={(e) => setCr(e.target.value)}
-                      className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2 py-2 text-sm text-slate-100 focus:outline-none"
-                    />
+              {/* Sheet Mode Selector Toggle */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0a0d14] border border-[#2a3449] p-3.5 rounded-2xl shadow-inner">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                    <Layers className="w-4 h-4" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">XP:</label>
-                    <input
-                      type="number"
-                      value={xp}
-                      onChange={(e) => setXp(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2 py-2 text-sm text-slate-100 focus:outline-none"
-                    />
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-100 flex items-center gap-2">
+                      <span>Modo da Ficha de Estatísticas</span>
+                      {category === 'npc' && (
+                        <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-mono">
+                          Recomendado: Ficha Completa
+                        </span>
+                      )}
+                    </h4>
+                    <p className="text-[10px] text-slate-400">
+                      {npcSheetMode === 'full'
+                        ? 'Ficha Completa D&D 5e: Classes, Níveis, Inventário, Equipamentos com CA dinâmica, Magias e Perícias.'
+                        : 'Bloco Rápido de Atributos: Estatísticas diretas estilo Monster Manual / SRD.'}
+                    </p>
                   </div>
+                </div>
+
+                <div className="flex items-center bg-[#121824] p-1 rounded-xl border border-[#2a3449] shrink-0 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNpcSheetMode('full');
+                      if (!npcCharacterSheet) {
+                        const init = createEmptyCharacterSheet('dm', activeWorld?.id);
+                        init.characterName = name || 'Novo NPC';
+                        init.race = npcRace || 'Humano';
+                        init.className = npcClass || 'Guerreiro';
+                        init.alignment = npcAlignment || 'Neutro';
+                        setNpcCharacterSheet(recalculateSheetDerivedStats(init));
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      npcSheetMode === 'full'
+                        ? 'bg-amber-500 text-slate-950 shadow-md font-black ring-1 ring-amber-300'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>Ficha Completa D&D 5e</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNpcSheetMode('statblock')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      npcSheetMode === 'statblock'
+                        ? 'bg-amber-500 text-slate-950 shadow-md font-black ring-1 ring-amber-300'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Swords className="w-3.5 h-3.5" />
+                    <span>Bloco Simplificado</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Ability Scores Grid */}
-              <div>
-                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">Atributos de Habilidade</h4>
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-                  {[
-                    { label: 'FOR (STR)', val: str, set: setStr },
-                    { label: 'DES (DEX)', val: dex, set: setDex },
-                    { label: 'CON (CON)', val: con, set: setCon },
-                    { label: 'INT (INT)', val: int, set: setInt },
-                    { label: 'SAB (WIS)', val: wis, set: setWis },
-                    { label: 'CAR (CHA)', val: cha, set: setCha }
-                  ].map((attr, idx) => {
-                    const mod = Math.floor((attr.val - 10) / 2);
-                    const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
-                    return (
-                      <div key={idx} className="bg-[#0a0d14] border border-[#2a3449] p-3 rounded-xl flex flex-col items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{attr.label}</span>
+              {npcSheetMode === 'full' ? (
+                /* FULL D&D 5E CHARACTER SHEET DASHBOARD FOR NPCS */
+                <div className="space-y-5 animate-fade-in">
+                  {/* HERO BANNER & PRIMARY ACTIONS */}
+                  <div className="bg-gradient-to-br from-[#121827] via-[#0d131f] to-[#0a0d14] border-2 border-amber-500/40 rounded-2xl p-5 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+                    
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 relative z-10">
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 rounded-2xl bg-[#0b0f19] border-2 border-amber-500/40 overflow-hidden shrink-0 flex items-center justify-center shadow-lg relative group">
+                          {images.length > 0 ? (
+                            <img src={images[0]} alt={name || 'NPC'} className="w-full h-full object-cover" />
+                          ) : (
+                            <User className="w-8 h-8 text-amber-400/60" />
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-lg font-black text-slate-100 font-serif">
+                              {name.trim() || npcCharacterSheet?.characterName || 'Personagem NPC'}
+                            </h3>
+                            <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full">
+                              Nv. {npcCharacterSheet?.level || 1} • {npcCharacterSheet?.className || npcClass || 'Guerreiro'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1">
+                            {npcCharacterSheet?.race || npcRace || 'Humano'} {npcCharacterSheet?.subrace ? `(${npcCharacterSheet.subrace})` : ''} • {npcAlignment} • {npcCharacterSheet?.background || 'Antecedente Personalizado'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Primary Buttons */}
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setIsNpcWizardModalOpen(true)}
+                          className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
+                        >
+                          <Wand2 className="w-4 h-4" />
+                          <span>Assistente de Criação (Wizard)</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!npcCharacterSheet) {
+                              const init = createEmptyCharacterSheet('dm', activeWorld?.id);
+                              init.characterName = name || 'Novo NPC';
+                              init.race = npcRace || 'Humano';
+                              init.className = npcClass || 'Guerreiro';
+                              init.alignment = npcAlignment || 'Neutro';
+                              init.avatarUrl = images[0] || '';
+                              setNpcCharacterSheet(recalculateSheetDerivedStats(init));
+                            }
+                            setIsNpcSheetModalOpen(true);
+                          }}
+                          className="px-4 py-2.5 bg-[#162032] hover:bg-[#1f2d47] border border-amber-500/50 hover:border-amber-400 text-amber-300 font-bold rounded-xl text-xs flex items-center gap-2 shadow-md active:scale-95 transition-all cursor-pointer"
+                        >
+                          <BookOpen className="w-4 h-4" />
+                          <span>Abrir Ficha Completa (8 Abas)</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* QUICK EQUIPMENT PRESETS TOOLBAR */}
+                  <div className="bg-[#0a0d14] border border-[#2a3449] p-4 rounded-2xl space-y-3 shadow-inner">
+                    <div className="flex items-center justify-between border-b border-[#2a3449] pb-2">
+                      <div className="flex items-center gap-2">
+                        <Package className="w-4 h-4 text-amber-400" />
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                          Kits Rápidos de Equipamento & Armas
+                        </h4>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        Aplica armas, armaduras e itens com 1 clique
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                      <select
+                        value={selectedPresetKit}
+                        onChange={(e) => setSelectedPresetKit(e.target.value)}
+                        className="flex-1 bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-slate-200 font-bold focus:outline-none cursor-pointer"
+                      >
+                        {NPC_EQUIPMENT_PRESETS.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.icon} {preset.name} ({preset.category})
+                          </option>
+                        ))}
+                      </select>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            let current = npcCharacterSheet;
+                            if (!current) {
+                              current = createEmptyCharacterSheet('dm', activeWorld?.id);
+                              current.characterName = name || 'Novo NPC';
+                              current.race = npcRace || 'Humano';
+                              current.className = npcClass || 'Guerreiro';
+                            }
+                            const updated = applyNpcEquipmentPreset(current, selectedPresetKit, false);
+                            setNpcCharacterSheet(updated);
+                            setAc(updated.armorClass);
+                            setHp(updated.currentHp);
+                            setMaxHp(updated.maxHp);
+                            setSpeed(updated.speed);
+                            setStr(getEffectiveAttributeScore(updated, 'str'));
+                            setDex(getEffectiveAttributeScore(updated, 'dex'));
+                            setCon(getEffectiveAttributeScore(updated, 'con'));
+                            setInt(getEffectiveAttributeScore(updated, 'int'));
+                            setWis(getEffectiveAttributeScore(updated, 'wis'));
+                            setCha(getEffectiveAttributeScore(updated, 'cha'));
+                            if (updated.attacks && updated.attacks.length > 0) {
+                              setActions(updated.attacks.map((atk) => ({
+                                name: atk.name,
+                                desc: `Ataque: ${atk.atkBonus} para acertar. Dano: ${atk.damage} (${atk.type || 'Físico'}).`
+                              })));
+                            }
+                            const pName = NPC_EQUIPMENT_PRESETS.find(p => p.id === selectedPresetKit)?.name || 'Kit';
+                            setPresetFeedback(`Kit "${pName}" equipado com sucesso! CA e Ataques recalculados.`);
+                            setTimeout(() => setPresetFeedback(null), 4000);
+                          }}
+                          className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                        >
+                          <Zap className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Equipar Kit no NPC</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {presetFeedback && (
+                      <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2 animate-fade-in">
+                        <Check className="w-4 h-4 shrink-0" />
+                        <span>{presetFeedback}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* COMBAT VITALS & DERIVED STATS GRID */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div className="bg-[#0a0d14] border border-[#2a3449] p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-inner">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <Shield className="w-3 h-3 text-cyan-400" /> Classe Armadura (CA)
+                      </span>
+                      <span className="text-xl font-black text-cyan-300 font-mono">
+                        {npcCharacterSheet?.armorClass || ac}
+                      </span>
+                      <span className="text-[9px] text-slate-500 font-mono mt-0.5 truncate max-w-full">
+                        {npcCharacterSheet?.equippedArmor ? `${npcCharacterSheet.equippedArmor}` : 'Sem armadura'}
+                        {npcCharacterSheet?.hasShield ? ' + Escudo' : ''}
+                      </span>
+                    </div>
+
+                    <div className="bg-[#0a0d14] border border-[#2a3449] p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-inner">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <Heart className="w-3 h-3 text-rose-400" /> Pontos de Vida (PV)
+                      </span>
+                      <span className="text-xl font-black text-rose-400 font-mono">
+                        {npcCharacterSheet?.currentHp || hp} / {npcCharacterSheet?.maxHp || maxHp}
+                      </span>
+                      <span className="text-[9px] text-slate-500 font-mono mt-0.5">
+                        Dados de Vida: {npcCharacterSheet?.hitDiceTotal || '1d8'}
+                      </span>
+                    </div>
+
+                    <div className="bg-[#0a0d14] border border-[#2a3449] p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-inner">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <Activity className="w-3 h-3 text-emerald-400" /> Deslocamento
+                      </span>
+                      <span className="text-base font-black text-emerald-400 font-mono">
+                        {npcCharacterSheet?.speed || speed}
+                      </span>
+                      <span className="text-[9px] text-slate-500 font-mono mt-0.5">
+                        Padrão D&D 5e
+                      </span>
+                    </div>
+
+                    <div className="bg-[#0a0d14] border border-[#2a3449] p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-inner">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <Swords className="w-3 h-3 text-amber-400" /> Bônus Iniciativa
+                      </span>
+                      <span className="text-xl font-black text-amber-400 font-mono">
+                        {npcCharacterSheet ? (
+                          (() => {
+                            const dexM = getAttributeModifier(npcCharacterSheet, 'dex');
+                            return dexM >= 0 ? `+${dexM}` : `${dexM}`;
+                          })()
+                        ) : '+0'}
+                      </span>
+                      <span className="text-[9px] text-slate-500 font-mono mt-0.5">
+                        Mod. Destreza
+                      </span>
+                    </div>
+
+                    <div className="bg-[#0a0d14] border border-[#2a3449] p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-inner">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <Target className="w-3 h-3 text-indigo-400" /> Percepção Passiva
+                      </span>
+                      <span className="text-xl font-black text-indigo-300 font-mono">
+                        {npcCharacterSheet ? (10 + getAttributeModifier(npcCharacterSheet, 'wis')) : 10}
+                      </span>
+                      <span className="text-[9px] text-slate-500 font-mono mt-0.5">
+                        10 + Mod. SAB
+                      </span>
+                    </div>
+
+                    <div className="bg-[#0a0d14] border border-[#2a3449] p-3 rounded-xl flex flex-col items-center justify-center text-center shadow-inner">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <Award className="w-3 h-3 text-purple-400" /> Proficiência
+                      </span>
+                      <span className="text-xl font-black text-purple-300 font-mono">
+                        +{npcCharacterSheet ? Math.floor(((npcCharacterSheet.level || 1) - 1) / 4) + 2 : 2}
+                      </span>
+                      <span className="text-[9px] text-slate-500 font-mono mt-0.5">
+                        Bônus de Batalha
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 6 ABILITY SCORES GRID */}
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2.5">
+                      Atributos Principais (D&D 5e)
+                    </h4>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                      {(
+                        [
+                          { key: 'str', label: 'FOR (STR)', fallback: str },
+                          { key: 'dex', label: 'DES (DEX)', fallback: dex },
+                          { key: 'con', label: 'CON (CON)', fallback: con },
+                          { key: 'int', label: 'INT (INT)', fallback: int },
+                          { key: 'wis', label: 'SAB (WIS)', fallback: wis },
+                          { key: 'cha', label: 'CAR (CHA)', fallback: cha },
+                        ] as const
+                      ).map(({ key, label, fallback }) => {
+                        const val = npcCharacterSheet ? getEffectiveAttributeScore(npcCharacterSheet, key) : fallback;
+                        const mod = Math.floor((val - 10) / 2);
+                        const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
+
+                        return (
+                          <div key={key} className="bg-[#0a0d14] border border-[#2a3449] p-3 rounded-xl flex flex-col items-center justify-between shadow-inner">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</span>
+                            <input
+                              type="number"
+                              value={val}
+                              onChange={(e) => {
+                                const newScore = Math.max(1, Math.min(30, parseInt(e.target.value) || 10));
+                                if (npcCharacterSheet) {
+                                  const updated = {
+                                    ...npcCharacterSheet,
+                                    attributes: {
+                                      ...npcCharacterSheet.attributes,
+                                      [key]: { score: newScore, baseScore: newScore }
+                                    }
+                                  };
+                                  const recalced = recalculateSheetDerivedStats(updated);
+                                  setNpcCharacterSheet(recalced);
+                                  setAc(recalced.armorClass);
+                                  setHp(recalced.currentHp);
+                                  setMaxHp(recalced.maxHp);
+                                }
+                                if (key === 'str') setStr(newScore);
+                                if (key === 'dex') setDex(newScore);
+                                if (key === 'con') setCon(newScore);
+                                if (key === 'int') setInt(newScore);
+                                if (key === 'wis') setWis(newScore);
+                                if (key === 'cha') setCha(newScore);
+                              }}
+                              className="w-16 bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2 py-1 text-center text-sm text-slate-100 font-bold focus:outline-none my-1.5"
+                            />
+                            <span className={`text-xs font-black font-mono ${mod >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {modStr}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* WEAPONS & EQUIPMENT SUMMARY PREVIEW */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Weapons & Attacks */}
+                    <div className="bg-[#0a0d14] border border-[#2a3449] p-4 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between border-b border-[#2a3449] pb-2">
+                        <div className="flex items-center gap-2">
+                          <Swords className="w-4 h-4 text-amber-400" />
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                            Ataques & Armas Equipadas
+                          </h4>
+                        </div>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {npcCharacterSheet?.attacks?.length || 0} ataque(s)
+                        </span>
+                      </div>
+
+                      <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                        {(!npcCharacterSheet?.attacks || npcCharacterSheet.attacks.length === 0) ? (
+                          <p className="text-xs text-slate-500 italic">Nenhuma arma equipada. Use um Kit Rápido acima ou abra a Ficha Completa.</p>
+                        ) : (
+                          npcCharacterSheet.attacks.map((atk, idx) => (
+                            <div key={idx} className="bg-[#121824] border border-[#2a3449] p-2.5 rounded-lg flex items-center justify-between">
+                              <div>
+                                <span className="text-xs font-bold text-amber-300 block">{atk.name}</span>
+                                <span className="text-[10px] text-slate-400 font-mono">Dano: {atk.damage} ({atk.type || 'Físico'})</span>
+                              </div>
+                              <span className="px-2 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded text-xs font-mono font-bold">
+                                {atk.atkBonus} Acerto
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Inventory Items Summary */}
+                    <div className="bg-[#0a0d14] border border-[#2a3449] p-4 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between border-b border-[#2a3449] pb-2">
+                        <div className="flex items-center gap-2">
+                          <Package className="w-4 h-4 text-cyan-400" />
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                            Inventário & Itens ({npcCharacterSheet?.equipment?.length || 0})
+                          </h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsNpcSheetModalOpen(true)}
+                          className="text-[10px] text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer"
+                        >
+                          Gerenciar no Inventário →
+                        </button>
+                      </div>
+
+                      <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                        {(!npcCharacterSheet?.equipment || npcCharacterSheet.equipment.length === 0) ? (
+                          <p className="text-xs text-slate-500 italic">Nenhum item no inventário. Aplique um Kit ou adicione itens do SRD na Ficha Completa.</p>
+                        ) : (
+                          npcCharacterSheet.equipment.slice(0, 6).map((item, idx) => (
+                            <div key={idx} className="bg-[#121824] border border-[#2a3449] p-2 rounded-lg flex items-center justify-between text-xs">
+                              <span className={`font-semibold ${item.equipped ? 'text-cyan-300' : 'text-slate-300'}`}>
+                                {item.equipped ? '🛡️ ' : ''}{item.name} {item.quantity > 1 ? `(${item.quantity}x)` : ''}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-mono">{item.weight || '—'}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* CLASSIC STATBLOCK EDITOR */
+                <div className="space-y-6 animate-fade-in">
+                  {/* Combat Values Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 bg-[#0a0d14] border border-[#2a3449] p-4 rounded-xl">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Classe de Armadura (CA):</label>
+                      <input
+                        type="number"
+                        value={ac}
+                        onChange={(e) => setAc(Math.max(1, parseInt(e.target.value) || 0))}
+                        className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-2 text-sm text-slate-100 font-bold focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">PV Atuais (HP):</label>
+                      <input
+                        type="number"
+                        value={hp}
+                        onChange={(e) => setHp(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-2 text-sm text-slate-100 font-bold focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">PV Máximos (Max HP):</label>
+                      <input
+                        type="number"
+                        value={maxHp}
+                        onChange={(e) => setMaxHp(Math.max(1, parseInt(e.target.value) || 0))}
+                        className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-2 text-sm text-slate-100 font-bold focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Velocidade (Speed):</label>
+                      <input
+                        type="text"
+                        value={speed}
+                        onChange={(e) => setSpeed(e.target.value)}
+                        className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none"
+                      />
+                    </div>
+                    <div className="col-span-2 sm:col-span-1 grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">ND (CR):</label>
+                        <input
+                          type="text"
+                          value={cr}
+                          onChange={(e) => setCr(e.target.value)}
+                          className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2 py-2 text-sm text-slate-100 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">XP:</label>
                         <input
                           type="number"
-                          value={attr.val}
-                          onChange={(e) => attr.set(Math.max(1, Math.min(30, parseInt(e.target.value) || 0)))}
-                          className="w-16 bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2 py-1.5 text-center text-sm text-slate-100 font-bold focus:outline-none my-1.5"
+                          value={xp}
+                          onChange={(e) => setXp(Math.max(0, parseInt(e.target.value) || 0))}
+                          className="w-full bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2 py-2 text-sm text-slate-100 focus:outline-none"
                         />
-                        <span className={`text-xs font-bold ${mod >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{modStr}</span>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Abilities & Actions Split Column */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Special Abilities */}
-                <div className="bg-[#0a0d14] border border-[#2a3449] p-4 rounded-xl space-y-4 flex flex-col">
-                  <div className="border-b border-[#2a3449] pb-2 flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Habilidades Especiais / Passivas</h4>
-                    <span className="text-[10px] text-slate-500 font-mono">{abilities.length}</span>
+                    </div>
                   </div>
-                  
-                  {/* List */}
-                  <div className="space-y-3 flex-1 overflow-y-auto max-h-60 pr-1">
-                    {abilities.length === 0 ? (
-                      <p className="text-xs text-slate-500 italic">Nenhuma habilidade especial adicionada.</p>
-                    ) : (
-                      abilities.map((ab, idx) => (
-                        <div key={idx} className="bg-[#121722] border border-[#2a3449] p-3 rounded-lg flex items-start justify-between gap-3">
-                          <div className="flex-1">
-                            <span className="text-xs font-bold text-amber-400 block">{ab.name}</span>
-                            <span className="text-[11px] text-slate-300 block mt-1 leading-relaxed">{ab.desc}</span>
+
+                  {/* Ability Scores Grid */}
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">Atributos de Habilidade</h4>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                      {[
+                        { label: 'FOR (STR)', val: str, set: setStr },
+                        { label: 'DES (DEX)', val: dex, set: setDex },
+                        { label: 'CON (CON)', val: con, set: setCon },
+                        { label: 'INT (INT)', val: int, set: setInt },
+                        { label: 'SAB (WIS)', val: wis, set: setWis },
+                        { label: 'CAR (CHA)', val: cha, set: setCha }
+                      ].map((attr, idx) => {
+                        const mod = Math.floor((attr.val - 10) / 2);
+                        const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
+                        return (
+                          <div key={idx} className="bg-[#0a0d14] border border-[#2a3449] p-3 rounded-xl flex flex-col items-center justify-between shadow-inner">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{attr.label}</span>
+                            <input
+                              type="number"
+                              value={attr.val}
+                              onChange={(e) => attr.set(Math.max(1, Math.min(30, parseInt(e.target.value) || 0)))}
+                              className="w-16 bg-[#121722] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2 py-1.5 text-center text-sm text-slate-100 font-bold focus:outline-none my-1.5"
+                            />
+                            <span className={`text-xs font-bold ${mod >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{modStr}</span>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => setAbilities(prev => prev.filter((_, i) => i !== idx))}
-                            className="text-slate-500 hover:text-rose-400 p-1 hover:bg-[#1a2234] rounded transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))
-                    )}
+                        );
+                      })}
+                    </div>
                   </div>
 
-                  {/* Form to add */}
-                  <div className="bg-[#121722] border border-[#2a3449] p-3 rounded-lg space-y-2">
-                    <input
-                      type="text"
-                      placeholder="Nome da Habilidade (Ex: Percepção Cega)"
-                      value={newAbilityName}
-                      onChange={(e) => setNewAbilityName(e.target.value)}
-                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                    />
-                    <textarea
-                      placeholder="Descrição do Efeito..."
-                      value={newAbilityDesc}
-                      onChange={(e) => setNewAbilityDesc(e.target.value)}
-                      rows={2}
-                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500 resize-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!newAbilityName.trim() || !newAbilityDesc.trim()) return;
-                        setAbilities(prev => [...prev, { name: newAbilityName.trim(), desc: newAbilityDesc.trim() }]);
-                        setNewAbilityName('');
-                        setNewAbilityDesc('');
-                      }}
-                      className="w-full py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 hover:border-amber-500/60 rounded text-xs font-bold transition-colors cursor-pointer"
-                    >
-                      + Adicionar Habilidade
-                    </button>
+                  {/* Abilities & Actions Split Column */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {/* Special Abilities */}
+                    <div className="bg-[#0a0d14] border border-[#2a3449] p-4 rounded-xl space-y-4 flex flex-col">
+                      <div className="border-b border-[#2a3449] pb-2 flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Habilidades Especiais / Passivas</h4>
+                        <span className="text-[10px] text-slate-500 font-mono">{abilities.length}</span>
+                      </div>
+                      
+                      {/* List */}
+                      <div className="space-y-3 flex-1 overflow-y-auto max-h-60 pr-1">
+                        {abilities.length === 0 ? (
+                          <p className="text-xs text-slate-500 italic">Nenhuma habilidade especial adicionada.</p>
+                        ) : (
+                          abilities.map((ab, idx) => (
+                            <div key={idx} className="bg-[#121722] border border-[#2a3449] p-3 rounded-lg flex items-start justify-between gap-3">
+                              <div className="flex-1">
+                                <span className="text-xs font-bold text-amber-400 block">{ab.name}</span>
+                                <span className="text-[11px] text-slate-300 block mt-1 leading-relaxed">{ab.desc}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setAbilities(prev => prev.filter((_, i) => i !== idx))}
+                                className="text-slate-500 hover:text-rose-400 p-1 hover:bg-[#1a2234] rounded transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      {/* Form to add */}
+                      <div className="bg-[#121722] border border-[#2a3449] p-3 rounded-lg space-y-2">
+                        <input
+                          type="text"
+                          placeholder="Nome da Habilidade (Ex: Percepção Cega)"
+                          value={newAbilityName}
+                          onChange={(e) => setNewAbilityName(e.target.value)}
+                          className="w-full bg-[#0a0d14] border border-[#2a3449] rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                        />
+                        <textarea
+                          placeholder="Descrição do Efeito..."
+                          value={newAbilityDesc}
+                          onChange={(e) => setNewAbilityDesc(e.target.value)}
+                          rows={2}
+                          className="w-full bg-[#0a0d14] border border-[#2a3449] rounded p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500 resize-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!newAbilityName.trim() || !newAbilityDesc.trim()) return;
+                            setAbilities(prev => [...prev, { name: newAbilityName.trim(), desc: newAbilityDesc.trim() }]);
+                            setNewAbilityName('');
+                            setNewAbilityDesc('');
+                          }}
+                          className="w-full py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 hover:border-amber-500/60 rounded text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          + Adicionar Habilidade
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Actions / Attacks */}
+                    <div className="bg-[#0a0d14] border border-[#2a3449] p-4 rounded-xl space-y-4 flex flex-col">
+                      <div className="border-b border-[#2a3449] pb-2 flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Ações / Ataques</h4>
+                        <span className="text-[10px] text-slate-500 font-mono">{actions.length}</span>
+                      </div>
+                      
+                      {/* List */}
+                      <div className="space-y-3 flex-1 overflow-y-auto max-h-60 pr-1">
+                        {actions.length === 0 ? (
+                          <p className="text-xs text-slate-500 italic">Nenhuma ação ou ataque adicionado.</p>
+                        ) : (
+                          actions.map((ac, idx) => (
+                            <div key={idx} className="bg-[#121722] border border-[#2a3449] p-3 rounded-lg flex items-start justify-between gap-3">
+                              <div className="flex-1">
+                                <span className="text-xs font-bold text-amber-400 block">{ac.name}</span>
+                                <span className="text-[11px] text-slate-300 block mt-1 leading-relaxed">{ac.desc}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setActions(prev => prev.filter((_, i) => i !== idx))}
+                                className="text-slate-500 hover:text-rose-400 p-1 hover:bg-[#1a2234] rounded transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      {/* Form to add */}
+                      <div className="bg-[#121722] border border-[#2a3449] p-3 rounded-lg space-y-2">
+                        <input
+                          type="text"
+                          placeholder="Nome da Ação (Ex: Garra / Sopro de Fogo)"
+                          value={newActionName}
+                          onChange={(e) => setNewActionName(e.target.value)}
+                          className="w-full bg-[#0a0d14] border border-[#2a3449] rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                        />
+                        <textarea
+                          placeholder="Descrição do Ataque (Alvo, bônus, dano...)"
+                          value={newActionDesc}
+                          onChange={(e) => setNewActionDesc(e.target.value)}
+                          rows={2}
+                          className="w-full bg-[#0a0d14] border border-[#2a3449] rounded p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500 resize-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!newActionName.trim() || !newActionDesc.trim()) return;
+                            setActions(prev => [...prev, { name: newActionName.trim(), desc: newActionDesc.trim() }]);
+                            setNewActionName('');
+                            setNewActionDesc('');
+                          }}
+                          className="w-full py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 hover:border-amber-500/60 rounded text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          + Adicionar Ação
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
-
-                {/* Actions / Attacks */}
-                <div className="bg-[#0a0d14] border border-[#2a3449] p-4 rounded-xl space-y-4 flex flex-col">
-                  <div className="border-b border-[#2a3449] pb-2 flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Ações / Ataques</h4>
-                    <span className="text-[10px] text-slate-500 font-mono">{actions.length}</span>
-                  </div>
-                  
-                  {/* List */}
-                  <div className="space-y-3 flex-1 overflow-y-auto max-h-60 pr-1">
-                    {actions.length === 0 ? (
-                      <p className="text-xs text-slate-500 italic">Nenhuma ação ou ataque adicionado.</p>
-                    ) : (
-                      actions.map((ac, idx) => (
-                        <div key={idx} className="bg-[#121722] border border-[#2a3449] p-3 rounded-lg flex items-start justify-between gap-3">
-                          <div className="flex-1">
-                            <span className="text-xs font-bold text-amber-400 block">{ac.name}</span>
-                            <span className="text-[11px] text-slate-300 block mt-1 leading-relaxed">{ac.desc}</span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setActions(prev => prev.filter((_, i) => i !== idx))}
-                            className="text-slate-500 hover:text-rose-400 p-1 hover:bg-[#1a2234] rounded transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {/* Form to add */}
-                  <div className="bg-[#121722] border border-[#2a3449] p-3 rounded-lg space-y-2">
-                    <input
-                      type="text"
-                      placeholder="Nome da Ação (Ex: Garra / Sopro de Fogo)"
-                      value={newActionName}
-                      onChange={(e) => setNewActionName(e.target.value)}
-                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                    />
-                    <textarea
-                      placeholder="Descrição do Ataque (Alvo, bônus, dano...)"
-                      value={newActionDesc}
-                      onChange={(e) => setNewActionDesc(e.target.value)}
-                      rows={2}
-                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500 resize-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!newActionName.trim() || !newActionDesc.trim()) return;
-                        setActions(prev => [...prev, { name: newActionName.trim(), desc: newActionDesc.trim() }]);
-                        setNewActionName('');
-                        setNewActionDesc('');
-                      }}
-                      className="w-full py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 hover:border-amber-500/60 rounded text-xs font-bold transition-colors cursor-pointer"
-                    >
-                      + Adicionar Ação
-                    </button>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -2170,6 +2729,27 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                   />
                 </div>
 
+                {/* Art Style Selector for Edited Image */}
+                <div className="bg-[#121722] p-2.5 rounded-xl border border-[#2a3449] space-y-1">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Palette className="w-3.5 h-3.5 text-purple-400" />
+                    <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider font-mono">
+                      Direção de Estilo Artístico RPG:
+                    </span>
+                  </div>
+                  <select
+                    value={editSelectedArtStyle}
+                    onChange={(e) => setEditSelectedArtStyle(e.target.value)}
+                    className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-purple-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 font-bold focus:outline-none cursor-pointer"
+                  >
+                    {RPG_IMAGE_STYLES.map((style) => (
+                      <option key={style.id} value={style.id}>
+                        {style.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Aspect Ratio Selector for Edited Image */}
                 <div className="bg-[#121722] p-2.5 rounded-xl border border-[#2a3449]">
                   <div className="flex items-center justify-between mb-1.5">
@@ -2261,6 +2841,79 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
               </div>
             </div>
           </div>
+        )}
+
+        {/* Dedicated NPC Full Character Sheet Modal */}
+        {isNpcSheetModalOpen && npcCharacterSheet && (
+          <CharacterSheetModal
+            isOpen={isNpcSheetModalOpen}
+            sheet={npcCharacterSheet}
+            onClose={() => setIsNpcSheetModalOpen(false)}
+            onSave={(updatedSheet) => {
+              const recalculated = recalculateSheetDerivedStats(updatedSheet);
+              setNpcCharacterSheet(recalculated);
+              setAc(recalculated.armorClass);
+              setHp(recalculated.currentHp);
+              setMaxHp(recalculated.maxHp);
+              setSpeed(recalculated.speed);
+              setStr(getEffectiveAttributeScore(recalculated, 'str'));
+              setDex(getEffectiveAttributeScore(recalculated, 'dex'));
+              setCon(getEffectiveAttributeScore(recalculated, 'con'));
+              setInt(getEffectiveAttributeScore(recalculated, 'int'));
+              setWis(getEffectiveAttributeScore(recalculated, 'wis'));
+              setCha(getEffectiveAttributeScore(recalculated, 'cha'));
+              if (recalculated.attacks && recalculated.attacks.length > 0) {
+                setActions(
+                  recalculated.attacks.map((atk) => ({
+                    name: atk.name,
+                    desc: `Ataque: ${atk.atkBonus} para acertar. Dano: ${atk.damage} (${atk.type || 'Físico'}).`,
+                  }))
+                );
+              }
+            }}
+          />
+        )}
+
+        {/* Dedicated NPC Character Builder Wizard Modal */}
+        {isNpcWizardModalOpen && (
+          <CharacterBuilderWizardModal
+            isOpen={isNpcWizardModalOpen}
+            userId="dm"
+            campaignId={activeWorld?.id}
+            initialValues={{
+              characterName: name.trim() || 'Novo NPC',
+              race: npcRace.trim() || 'Humano',
+              className: npcClass.trim() || 'Guerreiro',
+              alignment: npcAlignment || 'Neutro',
+            }}
+            onClose={() => setIsNpcWizardModalOpen(false)}
+            onCharacterCreated={(createdSheet) => {
+              const recalculated = recalculateSheetDerivedStats(createdSheet);
+              setNpcCharacterSheet(recalculated);
+              setName(recalculated.characterName);
+              setNpcRace(recalculated.race);
+              setNpcClass(recalculated.className);
+              setNpcAlignment(recalculated.alignment);
+              setAc(recalculated.armorClass);
+              setHp(recalculated.currentHp);
+              setMaxHp(recalculated.maxHp);
+              setSpeed(recalculated.speed);
+              setStr(getEffectiveAttributeScore(recalculated, 'str'));
+              setDex(getEffectiveAttributeScore(recalculated, 'dex'));
+              setCon(getEffectiveAttributeScore(recalculated, 'con'));
+              setInt(getEffectiveAttributeScore(recalculated, 'int'));
+              setWis(getEffectiveAttributeScore(recalculated, 'wis'));
+              setCha(getEffectiveAttributeScore(recalculated, 'cha'));
+              if (recalculated.attacks && recalculated.attacks.length > 0) {
+                setActions(
+                  recalculated.attacks.map((atk) => ({
+                    name: atk.name,
+                    desc: `Ataque: ${atk.atkBonus} para acertar. Dano: ${atk.damage} (${atk.type || 'Físico'}).`,
+                  }))
+                );
+              }
+            }}
+          />
         )}
       </form>
     </div>

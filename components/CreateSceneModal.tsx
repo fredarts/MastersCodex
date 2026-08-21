@@ -411,16 +411,34 @@ export const CreateSceneModal: React.FC<CreateSceneModalProps> = ({
 
   // Add NPC to Scene
   const handleAddNpcToScene = (npc: WorldEntity) => {
+    const cs = npc.characterSheet || npc.attributes?.characterSheet;
+    const dexVal = cs ? (cs.attributes?.dex?.score || 10) : (npc.statSheet?.dex || 10);
+    const dexMod = Math.floor((dexVal - 10) / 2);
+    const calculatedInit = Math.floor(Math.random() * 20) + 1 + dexMod;
+
     const npcCombatant: Combatant = {
       id: `npc-${Date.now()}-${npc.id}`,
       name: npc.name,
       type: 'npc',
-      hp: npc.statSheet?.hp || 25,
-      maxHp: npc.statSheet?.maxHp || 25,
-      ac: npc.statSheet?.ac || 12,
-      initiative: 10,
+      hp: cs?.currentHp ?? npc.statSheet?.hp ?? 25,
+      maxHp: cs?.maxHp ?? npc.statSheet?.maxHp ?? 25,
+      ac: cs?.armorClass ?? npc.statSheet?.ac ?? 12,
+      speed: cs?.speed ?? npc.statSheet?.speed ?? '9m (30ft)',
+      initiative: calculatedInit,
       conditions: [],
       cr: npc.statSheet?.cr || '1/2',
+      str: cs ? cs.attributes?.str?.score : npc.statSheet?.str,
+      dex: cs ? cs.attributes?.dex?.score : npc.statSheet?.dex,
+      con: cs ? cs.attributes?.con?.score : npc.statSheet?.con,
+      int: cs ? cs.attributes?.int?.score : npc.statSheet?.int,
+      wis: cs ? cs.attributes?.wis?.score : npc.statSheet?.wis,
+      cha: cs ? cs.attributes?.cha?.score : npc.statSheet?.cha,
+      avatarUrl: npc.images?.[0] || cs?.avatarUrl,
+      actions: cs?.attacks && cs.attacks.length > 0 ? cs.attacks.map((atk: any) => ({
+        name: atk.name,
+        desc: `Ataque: ${atk.atkBonus} para acertar. Dano: ${atk.damage} (${atk.type || 'Físico'}).`
+      })) : npc.statSheet?.actions,
+      characterSheet: cs,
     };
     setCombatants((prev) => [...prev, npcCombatant]);
     toast.success(`NPC ${npc.name} adicionado ao encontro!`);

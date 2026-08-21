@@ -25,7 +25,7 @@ import { AuthModal } from '@/components/AuthModal';
 import { CreateCampaignModal } from '@/components/CreateCampaignModal';
 import { PlayerLobby } from '@/components/PlayerLobby';
 import { LiveCockpitStudio } from '@/components/LiveCockpitStudio';
-import { Combatant, Encounter, World, GameScene, UserCampaign } from '@/lib/types';
+import { Combatant, Encounter, World, GameScene, UserCampaign, CharacterSheet, CharacterWeaponAttack } from '@/lib/types';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { createEmptyCharacterSheet } from '@/lib/dnd5e-data';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
@@ -138,6 +138,32 @@ function MainApp() {
   const handleUpdateCombatant = (updated: Combatant) => {
     setCombatants((prev) =>
       prev.map((c) => (c.id === updated.id ? updated : c))
+    );
+  };
+
+  const handleSaveSheet = (updatedSheet: CharacterSheet) => {
+    saveSheet(updatedSheet);
+    // Also sync combatant if this sheet belongs to an active combatant in the battle
+    setCombatants((prev) =>
+      prev.map((c) => {
+        const cClean = c.name.split('(')[0].trim().toLowerCase();
+        const sheetClean = updatedSheet.characterName.split('(')[0].trim().toLowerCase();
+        if (c.id === updatedSheet.id || cClean === sheetClean || c.name.toLowerCase().includes(sheetClean) || sheetClean.includes(cClean)) {
+          return {
+            ...c,
+            hp: updatedSheet.currentHp,
+            maxHp: updatedSheet.maxHp,
+            ac: updatedSheet.armorClass,
+            speed: updatedSheet.speed,
+            characterSheet: updatedSheet,
+            actions: updatedSheet.attacks && updatedSheet.attacks.length > 0 ? updatedSheet.attacks.map((atk: CharacterWeaponAttack) => ({
+              name: atk.name,
+              desc: `Ataque: ${atk.atkBonus} para acertar. Dano: ${atk.damage} (${atk.type}).`
+            })) : c.actions,
+          };
+        }
+        return c;
+      })
     );
   };
 
@@ -456,7 +482,7 @@ function MainApp() {
               isOpen={true}
               onClose={() => closeSheet(sheetState.id)}
               onMinimize={() => minimizeSheet(sheetState.id)}
-              onSave={saveSheet}
+              onSave={handleSaveSheet}
             />
           );
         })}

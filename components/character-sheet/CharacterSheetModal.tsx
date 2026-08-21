@@ -233,6 +233,7 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
               equipment: 'Equipamento',
               spells: 'Magias',
               rp: 'Biografia',
+              journal: 'Diário',
             };
             return (
               <button

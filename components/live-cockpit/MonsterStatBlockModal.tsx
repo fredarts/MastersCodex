@@ -14,11 +14,13 @@ import {
   Plus,
   ShieldAlert,
   HeartCrack,
-  Flame
+  Flame,
+  BookOpen
 } from 'lucide-react';
 import { Combatant } from '@/lib/types';
 import { INITIAL_MONSTERS } from '@/lib/srd-data';
 import { DND5E_DAMAGE_TYPES } from '@/lib/dnd5e-damage-resolver';
+import { useLiveCockpit } from '@/context/LiveCockpitContext';
 
 interface MonsterStatBlockModalProps {
   combatant: Combatant;
@@ -37,6 +39,7 @@ export const MonsterStatBlockModal: React.FC<MonsterStatBlockModalProps> = ({
   onRoll,
   onUpdateCombatant,
 }) => {
+  const { openSheet } = useLiveCockpit();
   const [isPrivate, setIsPrivate] = useState(true);
   const [hpInput, setHpInput] = useState('');
   const [showDefenseMenu, setShowDefenseMenu] = useState<'res' | 'imm' | 'vuln' | null>(null);
@@ -134,7 +137,21 @@ export const MonsterStatBlockModal: React.FC<MonsterStatBlockModalProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
+            {/* Abrir Ficha Completa D&D 5e */}
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                openSheet(combatant.id || combatant.name, 'pc', combatant.name, combatant.characterSheet || combatant);
+              }}
+              className="px-2 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition-all flex items-center gap-1.5 text-[10px] font-bold shadow-sm cursor-pointer"
+              title="Abrir Ficha Completa D&D 5e (8 Abas com Inventário e Magias)"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+              <span>Ficha Completa</span>
+            </button>
+
             {/* Toggle Rolagem Secreta */}
             <button
               onClick={() => setIsPrivate(!isPrivate)}

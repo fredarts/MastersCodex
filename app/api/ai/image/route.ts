@@ -22,6 +22,8 @@ async function resolveSourceImageBase64(sourceImage: string): Promise<{ mimeType
   return null;
 }
 
+const NO_TEXT_DIRECTIVE = 'CRITICAL RULE: Absolutely NO text, NO typography, NO letters, NO words, NO subtitles, NO captions, NO signatures, NO watermarks, NO UI elements, NO speech bubbles, NO frames, NO borders, NO labels. Pure visual artwork and illustration only.';
+
 async function tryGenerateWithGoogle(
   ai: GoogleGenAI,
   modelName: string,
@@ -30,6 +32,8 @@ async function tryGenerateWithGoogle(
   sourceImageResolved?: { mimeType: string; base64Data: string } | null
 ): Promise<string | null> {
   try {
+    const promptWithNoText = `${prompt}. ${NO_TEXT_DIRECTIVE}`;
+
     // Se for modelo Gemini multimodal ou se tiver imagem de origem para modelo Gemini
     if (modelName.startsWith('gemini')) {
       const contents: any[] = [];
@@ -41,7 +45,7 @@ async function tryGenerateWithGoogle(
           },
         });
       }
-      contents.push(prompt);
+      contents.push(promptWithNoText);
 
       const response = await ai.models.generateContent({
         model: modelName,
@@ -63,7 +67,7 @@ async function tryGenerateWithGoogle(
       }
     } else {
       // Modelos Imagen (como imagen-3.0-generate-002 / imagen-3.0-generate-001)
-      let finalPrompt = prompt;
+      let finalPrompt = promptWithNoText;
 
       // Se for Image-to-Image com Imagen, usamos Gemini multimodal para analisar a imagem de origem e compor um prompt refinado para o Imagen
       if (sourceImageResolved) {
@@ -77,12 +81,12 @@ async function tryGenerateWithGoogle(
                   data: sourceImageResolved.base64Data,
                 },
               },
-              `Analyze this character/scene image and describe its core visual composition, pose, colors, and features, while applying the following modifications: "${prompt}". Return a concise, high-detail prompt in English suitable for Imagen 3 image generator.`,
+              `Analyze this character/scene image and describe its core visual composition, pose, colors, and features, while applying the following modifications: "${prompt}". Return a concise, high-detail prompt in English suitable for Imagen 3 image generator without any text.`,
             ],
           });
           const refined = visionResp.text?.trim();
           if (refined) {
-            finalPrompt = `${refined}. High quality fantasy RPG concept art, cinematic lighting, 8k resolution.`;
+            finalPrompt = `${refined}. High quality fantasy RPG concept art, cinematic lighting, 8k resolution. ${NO_TEXT_DIRECTIVE}`;
           }
         } catch (visionErr) {
           console.warn('[ImageAPI] Falha ao analisar imagem com vision, usando prompt direto:', visionErr);
@@ -142,7 +146,7 @@ async function tryGenerateWithPollinations(prompt: string, aspectRatio: string):
     }
 
     const seed = Math.floor(Math.random() * 999999);
-    const encodedPrompt = encodeURIComponent(`Masterpiece, Dungeons & Dragons RPG fantasy concept art: ${prompt}`);
+    const encodedPrompt = encodeURIComponent(`Masterpiece, Dungeons & Dragons RPG fantasy concept art, clean artwork, no text, no words: ${prompt} ${NO_TEXT_DIRECTIVE}`);
     const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&model=flux`;
 
     const res = await fetch(url, { signal: AbortSignal.timeout(15000) });

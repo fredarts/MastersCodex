@@ -150,6 +150,8 @@ export interface WorldEntity {
   connections?: EntityConnection[]; // IDs de outras entidades conectadas e tipo da relação
   tags?: string[]; // Custom tags/etiquetas de organização e busca livre
   statSheet?: EntityStatSheet;
+  characterSheet?: CharacterSheet;
+  statSheetMode?: 'statblock' | 'full';
   createdAt?: string;
 }
 
@@ -358,6 +360,7 @@ export interface Combatant {
   damageImmunities?: string[];
   damageVulnerabilities?: string[];
   conditionImmunities?: string[];
+  characterSheet?: CharacterSheet;
 }
 
 export type WallType = 'wall' | 'door' | 'secret_door' | 'window' | 'terrain' | 'illusion';
@@ -1208,6 +1211,7 @@ export type SuccessionStatus =
   | 'ruling'           // Atual monarca / líder
   | 'heir_apparent'    // 1º na linha de sucessão
   | 'heir_presumptive' // Próximo na linha
+  | 'claimant'         // Reclamante ao trono / Pretendente
   | 'disinherited'     // Deserdado(a)
   | 'abdicated'        // Abdicou
   | 'deceased'         // Falecido(a)

@@ -10,6 +10,15 @@ interface CharacterBuilderWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCharacterCreated: (sheet: CharacterSheet) => void;
+  initialValues?: {
+    characterName?: string;
+    race?: string;
+    subrace?: string;
+    className?: string;
+    level?: number;
+    background?: string;
+    alignment?: string;
+  };
 }
 
 export const CharacterBuilderWizardModal: React.FC<CharacterBuilderWizardModalProps> = ({
@@ -18,15 +27,16 @@ export const CharacterBuilderWizardModal: React.FC<CharacterBuilderWizardModalPr
   isOpen,
   onClose,
   onCharacterCreated,
+  initialValues,
 }) => {
   const [step, setStep] = useState<number>(1);
-  const [characterName, setCharacterName] = useState('Heroi Lendario');
-  const [selectedRace, setSelectedRace] = useState('Humano');
-  const [selectedSubrace, setSelectedSubrace] = useState('');
-  const [selectedClass, setSelectedClass] = useState('Guerreiro');
-  const [selectedLevel, setSelectedLevel] = useState(1);
-  const [selectedBackground, setSelectedBackground] = useState('Herói do Povo');
-  const [selectedAlignment, setSelectedAlignment] = useState('Neutro e Bom');
+  const [characterName, setCharacterName] = useState(initialValues?.characterName || 'Heroi Lendario');
+  const [selectedRace, setSelectedRace] = useState(initialValues?.race || 'Humano');
+  const [selectedSubrace, setSelectedSubrace] = useState(initialValues?.subrace || '');
+  const [selectedClass, setSelectedClass] = useState(initialValues?.className || 'Guerreiro');
+  const [selectedLevel, setSelectedLevel] = useState(initialValues?.level || 1);
+  const [selectedBackground, setSelectedBackground] = useState(initialValues?.background || 'Herói do Povo');
+  const [selectedAlignment, setSelectedAlignment] = useState(initialValues?.alignment || 'Neutro e Bom');
 
   const [attributes, setAttributes] = useState<Record<AttributeKey, number>>({
     str: 15,

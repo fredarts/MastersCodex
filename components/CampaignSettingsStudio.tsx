@@ -24,6 +24,7 @@ import {
   RefreshCw,
   Pencil,
   ChevronLeft,
+  ChevronRight,
   ShieldAlert,
   Globe,
   Compass,
