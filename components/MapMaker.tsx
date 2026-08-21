@@ -58,7 +58,23 @@ export type TileType =
   | 'stash'
   | 'trigger'
   | 'portcullis'
-  | 'illusion_wall';
+  | 'illusion_wall'
+  | 'transition';
+
+export type TransitionType = 'stairs_down' | 'stairs_up' | 'ladder' | 'portal' | 'doorway';
+
+export interface DungeonTransitionConfig {
+  id: string;
+  name: string;
+  type: TransitionType;
+  targetLevelId: string;
+  targetSpawnR?: number;
+  targetSpawnC?: number;
+  linkedTransitionId?: string;
+  status?: 'open' | 'locked' | 'blocked';
+  lockpickDC?: number;
+  description?: string;
+}
 
 export type ContainerType = 'wooden_chest' | 'iron_chest' | 'ornate_chest' | 'hidden_stash' | 'mimic';
 export type ContainerStatus = 'locked' | 'unlocked' | 'open' | 'looted';
@@ -147,6 +163,7 @@ export interface Cell {
   triggerConfig?: TriggerConfig;
   portcullisConfig?: PortcullisConfig;
   illusionWallConfig?: IllusionWallConfig;
+  transitionConfig?: DungeonTransitionConfig;
 }
 
 const NPC_TEMPLATES: Combatant[] = [
@@ -530,6 +547,93 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     } finally {
       setIsUploadingImage(false);
     }
+  };
+
+  const handleSaveTransitionWithTargetLevel = (
+    config: DungeonTransitionConfig,
+    sourceR: number,
+    sourceC: number,
+    autoCreateLinked: boolean,
+    linkedTargetInfo?: { targetLevelId: string; targetR: number; targetC: number; linkedTransitionId?: string }
+  ) => {
+    // 1. Update current grid
+    setGrid((prev) => {
+      const copy = prev.map((row) => row.map((cell) => ({ ...cell })));
+      if (copy[sourceR]?.[sourceC]) {
+        copy[sourceR][sourceC].type = 'transition';
+        copy[sourceR][sourceC].transitionConfig = config;
+      }
+      return copy;
+    });
+
+    if (!linkedTargetInfo?.targetLevelId || linkedTargetInfo.targetLevelId === activeLevelId) {
+      return;
+    }
+
+    const targetLevelId = linkedTargetInfo.targetLevelId;
+    const targetR = linkedTargetInfo.targetR;
+    const targetC = linkedTargetInfo.targetC;
+
+    // 2. Update destination level in state
+    setLevels((prevLevels) => {
+      return prevLevels.map((lvl) => {
+        if (lvl.id === targetLevelId && lvl.grid) {
+          const tGrid = lvl.grid.map((row) => row.map((cell) => ({ ...cell })));
+
+          if (autoCreateLinked) {
+            const reverseType: TransitionType =
+              config.type === 'stairs_down' ? 'stairs_up' :
+              (config.type === 'stairs_up' ? 'stairs_down' : config.type);
+
+            const returnConfig: DungeonTransitionConfig = {
+              id: `trans-${Math.random().toString(36).substring(2, 8)}`,
+              name: `Retorno para ${levels.find((l) => l.id === activeLevelId)?.name || 'Andar Anterior'}`,
+              type: reverseType,
+              targetLevelId: activeLevelId || '',
+              targetSpawnR: sourceR,
+              targetSpawnC: sourceC,
+              linkedTransitionId: config.id,
+              status: 'open',
+            };
+
+            config.linkedTransitionId = returnConfig.id;
+
+            if (tGrid[targetR]?.[targetC]) {
+              tGrid[targetR][targetC].type = 'transition';
+              tGrid[targetR][targetC].transitionConfig = returnConfig;
+              tGrid[targetR][targetC].fog = false;
+            }
+          } else if (linkedTargetInfo.linkedTransitionId) {
+            if (tGrid[targetR]?.[targetC]) {
+              const existingTarget = tGrid[targetR][targetC].transitionConfig;
+              if (existingTarget) {
+                tGrid[targetR][targetC].transitionConfig = {
+                  ...existingTarget,
+                  targetLevelId: activeLevelId || '',
+                  targetSpawnR: sourceR,
+                  targetSpawnC: sourceC,
+                  linkedTransitionId: config.id,
+                };
+              } else {
+                tGrid[targetR][targetC].transitionConfig = {
+                  id: linkedTargetInfo.linkedTransitionId,
+                  name: 'Escada de Retorno',
+                  type: config.type === 'stairs_down' ? 'stairs_up' : (config.type === 'stairs_up' ? 'stairs_down' : config.type),
+                  targetLevelId: activeLevelId || '',
+                  targetSpawnR: sourceR,
+                  targetSpawnC: sourceC,
+                  linkedTransitionId: config.id,
+                  status: 'open',
+                };
+              }
+            }
+          }
+
+          return { ...lvl, grid: tGrid };
+        }
+        return lvl;
+      });
+    });
   };
 
   // Switch between floors/levels in memory (0ms latency, zero database fetch)
@@ -1386,6 +1490,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
               { id: 'trigger', label: '🕹️ Mecanismo' },
               { id: 'portcullis', label: '⛓️ Grade' },
               { id: 'illusion_wall', label: '🌫️ Parede Falsa' },
+              { id: 'transition', label: '🪜 Escadas / Níveis' },
             ] as { id: TileType; label: string }[]).map((t) => (
               <button
                 key={t.id}
@@ -1602,6 +1707,9 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
             setGridScale(size);
             toast.success(`Grid recalibrado para ${size}px por célula!`);
           }}
+          activeLevels={levels}
+          currentLevelId={activeLevelId}
+          onSaveTransitionWithTargetLevel={handleSaveTransitionWithTargetLevel}
         />
 
         {/* Modal do Gerador de Masmorras por IA */}

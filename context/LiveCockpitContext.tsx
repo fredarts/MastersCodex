@@ -60,7 +60,7 @@ interface LiveCockpitContextType {
   broadcastPlayerRoll: (roll: PlayerRollEvent) => void;
   chatMessages: ChatMessage[];
   broadcastChatMessage: (message: ChatMessage) => void;
-  onlineUsers: { userId: string; displayName: string; avatarUrl?: string; status: string }[];
+  onlineUsers: { userId: string; displayName: string; avatarUrl?: string; status: string; timestamp?: number }[];
   dmCursor: DmCursorPayload | null;
   broadcastDmCursor: (payload: DmCursorPayload) => void;
   pings: PingLocationPayload[];
@@ -104,7 +104,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [activeSheets, setActiveSheets] = useState<ActiveSheetState[]>([]);
   const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [onlineUsers, setOnlineUsers] = useState<{ userId: string; displayName: string; avatarUrl?: string; status: string }[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<{ userId: string; displayName: string; avatarUrl?: string; status: string; timestamp?: number }[]>([]);
   const [dmCursor, setDmCursor] = useState<DmCursorPayload | null>(null);
   const [pings, setPings] = useState<PingLocationPayload[]>([]);
   const [voiceSignal, setVoiceSignal] = useState<VoiceSignalPayload | null>(null);
@@ -127,6 +127,55 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const { user } = useAuth();
   const { activeScene, updateScene } = useSession();
   const campaignId = activeCampaign?.id || ((!user || user.id === 'user-demo') ? 'camp-demo-1' : null);
+
+  // Helper para obter a presença do usuário local com dados da campanha ativa
+  const getMyPresence = useCallback((): PresencePayload | null => {
+    if (!campaignId) return null;
+
+    const myId = user?.id || (activeCampaign?.role === 'dm' ? 'dm-host' : 'player-local');
+    let myName = user?.displayName || user?.user_metadata?.full_name || user?.email || (activeCampaign?.role === 'dm' ? 'Mestre' : 'Jogador');
+    let avatarUrl = user?.avatarUrl || user?.user_metadata?.avatar_url;
+    let avatarSettings: { zoom: number; offsetX: number; offsetY: number } | undefined;
+
+    // Se for jogador, busca o nome e avatar da ficha vinculada a esta campanha específica
+    if (activeCampaign?.role === 'player') {
+      try {
+        const saved = localStorage.getItem('masters_codex_character_sheets_v1');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const expectedCharName = activeCampaign.characterName;
+          
+          const found = parsed.find((s: any) => 
+            (activeCampaign.id && s.campaignId === activeCampaign.id) ||
+            (expectedCharName && s.characterName && s.characterName.toLowerCase() === expectedCharName.toLowerCase())
+          );
+          
+          if (found) {
+            if (found.characterName && found.characterName !== 'Novo Aventureiro') {
+              myName = found.characterName;
+            }
+            if (found.avatarUrl) {
+              avatarUrl = found.avatarUrl;
+            }
+            if (found.avatarSettings) {
+              avatarSettings = found.avatarSettings;
+            }
+          } else if (expectedCharName) {
+            myName = expectedCharName;
+          }
+        }
+      } catch (e) {}
+    }
+
+    return {
+      userId: myId,
+      displayName: myName,
+      avatarUrl,
+      avatarSettings,
+      status: 'online',
+      timestamp: Date.now(),
+    };
+  }, [campaignId, user, activeCampaign?.id, activeCampaign?.role, activeCampaign?.characterName]);
 
   // Helper to compare combat states
   const isCombatStateEqual = useCallback((
@@ -437,6 +486,8 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
     },
     onPresenceUpdate: (payload) => {
+      if (!payload || !payload.userId) return;
+
       setOnlineUsers((prev) => {
         if (payload.status === 'offline') {
           return prev.filter((u) => u.userId !== payload.userId);
@@ -448,6 +499,11 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
             const next = [...prev];
             next[idx] = payload;
             return next;
+          }
+          // Quando descobre um novo peer, responde com a própria presença para que ele nos veja imediatamente
+          const myPresence = getMyPresence();
+          if (myPresence && payload.userId !== myPresence.userId) {
+            syncBroadcastPresenceUpdate(myPresence);
           }
           return [...prev, payload];
         }
@@ -490,7 +546,13 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
           roundCount,
           mapData,
           selectedTargetId,
+          drawings,
         });
+      }
+      // Broadcast da presença para que quem solicitou nos veja imediatamente online
+      const myPresence = getMyPresence();
+      if (myPresence) {
+        syncBroadcastPresenceUpdate(myPresence);
       }
     },
     onStateSnapshot: (snapshot) => {
@@ -506,6 +568,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         if (snapshot.roundCount !== undefined) setRoundCount(snapshot.roundCount);
         if (snapshot.mapData !== undefined) setMapData(snapshot.mapData);
         if (snapshot.selectedTargetId !== undefined) setSelectedTargetId(snapshot.selectedTargetId);
+        if (snapshot.drawings !== undefined) setDrawings(snapshot.drawings);
       }
     },
   });
@@ -590,71 +653,59 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     rollHistoryService.saveRollHistory(campaignId, combatLogs);
   }, [campaignId, combatLogs]);
 
-  // Presence Heartbeat
+  // Presence Heartbeat e registro permanente da própria presença
   useEffect(() => {
-    if (!campaignId) return;
-    
-    // Identificação básica do usuário
-    const myId = user?.id || `guest-${Math.random().toString(36).substring(2, 9)}`;
-    let myName = user?.displayName || user?.user_metadata?.full_name || user?.email || (activeCampaign?.role === 'dm' ? 'Mestre' : 'Jogador');
-    let avatarUrl = user?.avatarUrl || user?.user_metadata?.avatar_url;
-    let avatarSettings: { zoom: number; offsetX: number; offsetY: number } | undefined;
-
-    // Se for jogador, tenta pegar o nome e o avatar da ficha ativa salva localmente
-    if (activeCampaign?.role === 'player') {
-      try {
-        const saved = localStorage.getItem('masters_codex_character_sheets_v1');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          const expectedCharName = activeCampaign.characterName || 'Aventureiro';
-          
-          const found = parsed.find((s: any) => 
-            (activeCampaign.id && s.campaignId === activeCampaign.id) ||
-            (s.characterName && s.characterName.toLowerCase() === expectedCharName.toLowerCase())
-          );
-          
-          if (found) {
-            if (found.characterName && found.characterName !== 'Novo Aventureiro') {
-              myName = found.characterName;
-            }
-            if (found.avatarUrl) {
-              avatarUrl = found.avatarUrl;
-            }
-            if (found.avatarSettings) {
-              avatarSettings = found.avatarSettings;
-            }
-          }
-        }
-      } catch (e) {}
+    if (!campaignId) {
+      setOnlineUsers([]);
+      return;
     }
 
+    const myPresence = getMyPresence();
+    if (!myPresence) return;
+
+    // Registra imediatamente a si próprio no array local de usuários online
+    setOnlineUsers((prev) => {
+      const filtered = prev.filter((u) => u.userId !== myPresence.userId);
+      return [myPresence, ...filtered];
+    });
+
     const pingPresence = () => {
-      syncBroadcastPresenceUpdate({
-        userId: myId,
-        displayName: myName,
-        avatarUrl,
-        avatarSettings,
-        status: 'online',
-        timestamp: Date.now(),
+      const currentPresence = getMyPresence();
+      if (!currentPresence) return;
+      setOnlineUsers((prev) => {
+        const filtered = prev.filter((u) => u.userId !== currentPresence.userId);
+        return [currentPresence, ...filtered];
       });
+      syncBroadcastPresenceUpdate(currentPresence);
     };
 
-    // Primeiro ping com um pequeno delay para garantir que o websocket está conectado
-    const timer = setTimeout(pingPresence, 1500);
-    // Repetir a cada 10 segundos
+    // Primeiro ping com pequeno delay para garantir que o canal/websocket está pronto
+    const timer = setTimeout(pingPresence, 1200);
+    // Repetir heartbeat a cada 10 segundos
     const interval = setInterval(pingPresence, 10000);
+
+    // Limpeza de usuários remotos inativos (> 35s sem ping), preservando a si mesmo
+    const cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      const myId = user?.id || (activeCampaign?.role === 'dm' ? 'dm-host' : 'player-local');
+      setOnlineUsers((prev) => 
+        prev.filter((u) => u.userId === myId || !u.timestamp || (now - u.timestamp < 35000))
+      );
+    }, 15000);
 
     return () => {
       clearTimeout(timer);
       clearInterval(interval);
-      syncBroadcastPresenceUpdate({
-        userId: myId,
-        displayName: myName,
-        status: 'offline',
-        timestamp: Date.now(),
-      });
+      clearInterval(cleanupInterval);
+      if (myPresence) {
+        syncBroadcastPresenceUpdate({
+          ...myPresence,
+          status: 'offline',
+          timestamp: Date.now(),
+        });
+      }
     };
-  }, [campaignId, user, syncBroadcastPresenceUpdate, activeCampaign?.role]);
+  }, [campaignId, getMyPresence, syncBroadcastPresenceUpdate, user?.id, activeCampaign?.role]);
 
   // Register global broadcaster so pure TS modules (dnd5e-dice.ts) can reach Supabase
   useEffect(() => {
@@ -816,6 +867,15 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [syncBroadcastVoiceSignal]);
 
   const broadcastPresenceUpdate = useCallback((payload: PresencePayload) => {
+    setOnlineUsers((prev) => {
+      const idx = prev.findIndex((u) => u.userId === payload.userId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...payload };
+        return next;
+      }
+      return [...prev, payload];
+    });
     syncBroadcastPresenceUpdate(payload);
   }, [syncBroadcastPresenceUpdate]);
 

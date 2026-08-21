@@ -20,7 +20,10 @@ import {
   Eye,
   Gem,
   ShieldAlert,
-  AlertTriangle
+  AlertTriangle,
+  Shield,
+  Heart,
+  Navigation
 } from 'lucide-react';
 import { 
   drawDysonCrosshatch, 
@@ -35,6 +38,8 @@ import {
   drawIllusionWallHachure,
   drawLightSourceIcon
 } from './dysonCore';
+import { DungeonTransitionModal } from './DungeonTransitionModal';
+import { MapLevel, DungeonTransitionConfig } from '@/lib/types';
 
 import { 
   hasLineOfSight, 
@@ -104,6 +109,12 @@ interface DysonCanvasProps {
   selectedLightPreset?: 'torch' | 'candle' | 'lantern' | 'spell' | 'dragon';
   drawings?: any[];
   onDrawingAction?: (payload: any) => void;
+  drawColor?: string;
+  drawLineWidth?: number;
+  activeLevels?: MapLevel[];
+  currentLevelId?: string | null;
+  onTransitionAction?: (action: 'teleport_party' | 'teleport_token', targetLevelId: string, spawnR?: number, spawnC?: number, tokenName?: string) => void;
+  onSaveTransitionWithTargetLevel?: (config: DungeonTransitionConfig, sourceR: number, sourceC: number, autoCreateLinked: boolean, linkedTargetInfo?: { targetLevelId: string; targetR: number; targetC: number; linkedTransitionId?: string }) => void;
 }
 
 export const DysonCanvas: React.FC<DysonCanvasProps> = ({
@@ -133,10 +144,17 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   selectedLightPreset = 'torch',
   drawings = [],
   onDrawingAction,
+  drawColor = '#f59e0b',
+  drawLineWidth = 4,
+  activeLevels = [],
+  currentLevelId = null,
+  onTransitionAction,
+  onSaveTransitionWithTargetLevel,
 }) => {
 
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const offscreenMaskRef = useRef<HTMLCanvasElement | null>(null);
   const lastPaintedCellRef = useRef<{ r: number; c: number; tool: string } | null>(null);
@@ -153,7 +171,6 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   const [editingCell, setEditingCell] = useState<{ r: number; c: number; cell: Cell } | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number; cell: Cell } | null>(null);
   const [draggingToken, setDraggingToken] = useState<{ name: string, color: string, startR: number, startC: number, currentR: number, currentC: number } | null>(null);
-  const [currentStroke, setCurrentStroke] = useState<any | null>(null);
   const activeStrokeRef = useRef<any | null>(null);
 
   const CELL_SIZE = bgImageUrl ? gridScale : 40;
@@ -169,15 +186,23 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
   const gridDims = useRef({ rows: grid.length, cols: grid[0]?.length || 0 });
   const panOffsetRef = useRef(panOffset);
+  panOffsetRef.current = panOffset;
   const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
   const selectedToolRef = useRef(selectedTool);
+  selectedToolRef.current = selectedTool;
   const rulerPointsRef = useRef(rulerPoints);
   const rulerCursorRef = useRef(rulerCursor);
   const rulerStatusRef = useRef(rulerStatus);
 
-  // Memoized Dyson Wall Distance Transform (recalculated ONLY when grid changes, not on frame/mousemove)
+  // Memoized Dyson Wall Distance Transform (recalculated ONLY when wall topology changes, and skipped if bgImage exists)
+  const wallTopologyKey = useMemo(() => {
+    if (!grid || grid.length === 0 || bgImageUrl) return '';
+    return grid.map(row => row.map(c => c.type === 'wall' ? '1' : '0').join('')).join('|');
+  }, [grid, bgImageUrl]);
+
   const distMap = useMemo(() => {
-    if (!grid || grid.length === 0) return [];
+    if (!grid || grid.length === 0 || bgImageUrl) return [];
     const rows = grid.length;
     const cols = grid[0]?.length || 0;
     const map: number[][] = Array(rows).fill(null).map(() => Array(cols).fill(99));
@@ -205,7 +230,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       }
     }
     return map;
-  }, [grid]);
+  }, [wallTopologyKey, bgImageUrl]);
 
   // Memoized player tokens list
   const playerTokens = useMemo(() => {
@@ -502,6 +527,42 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     const containerRect = containerRef.current.getBoundingClientRect();
     if (containerRect.width <= 0 || containerRect.height <= 0) return;
 
+    // 1. Priority 1: Focus directly on the Player Tokens if present on this map
+    if (playerTokens && playerTokens.length > 0) {
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+
+      for (const pt of playerTokens) {
+        const x = bgImage ? gridOffsetX + pt.c * CELL_SIZE + CELL_SIZE / 2 : pt.c * CELL_SIZE + CELL_SIZE / 2;
+        const y = bgImage ? gridOffsetY + pt.r * CELL_SIZE + CELL_SIZE / 2 : pt.r * CELL_SIZE + CELL_SIZE / 2;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+
+      const partyCenterX = (minX + maxX) / 2;
+      const partyCenterY = (minY + maxY) / 2;
+
+      // Viewing radius around party (6-8 cells)
+      const marginPx = Math.max(160, 6 * CELL_SIZE);
+      const spanW = Math.max(containerRect.width * 0.45, (maxX - minX) + marginPx * 2);
+      const spanH = Math.max(containerRect.height * 0.45, (maxY - minY) + marginPx * 2);
+
+      const zoomX = containerRect.width / spanW;
+      const zoomY = containerRect.height / spanH;
+      const focusZoom = Math.min(1.25, Math.max(0.65, Math.min(zoomX, zoomY)));
+
+      const panX = (containerRect.width / 2) - (partyCenterX * focusZoom);
+      const panY = (containerRect.height / 2) - (partyCenterY * focusZoom);
+
+      setZoom(focusZoom);
+      setPanOffset({ x: panX, y: panY });
+      return;
+    }
+
     if (bgImage) {
       const canvasWidth = bgImage.width;
       const canvasHeight = bgImage.height;
@@ -560,7 +621,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     setZoom(idealZoom);
     setPanOffset({ x: panX, y: panY });
-  }, [grid, bgImage, COLS, ROWS, CELL_SIZE]);
+  }, [grid, bgImage, COLS, ROWS, CELL_SIZE, playerTokens, gridOffsetX, gridOffsetY]);
 
   useEffect(() => {
     if (centeredRef.current) return;
@@ -572,10 +633,10 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     }
   }, [bgImage, bgImageUrl, COLS, ROWS, CELL_SIZE, fitAndCenterView]);
 
-  // Reset centering flag ONLY when background URL or grid dimensions change (NOT on cell edits)
+  // Reset centering flag ONLY when background URL, currentLevelId, or grid dimensions change
   useEffect(() => {
     centeredRef.current = false;
-  }, [bgImageUrl, COLS, ROWS]);
+  }, [bgImageUrl, currentLevelId, COLS, ROWS]);
 
   useEffect(() => {
     if (bgImageUrl) {
@@ -591,6 +652,114 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return () => clearTimeout(timer);
     }
   }, [bgImageUrl]);
+
+  // Dedicated Ultra-Fast Drawing Overlay Render (Zero-latency direct 2D canvas execution)
+  const renderDrawings = useCallback((liveStroke?: any) => {
+    const canvas = drawingCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    const width = canvasSize.width || container.clientWidth;
+    const height = canvasSize.height || container.clientHeight;
+    if (width <= 0 || height <= 0) return;
+
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+
+    ctx.clearRect(0, 0, width, height);
+
+    const currentPan = panOffsetRef.current;
+    const currentZoom = zoomRef.current;
+
+    ctx.save();
+    ctx.translate(currentPan.x, currentPan.y);
+    ctx.scale(currentZoom, currentZoom);
+
+    const drawSingleStroke = (stroke: any) => {
+      if (!stroke || !stroke.points || stroke.points.length === 0) return;
+      ctx.save();
+      ctx.strokeStyle = stroke.color || '#f59e0b';
+      ctx.lineWidth = Math.max(1.5, (stroke.lineWidth || 4) / currentZoom);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.fillStyle = stroke.color || '#f59e0b';
+
+      const pts = stroke.points;
+
+      if (stroke.tool === 'pencil') {
+        ctx.beginPath();
+        if (pts.length === 1) {
+          ctx.arc(pts[0].x, pts[0].y, Math.max(2, (stroke.lineWidth || 4) / 2 / currentZoom), 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.moveTo(pts[0].x, pts[0].y);
+          for (let i = 1; i < pts.length; i++) {
+            ctx.lineTo(pts[i].x, pts[i].y);
+          }
+          ctx.stroke();
+        }
+      } else if (stroke.tool === 'circle') {
+        ctx.beginPath();
+        const endPt = pts[1] || pts[0];
+        const dx = endPt.x - pts[0].x;
+        const dy = endPt.y - pts[0].y;
+        const radius = Math.sqrt(dx * dx + dy * dy);
+        ctx.arc(pts[0].x, pts[0].y, radius > 0 ? radius : 10 / currentZoom, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (stroke.tool === 'rect') {
+        ctx.beginPath();
+        const endPt = pts[1] || pts[0];
+        const rx = Math.min(pts[0].x, endPt.x);
+        const ry = Math.min(pts[0].y, endPt.y);
+        const rw = Math.abs(endPt.x - pts[0].x);
+        const rh = Math.abs(endPt.y - pts[0].y);
+        ctx.strokeRect(rx, ry, Math.max(2 / currentZoom, rw), Math.max(2 / currentZoom, rh));
+      } else if (stroke.tool === 'text') {
+        const fontSize = Math.max(12, 16 / currentZoom);
+        ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+        const text = stroke.text || '';
+        const metrics = ctx.measureText(text);
+        const textW = metrics.width;
+        const textH = fontSize * 1.2;
+        const pad = 4 / currentZoom;
+
+        // Dark background pill with border for high readability
+        ctx.fillStyle = 'rgba(10, 15, 26, 0.88)';
+        ctx.beginPath();
+        ctx.roundRect(pts[0].x - pad, pts[0].y - textH + pad, textW + pad * 2, textH + pad, 4 / currentZoom);
+        ctx.fill();
+        ctx.strokeStyle = stroke.color || '#f59e0b';
+        ctx.lineWidth = 1 / currentZoom;
+        ctx.stroke();
+
+        // Text fill
+        ctx.fillStyle = stroke.color || '#f59e0b';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(text, pts[0].x, pts[0].y);
+      }
+      ctx.restore();
+    };
+
+    if (drawings && drawings.length > 0) {
+      drawings.forEach(drawSingleStroke);
+    }
+    if (liveStroke) {
+      drawSingleStroke(liveStroke);
+    }
+
+    ctx.restore();
+  }, [drawings, canvasSize]);
+
+  // Synchronize drawings overlay on drawings update, pan, or zoom
+  useEffect(() => {
+    renderDrawings(activeStrokeRef.current);
+  }, [renderDrawings, zoom, panOffset]);
 
   // Main render loop
   useEffect(() => {
@@ -877,6 +1046,39 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
             const label = config?.status === 'looted' ? '✨' : '💎';
             ctx.fillText(label, x, y);
+          } else if (cell.type === 'transition') {
+            const config = cell.transitionConfig;
+            const x = c * CELL_SIZE + CELL_SIZE / 2;
+            const y = r * CELL_SIZE + CELL_SIZE / 2;
+
+            ctx.font = `bold ${Math.floor(CELL_SIZE * 0.58)}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            let label = '🪜';
+            if (config?.type === 'stairs_down') label = '🪜';
+            else if (config?.type === 'stairs_up') label = '🪜';
+            else if (config?.type === 'portal') label = '🌀';
+            else if (config?.type === 'ladder') label = '🪜';
+            else if (config?.type === 'doorway') label = '🚪';
+
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = config?.type === 'portal' ? '#c084fc' : '#f59e0b';
+            ctx.strokeText(label, x, y);
+
+            ctx.fillStyle = config?.type === 'portal' ? '#7e22ce' : '#78350f';
+            ctx.fillText(label, x, y);
+
+            // Subtitle indicator (e.g. ↓ or ↑ or Level name)
+            if (config?.type === 'stairs_down' || config?.type === 'stairs_up') {
+              ctx.save();
+              ctx.font = `bold ${Math.max(9, Math.floor(CELL_SIZE * 0.28))}px Inter, sans-serif`;
+              ctx.fillStyle = config?.type === 'stairs_down' ? '#f43f5e' : '#38bdf8';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'bottom';
+              ctx.fillText(config?.type === 'stairs_down' ? '▼' : '▲', x + CELL_SIZE * 0.28, y + CELL_SIZE * 0.38);
+              ctx.restore();
+            }
           }
         }
       }
@@ -1156,8 +1358,13 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           const tx = (bgImage ? gridOffsetX : 0) + c * CELL_SIZE + tokenDiameter / 2;
           const ty = (bgImage ? gridOffsetY : 0) + r * CELL_SIZE + tokenDiameter / 2;
 
+          const isBeingDragged = Boolean(draggingToken && draggingToken.name === cell.tokenName && r === draggingToken.startR && c === draggingToken.startC);
+
           // Token border & base fill
           ctx.save();
+          if (isBeingDragged) {
+            ctx.globalAlpha = 0.35;
+          }
           ctx.beginPath();
           ctx.arc(tx, ty, tokenRadius, 0, Math.PI * 2);
           ctx.lineWidth = Math.max(3, 3 + (gridSquares - 1) * 1.5);
@@ -1165,7 +1372,6 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           ctx.fillStyle = cell.tokenColor?.includes('cyan') ? '#06b6d4' : '#e11d48';
           ctx.fill();
           ctx.stroke();
-          ctx.restore();
 
           // Token Image (if present on combatant)
           const tokenUrl = tokenCombatant?.tokenImageUrl || tokenCombatant?.avatarUrl;
@@ -1251,8 +1457,91 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           ctx.arc(tx, ty, tokenRadius * 1.06, 0, Math.PI * 2);
           ctx.stroke();
           ctx.restore();
+
+          ctx.restore();
         }
       }
+    }
+
+    // 4.A.2. Live High-Performance Dragging Token Preview Overlay
+    if (draggingToken) {
+      const isPlayerToken = draggingToken.color?.includes('cyan') || draggingToken.color?.includes('emerald');
+      const targetCell = grid[draggingToken.currentR]?.[draggingToken.currentC];
+      const isBlocked = isCellBlockingVision(targetCell);
+
+      const targetX = (bgImage ? gridOffsetX : 0) + draggingToken.currentC * CELL_SIZE + CELL_SIZE / 2;
+      const targetY = (bgImage ? gridOffsetY : 0) + draggingToken.currentR * CELL_SIZE + CELL_SIZE / 2;
+      const startX = (bgImage ? gridOffsetX : 0) + draggingToken.startC * CELL_SIZE + CELL_SIZE / 2;
+      const startY = (bgImage ? gridOffsetY : 0) + draggingToken.startR * CELL_SIZE + CELL_SIZE / 2;
+
+      // Draw dashed motion vector trajectory
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(targetX, targetY);
+      ctx.strokeStyle = isBlocked ? 'rgba(239, 68, 68, 0.8)' : 'rgba(56, 189, 248, 0.8)';
+      ctx.lineWidth = 2 / zoom;
+      ctx.setLineDash([5 / zoom, 5 / zoom]);
+      ctx.stroke();
+      ctx.restore();
+
+      // Draw target cell bounding box
+      ctx.save();
+      const cellLeft = (bgImage ? gridOffsetX : 0) + draggingToken.currentC * CELL_SIZE;
+      const cellTop = (bgImage ? gridOffsetY : 0) + draggingToken.currentR * CELL_SIZE;
+      ctx.fillStyle = isBlocked ? 'rgba(239, 68, 68, 0.25)' : 'rgba(56, 189, 248, 0.2)';
+      ctx.fillRect(cellLeft, cellTop, CELL_SIZE, CELL_SIZE);
+      ctx.strokeStyle = isBlocked ? '#ef4444' : '#38bdf8';
+      ctx.lineWidth = 2 / zoom;
+      ctx.strokeRect(cellLeft, cellTop, CELL_SIZE, CELL_SIZE);
+      ctx.restore();
+
+      // Draw floating token avatar/circle
+      const tokenCombatant = combatants?.find(comb => {
+        const cName = comb.name.trim().toLowerCase();
+        const dName = draggingToken.name.trim().toLowerCase();
+        return cName === dName || cName.startsWith(dName) || dName.startsWith(cName.slice(0, 3));
+      });
+      const sizeInfo = getCreatureGridSize(tokenCombatant?.size);
+      const gridSquares = sizeInfo.gridSquares;
+      const tokenDiameter = gridSquares * CELL_SIZE;
+      const tokenRadius = (tokenDiameter / 2) * 0.95;
+
+      ctx.save();
+      ctx.shadowColor = isBlocked ? '#ef4444' : '#38bdf8';
+      ctx.shadowBlur = 14 / zoom;
+      ctx.beginPath();
+      ctx.arc(targetX, targetY, tokenRadius, 0, Math.PI * 2);
+      ctx.fillStyle = isPlayerToken ? '#06b6d4' : '#e11d48';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3 / zoom;
+      ctx.fill();
+      ctx.stroke();
+
+      const tokenUrl = tokenCombatant?.tokenImageUrl || tokenCombatant?.avatarUrl;
+      let imgDrawn = false;
+      if (tokenUrl) {
+        const img = token2DImageCache.get(tokenUrl);
+        if (img && img.complete && img.naturalWidth > 0) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(targetX, targetY, tokenRadius - 2, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.drawImage(img, targetX - tokenRadius + 2, targetY - tokenRadius + 2, (tokenRadius - 2) * 2, (tokenRadius - 2) * 2);
+          ctx.restore();
+          imgDrawn = true;
+        }
+      }
+
+      if (!imgDrawn) {
+        ctx.fillStyle = '#ffffff';
+        const fontSize = Math.floor(CELL_SIZE * (0.28 + (gridSquares - 1) * 0.1));
+        ctx.font = `bold ${fontSize}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(draggingToken.name, targetX, targetY);
+      }
+      ctx.restore();
     }
 
     // 4.B. Render Vector Walls and Doors
@@ -1461,56 +1750,6 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         }
       }
 
-      // --- Draw Freehand / Shapes Layer ---
-      const renderStroke = (stroke: any) => {
-        if (!stroke || !stroke.points || stroke.points.length === 0) return;
-        ctx.save();
-        ctx.beginPath();
-        ctx.strokeStyle = stroke.color || '#f59e0b';
-        ctx.lineWidth = (stroke.lineWidth || 4) / zoom;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.fillStyle = stroke.color || '#f59e0b';
-
-        const pts = stroke.points;
-
-        if (stroke.tool === 'pencil') {
-          if (pts.length === 1) {
-            ctx.arc(pts[0].x, pts[0].y, Math.max(2, (stroke.lineWidth || 4) / 2 / zoom), 0, Math.PI * 2);
-            ctx.fill();
-          } else {
-            ctx.moveTo(pts[0].x, pts[0].y);
-            for (let i = 1; i < pts.length; i++) {
-              ctx.lineTo(pts[i].x, pts[i].y);
-            }
-            ctx.stroke();
-          }
-        } else if (stroke.tool === 'circle') {
-          const endPt = pts[1] || pts[0];
-          const dx = endPt.x - pts[0].x;
-          const dy = endPt.y - pts[0].y;
-          const radius = Math.sqrt(dx * dx + dy * dy);
-          ctx.arc(pts[0].x, pts[0].y, radius > 0 ? radius : (stroke.lineWidth || 4) / zoom, 0, Math.PI * 2);
-          ctx.stroke();
-        } else if (stroke.tool === 'rect') {
-          const endPt = pts[1] || pts[0];
-          const w = endPt.x - pts[0].x;
-          const h = endPt.y - pts[0].y;
-          ctx.strokeRect(pts[0].x, pts[0].y, w, h);
-        } else if (stroke.tool === 'text') {
-          ctx.font = `bold ${Math.max(12, 16 / zoom)}px Inter, sans-serif`;
-          ctx.fillText(stroke.text || '', pts[0].x, pts[0].y);
-        }
-        ctx.restore();
-      };
-
-      if (drawings && drawings.length > 0) {
-        drawings.forEach(renderStroke);
-      }
-      if (currentStroke) {
-        renderStroke(currentStroke);
-      }
-
       // 5.C. Draw Waypoint Nodes
       rulerPoints.forEach((pt, idx) => {
         const coord = getPointCoords(pt);
@@ -1681,7 +1920,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     }
 
     ctx.restore();
-  }, [grid, bgImage, CELL_SIZE, COLS, ROWS, gridOffsetX, gridOffsetY, selectedTool, selectionBox, measureStart, calibrationLine, rulerPoints, rulerCursor, rulerStatus, zoom, panOffset, canvasSize, isPlayerView, lightSources, combatants, vectorWalls, drawings, currentStroke]);
+  }, [grid, bgImage, CELL_SIZE, COLS, ROWS, gridOffsetX, gridOffsetY, selectedTool, selectionBox, measureStart, calibrationLine, rulerPoints, rulerCursor, rulerStatus, zoom, panOffset, canvasSize, isPlayerView, lightSources, combatants, vectorWalls, draggingToken]);
 
   // Utility to convert client mouse events to Canvas coordinates
   const getCanvasCoords = (e: React.MouseEvent) => {
@@ -1805,9 +2044,15 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   };
 
   const isPOIType = (t: string | undefined) => 
-    t === 'door' || t === 'trap' || t === 'chest' || t === 'stash' || t === 'trigger' || t === 'portcullis' || t === 'illusion_wall';
+    t === 'door' || t === 'trap' || t === 'chest' || t === 'stash' || t === 'trigger' || t === 'portcullis' || t === 'illusion_wall' || t === 'transition';
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (editingCell) {
+      setIsDrawing(false);
+      setDrawButton(-1);
+      return;
+    }
+
     if (e.button === 1 || e.shiftKey || selectedTool === 'pan' || isSpacePressed) {
       setIsPanning(true);
       setPanStart({ x: e.clientX, y: e.clientY });
@@ -1826,32 +2071,35 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     if (selectedTool.startsWith('draw-')) {
       const toolType = selectedTool.replace('draw-', '');
       if (toolType === 'eraser') {
+        setIsDrawing(true);
         if (drawings && drawings.length > 0) {
           let closestId = null;
           let minDist = Infinity;
           drawings.forEach((d: any) => {
             if (!d.points || d.points.length === 0) return;
-            const p = d.points[0];
-            const dist = Math.hypot(p.x - x, p.y - y);
-            if (dist < minDist) {
-              minDist = dist;
-              closestId = d.id;
+            for (let i = 0; i < d.points.length; i++) {
+              const p = d.points[i];
+              const dist = Math.hypot(p.x - x, p.y - y);
+              if (dist < minDist) {
+                minDist = dist;
+                closestId = d.id;
+              }
             }
           });
-          if (closestId && minDist < 100 / zoom) {
+          if (closestId && minDist < 60 / zoom) {
             onDrawingAction?.({ action: 'remove', strokeId: closestId });
           }
         }
       } else if (toolType === 'text') {
-        const text = window.prompt('Digite o texto:');
-        if (text) {
+        const text = window.prompt('Digite o texto para anotação no mapa:');
+        if (text && text.trim()) {
           const newStroke = {
             id: Math.random().toString(36).substring(7),
             tool: 'text',
-            color: '#f59e0b', // amber-500
-            lineWidth: 2,
+            color: drawColor || '#f59e0b',
+            lineWidth: drawLineWidth || 3,
             points: [{ x, y }],
-            text
+            text: text.trim()
           };
           onDrawingAction?.({ action: 'add', stroke: newStroke });
         }
@@ -1860,12 +2108,12 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         const strokeData = {
           id: Math.random().toString(36).substring(7),
           tool: toolType,
-          color: '#f59e0b', // amber-500
-          lineWidth: 4,
+          color: drawColor || '#f59e0b',
+          lineWidth: drawLineWidth || 4,
           points: [{ x, y }]
         };
         activeStrokeRef.current = strokeData;
-        setCurrentStroke(strokeData);
+        renderDrawings(strokeData);
       }
       return;
     }
@@ -2027,16 +2275,32 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return null;
     })();
 
-    if (tokenHit && e.button === 0 && !isSpacePressed) {
-      setDraggingToken({
-         name: tokenHit.name,
-         color: tokenHit.color,
-         startR: tokenHit.originR,
-         startC: tokenHit.originC,
-         currentR: pos.r,
-         currentC: pos.c
-      });
-      return;
+    if (tokenHit && !isSpacePressed) {
+      if (e.button === 2 && !isPlayerView) {
+        // Right-click on a token removes it from the map
+        onGridChange((prev) => {
+          const copy = prev.map((row) => row.map((cell) => ({ ...cell })));
+          const targetR = tokenHit.originR;
+          const targetC = tokenHit.originC;
+          if (copy[targetR]?.[targetC]?.tokenName) {
+            copy[targetR][targetC].tokenName = undefined;
+            copy[targetR][targetC].tokenColor = undefined;
+          }
+          return copy;
+        });
+        return;
+      }
+      if (e.button === 0) {
+        setDraggingToken({
+           name: tokenHit.name,
+           color: tokenHit.color,
+           startR: tokenHit.originR,
+           startC: tokenHit.originC,
+           currentR: pos.r,
+           currentC: pos.c
+        });
+        return;
+      }
     }
     // Interacting with or clicking on existing POI (door, trap, chest, stash) in DM view
     if (clickedCell && !isPlayerView && isPOIType(clickedCell.type) && e.button === 0 && !isSpacePressed) {
@@ -2064,6 +2328,12 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    if (editingCell) {
+      if (isDrawing) setIsDrawing(false);
+      setDrawButton(-1);
+      return;
+    }
+
     if (isPanning) {
       const dx = e.clientX - panStart.x;
       const dy = e.clientY - panStart.y;
@@ -2074,14 +2344,42 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     const { x, y } = getCanvasCoords(e);
 
-    if (activeStrokeRef.current && selectedTool.startsWith('draw-')) {
+    if (selectedTool.startsWith('draw-')) {
       const toolType = selectedTool.replace('draw-', '');
-      if (toolType === 'pencil') {
-        activeStrokeRef.current.points.push({ x, y });
-      } else if (toolType === 'circle' || toolType === 'rect') {
-        activeStrokeRef.current.points[1] = { x, y };
+      if (toolType === 'eraser') {
+        if (isDrawing && drawings && drawings.length > 0) {
+          let closestId = null;
+          let minDist = Infinity;
+          drawings.forEach((d: any) => {
+            if (!d.points || d.points.length === 0) return;
+            for (let i = 0; i < d.points.length; i++) {
+              const p = d.points[i];
+              const dist = Math.hypot(p.x - x, p.y - y);
+              if (dist < minDist) {
+                minDist = dist;
+                closestId = d.id;
+              }
+            }
+          });
+          if (closestId && minDist < 60 / zoom) {
+            onDrawingAction?.({ action: 'remove', strokeId: closestId });
+          }
+        }
+        return;
       }
-      setCurrentStroke({ ...activeStrokeRef.current });
+      if (activeStrokeRef.current) {
+        if (toolType === 'pencil') {
+          const pts = activeStrokeRef.current.points;
+          const lastPt = pts[pts.length - 1];
+          if (!lastPt || Math.hypot(lastPt.x - x, lastPt.y - y) > 2 / zoom) {
+            pts.push({ x, y });
+          }
+        } else if (toolType === 'circle' || toolType === 'rect') {
+          activeStrokeRef.current.points[1] = { x, y };
+        }
+        renderDrawings(activeStrokeRef.current);
+        return;
+      }
       return;
     }
 
@@ -2107,7 +2405,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     if (!isPlayerView && !isPanning && !draggingToken) {
       const cell = grid[pos.r]?.[pos.c];
-      if (cell && isPOIType(cell.type)) {
+      if (cell && (isPOIType(cell.type) || Boolean(cell.tokenName))) {
         setHoveredCell({
           x: e.clientX,
           y: e.clientY,
@@ -2122,17 +2420,6 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     if (draggingToken) {
       if (pos.r !== draggingToken.currentR || pos.c !== draggingToken.currentC) {
-        // Block movement into walls or closed doors
-        const targetCell = grid[pos.r]?.[pos.c];
-        const isPortcullisClosed = targetCell?.type === 'portcullis' && targetCell.portcullisConfig?.status === 'closed';
-        if (isCellBlockingVision(targetCell) || isPortcullisClosed) {
-          return;
-        }
-        // Block movement through walls diagonally (no jumping over corners)
-        if (!hasLineOfSight(draggingToken.currentC, draggingToken.currentR, pos.c, pos.r, grid)) {
-          return;
-        }
-        moveToken(draggingToken.name, draggingToken.color, pos.r, pos.c);
         setDraggingToken(prev => prev ? { ...prev, currentR: pos.r, currentC: pos.c } : null);
       }
       return;
@@ -2158,12 +2445,25 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   const handleMouseUp = (e: React.MouseEvent) => {
     lastPaintedCellRef.current = null;
 
+    if (editingCell) {
+      setIsDrawing(false);
+      setDrawButton(-1);
+      return;
+    }
+
     if (isPanning) {
       setIsPanning(false);
       return;
     }
 
     if (draggingToken) {
+      if (draggingToken.currentR !== draggingToken.startR || draggingToken.currentC !== draggingToken.startC) {
+        const targetCell = grid[draggingToken.currentR]?.[draggingToken.currentC];
+        const isPortcullisClosed = targetCell?.type === 'portcullis' && targetCell.portcullisConfig?.status === 'closed';
+        if (!isCellBlockingVision(targetCell) && !isPortcullisClosed) {
+          moveToken(draggingToken.name, draggingToken.color, draggingToken.currentR, draggingToken.currentC);
+        }
+      }
       setDraggingToken(null);
       setHoveredCell(null);
       return;
@@ -2203,9 +2503,20 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     }
 
     if (activeStrokeRef.current && selectedTool.startsWith('draw-')) {
-      onDrawingAction?.({ action: 'add', stroke: activeStrokeRef.current });
+      const strokeToSave = { ...activeStrokeRef.current, points: [...activeStrokeRef.current.points] };
+      if (strokeToSave.points.length > 0) {
+        if ((strokeToSave.tool === 'circle' || strokeToSave.tool === 'rect') && strokeToSave.points.length === 1) {
+          strokeToSave.points.push({ x: strokeToSave.points[0].x + 30, y: strokeToSave.points[0].y + 30 });
+        }
+        onDrawingAction?.({ action: 'add', stroke: strokeToSave });
+      }
       activeStrokeRef.current = null;
-      setCurrentStroke(null);
+      setIsDrawing(false);
+      renderDrawings();
+      return;
+    }
+
+    if (selectedTool === 'draw-eraser') {
       setIsDrawing(false);
       return;
     }
@@ -2382,20 +2693,29 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
                blocksLight: true
              };
            }
-         } else if (selectedTool === 'token' && selectedTokenCombatant) {
-           const nameToClear = selectedTokenCombatant.name.slice(0, 3).toUpperCase();
-           for (let rowIdx = 0; rowIdx < copy.length; rowIdx++) {
-             for (let colIdx = 0; colIdx < copy[0].length; colIdx++) {
-               if (copy[rowIdx][colIdx].tokenName === nameToClear) {
-                 copy[rowIdx][colIdx].tokenName = undefined;
-                 copy[rowIdx][colIdx].tokenColor = undefined;
-               }
-             }
-           }
-           cell.tokenName = nameToClear;
-           cell.tokenColor = selectedTokenCombatant.type === 'player' ? 'bg-cyan-500' : 'bg-rose-600';
-           revealVisionWithLOS(copy, r, c, getTokenVisionRadius(selectedTokenCombatant.name, combatants));
-         }
+         } else if (selectedTool === 'token') {
+            if (button === 2) {
+              if (cell.tokenName) {
+                cell.tokenName = undefined;
+                cell.tokenColor = undefined;
+              }
+            } else if (selectedTokenCombatant) {
+              const targetName = selectedTokenCombatant.name;
+              const nameKey = targetName.trim().toUpperCase();
+              for (let rowIdx = 0; rowIdx < copy.length; rowIdx++) {
+                for (let colIdx = 0; colIdx < copy[0].length; colIdx++) {
+                  const existingName = copy[rowIdx][colIdx].tokenName;
+                  if (existingName && existingName.trim().toUpperCase() === nameKey) {
+                    copy[rowIdx][colIdx].tokenName = undefined;
+                    copy[rowIdx][colIdx].tokenColor = undefined;
+                  }
+                }
+              }
+              cell.tokenName = targetName;
+              cell.tokenColor = selectedTokenCombatant.type === 'player' ? 'bg-cyan-500' : 'bg-rose-600';
+              revealVisionWithLOS(copy, r, c, getTokenVisionRadius(selectedTokenCombatant.name, combatants));
+            }
+          }
       }
       return copy;
     });
@@ -2639,6 +2959,10 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         ref={canvasRef}
         className="absolute top-0 left-0 w-full h-full"
         style={{ filter: hasDarkvision ? 'grayscale(100%) brightness(0.8)' : 'none', transition: 'filter 0.5s ease' }}
+      />
+      <canvas
+        ref={drawingCanvasRef}
+        className="absolute top-0 left-0 w-full h-full pointer-events-none"
       />
       {hasTremorsense && (
         <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center">
@@ -3647,6 +3971,14 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
                         revealedToPlayers: false,
                         blocksLight: true
                       };
+                    } else if (editingCell.cell.type === 'transition') {
+                      cell.transitionConfig = editingCell.cell.transitionConfig || {
+                        id: `trans-${Math.random().toString(36).substring(2, 8)}`,
+                        name: 'Escada para Outro Nível',
+                        type: 'stairs_down',
+                        targetLevelId: '',
+                        status: 'open'
+                      };
                     }
                     return copy;
                   });
@@ -3697,14 +4029,198 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           </div>
         </div>
       )}
+
+      {/* Dedicated Dungeon Transition Modal */}
+      {editingCell && editingCell.cell.type === 'transition' && (
+        <DungeonTransitionModal
+          isOpen={true}
+          onClose={() => setEditingCell(null)}
+          r={editingCell.r}
+          c={editingCell.c}
+          currentLevelId={currentLevelId}
+          activeLevels={activeLevels || []}
+          transitionConfig={editingCell.cell.transitionConfig}
+          combatants={combatants}
+          isCockpitMode={Boolean(onTransitionAction)}
+          onTeleportParty={(targetLvlId, spR, spC) => {
+            onTransitionAction?.('teleport_party', targetLvlId, spR, spC);
+          }}
+          onTeleportSingleToken={(tokenName, targetLvlId, spR, spC) => {
+            onTransitionAction?.('teleport_token', targetLvlId, spR, spC, tokenName);
+          }}
+          onSave={(newConfig, autoCreateLinked, linkedTargetInfo) => {
+            if (onSaveTransitionWithTargetLevel) {
+              onSaveTransitionWithTargetLevel(newConfig, editingCell.r, editingCell.c, autoCreateLinked, linkedTargetInfo);
+            } else {
+              onGridChange((prev) => {
+                const copy = prev.map(row => row.map(cell => ({ ...cell })));
+                copy[editingCell.r][editingCell.c].type = 'transition';
+                copy[editingCell.r][editingCell.c].transitionConfig = newConfig;
+                return copy;
+              });
+            }
+            setEditingCell(null);
+            toast.success('Passagem salva e conectada com sucesso!');
+          }}
+        />
+      )}
+
       {hoveredCell && !editingCell && (
         <div 
-          className="fixed pointer-events-none z-40 bg-[#0d1117]/95 border border-[#30363d] rounded-xl shadow-2xl p-3 w-[260px] text-xs font-sans text-slate-200 backdrop-blur-md animate-fade-in"
+          className="fixed pointer-events-none z-40 bg-[#0d1117]/95 border border-[#30363d] rounded-xl shadow-2xl p-3 w-[270px] text-xs font-sans text-slate-200 backdrop-blur-md animate-fade-in"
           style={{ 
             left: `${hoveredCell.x + 15}px`, 
             top: `${hoveredCell.y + 15}px` 
           }}
         >
+          {hoveredCell.cell.tokenName && (() => {
+            const tokenName = hoveredCell.cell.tokenName;
+            const tokenComb = combatants?.find(
+              (c) => c.name.trim().toLowerCase() === tokenName.trim().toLowerCase()
+            );
+            const isPlayer = tokenComb?.type === 'player' || hoveredCell.cell.tokenColor?.includes('cyan') || hoveredCell.cell.tokenColor?.includes('emerald');
+            const hp = tokenComb?.hp ?? 10;
+            const maxHp = tokenComb?.maxHp ?? 10;
+            const hpPercent = Math.max(0, Math.min(100, Math.round((hp / maxHp) * 100)));
+            const ac = tokenComb?.ac ?? 10;
+            const visRadius = getTokenVisionRadius(tokenName, combatants);
+            const visType = getCombatantVisionType(tokenName, combatants);
+            const speedVal = typeof tokenComb?.speed === 'number' 
+              ? tokenComb.speed 
+              : parseInt(String(tokenComb?.speed || '30').replace(/\D/g, ''), 10) || 30;
+
+            const visTypeLabel =
+              visType === 'darkvision' ? '🌙 Visão no Escuro' :
+              visType === 'truesight' ? '✨ Visão Verdadeira' :
+              visType === 'blindsight' ? '🦇 Percepção às Cegas' :
+              visType === 'tremorsense' ? '🌐 Sentido Sísmico' : '☀️ Visão Padrão (Luz)';
+
+            return (
+              <div className="space-y-2.5">
+                {/* Header with Name and Badge */}
+                <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-800">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={`w-3.5 h-3.5 rounded-full border shrink-0 ${
+                      isPlayer ? 'bg-cyan-500 border-cyan-300 shadow-sm shadow-cyan-500/50' : 'bg-rose-600 border-rose-400 shadow-sm shadow-rose-600/50'
+                    }`} />
+                    <span className="font-black text-slate-100 uppercase tracking-wide text-xs truncate">
+                      {tokenName}
+                    </span>
+                  </div>
+                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shrink-0 ${
+                    isPlayer 
+                      ? 'bg-cyan-950/70 border-cyan-500/40 text-cyan-300' 
+                      : 'bg-rose-950/70 border-rose-500/40 text-rose-300'
+                  }`}>
+                    {tokenComb?.type === 'player' ? 'Jogador' : (tokenComb?.type === 'npc' ? 'NPC' : 'Monstro / Ameaça')}
+                  </span>
+                </div>
+
+                {/* HP & AC Bar */}
+                <div className="bg-[#070a10] border border-slate-800/80 rounded-lg p-2 space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-mono font-bold">
+                    <div className="flex items-center gap-1 text-rose-400">
+                      <Heart className="w-3 h-3 text-rose-400 fill-rose-500/30" />
+                      <span>HP:</span>
+                      <span className="text-slate-100">{hp} / {maxHp}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-500/30">
+                      <Shield className="w-3 h-3 text-cyan-400" />
+                      <span className="text-[10px] text-slate-400">CA</span>
+                      <span className="text-cyan-200">{ac}</span>
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                    <div
+                      className={`h-full transition-all duration-300 ${
+                        hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 25 ? 'bg-amber-500' : 'bg-rose-600'
+                      }`}
+                      style={{ width: `${hpPercent}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Dungeon Vision & Movement Stats */}
+                <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                  <div className="bg-[#070a10] border border-slate-800/80 rounded-md p-1.5 flex flex-col">
+                    <span className="text-slate-400 flex items-center gap-1 font-bold">
+                      <Eye className="w-3 h-3 text-cyan-400" /> Alcance Visão
+                    </span>
+                    <span className="text-cyan-300 font-mono font-bold mt-0.5">
+                      {visRadius * 5}ft <span className="text-slate-500 font-normal">({(visRadius * 1.5).toFixed(1)}m)</span>
+                    </span>
+                  </div>
+
+                  <div className="bg-[#070a10] border border-slate-800/80 rounded-md p-1.5 flex flex-col">
+                    <span className="text-slate-400 flex items-center gap-1 font-bold">
+                      <Sparkles className="w-3 h-3 text-amber-400" /> Modo Visão
+                    </span>
+                    <span className="text-amber-300 font-bold mt-0.5 truncate" title={visTypeLabel}>
+                      {visTypeLabel}
+                    </span>
+                  </div>
+
+                  <div className="bg-[#070a10] border border-slate-800/80 rounded-md p-1.5 flex flex-col">
+                    <span className="text-slate-400 flex items-center gap-1 font-bold">
+                      <Navigation className="w-3 h-3 text-emerald-400" /> Deslocamento
+                    </span>
+                    <span className="text-emerald-300 font-mono font-bold mt-0.5">
+                      {speedVal}ft <span className="text-slate-500 font-normal">({Math.round(speedVal * 0.3)}m)</span>
+                    </span>
+                  </div>
+
+                  <div className="bg-[#070a10] border border-slate-800/80 rounded-md p-1.5 flex flex-col">
+                    <span className="text-slate-400 flex items-center gap-1 font-bold">
+                      <Shield className="w-3 h-3 text-indigo-400" /> Percepção Passiva
+                    </span>
+                    <span className="text-indigo-300 font-mono font-bold mt-0.5">
+                      {tokenComb?.wis !== undefined ? 10 + Math.floor((tokenComb.wis - 10) / 2) : 12}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Conditions (if active) */}
+                {Boolean(tokenComb?.conditions && tokenComb.conditions.length > 0) && (
+                  <div className="pt-1 border-t border-slate-800 flex flex-wrap gap-1">
+                    {tokenComb!.conditions.map((cond: string) => (
+                      <span key={cond} className="px-1.5 py-0.5 bg-rose-950/60 border border-rose-500/40 text-rose-300 text-[9px] font-bold rounded capitalize">
+                        ⚠️ {cond}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {!hoveredCell.cell.tokenName && hoveredCell.cell.type === 'transition' && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-amber-400 uppercase tracking-wider text-[11px] pb-1 border-b border-slate-800">
+                <span>🪜 {hoveredCell.cell.transitionConfig?.name || 'Passagem de Nível'}</span>
+              </div>
+              <div className="pt-1 flex flex-col gap-1 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Tipo:</span>
+                  <span className="font-bold text-slate-200 capitalize">
+                    {hoveredCell.cell.transitionConfig?.type?.replace('_', ' ') || 'Escada'}
+                  </span>
+                </div>
+                {hoveredCell.cell.transitionConfig?.targetLevelId && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Destino:</span>
+                    <span className="font-bold text-cyan-400">
+                      {activeLevels?.find(l => l.id === hoveredCell.cell.transitionConfig?.targetLevelId)?.name || 'Outro Andar'}
+                    </span>
+                  </div>
+                )}
+                <div className="text-[10px] text-amber-300/80 pt-1">
+                  💡 Clique para configurar ou teletransportar heróis
+                </div>
+              </div>
+            </div>
+          )}
           {hoveredCell.cell.type === 'door' && (
             <div className="space-y-1">
               <div className="flex items-center gap-1.5 font-bold text-slate-100 uppercase tracking-wider text-[11px] pb-1 border-b border-slate-800">
@@ -4032,10 +4548,12 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         type="button"
         onClick={fitAndCenterView}
         className="absolute bottom-4 right-4 z-30 p-2.5 bg-slate-950/85 hover:bg-slate-900 border border-slate-700/80 hover:border-amber-500/50 text-amber-400 rounded-xl shadow-xl backdrop-blur-md flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 cursor-pointer pointer-events-auto"
-        title="Centralizar e Enquadrar Masmorra na Tela"
+        title={playerTokens.length > 0 ? "Focar e Centralizar nos Heróis" : "Centralizar e Enquadrar Masmorra na Tela"}
       >
         <Maximize2 className="w-4 h-4" />
-        <span className="hidden sm:inline">Centralizar Mapa</span>
+        <span className="hidden sm:inline">
+          {playerTokens.length > 0 ? 'Focar Heróis' : 'Centralizar Mapa'}
+        </span>
       </button>
     </div>
   );

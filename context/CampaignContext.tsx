@@ -221,7 +221,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
     if (res.value) {
       const { campaign, member } = res.value;
       setUserCampaigns((prev) => {
-        if (prev.some((c) => c.id === campaign.id)) return prev;
+        if (prev.some((c) => c.id === campaign.id && c.role === campaign.role)) return prev;
         return [...prev, campaign];
       });
 

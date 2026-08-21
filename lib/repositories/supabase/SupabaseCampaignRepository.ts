@@ -29,7 +29,7 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
 
     if (memCamps) {
       memCamps.forEach((m: Record<string, any>) => {
-        if (m.campaigns && !allCamps.some((c) => c.id === m.campaigns.id)) {
+        if (m.campaigns && !allCamps.some((c) => c.id === m.campaigns.id && c.role === (m.role || 'player'))) {
           allCamps.push(mapCampaignRowToDomain(m.campaigns as CampaignRow, m.role || 'player', m.character_name));
         }
       });

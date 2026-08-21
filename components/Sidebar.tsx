@@ -54,7 +54,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { userWorlds, activeWorld, setActiveWorld, updateWorld } = useWorld();
   const [isEditingWorld, setIsEditingWorld] = useState(false);
   const [editedWorldTitle, setEditedWorldTitle] = useState('');
+  const [isEditingCampaign, setIsEditingCampaign] = useState(false);
+  const [editedCampaignTitle, setEditedCampaignTitle] = useState('');
   const [showOtherWorldsCampaigns, setShowOtherWorldsCampaigns] = useState(false);
+
+  // All DM campaigns
+  const allDmCampaigns = userCampaigns.filter((c) => c.role === 'dm');
 
   // Campaigns belonging to the active world (or unassigned one-shots)
   const dmCampaigns = userCampaigns.filter((c) => {
@@ -74,6 +79,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       await updateWorld({ ...activeWorld, title: editedWorldTitle.trim() });
     }
     setIsEditingWorld(false);
+  };
+
+  const handleSaveCampaignTitle = async () => {
+    if (activeCampaign && editedCampaignTitle.trim()) {
+      await updateCampaign({ ...activeCampaign, title: editedCampaignTitle.trim() });
+    }
+    setIsEditingCampaign(false);
   };
 
   const handleSelectOtherCampaign = (camp: typeof userCampaigns[0]) => {
@@ -202,95 +214,129 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )
         )}
 
-        {/* Active Campaigns List & Create Button */}
+        {/* Active Campaign Selector & Switcher */}
         {!isCollapsed && (
-          <div className="space-y-1">
-            <div className="flex items-center justify-between px-2 py-0.5 text-[10px] font-bold tracking-wider text-slate-500 uppercase">
-              <span>Mesas / Campanhas</span>
+          allDmCampaigns.length === 0 ? (
+            <div className="p-3 bg-[#161c28] border border-dashed border-[#2a3449] rounded-xl text-center space-y-2">
+              <p className="text-xs text-slate-400 font-semibold">Nenhuma campanha cadastrada.</p>
               <button
                 onClick={onOpenCreateCampaign}
-                className="text-amber-400 hover:text-amber-300 flex items-center gap-0.5 text-[10px]"
-                title="Criar nova campanha"
+                className="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] rounded-lg shadow cursor-pointer"
               >
-                <Plus className="w-3 h-3" /> Nova
+                + Iniciar Campanha
+              </button>
+              <button
+                onClick={onLoadDemoEverything}
+                className="w-full py-1 bg-[#0f141d] hover:bg-[#1f2738] text-slate-400 hover:text-slate-200 text-[10px] rounded border border-[#2a3449] cursor-pointer"
+              >
+                Carregar Exemplo de Demo
               </button>
             </div>
+          ) : (
+            <div className="p-2.5 bg-gradient-to-r from-[#161c28] to-[#121722] border border-[#2a3449] hover:border-amber-500/30 rounded-xl transition-all">
+              <div className="text-[10px] font-bold uppercase text-slate-400 font-mono flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  <Crown className="w-3 h-3 text-amber-400" />
+                  <span>MESA / CAMPANHA:</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {activeCampaign && !isEditingCampaign && (
+                    <button
+                      onClick={() => {
+                        setIsEditingCampaign(true);
+                        setEditedCampaignTitle(activeCampaign.title);
+                      }}
+                      className="text-slate-400 hover:text-amber-300 transition-colors p-0.5"
+                      title="Editar Nome da Campanha"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                    </button>
+                  )}
+                  <button
+                    onClick={onOpenCreateCampaign}
+                    className="text-amber-400 hover:text-amber-300 flex items-center gap-0.5 text-[10px] font-bold font-sans hover:underline cursor-pointer"
+                    title="Criar nova campanha"
+                  >
+                    <Plus className="w-3 h-3" /> Nova
+                  </button>
+                </div>
+              </div>
 
-            {dmCampaigns.length === 0 ? (
-              <div className="p-3 bg-[#161c28] border border-dashed border-[#2a3449] rounded-xl text-center space-y-2">
-                <p className="text-xs text-slate-400 font-semibold">Nenhuma campanha neste mundo.</p>
-                <button
-                  onClick={onOpenCreateCampaign}
-                  className="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] rounded-lg shadow"
+              {isEditingCampaign && activeCampaign ? (
+                <div className="flex items-center gap-1 mt-1">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={editedCampaignTitle}
+                    onChange={(e) => setEditedCampaignTitle(e.target.value)}
+                    className="bg-[#0a0d14] border border-amber-500 rounded px-2 py-0.5 text-xs text-amber-300 font-bold focus:outline-none w-full"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveCampaignTitle();
+                      if (e.key === 'Escape') setIsEditingCampaign(false);
+                    }}
+                  />
+                  <button onClick={handleSaveCampaignTitle} className="p-1 text-emerald-400 hover:text-emerald-300">
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : allDmCampaigns.length > 1 ? (
+                <select
+                  value={activeCampaign?.id || ''}
+                  onChange={(e) => {
+                    const selected = userCampaigns.find((c) => c.id === e.target.value);
+                    if (selected) {
+                      if (selected.worldId && selected.worldId !== activeWorld?.id) {
+                        const matchingWorld = userWorlds.find((w) => w.id === selected.worldId);
+                        if (matchingWorld) setActiveWorld(matchingWorld);
+                      }
+                      setActiveCampaign(selected);
+                    }
+                  }}
+                  className="w-full bg-transparent text-xs font-bold text-slate-100 truncate mt-0.5 focus:outline-none cursor-pointer"
+                  title="Trocar Campanha Ativa"
                 >
-                  + Iniciar Campanha
-                </button>
-                {otherCampaigns.length > 0 && (
-                  <button
-                    onClick={() => setShowOtherWorldsCampaigns(!showOtherWorldsCampaigns)}
-                    className="w-full py-1 bg-[#0f141d] hover:bg-[#1f2738] text-slate-400 hover:text-slate-200 text-[10px] rounded border border-[#2a3449]"
-                  >
-                    Ver outras campanhas ({otherCampaigns.length})
-                  </button>
-                )}
-                {otherCampaigns.length === 0 && (
-                  <button
-                    onClick={onLoadDemoEverything}
-                    className="w-full py-1 bg-[#0f141d] hover:bg-[#1f2738] text-slate-400 hover:text-slate-200 text-[10px] rounded border border-[#2a3449]"
-                  >
-                    Carregar Exemplo de Demo
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {dmCampaigns.map((camp) => {
-                  const isActive = activeCampaign?.id === camp.id;
-                  return (
-                    <button
-                      key={camp.id}
-                      onClick={() => setActiveCampaign(camp)}
-                      className={`w-full text-left px-3 py-2 rounded-lg border text-xs font-semibold transition-all flex items-center justify-between ${
-                        isActive
-                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
-                          : 'bg-[#161c28] text-slate-300 border-[#2a3449] hover:bg-[#1f2738]'
-                      }`}
-                    >
-                      <span className="truncate">{camp.title}</span>
-                      <Crown className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 ml-1" />
-                    </button>
-                  );
-                })}
-
-                {otherCampaigns.length > 0 && (
-                  <div className="pt-1">
-                    <button
-                      onClick={() => setShowOtherWorldsCampaigns(!showOtherWorldsCampaigns)}
-                      className="w-full text-[10px] text-slate-500 hover:text-slate-300 py-0.5 text-left px-2 flex items-center justify-between"
-                    >
-                      <span>Outras Campanhas ({otherCampaigns.length})</span>
-                      <span>{showOtherWorldsCampaigns ? '▲' : '▼'}</span>
-                    </button>
-
-                    {showOtherWorldsCampaigns && (
-                      <div className="space-y-1 mt-1 pl-1 border-l-2 border-[#2a3449]">
-                        {otherCampaigns.map((camp) => (
-                          <button
-                            key={camp.id}
-                            onClick={() => handleSelectOtherCampaign(camp)}
-                            className="w-full text-left px-2 py-1.5 rounded bg-[#0c0f17] hover:bg-[#161c28] text-[11px] text-slate-400 hover:text-amber-300 truncate block border border-transparent hover:border-[#2a3449]"
-                            title={`Alternar para ${camp.title}`}
-                          >
-                            {camp.title}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+                  {!activeCampaign && (
+                    <option value="" disabled className="bg-[#161c28] text-slate-400">
+                      Selecione uma campanha
+                    </option>
+                  )}
+                  {otherCampaigns.length > 0 ? (
+                    <>
+                      {dmCampaigns.length > 0 && (
+                        <optgroup label="Mundo Atual" className="bg-[#161c28] text-amber-400/80 font-mono text-[10px]">
+                          {dmCampaigns.map((camp) => (
+                            <option key={camp.id} value={camp.id} className="bg-[#161c28] text-slate-200 text-xs font-sans">
+                              {camp.title}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      <optgroup label="Outros Mundos" className="bg-[#161c28] text-slate-400 font-mono text-[10px]">
+                        {otherCampaigns.map((camp) => {
+                          const campWorld = userWorlds.find((w) => w.id === camp.worldId);
+                          return (
+                            <option key={camp.id} value={camp.id} className="bg-[#161c28] text-slate-200 text-xs font-sans">
+                              {camp.title} {campWorld ? `(${campWorld.title})` : ''}
+                            </option>
+                          );
+                        })}
+                      </optgroup>
+                    </>
+                  ) : (
+                    dmCampaigns.map((camp) => (
+                      <option key={camp.id} value={camp.id} className="bg-[#161c28] text-slate-200">
+                        {camp.title}
+                      </option>
+                    ))
+                  )}
+                </select>
+              ) : activeCampaign ? (
+                <div className="text-xs font-bold text-slate-100 truncate mt-0.5">{activeCampaign.title}</div>
+              ) : (
+                <div className="text-xs font-bold text-slate-400 truncate mt-0.5">Nenhuma campanha</div>
+              )}
+            </div>
+          )
         )}
 
         {/* In Collapsed mode, render a simple crown icon for active campaign */}

@@ -102,7 +102,13 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
     );
   }
 
-  const activeWorldCampaigns = activeWorld ? userCampaigns.filter((c) => !c.worldId || c.worldId === activeWorld.id) : userCampaigns;
+  const activeWorldCampaigns = React.useMemo(() => {
+    return userCampaigns.filter((c) => {
+      if (c.role !== 'dm') return false;
+      if (!activeWorld) return true;
+      return !c.worldId || c.worldId === activeWorld.id;
+    });
+  }, [userCampaigns, activeWorld]);
 
   return (
     <div className="flex-1 bg-[#0a0d14] flex flex-col overflow-hidden select-none">
@@ -244,9 +250,9 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
                 CAMPANHAS DERIVADAS DESTE MUNDO ({activeWorldCampaigns.length}):
               </span>
               <div className="flex flex-wrap gap-2">
-                {activeWorldCampaigns.map((camp) => (
+                {activeWorldCampaigns.map((camp, idx) => (
                   <button
-                    key={camp.id}
+                    key={`${camp.id}-${camp.role || 'dm'}-${idx}`}
                     onClick={() => {
                       setActiveCampaign(camp);
                       if (onSelectCampaign) onSelectCampaign(camp);
@@ -361,9 +367,9 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
                 {derivedCampaigns.length > 0 && (
                   <div className="mt-3 pt-2 border-t border-[#2a3449]/40 space-y-1">
                     <div className="text-[10px] font-bold text-slate-500 uppercase">Campanhas Ativas:</div>
-                    {derivedCampaigns.map((c) => (
+                    {derivedCampaigns.map((c, idx) => (
                       <button
-                        key={c.id}
+                        key={`${c.id}-${c.role || 'dm'}-${idx}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveWorld(world);

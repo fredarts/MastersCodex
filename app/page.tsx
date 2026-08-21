@@ -312,8 +312,8 @@ function MainApp() {
 
           {/* Main Workspace Column */}
           <div className="flex-1 flex flex-col overflow-hidden relative">
-            {/* DM Session & Scene Timeline Navigation Bar (Visible only in Live Cockpit & Session Studio) */}
-            {(activeTab === 'live_cockpit' || activeTab === 'session_studio') && (
+            {/* DM Session & Scene Timeline Navigation Bar (Visible only in Session Studio) */}
+            {activeTab === 'session_studio' && (
               <SessionNavigator onEquipScene={handleEquipScene} />
             )}
 

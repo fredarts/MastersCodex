@@ -63,6 +63,7 @@ export interface RealtimeSyncPayloads {
     roundCount?: number;
     mapData?: any;
     selectedTargetId?: string | null;
+    drawings?: any[];
   };
   DRAWING_ACTION: {
     action: 'add' | 'clear' | 'undo' | 'remove';
@@ -203,14 +204,25 @@ export function useRealtimeSync({
     onSafetySettingsUpdated,
   ]);
 
-  // Cross-tab BroadcastChannel fallback
+  // Cross-tab BroadcastChannel fallback (Scoped per campaign)
   const bcRef = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
+    if (!campaignId) {
+      if (bcRef.current) {
+        bcRef.current.close();
+        bcRef.current = null;
+      }
+      return;
+    }
+
+    const channelName = `masters_codex_sync_${campaignId}`;
     try {
-      bcRef.current = new BroadcastChannel('masters_codex_sync');
-      bcRef.current.onmessage = (event) => {
-        const { type, ...data } = event.data || {};
+      const bc = new BroadcastChannel(channelName);
+      bcRef.current = bc;
+      bc.onmessage = (event) => {
+        const { type, _campaignId, ...data } = event.data || {};
+        if (_campaignId && _campaignId !== campaignId) return;
         const cb = callbacksRef.current;
         if (type === 'TOKEN_MOVE_3D' && cb.onTokenMove) cb.onTokenMove(data as any);
         if (type === 'TOKEN_ROTATE_3D' && cb.onTokenRotate) cb.onTokenRotate(data as any);
@@ -242,7 +254,7 @@ export function useRealtimeSync({
         bcRef.current = null;
       }
     };
-  }, []);
+  }, [campaignId]);
 
   // Supabase Realtime Channel
   useEffect(() => {
@@ -381,38 +393,41 @@ export function useRealtimeSync({
   }, [campaignId]);
 
   const sendBroadcast = useCallback((event: string, payload: any) => {
+    if (!campaignId) return;
+
     // 1. Send via Supabase Realtime WebSocket if connected and subscribed
     if (channelRef.current) {
       if (isSubscribedRef.current) {
         channelRef.current.send({
           type: 'broadcast',
           event,
-          payload,
+          payload: { ...payload, campaignId },
         });
       } else {
         // Fallback: Queue offline event for CRDT
         const entityId = payload.combatantId || payload.sceneId || 'global';
-        offlineQueue.enqueueEvent(entityId, event, payload).catch(err => {
+        offlineQueue.enqueueEvent(entityId, event, { ...payload, campaignId }).catch(err => {
           console.error('Failed to enqueue offline event:', err);
         });
       }
     }
 
-    // 2. Send via Local BroadcastChannel (Same-machine / cross-tab)
+    // 2. Send via Local BroadcastChannel (Same-machine / cross-tab, scoped to campaign)
     if (bcRef.current) {
       try {
-        bcRef.current.postMessage({ type: event, ...payload });
+        bcRef.current.postMessage({ type: event, _campaignId: campaignId, ...payload });
       } catch (err) {
         console.warn('BroadcastChannel was closed, re-creating and sending: ', err);
         try {
-          bcRef.current = new BroadcastChannel('masters_codex_sync');
-          bcRef.current.postMessage({ type: event, ...payload });
+          const channelName = `masters_codex_sync_${campaignId}`;
+          bcRef.current = new BroadcastChannel(channelName);
+          bcRef.current.postMessage({ type: event, _campaignId: campaignId, ...payload });
         } catch (retryErr) {
           console.error('Failed to send broadcast even after retry:', retryErr);
         }
       }
     }
-  }, []);
+  }, [campaignId]);
 
   const broadcastTokenMove = useCallback((payload: RealtimeSyncPayloads['TOKEN_MOVE_3D']) => {
     sendBroadcast('TOKEN_MOVE_3D', payload);

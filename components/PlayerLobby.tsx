@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Shield, 
   Sparkles, 
@@ -102,7 +102,9 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   const { setIsOnPlayerCampaignView } = usePartyLoot();
   
   // Navigation & Modal States
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(activeCampaign?.id || null);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(
+    activeCampaign?.role === 'player' ? activeCampaign?.id || null : null
+  );
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
 
   // Solicita o snapshot atual do Mestre ao carregar o lobby
@@ -883,10 +885,16 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     setIsJoinModalOpen(true);
   };
 
-  const playerCampaigns = userCampaigns;
+  // Filtra estritamente apenas as campanhas onde o personagem/usuário ingressou como jogador
+  const playerCampaigns = useMemo(() => {
+    return userCampaigns.filter((c) => c.role === 'player');
+  }, [userCampaigns]);
 
-  // Find currently selected campaign
-  const currentCampaign = playerCampaigns.find((c) => c.id === selectedCampaignId) || activeCampaign;
+  // Find currently selected campaign (only among player campaigns)
+  const currentCampaign =
+    playerCampaigns.find((c) => c.id === selectedCampaignId) ||
+    (activeCampaign?.role === 'player' ? activeCampaign : playerCampaigns[0]) ||
+    null;
 
   // Resolve character name from multiple sources (campaign → sheets → members → fallback)
   const resolveCharName = (camp?: UserCampaign | null): string => {

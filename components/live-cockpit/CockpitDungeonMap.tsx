@@ -1,13 +1,35 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Eye, EyeOff, MapPin, Ruler, Hand, Map, Cloud, RefreshCw, Layers, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { 
+  Eye, 
+  EyeOff, 
+  MapPin, 
+  Ruler, 
+  Hand, 
+  Cloud, 
+  RefreshCw, 
+  Layers, 
+  ChevronLeft, 
+  ChevronRight, 
+  ChevronUp, 
+  ChevronDown,
+  Trash2,
+  Users,
+  Search,
+  Shield,
+  Skull,
+  Sparkles,
+  ArrowRightLeft,
+  X
+} from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
+import { useCampaign } from '@/lib/hooks/useCampaign';
 import { DysonCanvas } from '@/components/map/DysonCanvas';
 import { revealVisionWithLOS, getTokenVisionRadius } from '@/components/map/visionCore';
 import { normalizeToMultiLevel } from '@/lib/map/mapLevelsCore';
-import { MapLevel } from '@/lib/types';
+import { MapLevel, Combatant, DungeonTransitionConfig, TransitionType } from '@/lib/types';
 import { Cell } from '../MapMaker';
 import { toast } from 'sonner';
 
@@ -44,6 +66,7 @@ interface MultiMapState {
 export const CockpitDungeonMap: React.FC = () => {
   const { activeScene, fetchSceneMap, saveSceneMap, campaignMaps } = useSession();
   const { combatants, broadcastToPlayerView, drawings, broadcastDrawingAction } = useLiveCockpit();
+  const { activeCampaign } = useCampaign();
 
   const [grid, setGrid] = useState<Cell[][]>([]);
   const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
@@ -54,9 +77,18 @@ export const CockpitDungeonMap: React.FC = () => {
   const [lightSources, setLightSources] = useState<import('@/lib/types').LightSource[]>([]);
 
   const [selectedTool, setSelectedTool] = useState<'pan' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'draw-pencil' | 'draw-circle' | 'draw-rect' | 'draw-eraser' | 'draw-text'>('token');
+  const [selectedTokenCombatant, setSelectedTokenCombatant] = useState<Combatant | null>(null);
+  const [tokenSearchQuery, setTokenSearchQuery] = useState('');
+  const [tokenCategory, setTokenCategory] = useState<'all' | 'players' | 'monsters'>('all');
+  const [isTokenTrayOpen, setIsTokenTrayOpen] = useState(true);
+
   const [measureStart, setMeasureStart] = useState<{ r: number; c: number } | null>(null);
   const [measuredDistance, setMeasuredDistance] = useState<{ feet: number; meters: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Drawing customization
+  const [drawColor, setDrawColor] = useState<string>('#f59e0b');
+  const [drawLineWidth, setDrawLineWidth] = useState<number>(4);
 
   const [currentMapId, setCurrentMapId] = useState<string | null>(null);
   const [activeLevels, setActiveLevels] = useState<MapLevel[]>([]);
@@ -67,6 +99,71 @@ export const CockpitDungeonMap: React.FC = () => {
   const [isMapSelectorCollapsed, setIsMapSelectorCollapsed] = useState(false);
   const [isToolsBarCollapsed, setIsToolsBarCollapsed] = useState(false);
   const [isDrawingToolsCollapsed, setIsDrawingToolsCollapsed] = useState(false);
+
+  // Consolidated list of all placeable combatants / tokens
+  const allAvailableTokens: Combatant[] = useMemo(() => {
+    const list: Combatant[] = [...combatants];
+    const registeredParty = activeCampaign?.partyMembers || [];
+    for (const pm of registeredParty) {
+      if (!list.some(c => c.name.trim().toLowerCase() === pm.name.trim().toLowerCase())) {
+        list.push({
+          id: `party-${pm.id}`,
+          name: pm.name,
+          type: 'player',
+          hp: 20,
+          maxHp: 20,
+          ac: 10,
+          initiative: 0,
+          conditions: [],
+          avatarUrl: pm.avatarUrl,
+        });
+      }
+    }
+    return list;
+  }, [combatants, activeCampaign?.partyMembers]);
+
+  // Helper to determine which floor/level a token is currently located on
+  const getTokenLocation = useCallback((tokenName: string): { levelId: string; levelName: string; isOnActive: boolean } | null => {
+    const key = tokenName.trim().toUpperCase();
+
+    // Check active grid
+    for (let r = 0; r < grid.length; r++) {
+      for (let c = 0; c < grid[r].length; c++) {
+        if (grid[r][c].tokenName?.trim().toUpperCase() === key) {
+          const currentLevelObj = activeLevels.find(l => l.id === activeLevelId);
+          return {
+            levelId: activeLevelId || 'current',
+            levelName: currentLevelObj?.name || 'Andar Atual',
+            isOnActive: true
+          };
+        }
+      }
+    }
+
+    // Check all other levels in multiMapStateRef
+    if (currentMapId && multiMapStateRef.current.maps[currentMapId]?.levels) {
+      const levelsRecord = multiMapStateRef.current.maps[currentMapId].levels;
+      for (const [lvlId, lvlState] of Object.entries(levelsRecord)) {
+        if (lvlId === activeLevelId) continue;
+        const lGrid = lvlState.grid;
+        if (!lGrid) continue;
+        for (let r = 0; r < lGrid.length; r++) {
+          for (let c = 0; c < lGrid[r].length; c++) {
+            if (lGrid[r][c].tokenName?.trim().toUpperCase() === key) {
+              const lvlObj = activeLevels.find(l => l.id === lvlId);
+              return {
+                levelId: lvlId,
+                levelName: lvlObj?.name || lvlState.name || 'Outro Andar',
+                isOnActive: false
+              };
+            }
+          }
+        }
+      }
+    }
+
+    return null;
+  }, [grid, activeLevelId, activeLevels, currentMapId]);
 
   // Helper to create empty grid if no template
   const createInitialGrid = (cols = 80, rows = 80): Cell[][] => {
@@ -151,8 +248,8 @@ export const CockpitDungeonMap: React.FC = () => {
             return {
               ...cell,
               fog: sCell !== undefined ? sCell.fog : true,
-              tokenName: (sCell && sCell.tokenName) ? sCell.tokenName : cell.tokenName,
-              tokenColor: (sCell && sCell.tokenName) ? sCell.tokenColor : cell.tokenColor,
+              tokenName: sCell?.tokenName,
+              tokenColor: sCell?.tokenColor,
             };
           })
         );
@@ -169,29 +266,6 @@ export const CockpitDungeonMap: React.FC = () => {
                 mergedGrid[r][c].tokenColor = undefined;
               } else {
                 seenTokens.add(key);
-              }
-            }
-          }
-        }
-
-        // Ensure active player combatants have tokens on the primary ground floor if not placed anywhere
-        if (combatants && combatants.length > 0 && (tLevel.order === 0 || templateLevels.indexOf(tLevel) === 0)) {
-          const playerCombatants = combatants.filter((comb) => comb.type === 'player');
-          for (const player of playerCombatants) {
-            const playerKey = player.name.trim().toUpperCase();
-            if (!seenTokens.has(playerKey)) {
-              let placed = false;
-              for (let r = 0; r < mergedGrid.length; r++) {
-                for (let c = 0; c < mergedGrid[r].length; c++) {
-                  if (mergedGrid[r][c].type !== 'wall' && !mergedGrid[r][c].tokenName) {
-                    mergedGrid[r][c].tokenName = player.name;
-                    mergedGrid[r][c].tokenColor = '#38bdf8';
-                    seenTokens.add(playerKey);
-                    placed = true;
-                    break;
-                  }
-                }
-                if (placed) break;
               }
             }
           }
@@ -274,7 +348,6 @@ export const CockpitDungeonMap: React.FC = () => {
   // Load or initialize scene map
   useEffect(() => {
     if (!activeScene) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
 
     fetchSceneMap(activeScene.id).then((savedData: any) => {
@@ -439,7 +512,7 @@ export const CockpitDungeonMap: React.FC = () => {
     return () => clearTimeout(delayDebounce);
   }, [grid, bgImageUrl, vectorWalls, lightSources, gridScale, gridOffsetX, gridOffsetY, activeScene, isLoading, currentMapId, activeLevelId, activeLevels, saveSceneMap, broadcastToPlayerView]);
 
-  // Instant In-Memory Floor / Level Switcher (0ms Latency, zero database fetch)
+  // Instant In-Memory Floor / Level Switcher
   const handleSwitchLevel = (targetLevelId: string) => {
     if (!currentMapId || !multiMapStateRef.current || !activeScene) return;
     if (targetLevelId === activeLevelId) return;
@@ -524,50 +597,467 @@ export const CockpitDungeonMap: React.FC = () => {
     }
   };
 
-  const handleSwitchMap = (newMapId: string) => {
-    if (!currentMapId || !multiMapStateRef.current || !activeScene) return;
+  // Remove a token from current active floor and all memory levels
+  const handleRemoveToken = (tokenName: string) => {
+    const key = tokenName.trim().toUpperCase();
 
-    // 1. Save current memory state to currentMapId index
-    if (activeLevelId && multiMapStateRef.current.maps[currentMapId]?.levels) {
-      multiMapStateRef.current.maps[currentMapId].levels[activeLevelId] = {
-        grid,
+    // 1. Remove from active React state
+    setGrid((prev) => {
+      const copy = prev.map((row) => row.map((cell) => ({ ...cell })));
+      for (let r = 0; r < copy.length; r++) {
+        for (let c = 0; c < copy[r].length; c++) {
+          if (copy[r][c].tokenName?.trim().toUpperCase() === key) {
+            copy[r][c].tokenName = undefined;
+            copy[r][c].tokenColor = undefined;
+          }
+        }
+      }
+      return copy;
+    });
+
+    // 2. Remove from all memory levels in multiMapStateRef
+    if (currentMapId && multiMapStateRef.current.maps[currentMapId]?.levels) {
+      const levelsRecord = multiMapStateRef.current.maps[currentMapId].levels;
+      for (const lvlState of Object.values(levelsRecord)) {
+        if (lvlState.grid) {
+          for (let r = 0; r < lvlState.grid.length; r++) {
+            for (let c = 0; c < lvlState.grid[r].length; c++) {
+              if (lvlState.grid[r][c].tokenName?.trim().toUpperCase() === key) {
+                lvlState.grid[r][c].tokenName = undefined;
+                lvlState.grid[r][c].tokenColor = undefined;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (selectedTokenCombatant?.name.trim().toUpperCase() === key) {
+      setSelectedTokenCombatant(null);
+    }
+
+    toast.success(`Token de "${tokenName}" removido do mapa.`);
+  };
+
+  // Transport ALL player tokens to target floor/level in one single action
+  const handleMovePartyToLevel = (targetLevelId: string, spawnR?: number, spawnC?: number) => {
+    if (!currentMapId || !multiMapStateRef.current || !activeScene) return;
+    const targetLevelObj = activeLevels.find((l) => l.id === targetLevelId);
+    if (!targetLevelObj) return;
+
+    // 1. Collect all player tokens
+    const playerTokens = allAvailableTokens.filter((t) => t.type === 'player');
+    if (playerTokens.length === 0) {
+      toast.error('Nenhum jogador cadastrado para mover.');
+      return;
+    }
+
+    const playerKeys = new Set(playerTokens.map((p) => p.name.trim().toUpperCase()));
+
+    // 2. Snapshot current active grid into memory with player tokens removed
+    const levelsRecord = multiMapStateRef.current.maps[currentMapId]?.levels || {};
+    if (activeLevelId && levelsRecord[activeLevelId]) {
+      const cleanedCurrentGrid = grid.map((row) =>
+        row.map((cell) => {
+          if (cell.tokenName && playerKeys.has(cell.tokenName.trim().toUpperCase())) {
+            return { ...cell, tokenName: undefined, tokenColor: undefined };
+          }
+          return { ...cell };
+        })
+      );
+      levelsRecord[activeLevelId] = {
+        ...levelsRecord[activeLevelId],
+        grid: cleanedCurrentGrid,
         bgImageUrl,
         gridScale,
         gridOffsetX,
         gridOffsetY,
         vectorWalls,
         lightSources,
-        name: activeLevels.find(l => l.id === activeLevelId)?.name,
+        name: activeLevels.find((l) => l.id === activeLevelId)?.name,
       };
     }
-    multiMapStateRef.current.activeMapId = newMapId;
 
-    // 2. Change current map ID
-    setCurrentMapId(newMapId);
+    // Clean player tokens from all levels in memory
+    for (const [lvlId, lvlState] of Object.entries(levelsRecord)) {
+      if (lvlState.grid) {
+        lvlState.grid = lvlState.grid.map((row) =>
+          row.map((cell) => {
+            if (cell.tokenName && playerKeys.has(cell.tokenName.trim().toUpperCase())) {
+              return { ...cell, tokenName: undefined, tokenColor: undefined };
+            }
+            return { ...cell };
+          })
+        );
+      }
+    }
 
-    // 3. Load the new map properties
-    loadMapFromMultiState(multiMapStateRef.current, newMapId);
+    // 3. Prepare target level grid
+    let targetState = levelsRecord[targetLevelId];
+    let targetGrid: Cell[][];
+    if (targetState?.grid) {
+      targetGrid = targetState.grid.map((row) => row.map((cell) => ({ ...cell })));
+    } else {
+      const tGrid = targetLevelObj.grid || createInitialGrid();
+      targetGrid = tGrid.map((row) => row.map((cell) => ({ ...cell, fog: true, tokenName: undefined, tokenColor: undefined })));
+    }
 
-    // 4. Broadcast immediately so player view updates
-    const switchedMap = multiMapStateRef.current.maps[newMapId];
-    if (switchedMap) {
-      const lvlId = switchedMap.activeLevelId;
-      const currentLvlState: LevelRuntimeState | undefined = (lvlId && switchedMap.levels ? switchedMap.levels[lvlId] : undefined) || (switchedMap.levels ? Object.values(switchedMap.levels)[0] : undefined);
-      const payload = {
-        grid: currentLvlState?.grid || switchedMap.grid || [],
-        bgImageUrl: currentLvlState?.bgImageUrl ?? switchedMap.bgImageUrl ?? null,
-        gridScale: currentLvlState?.gridScale ?? switchedMap.gridScale ?? 40,
-        gridOffsetX: currentLvlState?.gridOffsetX ?? switchedMap.gridOffsetX ?? 0,
-        gridOffsetY: currentLvlState?.gridOffsetY ?? switchedMap.gridOffsetY ?? 0,
-        vectorWalls: currentLvlState?.vectorWalls || switchedMap.vectorWalls || [],
-        lightSources: currentLvlState?.lightSources || switchedMap.lightSources || [],
-        activeMapId: newMapId,
-        activeLevelId: lvlId,
-        currentLevelName: currentLvlState?.name || 'Andar',
-        sceneId: activeScene.id,
+    // 4. Find walkable cells in targetGrid to place players (closest to target spawn position or center)
+    const freeCells: { r: number; c: number }[] = [];
+    for (let r = 0; r < targetGrid.length; r++) {
+      for (let c = 0; c < targetGrid[r].length; c++) {
+        if (targetGrid[r][c].type !== 'wall' && !targetGrid[r][c].tokenName) {
+          freeCells.push({ r, c });
+        }
+      }
+    }
+
+    // Sort free cells starting closest to spawn point (or center)
+    const centerR = spawnR !== undefined ? spawnR : Math.floor(targetGrid.length / 2);
+    const centerC = spawnC !== undefined ? spawnC : Math.floor((targetGrid[0]?.length || 0) / 2);
+    freeCells.sort((a, b) => {
+      const distA = Math.hypot(a.r - centerR, a.c - centerC);
+      const distB = Math.hypot(b.r - centerR, b.c - centerC);
+      return distA - distB;
+    });
+
+    // Place each player
+    playerTokens.forEach((player, idx) => {
+      const cellPos = freeCells[idx] || freeCells[0];
+      if (cellPos) {
+        targetGrid[cellPos.r][cellPos.c].tokenName = player.name;
+        targetGrid[cellPos.r][cellPos.c].tokenColor = '#38bdf8';
+        const radius = getTokenVisionRadius(player.name, combatants);
+        revealVisionWithLOS(targetGrid, cellPos.r, cellPos.c, radius);
+      }
+    });
+
+    // 5. Save target state & switch active level
+    const updatedTargetState: LevelRuntimeState = {
+      grid: targetGrid,
+      bgImageUrl: targetLevelObj.bgImageUrl || targetState?.bgImageUrl || null,
+      gridScale: targetLevelObj.gridScale || targetState?.gridScale || 40,
+      gridOffsetX: targetLevelObj.gridOffsetX || targetState?.gridOffsetX || 0,
+      gridOffsetY: targetLevelObj.gridOffsetY || targetState?.gridOffsetY || 0,
+      vectorWalls: targetLevelObj.vectorWalls || targetState?.vectorWalls || [],
+      lightSources: targetLevelObj.lightSources || targetState?.lightSources || [],
+      name: targetLevelObj.name,
+      order: targetLevelObj.order,
+    };
+
+    if (!multiMapStateRef.current.maps[currentMapId]) {
+      multiMapStateRef.current.maps[currentMapId] = { levels: {} };
+    }
+    if (!multiMapStateRef.current.maps[currentMapId].levels) {
+      multiMapStateRef.current.maps[currentMapId].levels = {};
+    }
+    multiMapStateRef.current.maps[currentMapId].levels[targetLevelId] = updatedTargetState;
+    multiMapStateRef.current.maps[currentMapId].activeLevelId = targetLevelId;
+
+    // Immediately persist in storage
+    saveSceneMap(activeScene.id, multiMapStateRef.current).catch((e: any) => {
+      console.error('Failed to save scene map on party transition:', e);
+    });
+
+    setActiveLevelId(targetLevelId);
+    setGrid(targetGrid);
+    setBgImageUrl(updatedTargetState.bgImageUrl);
+    setGridScale(updatedTargetState.gridScale);
+    setGridOffsetX(updatedTargetState.gridOffsetX);
+    setGridOffsetY(updatedTargetState.gridOffsetY);
+    setVectorWalls(updatedTargetState.vectorWalls || []);
+    setLightSources(updatedTargetState.lightSources || []);
+
+    // 6. Broadcast instantly to Player View
+    const payload = {
+      grid: targetGrid,
+      bgImageUrl: updatedTargetState.bgImageUrl,
+      gridScale: updatedTargetState.gridScale,
+      gridOffsetX: updatedTargetState.gridOffsetX,
+      gridOffsetY: updatedTargetState.gridOffsetY,
+      vectorWalls: updatedTargetState.vectorWalls || [],
+      lightSources: updatedTargetState.lightSources || [],
+      activeMapId: currentMapId,
+      activeLevelId: targetLevelId,
+      currentLevelName: targetLevelObj.name || 'Andar',
+      sceneId: activeScene.id,
+    };
+    lastBroadcast.current = JSON.stringify(payload);
+    broadcastToPlayerView({ mapData: payload });
+
+    toast.success(`🚀 Grupo de heróis transportado para "${targetLevelObj.name}"!`);
+  };
+
+  // Move single token to target floor
+  const handleMoveSingleTokenToLevel = (combOrName: Combatant | string, targetLevelId: string, spawnR?: number, spawnC?: number) => {
+    if (!currentMapId || !multiMapStateRef.current || !activeScene) return;
+    const targetLevelObj = activeLevels.find((l) => l.id === targetLevelId);
+    if (!targetLevelObj) return;
+
+    const tokenName = typeof combOrName === 'string' ? combOrName : combOrName.name;
+    const key = tokenName.trim().toUpperCase();
+    const combObj = typeof combOrName === 'string'
+      ? allAvailableTokens.find((t) => t.name.trim().toUpperCase() === key) || {
+          id: `comb-${key}`,
+          name: tokenName,
+          type: 'player' as const,
+          hp: 10,
+          maxHp: 10,
+          ac: 10,
+          initiative: 0,
+          conditions: [],
+        }
+      : combOrName;
+
+    // 1. Remove from all levels in memory & current state
+    setGrid((prev) => {
+      const copy = prev.map((row) => row.map((cell) => ({ ...cell })));
+      for (let r = 0; r < copy.length; r++) {
+        for (let c = 0; c < copy[r].length; c++) {
+          if (copy[r][c].tokenName?.trim().toUpperCase() === key) {
+            copy[r][c].tokenName = undefined;
+            copy[r][c].tokenColor = undefined;
+          }
+        }
+      }
+      return copy;
+    });
+
+    const levelsRecord = multiMapStateRef.current.maps[currentMapId]?.levels || {};
+    if (activeLevelId && levelsRecord[activeLevelId]) {
+      const cleanedCurrentGrid = grid.map((row) =>
+        row.map((cell) => {
+          if (cell.tokenName?.trim().toUpperCase() === key) {
+            return { ...cell, tokenName: undefined, tokenColor: undefined };
+          }
+          return { ...cell };
+        })
+      );
+      levelsRecord[activeLevelId].grid = cleanedCurrentGrid;
+    }
+
+    for (const [lvlId, lvlState] of Object.entries(levelsRecord)) {
+      if (lvlId !== targetLevelId && lvlState.grid) {
+        lvlState.grid = lvlState.grid.map((row) =>
+          row.map((cell) => {
+            if (cell.tokenName?.trim().toUpperCase() === key) {
+              return { ...cell, tokenName: undefined, tokenColor: undefined };
+            }
+            return { ...cell };
+          })
+        );
+      }
+    }
+
+    // 2. Add to targetLevel
+    let targetState = levelsRecord[targetLevelId];
+    let targetGrid: Cell[][];
+    if (targetLevelId === activeLevelId) {
+      targetGrid = grid.map((row) =>
+        row.map((cell) => ({
+          ...cell,
+          tokenName: cell.tokenName?.trim().toUpperCase() === key ? undefined : cell.tokenName,
+          tokenColor: cell.tokenName?.trim().toUpperCase() === key ? undefined : cell.tokenColor,
+        }))
+      );
+    } else if (targetState?.grid) {
+      targetGrid = targetState.grid.map((row) => row.map((cell) => ({ ...cell })));
+    } else {
+      const tGrid = targetLevelObj.grid || createInitialGrid();
+      targetGrid = tGrid.map((row) => row.map((cell) => ({ ...cell, fog: true, tokenName: undefined, tokenColor: undefined })));
+    }
+
+    // Find free cell closest to spawn position
+    const centerR = spawnR !== undefined ? spawnR : Math.floor(targetGrid.length / 2);
+    const centerC = spawnC !== undefined ? spawnC : Math.floor((targetGrid[0]?.length || 0) / 2);
+
+    const freeCells: { r: number; c: number }[] = [];
+    for (let r = 0; r < targetGrid.length; r++) {
+      for (let c = 0; c < targetGrid[r].length; c++) {
+        if (targetGrid[r][c].type !== 'wall' && !targetGrid[r][c].tokenName) {
+          freeCells.push({ r, c });
+        }
+      }
+    }
+    freeCells.sort((a, b) => Math.hypot(a.r - centerR, a.c - centerC) - Math.hypot(b.r - centerR, b.c - centerC));
+    const targetPos = freeCells[0];
+    if (targetPos) {
+      targetGrid[targetPos.r][targetPos.c].tokenName = combObj.name;
+      targetGrid[targetPos.r][targetPos.c].tokenColor = combObj.type === 'player' ? '#38bdf8' : '#e11d48';
+      const radius = getTokenVisionRadius(combObj.name, combatants);
+      revealVisionWithLOS(targetGrid, targetPos.r, targetPos.c, radius);
+    }
+
+    if (targetLevelId === activeLevelId) {
+      setGrid(targetGrid);
+    }
+    if (!targetState) {
+      targetState = {
+        grid: targetGrid,
+        bgImageUrl: targetLevelObj.bgImageUrl || null,
+        gridScale: targetLevelObj.gridScale || 40,
+        gridOffsetX: targetLevelObj.gridOffsetX || 0,
+        gridOffsetY: targetLevelObj.gridOffsetY || 0,
+        vectorWalls: targetLevelObj.vectorWalls || [],
+        lightSources: targetLevelObj.lightSources || [],
+        name: targetLevelObj.name,
+        order: targetLevelObj.order,
       };
-      lastBroadcast.current = JSON.stringify(payload);
-      broadcastToPlayerView({ mapData: payload });
+      levelsRecord[targetLevelId] = targetState;
+    } else {
+      targetState.grid = targetGrid;
+    }
+
+    // Immediately persist in storage
+    saveSceneMap(activeScene.id, multiMapStateRef.current).catch((e: any) => {
+      console.error('Failed to save scene map on single token transition:', e);
+    });
+
+    toast.success(`Token de "${tokenName}" movido para "${targetLevelObj.name}"!`);
+  };
+
+  const handleSaveTransitionWithTargetLevel = (
+    config: DungeonTransitionConfig,
+    sourceR: number,
+    sourceC: number,
+    autoCreateLinked: boolean,
+    linkedTargetInfo?: { targetLevelId: string; targetR: number; targetC: number; linkedTransitionId?: string }
+  ) => {
+    // 1. Update current grid in state
+    setGrid((prev) => {
+      const copy = prev.map((row) => row.map((cell) => ({ ...cell })));
+      if (copy[sourceR]?.[sourceC]) {
+        copy[sourceR][sourceC].type = 'transition';
+        copy[sourceR][sourceC].transitionConfig = config;
+      }
+      return copy;
+    });
+
+    if (!currentMapId || !multiMapStateRef.current || !activeScene) return;
+
+    // 2. Snapshot current active level in multiMapStateRef
+    const levelsRecord = multiMapStateRef.current.maps[currentMapId]?.levels || {};
+    if (activeLevelId && levelsRecord[activeLevelId]) {
+      const updatedCurrentGrid = grid.map((row, rIdx) =>
+        row.map((cell, cIdx) => {
+          if (rIdx === sourceR && cIdx === sourceC) {
+            return { ...cell, type: 'transition' as const, transitionConfig: config };
+          }
+          return { ...cell };
+        })
+      );
+      levelsRecord[activeLevelId].grid = updatedCurrentGrid;
+    }
+
+    // 3. Update target level grid
+    if (linkedTargetInfo?.targetLevelId && linkedTargetInfo.targetLevelId !== activeLevelId) {
+      const targetLevelId = linkedTargetInfo.targetLevelId;
+      const targetR = linkedTargetInfo.targetR;
+      const targetC = linkedTargetInfo.targetC;
+
+      let targetState = levelsRecord[targetLevelId];
+      if (!targetState) {
+        const targetLevelObj = activeLevels.find((l) => l.id === targetLevelId);
+        if (targetLevelObj) {
+          targetState = {
+            grid: targetLevelObj.grid || createInitialGrid(),
+            bgImageUrl: targetLevelObj.bgImageUrl || null,
+            gridScale: targetLevelObj.gridScale || 40,
+            gridOffsetX: targetLevelObj.gridOffsetX || 0,
+            gridOffsetY: targetLevelObj.gridOffsetY || 0,
+            vectorWalls: targetLevelObj.vectorWalls || [],
+            lightSources: targetLevelObj.lightSources || [],
+            name: targetLevelObj.name,
+            order: targetLevelObj.order,
+          };
+          levelsRecord[targetLevelId] = targetState;
+        }
+      }
+
+      if (targetState?.grid) {
+        const tGrid = targetState.grid.map((row) => row.map((cell) => ({ ...cell })));
+
+        if (autoCreateLinked) {
+          const reverseType: TransitionType =
+            config.type === 'stairs_down' ? 'stairs_up' :
+            (config.type === 'stairs_up' ? 'stairs_down' : config.type);
+
+          const returnConfig: DungeonTransitionConfig = {
+            id: `trans-${Math.random().toString(36).substring(2, 8)}`,
+            name: `Retorno para ${activeLevels.find((l) => l.id === activeLevelId)?.name || 'Andar Anterior'}`,
+            type: reverseType,
+            targetLevelId: activeLevelId || '',
+            targetSpawnR: sourceR,
+            targetSpawnC: sourceC,
+            linkedTransitionId: config.id,
+            status: 'open',
+          };
+
+          config.linkedTransitionId = returnConfig.id;
+
+          if (tGrid[targetR]?.[targetC]) {
+            tGrid[targetR][targetC].type = 'transition';
+            tGrid[targetR][targetC].transitionConfig = returnConfig;
+            tGrid[targetR][targetC].fog = false;
+          }
+        } else if (linkedTargetInfo.linkedTransitionId) {
+          if (tGrid[targetR]?.[targetC]) {
+            const existingTarget = tGrid[targetR][targetC].transitionConfig;
+            if (existingTarget) {
+              tGrid[targetR][targetC].transitionConfig = {
+                ...existingTarget,
+                targetLevelId: activeLevelId || '',
+                targetSpawnR: sourceR,
+                targetSpawnC: sourceC,
+                linkedTransitionId: config.id,
+              };
+            } else {
+              tGrid[targetR][targetC].transitionConfig = {
+                id: linkedTargetInfo.linkedTransitionId,
+                name: 'Escada de Retorno',
+                type: config.type === 'stairs_down' ? 'stairs_up' : (config.type === 'stairs_up' ? 'stairs_down' : config.type),
+                targetLevelId: activeLevelId || '',
+                targetSpawnR: sourceR,
+                targetSpawnC: sourceC,
+                linkedTransitionId: config.id,
+                status: 'open',
+              };
+            }
+          }
+        }
+
+        targetState.grid = tGrid;
+      }
+    }
+
+    // Persist immediately in storage
+    saveSceneMap(activeScene.id, multiMapStateRef.current).catch((e: any) => {
+      console.error('Failed to save scene map on transition link:', e);
+    });
+  };
+
+  const handleTransitionAction = (
+    action: 'teleport_party' | 'teleport_token',
+    targetLevelId: string,
+    spawnR?: number,
+    spawnC?: number,
+    tokenName?: string
+  ) => {
+    if (action === 'teleport_party') {
+      handleMovePartyToLevel(targetLevelId, spawnR, spawnC);
+    } else if (action === 'teleport_token') {
+      if (tokenName) {
+        handleMoveSingleTokenToLevel(tokenName, targetLevelId, spawnR, spawnC);
+      } else if (selectedTokenCombatant) {
+        handleMoveSingleTokenToLevel(selectedTokenCombatant, targetLevelId, spawnR, spawnC);
+      } else {
+        const firstPlayer = allAvailableTokens.find((t) => t.type === 'player');
+        if (firstPlayer) {
+          handleMoveSingleTokenToLevel(firstPlayer, targetLevelId, spawnR, spawnC);
+        } else {
+          toast.info('Selecione um token na bandeja para movê-lo.');
+        }
+      }
     }
   };
 
@@ -600,7 +1090,7 @@ export const CockpitDungeonMap: React.FC = () => {
 
   const handleReloadFromTemplate = () => {
     if (!currentMapId || !multiMapStateRef.current || !activeScene) return;
-    const associatedMap = campaignMaps.find(m => m.id === currentMapId);
+    const associatedMap = campaignMaps.find((m) => m.id === currentMapId);
     if (!associatedMap || !associatedMap.gridData) {
       toast.error('Modelo de mapa não encontrado.');
       return;
@@ -612,8 +1102,20 @@ export const CockpitDungeonMap: React.FC = () => {
     toast.success('Mapa tático recarregado com sucesso a partir do modelo original!');
   };
 
-  const associatedMapIds = activeScene?.associatedMapIds || (activeScene?.associatedMapId ? [activeScene.associatedMapId] : []);
-  const associatedMaps = campaignMaps.filter(m => associatedMapIds.includes(m.id));
+  // Filtered tokens for the Tray HUD
+  const filteredTokens = useMemo(() => {
+    return allAvailableTokens.filter((token) => {
+      if (tokenCategory === 'players' && token.type !== 'player') return false;
+      if (tokenCategory === 'monsters' && token.type === 'player') return false;
+      if (tokenSearchQuery.trim()) {
+        return token.name.toLowerCase().includes(tokenSearchQuery.toLowerCase());
+      }
+      return true;
+    });
+  }, [allAvailableTokens, tokenCategory, tokenSearchQuery]);
+
+  const playerTokensCount = allAvailableTokens.filter((t) => t.type === 'player').length;
+  const monsterTokensCount = allAvailableTokens.filter((t) => t.type !== 'player').length;
 
   if (isLoading || !activeScene) {
     return (
@@ -628,22 +1130,21 @@ export const CockpitDungeonMap: React.FC = () => {
 
   return (
     <div className="w-full h-full relative overflow-hidden flex flex-col bg-[#0a0d14]">
-      {/* Top HUD Container - Responsive flex layout preventing any overlaps */}
+      {/* Top HUD Container - Responsive flex layout */}
       <div className="absolute top-3 left-3 right-3 z-30 flex items-start justify-between gap-3 pointer-events-none select-none">
-        {/* Left Side: Single Floor Navigation Card */}
+        {/* Left Side: Floor Navigation Card & Quick Party Transport */}
         <div className="flex items-center gap-2 pointer-events-auto flex-wrap max-w-[60%]">
-          {/* Floor / Level Selector - Single Unified Dropdown */}
           {activeLevels.length > 0 && (
             <div className="px-2.5 py-1.5 bg-slate-950/90 backdrop-blur-md border border-amber-500/40 rounded-2xl flex items-center gap-2 shadow-2xl animate-in fade-in shrink-0">
               <Layers className="w-4 h-4 text-amber-400 shrink-0" />
-              
+
               {!isMapSelectorCollapsed ? (
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider hidden sm:inline">Andar:</span>
                   <select
                     value={activeLevelId || ''}
                     onChange={(e) => handleSwitchLevel(e.target.value)}
-                    className="bg-[#0a0d14] border border-amber-500/40 focus:border-amber-400 rounded-xl px-2.5 py-1 text-xs font-bold text-amber-300 focus:outline-none cursor-pointer max-w-[200px] truncate"
+                    className="bg-[#0a0d14] border border-amber-500/40 focus:border-amber-400 rounded-xl px-2.5 py-1 text-xs font-bold text-amber-300 focus:outline-none cursor-pointer max-w-[180px] truncate"
                     title="Selecione o andar da masmorra"
                   >
                     {activeLevels.map((lvl) => (
@@ -652,6 +1153,19 @@ export const CockpitDungeonMap: React.FC = () => {
                       </option>
                     ))}
                   </select>
+
+                  {/* Multi-floor party mover action */}
+                  {activeLevels.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => activeLevelId && handleMovePartyToLevel(activeLevelId)}
+                      className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-[11px] font-bold flex items-center gap-1 transition-all shadow-sm cursor-pointer ml-1"
+                      title="Transportar todos os heróis da party para este andar"
+                    >
+                      <Users className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="hidden md:inline">Mover Grupo P/ Cá</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -684,11 +1198,14 @@ export const CockpitDungeonMap: React.FC = () => {
           {!isToolsBarCollapsed ? (
             <div className="flex items-center gap-1">
               <button
-                onClick={() => setSelectedTool('token')}
+                onClick={() => {
+                  setSelectedTool('token');
+                  setIsTokenTrayOpen(true);
+                }}
                 className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                   selectedTool === 'token' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
                 }`}
-                title="Mover Tokens e Personagens"
+                title="Gerenciar, Adicionar e Mover Tokens"
               >
                 <MapPin className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Token</span>
@@ -777,12 +1294,197 @@ export const CockpitDungeonMap: React.FC = () => {
         </div>
       </div>
 
+      {/* Floating Token Tray HUD (Active when Token tool is selected) */}
+      {selectedTool === 'token' && isTokenTrayOpen && (
+        <div className="absolute top-16 right-3 z-30 w-80 max-w-[90vw] bg-[#0c1017]/95 backdrop-blur-xl border border-amber-500/30 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
+          {/* Header */}
+          <div className="p-3 border-b border-[#2a3449]/70 flex items-center justify-between bg-[#121824]/80">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-amber-400" />
+              <h3 className="text-xs font-bold text-slate-100 uppercase tracking-wider font-mono">Tokens da Sessão</h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsTokenTrayOpen(false)}
+              className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+              title="Fechar Bandeja de Tokens"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Search & Tabs */}
+          <div className="p-2.5 space-y-2 border-b border-[#2a3449]/50">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                value={tokenSearchQuery}
+                onChange={(e) => setTokenSearchQuery(e.target.value)}
+                placeholder="Buscar token por nome..."
+                className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-xl pl-8 pr-2.5 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/60"
+              />
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="grid grid-cols-3 gap-1 bg-[#0a0d14] p-1 rounded-xl border border-[#2a3449]/60 text-[10px] font-semibold text-center">
+              <button
+                type="button"
+                onClick={() => setTokenCategory('all')}
+                className={`py-1 rounded-lg transition-all cursor-pointer ${
+                  tokenCategory === 'all' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Todos ({allAvailableTokens.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTokenCategory('players')}
+                className={`py-1 rounded-lg transition-all cursor-pointer ${
+                  tokenCategory === 'players' ? 'bg-cyan-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Heróis ({playerTokensCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTokenCategory('monsters')}
+                className={`py-1 rounded-lg transition-all cursor-pointer ${
+                  tokenCategory === 'monsters' ? 'bg-rose-600 text-white font-bold shadow' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Inimigos ({monsterTokensCount})
+              </button>
+            </div>
+          </div>
+
+          {/* Tokens List */}
+          <div className="max-h-72 overflow-y-auto p-2 space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+            {filteredTokens.length === 0 ? (
+              <div className="text-center py-6 text-slate-500 text-xs">
+                Nenhum combatente ou jogador encontrado.
+              </div>
+            ) : (
+              filteredTokens.map((comb) => {
+                const isSelected = selectedTokenCombatant?.id === comb.id;
+                const loc = getTokenLocation(comb.name);
+                const isPlayer = comb.type === 'player';
+
+                return (
+                  <div
+                    key={comb.id}
+                    className={`p-2 rounded-xl border transition-all flex items-center justify-between gap-2 ${
+                      isSelected
+                        ? 'bg-amber-500/15 border-amber-400/80 shadow-md shadow-amber-500/10'
+                        : 'bg-[#121824]/70 border-[#2a3449]/70 hover:border-slate-600 hover:bg-[#161f30]'
+                    }`}
+                  >
+                    {/* Left: Token info & select action */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedTokenCombatant(null);
+                        } else {
+                          setSelectedTokenCombatant(comb);
+                          toast.info(`Token "${comb.name}" selecionado. Clique no mapa para posicionar.`);
+                        }
+                      }}
+                      className="flex items-center gap-2.5 text-left flex-1 min-w-0 cursor-pointer"
+                      title={isSelected ? 'Clique para desmarcar' : 'Clique para selecionar e posicionar no mapa'}
+                    >
+                      {/* Avatar / Initial Circle */}
+                      <div
+                        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 border ${
+                          isPlayer ? 'bg-cyan-950 text-cyan-300 border-cyan-400/60' : 'bg-rose-950 text-rose-300 border-rose-500/60'
+                        }`}
+                      >
+                        {isPlayer ? <Shield className="w-3.5 h-3.5 text-cyan-400" /> : <Skull className="w-3.5 h-3.5 text-rose-400" />}
+                      </div>
+
+                      {/* Name & Status */}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold text-slate-100 truncate flex items-center gap-1.5">
+                          <span>{comb.name}</span>
+                          {isSelected && (
+                            <span className="text-[9px] bg-amber-500 text-slate-950 font-extrabold px-1.5 py-0.2 rounded-full uppercase">
+                              Ativo
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5 truncate">
+                          {loc ? (
+                            <span className={loc.isOnActive ? 'text-emerald-400 font-semibold' : 'text-amber-400 font-semibold'}>
+                              📍 {loc.levelName}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 italic">Fora do Mapa</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Right: Actions */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {/* Move to another floor dropdown if multi-floor */}
+                      {activeLevels.length > 1 && (
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleMoveSingleTokenToLevel(comb, e.target.value);
+                            }
+                          }}
+                          className="bg-[#0a0d14] border border-[#2a3449] text-[10px] text-slate-300 rounded-lg px-1.5 py-1 focus:outline-none cursor-pointer"
+                          title="Mover token para outro andar"
+                        >
+                          <option value="" disabled>
+                            Mover...
+                          </option>
+                          {activeLevels.map((lvl) => (
+                            <option key={lvl.id} value={lvl.id}>
+                              {lvl.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+
+                      {/* Remove Token Button (If on map) */}
+                      {loc && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveToken(comb.name);
+                          }}
+                          className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-950/60 border border-transparent hover:border-rose-500/40 rounded-lg transition-all cursor-pointer"
+                          title={`Remover ${comb.name} do mapa`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Footer Helper */}
+          <div className="p-2 bg-[#0a0d14]/90 border-t border-[#2a3449]/50 text-[10px] text-slate-400 flex items-center justify-between">
+            <span>💡 Selecione e clique na célula para posicionar</span>
+            <span className="text-slate-500">Botão dir.: remove</span>
+          </div>
+        </div>
+      )}
+
       {/* Floating Drawing Tools (Left side - Collapsible) */}
       <div className="absolute top-1/2 -translate-y-1/2 left-3 z-30">
         {!isDrawingToolsCollapsed ? (
-          <div className="p-2 bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-2xl flex flex-col gap-1.5 shadow-2xl w-13 items-center animate-in fade-in slide-in-from-left-2">
-            <div className="flex items-center justify-between w-full pb-1 border-b border-slate-800/80">
-              <span className="text-[8px] uppercase font-bold text-slate-400 tracking-wider">Anotar</span>
+          <div className="p-2 bg-slate-950/95 backdrop-blur-md border border-slate-800 rounded-2xl flex flex-col gap-1.5 shadow-2xl w-14 items-center animate-in fade-in slide-in-from-left-2">
+            <div className="flex items-center justify-between w-full pb-1 border-b border-slate-800/80 px-0.5">
+              <span className="text-[8px] uppercase font-bold text-amber-400 tracking-wider">Anotar</span>
               <button
                 type="button"
                 onClick={() => setIsDrawingToolsCollapsed(true)}
@@ -793,10 +1495,11 @@ export const CockpitDungeonMap: React.FC = () => {
               </button>
             </div>
 
+            {/* Drawing Tools */}
             <button
               onClick={() => setSelectedTool('draw-pencil')}
               className={`w-9 h-9 flex items-center justify-center rounded-xl text-base transition-all cursor-pointer ${
-                selectedTool === 'draw-pencil' ? 'bg-amber-500 shadow-md scale-105' : 'hover:bg-slate-800 grayscale hover:grayscale-0'
+                selectedTool === 'draw-pencil' ? 'bg-amber-500 text-slate-950 shadow-md scale-105' : 'hover:bg-slate-800 text-slate-300'
               }`}
               title="Lápis Livre"
             >
@@ -805,55 +1508,78 @@ export const CockpitDungeonMap: React.FC = () => {
             <button
               onClick={() => setSelectedTool('draw-circle')}
               className={`w-9 h-9 flex items-center justify-center rounded-xl text-base transition-all cursor-pointer ${
-                selectedTool === 'draw-circle' ? 'bg-amber-500 shadow-md scale-105' : 'hover:bg-slate-800 grayscale hover:grayscale-0'
+                selectedTool === 'draw-circle' ? 'bg-amber-500 text-slate-950 shadow-md scale-105' : 'hover:bg-slate-800 text-slate-300'
               }`}
-              title="Desenhar Círculo"
+              title="Desenhar Círculo / Área"
             >
               ⭕
             </button>
             <button
               onClick={() => setSelectedTool('draw-rect')}
               className={`w-9 h-9 flex items-center justify-center rounded-xl text-base transition-all cursor-pointer ${
-                selectedTool === 'draw-rect' ? 'bg-amber-500 shadow-md scale-105' : 'hover:bg-slate-800 grayscale hover:grayscale-0'
+                selectedTool === 'draw-rect' ? 'bg-amber-500 text-slate-950 shadow-md scale-105' : 'hover:bg-slate-800 text-slate-300'
               }`}
-              title="Desenhar Retângulo"
+              title="Desenhar Retângulo / Sala"
             >
               🔲
             </button>
             <button
               onClick={() => setSelectedTool('draw-text')}
               className={`w-9 h-9 flex items-center justify-center rounded-xl text-base transition-all cursor-pointer ${
-                selectedTool === 'draw-text' ? 'bg-amber-500 shadow-md scale-105' : 'hover:bg-slate-800 grayscale hover:grayscale-0'
+                selectedTool === 'draw-text' ? 'bg-amber-500 text-slate-950 shadow-md scale-105' : 'hover:bg-slate-800 text-slate-300'
               }`}
-              title="Anotação de Texto"
+              title="Anotação de Texto no Mapa"
             >
               📝
             </button>
-            <div className="w-7 h-[1px] bg-slate-800 my-0.5"></div>
+
+            {/* Color Palette Pill */}
+            <div className="w-full py-1 border-y border-slate-800/80 flex flex-wrap justify-center gap-1">
+              {[
+                { hex: '#f59e0b', title: 'Ouro / Dourado' },
+                { hex: '#ef4444', title: 'Vermelho / Sangue' },
+                { hex: '#06b6d4', title: 'Ciano / Mágico' },
+                { hex: '#10b981', title: 'Esmeralda / Veneno' },
+                { hex: '#a855f7', title: 'Roxo / Arcano' },
+                { hex: '#ffffff', title: 'Branco / Giz' },
+              ].map((c) => (
+                <button
+                  key={c.hex}
+                  type="button"
+                  onClick={() => setDrawColor(c.hex)}
+                  className={`w-4 h-4 rounded-full transition-transform cursor-pointer border ${
+                    drawColor === c.hex ? 'scale-125 border-white ring-1 ring-amber-400' : 'border-slate-700 hover:scale-110 opacity-70 hover:opacity-100'
+                  }`}
+                  style={{ backgroundColor: c.hex }}
+                  title={c.title}
+                />
+              ))}
+            </div>
+
             <button
               onClick={() => setSelectedTool('draw-eraser')}
               className={`w-9 h-9 flex items-center justify-center rounded-xl text-base transition-all cursor-pointer ${
-                selectedTool === 'draw-eraser' ? 'bg-rose-500 shadow-md scale-105' : 'hover:bg-slate-800 grayscale hover:grayscale-0'
+                selectedTool === 'draw-eraser' ? 'bg-rose-500 text-white shadow-md scale-105' : 'hover:bg-slate-800 text-slate-300'
               }`}
-              title="Borracha"
+              title="Borracha (Clique ou arraste sobre os traços)"
             >
               🧹
             </button>
             <button
               onClick={() => broadcastDrawingAction?.({ action: 'undo' })}
               className="w-9 h-9 flex items-center justify-center rounded-xl text-base hover:bg-slate-800 transition-all text-slate-300 hover:text-slate-100 cursor-pointer"
-              title="Desfazer (Ctrl+Z)"
+              title="Desfazer Último Traço"
             >
               ↩️
             </button>
             <button
               onClick={() => {
-                if (window.confirm('Tem certeza que deseja apagar todos os desenhos?')) {
+                if (window.confirm('Tem certeza que deseja apagar todos os desenhos do mapa?')) {
                   broadcastDrawingAction?.({ action: 'clear' });
                 }
               }}
               className="w-9 h-9 flex items-center justify-center rounded-xl text-base hover:bg-rose-900/50 transition-all text-rose-500 hover:text-rose-400 cursor-pointer"
-              title="Limpar Tudo"
+              title="Limpar Todos os Desenhos"
             >
               🗑️
             </button>
@@ -884,15 +1610,22 @@ export const CockpitDungeonMap: React.FC = () => {
         lightSources={lightSources}
         selectedTool={selectedTool}
         setSelectedTool={(t) => setSelectedTool(t as any)}
-        selectedTileType="floor" // Not painting terrains in cockpit
-        selectedTokenCombatant={null}
+        selectedTileType="floor"
+        selectedTokenCombatant={selectedTokenCombatant}
         measureStart={measureStart}
         setMeasureStart={setMeasureStart}
         setMeasuredDistance={setMeasuredDistance}
         onGridChange={setGrid}
         drawings={drawings}
         onDrawingAction={broadcastDrawingAction}
+        drawColor={drawColor}
+        drawLineWidth={drawLineWidth}
+        activeLevels={activeLevels}
+        currentLevelId={activeLevelId}
+        onTransitionAction={handleTransitionAction}
+        onSaveTransitionWithTargetLevel={handleSaveTransitionWithTargetLevel}
       />
     </div>
   );
 };
+

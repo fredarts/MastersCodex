@@ -208,9 +208,9 @@ export function computeVisibilityPolygon(
   }
   const points: { x: number; y: number }[] = [];
   const anglesSet = new Set<number>();
-  const numRays = 360;
+  const numRays = 180;
 
-  // Base 360-degree rays
+  // Base 180-degree ray sweep (every 2 degrees)
   for (let i = 0; i < numRays; i++) {
     anglesSet.add((i * 2 * Math.PI) / numRays);
   }

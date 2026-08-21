@@ -10,11 +10,26 @@ export class LocalStorageCampaignRepository implements ICampaignRepository {
 
       const savedMembers = localStorage.getItem('codex_members');
       const members: CampaignMember[] = savedMembers ? JSON.parse(savedMembers) : [];
-      const memberCampaignIds = members
-        .filter((m) => m.userId === userId)
-        .map((m) => m.campaignId);
+      
+      const result: UserCampaign[] = [];
 
-      return all.filter((c) => !c.dmId || c.dmId === userId || memberCampaignIds.includes(c.id));
+      all.forEach((c) => {
+        const isDm = !c.dmId || c.dmId === userId;
+        const myMember = members.find((m) => m.campaignId === c.id && m.userId === userId && m.role === 'player');
+
+        if (isDm) {
+          result.push({ ...c, role: 'dm' });
+        }
+        if (myMember) {
+          result.push({
+            ...c,
+            role: 'player',
+            characterName: myMember.characterName || c.characterName,
+          });
+        }
+      });
+
+      return result;
     } catch (_e) {
       return [];
     }
@@ -100,7 +115,7 @@ export class LocalStorageCampaignRepository implements ICampaignRepository {
       
       if (!campaign) return null;
 
-      const joinedCampaign = { ...campaign, characterName };
+      const joinedCampaign: UserCampaign = { ...campaign, role: 'player', characterName };
 
       let member: CampaignMember | undefined;
       if (characterName) {

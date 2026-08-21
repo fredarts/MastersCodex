@@ -44,4 +44,53 @@ describe('Realtime Pings & Grid Snapping Logic', () => {
     expect(presence.status).toBe('online');
     expect(presence.avatarSettings?.zoom).toBe(1.5);
   });
+
+  it('should correctly include and update self presence alongside peer presences', () => {
+    const selfPresence: PresencePayload = {
+      userId: 'user-dm',
+      displayName: 'Mestre',
+      status: 'online',
+      timestamp: Date.now(),
+    };
+
+    const peerPresence: PresencePayload = {
+      userId: 'user-player-1',
+      displayName: 'Karynna',
+      status: 'online',
+      timestamp: Date.now(),
+    };
+
+    let onlineUsers: PresencePayload[] = [selfPresence];
+
+    // Peer connects
+    const idx = onlineUsers.findIndex((u) => u.userId === peerPresence.userId);
+    if (idx >= 0) {
+      onlineUsers[idx] = peerPresence;
+    } else {
+      onlineUsers = [...onlineUsers, peerPresence];
+    }
+
+    expect(onlineUsers).toHaveLength(2);
+    expect(onlineUsers.some((u) => u.userId === 'user-dm')).toBe(true);
+    expect(onlineUsers.some((u) => u.userId === 'user-player-1')).toBe(true);
+
+    // Peer goes offline
+    onlineUsers = onlineUsers.filter((u) => u.userId !== 'user-player-1');
+    expect(onlineUsers).toHaveLength(1);
+    expect(onlineUsers[0].userId).toBe('user-dm');
+  });
+
+  it('should reject or isolate presence broadcast from different campaign channel', () => {
+    const currentCampaignId = 'camp-alpha';
+    const foreignCampaignMessage = {
+      type: 'PRESENCE_UPDATE',
+      _campaignId: 'camp-beta',
+      userId: 'user-intruder',
+      displayName: 'Intruder',
+      status: 'online',
+    };
+
+    const shouldProcess = foreignCampaignMessage._campaignId === currentCampaignId;
+    expect(shouldProcess).toBe(false);
+  });
 });

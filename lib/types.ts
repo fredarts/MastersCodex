@@ -1267,3 +1267,18 @@ export interface FamilyTree {
   updatedAt?: string;
 }
 
+export type TransitionType = 'stairs_down' | 'stairs_up' | 'ladder' | 'portal' | 'doorway';
+
+export interface DungeonTransitionConfig {
+  id: string;
+  name: string;
+  type: TransitionType;
+  targetLevelId: string;
+  targetSpawnR?: number;
+  targetSpawnC?: number;
+  linkedTransitionId?: string;
+  status?: 'open' | 'locked' | 'blocked';
+  lockpickDC?: number;
+  description?: string;
+}
+
