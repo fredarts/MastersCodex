@@ -81,3 +81,54 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
+
+// Push Notifications: Handle background push messages
+self.addEventListener('push', (event) => {
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data = { title: 'Masters Codex', body: event.data.text() };
+    }
+  }
+
+  const title = data.title || 'Masters Codex - Notificação';
+  const options = {
+    body: data.body || 'Você tem uma atualização na sua campanha.',
+    icon: data.icon || '/web-app-manifest-192x192.png',
+    badge: data.badge || '/favicon-96x96.png',
+    tag: data.tag || 'masters-codex-notification',
+    data: {
+      url: data.url || '/',
+      timestamp: Date.now(),
+      ...data.data,
+    },
+    vibrate: [200, 100, 200],
+    requireInteraction: data.type === 'combat_turn' || data.type === 'safety_alert',
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Notification Click: Focus existing client or open new window
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          if ('navigate' in client && targetUrl !== '/') {
+            client.navigate(targetUrl);
+          }
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
