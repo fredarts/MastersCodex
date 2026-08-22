@@ -53,6 +53,10 @@ import {
 import { Combatant, VisionType } from '@/lib/types';
 import { Cell, TileType, ChestConfig, ContainerType, ContainerStatus, ChestLoot } from '../MapMaker';
 import { getCreatureGridSize } from '@/lib/utils/creatureSize';
+import { evaluateTokenStep } from '@/lib/reactive/reactiveSceneEngine';
+import { ReactiveTrapEffect } from '@/lib/reactive/reactiveTypes';
+import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
+import { ContainerLootModal } from '@/components/loot/ContainerLootModal';
 
 const token2DImageCache = new Map<string, HTMLImageElement>();
 
@@ -195,6 +199,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [editingCell, setEditingCell] = useState<{ r: number; c: number; cell: Cell } | null>(null);
+  const [activeLootContainer, setActiveLootContainer] = useState<{ r: number; c: number; cell: Cell } | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number; cell: Cell } | null>(null);
   const [draggingToken, setDraggingToken] = useState<{ name: string, color: string, startR: number, startC: number, currentR: number, currentC: number } | null>(null);
   const [draggingItem, setDraggingItem] = useState<DraggingItem | null>(null);
@@ -2083,6 +2088,154 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
          copy[r][c].tokenName = tokenName;
          copy[r][c].tokenColor = tokenColor;
          revealVisionWithLOS(copy, r, c, getTokenVisionRadius(tokenName, combatants));
+
+         // 💥 RECTIVE SCENES: Check Trap or Pressure Plate Trigger
+         const destCell = copy[r][c];
+         if (destCell.type === 'trap' || destCell.trapConfig) {
+           const trapCfg = destCell.trapConfig || {
+             trapType: 'Fosso de Estacas',
+             detectDC: 13,
+             disarmDC: 13,
+             revealedToPlayers: false,
+             description: 'Mecanismo oculto no piso',
+           };
+
+           const trapEffect: ReactiveTrapEffect = {
+             type: 'trap_damage',
+             name: trapCfg.trapType || 'Armadilha no Piso',
+             description: trapCfg.description || 'Mecanismo no piso',
+             detectDC: trapCfg.detectDC || 13,
+             disarmDC: trapCfg.disarmDC || 13,
+             saveStat: (trapCfg as any).saveStat || 'dex',
+             saveDC: (trapCfg as any).saveDC || 13,
+             damageDice: (trapCfg as any).damageDice || '2d10',
+             damageType: (trapCfg as any).damageType || 'Perfurante',
+             conditionApplied: (trapCfg as any).conditionApplied || 'Caído',
+             revealedToPlayers: trapCfg.revealedToPlayers || false,
+             isArmed: (trapCfg as any).isArmed !== false,
+             oneShot: (trapCfg as any).oneShot !== false,
+             soundEffect: 'trap_spike',
+           };
+
+           const matchedComb = combatants.find(cb => cb.name.trim().toUpperCase() === tokenName.trim().toUpperCase());
+           const passivePerception = 10 + (matchedComb?.initiative || 0);
+
+           const triggerRes = evaluateTokenStep({
+             tokenName,
+             passivePerception,
+             trap: trapEffect,
+             forceStepEvenIfDetected: true,
+           });
+
+           if (triggerRes.triggered) {
+             destCell.trapConfig = {
+               ...trapCfg,
+               revealedToPlayers: true,
+             };
+             (destCell.trapConfig as any).isArmed = triggerRes.updatedTrap.isArmed;
+             toast.error(triggerRes.message, { duration: 7000 });
+           } else if (triggerRes.detectedEarly) {
+             destCell.trapConfig = {
+               ...trapCfg,
+               revealedToPlayers: true,
+             };
+             toast.warning(triggerRes.message, { duration: 6000 });
+           }
+         } else if (destCell.type === 'trigger' && destCell.triggerConfig) {
+           const trig = destCell.triggerConfig;
+           toast.info(`⚙️ ${tokenName} pisou em "${trig.name || 'Gatilho de Pressão'}"! O mecanismo ressoou no calabouço.`, { duration: 5000 });
+           
+           // Toggle connected portcullis / gate if targetId exists
+           if (trig.targetId) {
+             for (let rowI = 0; rowI < copy.length; rowI++) {
+               for (let colI = 0; colI < copy[rowI].length; colI++) {
+                 if (copy[rowI][colI].portcullisConfig?.id === trig.targetId) {
+                   const currStatus = copy[rowI][colI].portcullisConfig!.status;
+                   copy[rowI][colI].portcullisConfig!.status = currStatus === 'closed' ? 'open' : 'closed';
+                   toast.success(`Grade "${copy[rowI][colI].portcullisConfig!.name || 'Portcullis'}" agora está ${currStatus === 'closed' ? 'ABERTA 🔓' : 'FECHADA 🔒'}!`);
+                 }
+               }
+             }
+           }
+         }
+
+         // 🔍 BG3 PROXIMITY PERCEPTION CHECK: Search for hidden secrets nearby (radius <= 2)
+         let nearestSecret: { r: number; c: number; name: string; dc: number; type: string } | null = null;
+         for (let dr = -2; dr <= 2; dr++) {
+           for (let dc = -2; dc <= 2; dc++) {
+             const nr = r + dr;
+             const nc = c + dc;
+             if (nr >= 0 && nr < copy.length && nc >= 0 && nc < copy[0].length) {
+               const cell = copy[nr][nc];
+               // Check stash / hidden chest
+               if (cell.type === 'stash' || (cell.chestConfig?.containerType === 'hidden_stash' && !cell.chestConfig?.revealedToPlayers)) {
+                 if (cell.chestConfig && !cell.chestConfig.revealedToPlayers) {
+                   nearestSecret = { r: nr, c: nc, name: cell.chestConfig.name || 'Esconderijo Secreto', dc: cell.chestConfig.detectDC || 14, type: 'stash' };
+                   break;
+                 }
+               }
+               // Check secret door
+               if (cell.type === 'door' && cell.doorConfig?.doorType === 'secret' && !cell.doorConfig?.secretRevealed) {
+                 nearestSecret = { r: nr, c: nc, name: 'Passagem Secreta Oculta', dc: 14, type: 'door' };
+                 break;
+               }
+               // Check illusion wall
+               if (cell.type === 'illusion_wall' && cell.illusionWallConfig && !cell.illusionWallConfig.revealedToPlayers) {
+                 nearestSecret = { r: nr, c: nc, name: 'Parede Ilusória', dc: cell.illusionWallConfig.detectDC || 15, type: 'illusion_wall' };
+                 break;
+               }
+             }
+           }
+           if (nearestSecret) break;
+         }
+
+         if (nearestSecret) {
+           const secretObj = nearestSecret;
+           const matchedComb = combatants.find(cb => cb.name.trim().toUpperCase() === tokenName.trim().toUpperCase());
+           const wisMod = matchedComb?.initiative !== undefined ? Math.max(0, matchedComb.initiative) : 2;
+
+           // Open 3D BG3 Dice Modal for player to roll the d20!
+           setTimeout(() => {
+             useLiveCockpitStudioStore.getState().setBg3DiceOverlay({
+               title: 'Teste de Percepção',
+               subtitle: `Investigando arredores com ${tokenName}`,
+               actorName: tokenName,
+               targetName: secretObj.name,
+               modifier: wisMod,
+               difficultyClass: secretObj.dc,
+               modifierCards: [
+                 {
+                   id: 'wis_mod',
+                   label: 'Percepção (Sabedoria)',
+                   value: wisMod >= 0 ? `+${wisMod}` : `${wisMod}`,
+                   numericValue: wisMod,
+                   iconType: 'attribute',
+                   sourceName: 'Atributo',
+                   isEnabled: true,
+                 }
+               ],
+               phase: 'd20',
+               isRolling: false,
+               onRollComplete: (finalTotal) => {
+                 if (finalTotal >= secretObj.dc) {
+                   onGridChange((currGrid) => {
+                     const updated = currGrid.map(row => row.map(cell => ({ ...cell })));
+                     const targetCell = updated[secretObj.r]?.[secretObj.c];
+                     if (targetCell) {
+                       if (targetCell.chestConfig) targetCell.chestConfig.revealedToPlayers = true;
+                       if (targetCell.doorConfig) targetCell.doorConfig.secretRevealed = true;
+                       if (targetCell.illusionWallConfig) targetCell.illusionWallConfig.revealedToPlayers = true;
+                     }
+                     return updated;
+                   });
+                   toast.success(`✨ Sucesso! ${tokenName} notou um "${secretObj.name}"! (Total: ${finalTotal} vs CD ${secretObj.dc})`, { duration: 7000 });
+                 } else {
+                   toast.info(`👀 ${tokenName} olhou com atenção, mas não percebeu nada fora do comum. (Total: ${finalTotal} vs CD ${secretObj.dc})`, { duration: 4000 });
+                 }
+               }
+             });
+           }, 250);
+         }
       }
       return copy;
     });
@@ -4012,6 +4165,22 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
                       className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 resize-none font-mono"
                     />
                   </div>
+
+                  {/* Botão de Abrir Saque Interativo */}
+                  {editingCell.cell.chestConfig?.loot && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = { ...editingCell };
+                        setEditingCell(null);
+                        setActiveLootContainer(target);
+                      }}
+                      className="w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Abrir Modal de Saque & Distribuir Loot</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* 6. Visibilidade para Jogadores */}
@@ -4849,6 +5018,31 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
             );
           })()}
         </div>
+      )}
+
+      {/* Interactive Container Loot Modal */}
+      {activeLootContainer && activeLootContainer.cell.chestConfig?.loot && (
+        <ContainerLootModal
+          isOpen={Boolean(activeLootContainer)}
+          onClose={() => setActiveLootContainer(null)}
+          containerName={activeLootContainer.cell.chestConfig.name || (activeLootContainer.cell.type === 'stash' ? 'Esconderijo Secreto' : 'Baú de Tesouro')}
+          containerType={activeLootContainer.cell.chestConfig.containerType || activeLootContainer.cell.type}
+          loot={activeLootContainer.cell.chestConfig.loot}
+          combatants={combatants}
+          onUpdateLoot={(updatedLoot, isFullyLooted) => {
+            onGridChange((currGrid) => {
+              const updated = currGrid.map(row => row.map(c => ({ ...c })));
+              const target = updated[activeLootContainer.r]?.[activeLootContainer.c];
+              if (target && target.chestConfig) {
+                target.chestConfig.loot = updatedLoot;
+                if (isFullyLooted) {
+                  target.chestConfig.status = 'looted';
+                }
+              }
+              return updated;
+            });
+          }}
+        />
       )}
     </div>
   );
