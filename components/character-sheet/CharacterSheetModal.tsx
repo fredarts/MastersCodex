@@ -10,6 +10,7 @@ import { JournalSection } from './Sections/JournalSection';
 import { ClassAbilitiesSection } from './Sections/ClassAbilitiesSection';
 import { QuickCombatBar } from './QuickCombatBar';
 import { CharacterBuilderWizardModal } from './Modals/CharacterBuilderWizardModal';
+import { ImportCharacterModal } from './ImportCharacterModal';
 import { exportCharacterToJson, importCharacterFromJson, exportCharacterToPrintablePdf } from '@/lib/character-exporter';
 import { useCustomDialog } from '@/context/CustomDialogContext';
 import {
@@ -81,6 +82,7 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
   const [advantageMode, setAdvantageMode] = useState<AdvantageMode>('normal');
   const [lastRoll, setLastRoll] = useState<DiceRollEvent | null>(null);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [headerAvatarAspect, setHeaderAvatarAspect] = useState(1);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -286,6 +288,14 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
                   >
                     <Wand2 className="w-4 h-4" />
                     Criador Guiado (Wizard)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsImportModalOpen(true); setIsSettingsOpen(false); }}
+                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-bold text-amber-400 hover:bg-amber-500/10 transition-all text-left"
+                  >
+                    <Download className="w-4 h-4 text-amber-400" />
+                    Importar D&D Beyond / JSON
                   </button>
                   <button
                     type="button"
@@ -532,6 +542,15 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
 
                   <button
                     type="button"
+                    onClick={() => { setIsImportModalOpen(true); setIsDrawerOpen(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-all"
+                  >
+                    <Download className="w-4 h-4 text-amber-400" />
+                    Importar D&D Beyond / JSON
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => exportCharacterToJson(sheet)}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 hover:text-white transition-all"
                   >
@@ -564,12 +583,43 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
                 className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 text-xs"
               >
                 <Save className="w-4 h-4" />
-                Salvar Ficha de Personagem
+                <span>Salvar Ficha</span>
               </button>
             )}
           </div>
         </div>
       )}
+
+      {/* MODAL DO CRIADOR GUIADO (WIZARD) */}
+      <CharacterBuilderWizardModal
+        userId={sheet.userId || 'user'}
+        campaignId={sheet.campaignId}
+        isOpen={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        initialValues={{
+          characterName: sheet.characterName,
+          race: sheet.race,
+          subrace: sheet.subrace,
+          className: sheet.className,
+          level: sheet.level,
+          background: sheet.background,
+          alignment: sheet.alignment,
+        }}
+        onCharacterCreated={(newSheet) => {
+          setSheet(newSheet);
+          onSave(newSheet);
+        }}
+      />
+
+      {/* MODAL DO IMPORTADOR D&D BEYOND & JSON */}
+      <ImportCharacterModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImport={(importedSheet) => {
+          setSheet(importedSheet);
+          onSave(importedSheet);
+        }}
+      />
     </div>
   );
 };
