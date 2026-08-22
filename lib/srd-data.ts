@@ -1,7 +1,11 @@
 import { SRDMonster, SRDSpell, SRDItem, Encounter, LoreNode, BGMTrack, SFXButton, ConditionType } from './types';
 import { ALL_SRD_SPELLS } from './srd-spells-data';
 import { ALL_SRD_ITEMS } from './srd-items-data';
-
+import { BATCH_1_MONSTERS } from './srd-monsters-batch-1';
+import { BATCH_2_MONSTERS } from './srd-monsters-batch-2';
+import { BATCH_3_MONSTERS } from './srd-monsters-batch-3';
+import { BATCH_4_MONSTERS } from './srd-monsters-batch-4';
+import { BATCH_5_MONSTERS } from './srd-monsters-batch-5';
 export const CONDITIONS: ConditionType[] = [
   'Cego',
   'Encantado',
@@ -3996,7 +4000,12 @@ export const INITIAL_MONSTERS: SRDMonster[] = [
     "id": "zumbi",
     "tokenImageUrl": "/assets/2d/Monstros/Zumbi.png",
     "tokenType": "billboard"
-  }
+  },
+  ...BATCH_1_MONSTERS,
+  ...BATCH_2_MONSTERS,
+  ...BATCH_3_MONSTERS,
+  ...BATCH_4_MONSTERS,
+  ...BATCH_5_MONSTERS
 ];
 
 export const INITIAL_SPELLS: SRDSpell[] = ALL_SRD_SPELLS;

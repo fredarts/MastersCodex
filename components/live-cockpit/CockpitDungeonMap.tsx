@@ -80,7 +80,7 @@ export const CockpitDungeonMap: React.FC = () => {
   const [selectedTokenCombatant, setSelectedTokenCombatant] = useState<Combatant | null>(null);
   const [tokenSearchQuery, setTokenSearchQuery] = useState('');
   const [tokenCategory, setTokenCategory] = useState<'all' | 'players' | 'monsters'>('all');
-  const [isTokenTrayOpen, setIsTokenTrayOpen] = useState(true);
+  const [isTokenTrayOpen, setIsTokenTrayOpen] = useState(false);
 
   const [measureStart, setMeasureStart] = useState<{ r: number; c: number } | null>(null);
   const [measuredDistance, setMeasuredDistance] = useState<{ feet: number; meters: number } | null>(null);
@@ -95,10 +95,10 @@ export const CockpitDungeonMap: React.FC = () => {
   const [activeLevelId, setActiveLevelId] = useState<string | null>(null);
   const multiMapStateRef = useRef<MultiMapState>({ maps: {}, activeMapId: null });
 
-  // Collapsible HUD states
-  const [isMapSelectorCollapsed, setIsMapSelectorCollapsed] = useState(false);
-  const [isToolsBarCollapsed, setIsToolsBarCollapsed] = useState(false);
-  const [isDrawingToolsCollapsed, setIsDrawingToolsCollapsed] = useState(false);
+  // Collapsible HUD states - All collapsed by default
+  const [isMapSelectorCollapsed, setIsMapSelectorCollapsed] = useState(true);
+  const [isToolsBarCollapsed, setIsToolsBarCollapsed] = useState(true);
+  const [isDrawingToolsCollapsed, setIsDrawingToolsCollapsed] = useState(true);
 
   // Consolidated list of all placeable combatants / tokens
   const allAvailableTokens: Combatant[] = useMemo(() => {
