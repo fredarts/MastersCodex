@@ -22,6 +22,7 @@ import { LiveCockpitModalManager } from '@/components/live-cockpit/LiveCockpitMo
 import { DMNotebookDrawer } from '@/components/live-cockpit/DMNotebookDrawer';
 import { AudioMaestro } from '@/components/AudioMaestro';
 import { XCardAlertBanner } from '@/components/safety/XCardAlertBanner';
+import { StreamerOverlayModal } from '@/components/overlay/config/StreamerOverlayModal';
 
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { useCombatEngine } from '@/lib/hooks/useCombatEngine';
@@ -82,6 +83,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
 
   const { user } = useAuth();
   const [isNotebookOpen, setIsNotebookOpen] = useState(false);
+  const [showStreamerOverlayModal, setShowStreamerOverlayModal] = useState(false);
   const { characterSheets } = useCharacterSync({
     userId: user?.id || '',
     campaignId: activeCampaign?.id,
@@ -1243,6 +1245,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
           setLiveDisplayMode={setLiveDisplayMode}
           onOpenCreateScene={() => setShowCreateSceneModal(true)}
           onOpenPlayerView={onOpenPlayerView}
+          onOpenStreamerOverlay={() => setShowStreamerOverlayModal(true)}
           onToggleNotebook={() => setIsNotebookOpen((prev: boolean) => !prev)}
         />
 
@@ -1295,6 +1298,13 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         isOpen={isNotebookOpen}
         onClose={() => setIsNotebookOpen(false)}
         campaignId={activeCampaign?.id}
+      />
+
+      {/* Streamer Mode / OBS Overlay Settings Modal */}
+      <StreamerOverlayModal
+        isOpen={showStreamerOverlayModal}
+        onClose={() => setShowStreamerOverlayModal(false)}
+        campaignId={activeCampaign?.id || ''}
       />
 
       {/* 5. Modals Controller */}

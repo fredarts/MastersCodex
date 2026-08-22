@@ -1,6 +1,6 @@
 'use client';
 
-import { Tv, Play, Swords, Map as MapIcon, Image as ImageIcon, Sparkles, Radio, BookOpen } from 'lucide-react';
+import { Tv, Play, Swords, Map as MapIcon, Image as ImageIcon, Sparkles, Radio, BookOpen, Video } from 'lucide-react';
 import { GameScene } from '@/lib/types';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { PresenceIndicator } from '@/components/live-cockpit/PresenceIndicator';
@@ -12,6 +12,7 @@ interface LiveCockpitHeaderProps {
   setLiveDisplayMode: (mode: 'artwork' | 'map' | 'combat') => void;
   onOpenPlayerView: () => void;
   onOpenCreateScene: () => void;
+  onOpenStreamerOverlay?: () => void;
   onToggleNotebook?: () => void;
 }
 
@@ -21,6 +22,7 @@ export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
   setLiveDisplayMode,
   onOpenPlayerView,
   onOpenCreateScene,
+  onOpenStreamerOverlay,
   onToggleNotebook,
 }) => {
   const { onlineUsers } = useLiveCockpit();
@@ -92,6 +94,16 @@ export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
             title="Abrir Caderno de Anotações do DM"
           >
             <BookOpen className="w-3.5 h-3.5 text-amber-400" /> Caderno DM
+          </button>
+        )}
+
+        {onOpenStreamerOverlay && (
+          <button
+            onClick={onOpenStreamerOverlay}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-semibold rounded-lg border border-amber-500/30 transition-colors"
+            title="Gerar Overlay transparente para OBS / Transmissões"
+          >
+            <Video className="w-3.5 h-3.5 text-amber-400" /> Overlay OBS
           </button>
         )}
 

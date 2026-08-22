@@ -4,6 +4,11 @@
   "description": "A mais avançada forja de campanhas, estúdio de worldbuilding e mesa virtual 3D para D&D 5e.",
   "start_url": "/",
   "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0d14",
+  "theme_color": "#0a0d14",
+  "categories": ["games", "entertainment", "utilities"],
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
@@ -29,8 +34,5 @@
       "type": "image/png",
       "purpose": "maskable"
     }
-  ],
-  "theme_color": "#0a0d14",
-  "background_color": "#0a0d14",
-  "display": "standalone"
+  ]
 }
