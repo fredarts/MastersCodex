@@ -115,6 +115,28 @@ interface DysonCanvasProps {
   currentLevelId?: string | null;
   onTransitionAction?: (action: 'teleport_party' | 'teleport_token', targetLevelId: string, spawnR?: number, spawnC?: number, tokenName?: string) => void;
   onSaveTransitionWithTargetLevel?: (config: DungeonTransitionConfig, sourceR: number, sourceC: number, autoCreateLinked: boolean, linkedTargetInfo?: { targetLevelId: string; targetR: number; targetC: number; linkedTransitionId?: string }) => void;
+  renderLighting?: boolean;
+  renderVision?: boolean;
+  renderFog?: boolean;
+  onUpdateLightSource?: (light: import('@/lib/types').LightSource) => void;
+}
+
+export interface DraggingItem {
+  kind: 'token' | 'poi' | 'light';
+  tokenName?: string;
+  tokenColor?: string;
+  poiType?: string;
+  poiCell?: Cell;
+  lightId?: string;
+  light?: import('@/lib/types').LightSource;
+  startR: number;
+  startC: number;
+  currentR: number;
+  currentC: number;
+  startX?: number;
+  startY?: number;
+  currentX?: number;
+  currentY?: number;
 }
 
 export const DysonCanvas: React.FC<DysonCanvasProps> = ({
@@ -141,6 +163,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   lightSources = [],
   onAddLightSource,
   onRemoveLightSource,
+  onUpdateLightSource,
   selectedLightPreset = 'torch',
   drawings = [],
   onDrawingAction,
@@ -150,6 +173,9 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   currentLevelId = null,
   onTransitionAction,
   onSaveTransitionWithTargetLevel,
+  renderLighting = true,
+  renderVision = true,
+  renderFog = true,
 }) => {
 
 
@@ -171,6 +197,20 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   const [editingCell, setEditingCell] = useState<{ r: number; c: number; cell: Cell } | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number; cell: Cell } | null>(null);
   const [draggingToken, setDraggingToken] = useState<{ name: string, color: string, startR: number, startC: number, currentR: number, currentC: number } | null>(null);
+  const [draggingItem, setDraggingItem] = useState<DraggingItem | null>(null);
+  const dragCandidateRef = useRef<{
+    kind: 'token' | 'poi' | 'light';
+    startR: number;
+    startC: number;
+    startX: number;
+    startY: number;
+    initialClientX: number;
+    initialClientY: number;
+    tokenName?: string;
+    tokenColor?: string;
+    cell?: Cell;
+    light?: import('@/lib/types').LightSource;
+  } | null>(null);
   const activeStrokeRef = useRef<any | null>(null);
 
   const CELL_SIZE = bgImageUrl ? gridScale : 40;
@@ -269,7 +309,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
   // Memoized token active vision polygons (world-space, recomputed ONLY when tokens/geometry change)
   const tokenVisionPolygons = useMemo(() => {
-    if (!grid || grid.length === 0) return [];
+    if (!renderVision || !grid || grid.length === 0) return [];
     return playerTokens.map((pt) => {
       const tx = bgImageUrl ? gridOffsetX + pt.c * CELL_SIZE + CELL_SIZE / 2 : pt.c * CELL_SIZE + CELL_SIZE / 2;
       const ty = bgImageUrl ? gridOffsetY + pt.r * CELL_SIZE + CELL_SIZE / 2 : pt.r * CELL_SIZE + CELL_SIZE / 2;
@@ -281,11 +321,11 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
       return { tx, ty, visionRadius, polyPoints, visionType: pt.visionType };
     });
-  }, [playerTokens, grid, vectorWalls, CELL_SIZE, gridOffsetX, gridOffsetY, bgImageUrl]);
+  }, [renderVision, playerTokens, grid, vectorWalls, CELL_SIZE, gridOffsetX, gridOffsetY, bgImageUrl]);
 
   // Memoized light source visibility polygons (world-space, recomputed ONLY when lights/geometry change)
   const lightPolygons = useMemo(() => {
-    if (!lightSources || lightSources.length === 0 || !grid || grid.length === 0) return [];
+    if (!renderLighting || !lightSources || lightSources.length === 0 || !grid || grid.length === 0) return [];
 
     return lightSources.map((light) => {
       const isVisible = !isPlayerView || isLightVisibleToPlayer(light, playerTokens, grid, vectorWalls, CELL_SIZE, gridOffsetX, gridOffsetY, Boolean(bgImageUrl));
@@ -300,7 +340,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
       return { light, lx, ly, lRadius, polyPoints, isVisible };
     });
-  }, [lightSources, isPlayerView, playerTokens, grid, vectorWalls, CELL_SIZE, gridOffsetX, gridOffsetY, bgImageUrl]);
+  }, [renderLighting, lightSources, isPlayerView, playerTokens, grid, vectorWalls, CELL_SIZE, gridOffsetX, gridOffsetY, bgImageUrl]);
 
   useEffect(() => {
     gridDims.current = { rows: grid.length, cols: grid[0]?.length || 0 };
@@ -527,58 +567,27 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     const containerRect = containerRef.current.getBoundingClientRect();
     if (containerRect.width <= 0 || containerRect.height <= 0) return;
 
-    // 1. Priority 1: Focus directly on the Player Tokens if present on this map
-    if (playerTokens && playerTokens.length > 0) {
-      let minX = Infinity;
-      let maxX = -Infinity;
-      let minY = Infinity;
-      let maxY = -Infinity;
+    const padding = 36;
+    const availWidth = Math.max(100, containerRect.width - padding * 2);
+    const availHeight = Math.max(100, containerRect.height - padding * 2);
 
-      for (const pt of playerTokens) {
-        const x = bgImage ? gridOffsetX + pt.c * CELL_SIZE + CELL_SIZE / 2 : pt.c * CELL_SIZE + CELL_SIZE / 2;
-        const y = bgImage ? gridOffsetY + pt.r * CELL_SIZE + CELL_SIZE / 2 : pt.r * CELL_SIZE + CELL_SIZE / 2;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      }
+    // 1. Background Image Map: Fit entire image bounds
+    if (bgImage && bgImage.width > 0 && bgImage.height > 0) {
+      const canvasWidth = bgImage.width;
+      const canvasHeight = bgImage.height;
+      const fitZoom = Math.max(0.04, Math.min(availWidth / canvasWidth, availHeight / canvasHeight, 1.5));
 
-      const partyCenterX = (minX + maxX) / 2;
-      const partyCenterY = (minY + maxY) / 2;
+      const panX = (containerRect.width - canvasWidth * fitZoom) / 2;
+      const panY = (containerRect.height - canvasHeight * fitZoom) / 2;
 
-      // Viewing radius around party (6-8 cells)
-      const marginPx = Math.max(160, 6 * CELL_SIZE);
-      const spanW = Math.max(containerRect.width * 0.45, (maxX - minX) + marginPx * 2);
-      const spanH = Math.max(containerRect.height * 0.45, (maxY - minY) + marginPx * 2);
-
-      const zoomX = containerRect.width / spanW;
-      const zoomY = containerRect.height / spanH;
-      const focusZoom = Math.min(1.25, Math.max(0.65, Math.min(zoomX, zoomY)));
-
-      const panX = (containerRect.width / 2) - (partyCenterX * focusZoom);
-      const panY = (containerRect.height / 2) - (partyCenterY * focusZoom);
-
-      setZoom(focusZoom);
+      zoomRef.current = fitZoom;
+      panOffsetRef.current = { x: panX, y: panY };
+      setZoom(fitZoom);
       setPanOffset({ x: panX, y: panY });
       return;
     }
 
-    if (bgImage) {
-      const canvasWidth = bgImage.width;
-      const canvasHeight = bgImage.height;
-      const zoomX = containerRect.width / canvasWidth;
-      const zoomY = containerRect.height / canvasHeight;
-      const fitZoom = Math.min(1.2, Math.max(0.2, Math.min(zoomX, zoomY) * 0.9));
-
-      setZoom(fitZoom);
-      setPanOffset({
-        x: (containerRect.width - canvasWidth * fitZoom) / 2,
-        y: (containerRect.height - canvasHeight * fitZoom) / 2,
-      });
-      return;
-    }
-
-    // Find bounding box of carved cells (type !== 'wall')
+    // 2. Procedural / Grid Map: Find bounding box of carved cells & active elements
     let minC = COLS;
     let maxC = -1;
     let minR = ROWS;
@@ -586,7 +595,8 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
-        if (grid[r]?.[c] && grid[r][c].type !== 'wall') {
+        const cell = grid[r]?.[c];
+        if (cell && (cell.type !== 'wall' || cell.tokenName || cell.doorConfig || cell.trapConfig || cell.chestConfig || cell.transitionConfig)) {
           if (c < minC) minC = c;
           if (c > maxC) maxC = c;
           if (r < minR) minR = r;
@@ -601,10 +611,10 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     let dungCenterY = dungHeight / 2;
 
     if (maxC >= minC && maxR >= minR) {
-      const padMinC = Math.max(0, minC - 2);
-      const padMaxC = Math.min(COLS - 1, maxC + 2);
-      const padMinR = Math.max(0, minR - 2);
-      const padMaxR = Math.min(ROWS - 1, maxR + 2);
+      const padMinC = Math.max(0, minC - 1);
+      const padMaxC = Math.min(COLS - 1, maxC + 1);
+      const padMinR = Math.max(0, minR - 1);
+      const padMaxR = Math.min(ROWS - 1, maxR + 1);
 
       dungWidth = (padMaxC - padMinC + 1) * CELL_SIZE;
       dungHeight = (padMaxR - padMinR + 1) * CELL_SIZE;
@@ -612,16 +622,15 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       dungCenterY = ((padMinR + padMaxR + 1) / 2) * CELL_SIZE;
     }
 
-    const zoomX = containerRect.width / dungWidth;
-    const zoomY = containerRect.height / dungHeight;
-    const idealZoom = Math.min(1.2, Math.max(0.3, Math.min(zoomX, zoomY)));
+    const fitZoom = Math.max(0.04, Math.min(availWidth / dungWidth, availHeight / dungHeight, 1.5));
+    const panX = (containerRect.width / 2) - (dungCenterX * fitZoom);
+    const panY = (containerRect.height / 2) - (dungCenterY * fitZoom);
 
-    const panX = (containerRect.width / 2) - (dungCenterX * idealZoom);
-    const panY = (containerRect.height / 2) - (dungCenterY * idealZoom);
-
-    setZoom(idealZoom);
+    zoomRef.current = fitZoom;
+    panOffsetRef.current = { x: panX, y: panY };
+    setZoom(fitZoom);
     setPanOffset({ x: panX, y: panY });
-  }, [grid, bgImage, COLS, ROWS, CELL_SIZE, playerTokens, gridOffsetX, gridOffsetY]);
+  }, [grid, bgImage, COLS, ROWS, CELL_SIZE]);
 
   useEffect(() => {
     if (centeredRef.current) return;
@@ -1095,33 +1104,34 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         const ly = light.y < 150 ? light.y * CELL_SIZE : light.y;
         const colorHex = light.color || '#ff9900';
 
-        // Calculate dynamic light radius in pixels (5ft = CELL_SIZE)
-        const dimFt = light.dimRadius || 40;
-        let dimRadiusPx = Math.max(20, (dimFt / 5) * CELL_SIZE);
+        // 1. Radial Glowing Light Halo (Only when lighting is enabled)
+        if (renderLighting) {
+          const dimFt = light.dimRadius || 40;
+          let dimRadiusPx = Math.max(20, (dimFt / 5) * CELL_SIZE);
 
-        // Dynamic Flicker / Pulse animation effect
-        let alphaMultiplier = 1.0;
-        if (light.animation === 'torch' || light.animation === 'candle') {
-          const flicker = (Math.sin(now / 150 + lx * 0.05) + Math.cos(now / 200 + ly * 0.05)) * 0.08;
-          dimRadiusPx *= (1 + flicker);
-          alphaMultiplier += flicker;
-        } else if (light.animation === 'pulse') {
-          const pulse = Math.sin(now / 400) * 0.12;
-          dimRadiusPx *= (1 + pulse);
+          // Dynamic Flicker / Pulse animation effect
+          let alphaMultiplier = 1.0;
+          if (light.animation === 'torch' || light.animation === 'candle') {
+            const flicker = (Math.sin(now / 150 + lx * 0.05) + Math.cos(now / 200 + ly * 0.05)) * 0.08;
+            dimRadiusPx *= (1 + flicker);
+            alphaMultiplier += flicker;
+          } else if (light.animation === 'pulse') {
+            const pulse = Math.sin(now / 400) * 0.12;
+            dimRadiusPx *= (1 + pulse);
+          }
+
+          ctx.save();
+          const radGrad = ctx.createRadialGradient(lx, ly, 0, lx, ly, dimRadiusPx);
+          radGrad.addColorStop(0, hexToRgba(colorHex, 0.55 * alphaMultiplier));
+          radGrad.addColorStop(0.35, hexToRgba(colorHex, 0.22 * alphaMultiplier));
+          radGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+          ctx.fillStyle = radGrad;
+          ctx.beginPath();
+          ctx.arc(lx, ly, dimRadiusPx, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
         }
-
-        // 1. Radial Glowing Light Halo
-        ctx.save();
-        const radGrad = ctx.createRadialGradient(lx, ly, 0, lx, ly, dimRadiusPx);
-        radGrad.addColorStop(0, hexToRgba(colorHex, 0.55 * alphaMultiplier));
-        radGrad.addColorStop(0.35, hexToRgba(colorHex, 0.22 * alphaMultiplier));
-        radGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-        ctx.fillStyle = radGrad;
-        ctx.beginPath();
-        ctx.arc(lx, ly, dimRadiusPx, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
 
         // 2. Determine Preset Type for hand-drawn icon
         let preset: 'torch' | 'candle' | 'lantern' | 'spell' | 'dragon' = 'torch';
@@ -1185,140 +1195,148 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       }
     }
 
-    // 3. Draw Fog of War & Vision Circles (Destination Out - Culled)
-    if (!offscreenMaskRef.current) {
-      offscreenMaskRef.current = document.createElement('canvas');
-    }
-    const maskCanvas = offscreenMaskRef.current;
-    if (maskCanvas.width !== width || maskCanvas.height !== height) {
-      maskCanvas.width = width;
-      maskCanvas.height = height;
-    }
-    const maskCtx = maskCanvas.getContext('2d');
-
-    if (maskCtx) {
-      // Reset transform before clearing to avoid cumulative scaling/translating issues on reuse
-      maskCtx.setTransform(1, 0, 0, 1, 0, 0);
-      
-      // Reset composite operation to default drawing mode (essential since destination-out persists)
-      maskCtx.globalCompositeOperation = 'source-over';
-      
-      // Clear mask canvas (starts fully transparent)
-      maskCtx.clearRect(0, 0, width, height);
-
-      // 1. Fill entire viewport with dark fog (Opaque for players, semi-transparent for DM) in screen space
-      maskCtx.fillStyle = isPlayerView ? 'rgba(8, 8, 12, 0.98)' : 'rgba(8, 8, 12, 0.45)';
-      maskCtx.fillRect(0, 0, width, height);
-
-      // Now translate and scale to world coordinates for carving visibility
-      maskCtx.translate(panOffset.x, panOffset.y);
-      maskCtx.scale(zoom, zoom);
-
-      // Use destination-out to carve visibility out of the dark fog
-      maskCtx.globalCompositeOperation = 'destination-out';
-
-      // Soft smoky blur filter for organic misty fog edges
-      maskCtx.filter = 'blur(6px)';
-
-      // 2. Cut out explored areas (soft rounded blending so it feels smoky, not grid-locked)
-      maskCtx.fillStyle = 'rgba(0, 0, 0, 1)';
-      for (let r = startRow; r <= endRow; r++) {
-        for (let c = startCol; c <= endCol; c++) {
-          if (grid[r]?.[c] && !grid[r][c].fog) {
-            const cx = bgImage ? gridOffsetX + c * CELL_SIZE + CELL_SIZE / 2 : c * CELL_SIZE + CELL_SIZE / 2;
-            const cy = bgImage ? gridOffsetY + r * CELL_SIZE + CELL_SIZE / 2 : r * CELL_SIZE + CELL_SIZE / 2;
-            maskCtx.beginPath();
-            maskCtx.arc(cx, cy, CELL_SIZE * 0.72, 0, Math.PI * 2);
-            maskCtx.fill();
-          }
-        }
+    // 3. Draw Fog of War & Vision Circles (Destination Out - Culled - Only when renderFog is enabled)
+    if (renderFog) {
+      if (!offscreenMaskRef.current) {
+        offscreenMaskRef.current = document.createElement('canvas');
       }
+      const maskCanvas = offscreenMaskRef.current;
+      if (maskCanvas.width !== width || maskCanvas.height !== height) {
+        maskCanvas.width = width;
+        maskCanvas.height = height;
+      }
+      const maskCtx = maskCanvas.getContext('2d');
 
-      // 3. Current token active vision (uses memoized tokenVisionPolygons)
-      tokenVisionPolygons.forEach(({ tx, ty, visionRadius, polyPoints, visionType }) => {
-        if (polyPoints.length > 0) {
-          maskCtx.save();
-          maskCtx.beginPath();
-          maskCtx.moveTo(polyPoints[0].x, polyPoints[0].y);
-          for (let p = 1; p < polyPoints.length; p++) {
-            maskCtx.lineTo(polyPoints[p].x, polyPoints[p].y);
+      if (maskCtx) {
+        // Reset transform before clearing to avoid cumulative scaling/translating issues on reuse
+        maskCtx.setTransform(1, 0, 0, 1, 0, 0);
+        
+        // Reset composite operation to default drawing mode (essential since destination-out persists)
+        maskCtx.globalCompositeOperation = 'source-over';
+        
+        // Clear mask canvas (starts fully transparent)
+        maskCtx.clearRect(0, 0, width, height);
+
+        // 1. Fill entire viewport with dark fog (Opaque for players, semi-transparent for DM) in screen space
+        maskCtx.fillStyle = isPlayerView ? 'rgba(8, 8, 12, 0.98)' : 'rgba(8, 8, 12, 0.45)';
+        maskCtx.fillRect(0, 0, width, height);
+
+        // Now translate and scale to world coordinates for carving visibility
+        maskCtx.translate(panOffset.x, panOffset.y);
+        maskCtx.scale(zoom, zoom);
+
+        // Use destination-out to carve visibility out of the dark fog
+        maskCtx.globalCompositeOperation = 'destination-out';
+
+        // Soft smoky blur filter for organic misty fog edges
+        maskCtx.filter = 'blur(6px)';
+
+        // 2. Cut out explored areas (soft rounded blending so it feels smoky, not grid-locked)
+        maskCtx.fillStyle = 'rgba(0, 0, 0, 1)';
+        for (let r = startRow; r <= endRow; r++) {
+          for (let c = startCol; c <= endCol; c++) {
+            if (grid[r]?.[c] && !grid[r][c].fog) {
+              const cx = bgImage ? gridOffsetX + c * CELL_SIZE + CELL_SIZE / 2 : c * CELL_SIZE + CELL_SIZE / 2;
+              const cy = bgImage ? gridOffsetY + r * CELL_SIZE + CELL_SIZE / 2 : r * CELL_SIZE + CELL_SIZE / 2;
+              maskCtx.beginPath();
+              maskCtx.arc(cx, cy, CELL_SIZE * 0.72, 0, Math.PI * 2);
+              maskCtx.fill();
+            }
           }
-          maskCtx.closePath();
-
-          const grad = maskCtx.createRadialGradient(tx, ty, CELL_SIZE * 0.5, tx, ty, visionRadius);
-          if (visionType === 'darkvision') {
-            // Greyscale / Desaturated spotlight for Darkvision
-            grad.addColorStop(0.0, 'rgba(0, 0, 0, 0.95)');
-            grad.addColorStop(0.65, 'rgba(0, 0, 0, 0.75)');
-            grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
-          } else {
-            grad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
-            grad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)');
-            grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
-          }
-
-          maskCtx.fillStyle = grad;
-          maskCtx.fill();
-          maskCtx.restore();
         }
-      });
 
-      // Render standalone LightSources on fog mask (uses memoized lightPolygons)
-      lightPolygons.forEach(({ lx, ly, lRadius, polyPoints, isVisible }) => {
-        if (!isVisible || polyPoints.length === 0) return;
+        // 3. Current token active vision (uses memoized tokenVisionPolygons - only if renderVision enabled)
+        if (renderVision) {
+          tokenVisionPolygons.forEach(({ tx, ty, visionRadius, polyPoints, visionType }) => {
+            if (polyPoints.length > 0) {
+              maskCtx.save();
+              maskCtx.beginPath();
+              maskCtx.moveTo(polyPoints[0].x, polyPoints[0].y);
+              for (let p = 1; p < polyPoints.length; p++) {
+                maskCtx.lineTo(polyPoints[p].x, polyPoints[p].y);
+              }
+              maskCtx.closePath();
 
-        maskCtx.save();
-        maskCtx.beginPath();
-        maskCtx.moveTo(polyPoints[0].x, polyPoints[0].y);
-        for (let p = 1; p < polyPoints.length; p++) {
-          maskCtx.lineTo(polyPoints[p].x, polyPoints[p].y);
+              const grad = maskCtx.createRadialGradient(tx, ty, CELL_SIZE * 0.5, tx, ty, visionRadius);
+              if (visionType === 'darkvision') {
+                // Greyscale / Desaturated spotlight for Darkvision
+                grad.addColorStop(0.0, 'rgba(0, 0, 0, 0.95)');
+                grad.addColorStop(0.65, 'rgba(0, 0, 0, 0.75)');
+                grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+              } else {
+                grad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
+                grad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)');
+                grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+              }
+
+              maskCtx.fillStyle = grad;
+              maskCtx.fill();
+              maskCtx.restore();
+            }
+          });
         }
-        maskCtx.closePath();
 
-        const fogGrad = maskCtx.createRadialGradient(lx, ly, 5, lx, ly, lRadius);
-        fogGrad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
-        fogGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)');
-        fogGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+        // Render standalone LightSources on fog mask (uses memoized lightPolygons - only if renderLighting enabled)
+        if (renderLighting) {
+          lightPolygons.forEach(({ lx, ly, lRadius, polyPoints, isVisible }) => {
+            if (!isVisible || polyPoints.length === 0) return;
 
-        maskCtx.fillStyle = fogGrad;
-        maskCtx.fill();
-        maskCtx.restore();
-      });
+            maskCtx.save();
+            maskCtx.beginPath();
+            maskCtx.moveTo(polyPoints[0].x, polyPoints[0].y);
+            for (let p = 1; p < polyPoints.length; p++) {
+              maskCtx.lineTo(polyPoints[p].x, polyPoints[p].y);
+            }
+            maskCtx.closePath();
 
-      // Reset filter
-      maskCtx.filter = 'none';
+            const fogGrad = maskCtx.createRadialGradient(lx, ly, 5, lx, ly, lRadius);
+            fogGrad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
+            fogGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)');
+            fogGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
 
-      // Draw the computed fog mask back onto the main canvas
-      ctx.drawImage(maskCanvas, 0, 0);
+            maskCtx.fillStyle = fogGrad;
+            maskCtx.fill();
+            maskCtx.restore();
+          });
+        }
+
+        // Reset filter
+        maskCtx.filter = 'none';
+
+        // Draw the computed fog mask back onto the main canvas
+        ctx.drawImage(maskCanvas, 0, 0);
+      }
     }
 
     ctx.save();
     ctx.translate(panOffset.x, panOffset.y);
     ctx.scale(zoom, zoom);
 
-    // 3.B. Render Colored Ambient Light Glow on Main Canvas (uses memoized lightPolygons)
-    lightPolygons.forEach(({ light, lx, ly, lRadius, polyPoints, isVisible }) => {
-      if (!isVisible || polyPoints.length === 0) return;
+    // 3.B. Render Colored Ambient Light Glow on Main Canvas (uses memoized lightPolygons - only if renderLighting enabled)
+    if (renderLighting) {
+      lightPolygons.forEach(({ light, lx, ly, lRadius, polyPoints, isVisible }) => {
+        if (!isVisible || polyPoints.length === 0) return;
 
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(polyPoints[0].x, polyPoints[0].y);
-      for (let p = 1; p < polyPoints.length; p++) {
-        ctx.lineTo(polyPoints[p].x, polyPoints[p].y);
-      }
-      ctx.closePath();
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(polyPoints[0].x, polyPoints[0].y);
+        for (let p = 1; p < polyPoints.length; p++) {
+          ctx.lineTo(polyPoints[p].x, polyPoints[p].y);
+        }
+        ctx.closePath();
 
-      const lightColor = light.color || '#ffaa33';
-      const grad = ctx.createRadialGradient(lx, ly, 5, lx, ly, lRadius);
-      grad.addColorStop(0.0, lightColor);
-      grad.addColorStop(0.5, lightColor.startsWith('#') ? `${lightColor}66` : 'rgba(255, 170, 51, 0.4)');
-      grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+        const lightColor = light.color || '#ffaa33';
+        const grad = ctx.createRadialGradient(lx, ly, 5, lx, ly, lRadius);
+        grad.addColorStop(0.0, lightColor);
+        grad.addColorStop(0.5, lightColor.startsWith('#') ? `${lightColor}66` : 'rgba(255, 170, 51, 0.4)');
+        grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
 
-      ctx.fillStyle = grad;
-      ctx.globalCompositeOperation = 'screen';
-      ctx.fill();
-      ctx.restore();
-    });
+        ctx.fillStyle = grad;
+        ctx.globalCompositeOperation = 'screen';
+        ctx.fill();
+        ctx.restore();
+      });
+    }
 
     // 4. Draw Tokens (Characters)
     for (let r = 0; r < ROWS; r++) {
@@ -1463,23 +1481,22 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       }
     }
 
-    // 4.A.2. Live High-Performance Dragging Token Preview Overlay
-    if (draggingToken) {
-      const isPlayerToken = draggingToken.color?.includes('cyan') || draggingToken.color?.includes('emerald');
-      const targetCell = grid[draggingToken.currentR]?.[draggingToken.currentC];
-      const isBlocked = isCellBlockingVision(targetCell);
+    // 4.A.2. Live High-Performance Dragging Preview Overlay (Tokens, POIs, Light Sources)
+    if (draggingItem) {
+      const targetCell = grid[draggingItem.currentR]?.[draggingItem.currentC];
+      const isBlocked = draggingItem.kind === 'token' && isCellBlockingVision(targetCell);
 
-      const targetX = (bgImage ? gridOffsetX : 0) + draggingToken.currentC * CELL_SIZE + CELL_SIZE / 2;
-      const targetY = (bgImage ? gridOffsetY : 0) + draggingToken.currentR * CELL_SIZE + CELL_SIZE / 2;
-      const startX = (bgImage ? gridOffsetX : 0) + draggingToken.startC * CELL_SIZE + CELL_SIZE / 2;
-      const startY = (bgImage ? gridOffsetY : 0) + draggingToken.startR * CELL_SIZE + CELL_SIZE / 2;
+      const targetX = (bgImage ? gridOffsetX : 0) + draggingItem.currentC * CELL_SIZE + CELL_SIZE / 2;
+      const targetY = (bgImage ? gridOffsetY : 0) + draggingItem.currentR * CELL_SIZE + CELL_SIZE / 2;
+      const startX = (bgImage ? gridOffsetX : 0) + draggingItem.startC * CELL_SIZE + CELL_SIZE / 2;
+      const startY = (bgImage ? gridOffsetY : 0) + draggingItem.startR * CELL_SIZE + CELL_SIZE / 2;
 
       // Draw dashed motion vector trajectory
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(startX, startY);
       ctx.lineTo(targetX, targetY);
-      ctx.strokeStyle = isBlocked ? 'rgba(239, 68, 68, 0.8)' : 'rgba(56, 189, 248, 0.8)';
+      ctx.strokeStyle = isBlocked ? 'rgba(239, 68, 68, 0.8)' : (draggingItem.kind === 'poi' ? 'rgba(245, 158, 11, 0.85)' : 'rgba(56, 189, 248, 0.8)');
       ctx.lineWidth = 2 / zoom;
       ctx.setLineDash([5 / zoom, 5 / zoom]);
       ctx.stroke();
@@ -1487,61 +1504,89 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
       // Draw target cell bounding box
       ctx.save();
-      const cellLeft = (bgImage ? gridOffsetX : 0) + draggingToken.currentC * CELL_SIZE;
-      const cellTop = (bgImage ? gridOffsetY : 0) + draggingToken.currentR * CELL_SIZE;
-      ctx.fillStyle = isBlocked ? 'rgba(239, 68, 68, 0.25)' : 'rgba(56, 189, 248, 0.2)';
+      const cellLeft = (bgImage ? gridOffsetX : 0) + draggingItem.currentC * CELL_SIZE;
+      const cellTop = (bgImage ? gridOffsetY : 0) + draggingItem.currentR * CELL_SIZE;
+      ctx.fillStyle = isBlocked ? 'rgba(239, 68, 68, 0.25)' : (draggingItem.kind === 'poi' ? 'rgba(245, 158, 11, 0.25)' : 'rgba(56, 189, 248, 0.2)');
       ctx.fillRect(cellLeft, cellTop, CELL_SIZE, CELL_SIZE);
-      ctx.strokeStyle = isBlocked ? '#ef4444' : '#38bdf8';
+      ctx.strokeStyle = isBlocked ? '#ef4444' : (draggingItem.kind === 'poi' ? '#f59e0b' : '#38bdf8');
       ctx.lineWidth = 2 / zoom;
       ctx.strokeRect(cellLeft, cellTop, CELL_SIZE, CELL_SIZE);
       ctx.restore();
 
-      // Draw floating token avatar/circle
-      const tokenCombatant = combatants?.find(comb => {
-        const cName = comb.name.trim().toLowerCase();
-        const dName = draggingToken.name.trim().toLowerCase();
-        return cName === dName || cName.startsWith(dName) || dName.startsWith(cName.slice(0, 3));
-      });
-      const sizeInfo = getCreatureGridSize(tokenCombatant?.size);
-      const gridSquares = sizeInfo.gridSquares;
-      const tokenDiameter = gridSquares * CELL_SIZE;
-      const tokenRadius = (tokenDiameter / 2) * 0.95;
+      if (draggingItem.kind === 'token' && draggingItem.tokenName) {
+        const isPlayerToken = draggingItem.tokenColor?.includes('cyan') || draggingItem.tokenColor?.includes('emerald');
+        const tokenCombatant = combatants?.find(comb => {
+          const cName = comb.name.trim().toLowerCase();
+          const dName = draggingItem.tokenName!.trim().toLowerCase();
+          return cName === dName || cName.startsWith(dName) || dName.startsWith(cName.slice(0, 3));
+        });
+        const sizeInfo = getCreatureGridSize(tokenCombatant?.size);
+        const gridSquares = sizeInfo.gridSquares;
+        const tokenDiameter = gridSquares * CELL_SIZE;
+        const tokenRadius = (tokenDiameter / 2) * 0.95;
 
-      ctx.save();
-      ctx.shadowColor = isBlocked ? '#ef4444' : '#38bdf8';
-      ctx.shadowBlur = 14 / zoom;
-      ctx.beginPath();
-      ctx.arc(targetX, targetY, tokenRadius, 0, Math.PI * 2);
-      ctx.fillStyle = isPlayerToken ? '#06b6d4' : '#e11d48';
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 3 / zoom;
-      ctx.fill();
-      ctx.stroke();
+        ctx.save();
+        ctx.shadowColor = isBlocked ? '#ef4444' : '#38bdf8';
+        ctx.shadowBlur = 14 / zoom;
+        ctx.beginPath();
+        ctx.arc(targetX, targetY, tokenRadius, 0, Math.PI * 2);
+        ctx.fillStyle = isPlayerToken ? '#06b6d4' : '#e11d48';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3 / zoom;
+        ctx.fill();
+        ctx.stroke();
 
-      const tokenUrl = tokenCombatant?.tokenImageUrl || tokenCombatant?.avatarUrl;
-      let imgDrawn = false;
-      if (tokenUrl) {
-        const img = token2DImageCache.get(tokenUrl);
-        if (img && img.complete && img.naturalWidth > 0) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(targetX, targetY, tokenRadius - 2, 0, Math.PI * 2);
-          ctx.clip();
-          ctx.drawImage(img, targetX - tokenRadius + 2, targetY - tokenRadius + 2, (tokenRadius - 2) * 2, (tokenRadius - 2) * 2);
-          ctx.restore();
-          imgDrawn = true;
+        const tokenUrl = tokenCombatant?.tokenImageUrl || tokenCombatant?.avatarUrl;
+        let imgDrawn = false;
+        if (tokenUrl) {
+          const img = token2DImageCache.get(tokenUrl);
+          if (img && img.complete && img.naturalWidth > 0) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(targetX, targetY, tokenRadius - 2, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(img, targetX - tokenRadius + 2, targetY - tokenRadius + 2, (tokenRadius - 2) * 2, (tokenRadius - 2) * 2);
+            ctx.restore();
+            imgDrawn = true;
+          }
         }
-      }
 
-      if (!imgDrawn) {
-        ctx.fillStyle = '#ffffff';
-        const fontSize = Math.floor(CELL_SIZE * (0.28 + (gridSquares - 1) * 0.1));
-        ctx.font = `bold ${fontSize}px monospace`;
+        if (!imgDrawn) {
+          ctx.fillStyle = '#ffffff';
+          const fontSize = Math.floor(CELL_SIZE * (0.28 + (gridSquares - 1) * 0.1));
+          ctx.font = `bold ${fontSize}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(draggingItem.tokenName, targetX, targetY);
+        }
+        ctx.restore();
+      } else if (draggingItem.kind === 'poi' && draggingItem.poiCell) {
+        // Draw POI Icon preview floating over destination cell
+        ctx.save();
+        const emoji = getPOIEmoji(draggingItem.poiCell);
+        ctx.font = `bold ${Math.floor(CELL_SIZE * 0.65)}px "Courier New", "Segoe UI Emoji", monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(draggingToken.name, targetX, targetY);
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 12 / zoom;
+        ctx.fillText(emoji, targetX, targetY);
+        ctx.restore();
+      } else if (draggingItem.kind === 'light' && draggingItem.light) {
+        // Draw Light Source preview
+        const light = draggingItem.light;
+        const colorHex = light.color || '#ff9900';
+        let preset: 'torch' | 'candle' | 'lantern' | 'spell' | 'dragon' = 'torch';
+        if (light.animation === 'candle' || colorHex.toLowerCase() === '#ffaa33') preset = 'candle';
+        else if (light.animation === 'none' || colorHex.toLowerCase() === '#ffee77') preset = 'lantern';
+        else if (light.animation === 'pulse' || colorHex.toLowerCase() === '#ff4400') preset = 'dragon';
+        else if (light.animation === 'chroma' || colorHex.toLowerCase() === '#00ccff') preset = 'spell';
+
+        ctx.save();
+        ctx.shadowColor = colorHex;
+        ctx.shadowBlur = 16 / zoom;
+        drawLightSourceIcon(ctx, targetX, targetY, preset, zoom);
+        ctx.restore();
       }
-      ctx.restore();
     }
 
     // 4.B. Render Vector Walls and Doors
@@ -1920,7 +1965,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     }
 
     ctx.restore();
-  }, [grid, bgImage, CELL_SIZE, COLS, ROWS, gridOffsetX, gridOffsetY, selectedTool, selectionBox, measureStart, calibrationLine, rulerPoints, rulerCursor, rulerStatus, zoom, panOffset, canvasSize, isPlayerView, lightSources, combatants, vectorWalls, draggingToken]);
+  }, [grid, bgImage, CELL_SIZE, COLS, ROWS, gridOffsetX, gridOffsetY, selectedTool, selectionBox, measureStart, calibrationLine, rulerPoints, rulerCursor, rulerStatus, zoom, panOffset, canvasSize, isPlayerView, lightSources, combatants, vectorWalls, draggingItem, renderLighting, renderVision, renderFog]);
 
   // Utility to convert client mouse events to Canvas coordinates
   const getCanvasCoords = (e: React.MouseEvent) => {
@@ -2046,6 +2091,32 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   const isPOIType = (t: string | undefined) => 
     t === 'door' || t === 'trap' || t === 'chest' || t === 'stash' || t === 'trigger' || t === 'portcullis' || t === 'illusion_wall' || t === 'transition';
 
+  const getPOIEmoji = (cell: Cell | undefined) => {
+    if (!cell) return '📦';
+    if (cell.type === 'door') return '🚪';
+    if (cell.type === 'trap') return cell.trapConfig?.revealedToPlayers ? '⚠️' : '💥';
+    if (cell.type === 'chest') return cell.chestConfig?.status === 'looted' ? '✨' : '🧰';
+    if (cell.type === 'stash') return '💎';
+    if (cell.type === 'trigger') return '🕹️';
+    if (cell.type === 'portcullis') return '⛓️';
+    if (cell.type === 'illusion_wall') return '〰️';
+    if (cell.type === 'transition') return cell.transitionConfig?.type === 'portal' ? '🌀' : '🪜';
+    return '📦';
+  };
+
+  const getPOIName = (cell: Cell | undefined) => {
+    if (!cell) return 'Objeto';
+    if (cell.type === 'door') return cell.doorConfig?.doorType === 'secret' ? 'Porta Secreta' : 'Porta';
+    if (cell.type === 'trap') return cell.trapConfig?.trapType || 'Armadilha';
+    if (cell.type === 'chest') return cell.chestConfig?.name || 'Baú';
+    if (cell.type === 'stash') return 'Esconderijo Secreto';
+    if (cell.type === 'trigger') return cell.triggerConfig?.triggerType === 'lever' ? 'Alavanca' : 'Gatilho';
+    if (cell.type === 'portcullis') return 'Grade / Portcullis';
+    if (cell.type === 'illusion_wall') return 'Parede Ilusória';
+    if (cell.type === 'transition') return 'Escada / Transição';
+    return 'Objeto Interativo';
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (editingCell) {
       setIsDrawing(false);
@@ -2130,23 +2201,89 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return;
     }
 
-    if (selectedTool === 'light') {
-      const gridPos = getGridPos(x, y);
+    const clickedCell = grid[pos.r]?.[pos.c];
 
-      const existing = lightSources?.find((l) => {
-        const lx = l.x < 150 ? (bgImage ? gridOffsetX + l.x * CELL_SIZE : l.x * CELL_SIZE) : l.x;
-        const ly = l.y < 150 ? (bgImage ? gridOffsetY + l.y * CELL_SIZE : l.y * CELL_SIZE) : l.y;
-        const dist = Math.hypot(x - lx, y - ly);
-        return dist <= CELL_SIZE * 0.8;
-      });
-
-      if (existing || e.button === 2) {
-        if (existing) {
-          onRemoveLightSource?.(existing.id);
-          toast.info('Fonte de luz removida.');
+    // 1. Check Token Hit
+    const tokenHit = (() => {
+      if (clickedCell?.tokenName) {
+        return { name: clickedCell.tokenName, color: clickedCell.tokenColor || '', originR: pos.r, originC: pos.c };
+      }
+      for (let tr = Math.max(0, pos.r - 6); tr <= pos.r; tr++) {
+        for (let tc = Math.max(0, pos.c - 6); tc <= pos.c; tc++) {
+          const candidateCell = grid[tr]?.[tc];
+          if (candidateCell?.tokenName) {
+            const comb = combatants?.find(combItem => combItem.name.trim().toLowerCase() === candidateCell.tokenName?.trim().toLowerCase());
+            const gridSquares = getCreatureGridSize(comb?.size).gridSquares;
+            if (gridSquares > 1 && pos.r >= tr && pos.r < tr + gridSquares && pos.c >= tc && pos.c < tc + gridSquares) {
+              return { name: candidateCell.tokenName, color: candidateCell.tokenColor || '', originR: tr, originC: tc };
+            }
+          }
         }
+      }
+      return null;
+    })();
+
+    if (tokenHit && !isSpacePressed) {
+      if (e.button === 2 && !isPlayerView) {
+        onGridChange((prev) => {
+          const copy = prev.map((row) => row.map((cell) => ({ ...cell })));
+          const targetR = tokenHit.originR;
+          const targetC = tokenHit.originC;
+          if (copy[targetR]?.[targetC]?.tokenName) {
+            copy[targetR][targetC].tokenName = undefined;
+            copy[targetR][targetC].tokenColor = undefined;
+          }
+          return copy;
+        });
         return;
       }
+      if (e.button === 0) {
+        dragCandidateRef.current = {
+          kind: 'token',
+          startR: tokenHit.originR,
+          startC: tokenHit.originC,
+          startX: x,
+          startY: y,
+          initialClientX: e.clientX,
+          initialClientY: e.clientY,
+          tokenName: tokenHit.name,
+          tokenColor: tokenHit.color
+        };
+        return;
+      }
+    }
+
+    // 2. Check Light Source Hit
+    const hitLight = lightSources?.find((l) => {
+      const lx = l.x < 150 ? (bgImage ? gridOffsetX + l.x * CELL_SIZE + CELL_SIZE / 2 : l.x * CELL_SIZE + CELL_SIZE / 2) : l.x;
+      const ly = l.y < 150 ? (bgImage ? gridOffsetY + l.y * CELL_SIZE + CELL_SIZE / 2 : l.y * CELL_SIZE + CELL_SIZE / 2) : l.y;
+      return Math.hypot(x - lx, y - ly) <= Math.max(22, CELL_SIZE * 0.55);
+    });
+
+    if (hitLight && !isSpacePressed && !isPlayerView) {
+      if (e.button === 2 || (selectedTool === 'paint' && e.button === 2)) {
+        onRemoveLightSource?.(hitLight.id);
+        toast.info('Fonte de luz removida.');
+        return;
+      }
+      if (e.button === 0) {
+        dragCandidateRef.current = {
+          kind: 'light',
+          startR: pos.r,
+          startC: pos.c,
+          startX: x,
+          startY: y,
+          initialClientX: e.clientX,
+          initialClientY: e.clientY,
+          light: hitLight
+        };
+        return;
+      }
+    }
+
+    // Placing a new light source if tool is 'light'
+    if (selectedTool === 'light') {
+      const gridPos = getGridPos(x, y);
 
       let brightRadius = 20;
       let dimRadius = 40;
@@ -2205,14 +2342,26 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return;
     }
 
-
-
-    const clickedCell = grid[pos.r]?.[pos.c];
+    // 3. Check Existing Interactive Functional POI Hit (door, trap, chest, stash, trigger, portcullis, illusion_wall, transition)
+    if (clickedCell && !isPlayerView && isPOIType(clickedCell.type) && !isSpacePressed) {
+      if (e.button === 0) {
+        dragCandidateRef.current = {
+          kind: 'poi',
+          startR: pos.r,
+          startC: pos.c,
+          startX: x,
+          startY: y,
+          initialClientX: e.clientX,
+          initialClientY: e.clientY,
+          cell: clickedCell
+        };
+        return;
+      }
+    }
 
     if (selectedTool === 'measure') {
       if (e.button === 0) {
         if (rulerStatus === 'completed') {
-          // Fresh measurement starting from this click
           setRulerPoints([pos]);
           setRulerStatus('measuring');
           setIsRulerDragging(true);
@@ -2235,12 +2384,10 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         if (rulerStatus === 'measuring') {
           const lastPoint = rulerPoints[rulerPoints.length - 1];
           if (pos.r === lastPoint.r && pos.c === lastPoint.c) {
-            // Clicked directly on the end point to finalize
             if (rulerPoints.length >= 2) {
               handleFinishRuler();
             }
           } else {
-            // Add orthogonal waypoint(s) (L-shaped if diagonal)
             const added = getOrthogonalPath(lastPoint, pos);
             const newPoints = [...rulerPoints, ...added];
             setRulerPoints(newPoints);
@@ -2255,66 +2402,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return;
     }
 
-    // Token drag takes priority over door/trap editing (suporta hitboxes multi-célula de criaturas grandes/gigantes)
-    const tokenHit = (() => {
-      if (clickedCell?.tokenName) {
-        return { name: clickedCell.tokenName, color: clickedCell.tokenColor || '', originR: pos.r, originC: pos.c };
-      }
-      for (let tr = Math.max(0, pos.r - 6); tr <= pos.r; tr++) {
-        for (let tc = Math.max(0, pos.c - 6); tc <= pos.c; tc++) {
-          const candidateCell = grid[tr]?.[tc];
-          if (candidateCell?.tokenName) {
-            const comb = combatants?.find(combItem => combItem.name.trim().toLowerCase() === candidateCell.tokenName?.trim().toLowerCase());
-            const gridSquares = getCreatureGridSize(comb?.size).gridSquares;
-            if (gridSquares > 1 && pos.r >= tr && pos.r < tr + gridSquares && pos.c >= tc && pos.c < tc + gridSquares) {
-              return { name: candidateCell.tokenName, color: candidateCell.tokenColor || '', originR: tr, originC: tc };
-            }
-          }
-        }
-      }
-      return null;
-    })();
-
-    if (tokenHit && !isSpacePressed) {
-      if (e.button === 2 && !isPlayerView) {
-        // Right-click on a token removes it from the map
-        onGridChange((prev) => {
-          const copy = prev.map((row) => row.map((cell) => ({ ...cell })));
-          const targetR = tokenHit.originR;
-          const targetC = tokenHit.originC;
-          if (copy[targetR]?.[targetC]?.tokenName) {
-            copy[targetR][targetC].tokenName = undefined;
-            copy[targetR][targetC].tokenColor = undefined;
-          }
-          return copy;
-        });
-        return;
-      }
-      if (e.button === 0) {
-        setDraggingToken({
-           name: tokenHit.name,
-           color: tokenHit.color,
-           startR: tokenHit.originR,
-           startC: tokenHit.originC,
-           currentR: pos.r,
-           currentC: pos.c
-        });
-        return;
-      }
-    }
-    // Interacting with or clicking on existing POI (door, trap, chest, stash) in DM view
-    if (clickedCell && !isPlayerView && isPOIType(clickedCell.type) && e.button === 0 && !isSpacePressed) {
-      setIsDrawing(false);
-      setDrawButton(-1);
-      setEditingCell({
-        r: pos.r,
-        c: pos.c,
-        cell: clickedCell
-      });
-      return;
-    }
-
-    // Placing a new POI (door, trap, chest, stash) - single placement only
+    // Placing a NEW POI (door, trap, chest, stash, etc.) with paint tool - single placement
     if (selectedTool === 'paint' && isPOIType(selectedTileType) && e.button === 0 && !isSpacePressed) {
       setIsDrawing(false);
       setDrawButton(-1);
@@ -2390,6 +2478,60 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     const pos = getGridPos(x, y);
 
+    // Promote candidate to active drag if mouse moved >= 4px
+    if (dragCandidateRef.current && !isPanning) {
+      const moveDist = Math.hypot(e.clientX - dragCandidateRef.current.initialClientX, e.clientY - dragCandidateRef.current.initialClientY);
+      if (moveDist >= 4) {
+        const cand = dragCandidateRef.current;
+        if (cand.kind === 'token') {
+          setDraggingItem({
+            kind: 'token',
+            tokenName: cand.tokenName,
+            tokenColor: cand.tokenColor,
+            startR: cand.startR,
+            startC: cand.startC,
+            currentR: pos.r,
+            currentC: pos.c
+          });
+        } else if (cand.kind === 'poi' && cand.cell) {
+          setDraggingItem({
+            kind: 'poi',
+            poiType: cand.cell.type,
+            poiCell: cand.cell,
+            startR: cand.startR,
+            startC: cand.startC,
+            currentR: pos.r,
+            currentC: pos.c
+          });
+        } else if (cand.kind === 'light' && cand.light) {
+          setDraggingItem({
+            kind: 'light',
+            lightId: cand.light.id,
+            light: cand.light,
+            startR: cand.startR,
+            startC: cand.startC,
+            currentR: pos.r,
+            currentC: pos.c,
+            startX: cand.startX,
+            startY: cand.startY,
+            currentX: x,
+            currentY: y
+          });
+        }
+        dragCandidateRef.current = null;
+        setEditingCell(null);
+      }
+    }
+
+    if (draggingItem) {
+      if (draggingItem.kind === 'light') {
+        setDraggingItem(prev => prev ? { ...prev, currentR: pos.r, currentC: pos.c, currentX: x, currentY: y } : null);
+      } else if (pos.r !== draggingItem.currentR || pos.c !== draggingItem.currentC) {
+        setDraggingItem(prev => prev ? { ...prev, currentR: pos.r, currentC: pos.c } : null);
+      }
+      return;
+    }
+
     if (selectedTool === 'measure') {
       setRulerCursor(pos);
       if (rulerStatus === 'measuring' && rulerPoints.length > 0) {
@@ -2403,7 +2545,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return;
     }
 
-    if (!isPlayerView && !isPanning && !draggingToken) {
+    if (!isPlayerView && !isPanning && !draggingItem) {
       const cell = grid[pos.r]?.[pos.c];
       if (cell && (isPOIType(cell.type) || Boolean(cell.tokenName))) {
         setHoveredCell({
@@ -2418,20 +2560,11 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       setHoveredCell(null);
     }
 
-    if (draggingToken) {
-      if (pos.r !== draggingToken.currentR || pos.c !== draggingToken.currentC) {
-        setDraggingToken(prev => prev ? { ...prev, currentR: pos.r, currentC: pos.c } : null);
-      }
-      return;
-    }
-
     if (!isDrawing) return;
-    // Single POIs (door, trap, chest, stash, mechanisms) are never drag-painted
     if (selectedTool === 'paint' && isPOIType(selectedTileType)) {
       return;
     }
 
-    // Spatial Throttling: If mouse is still in the same cell, skip redundant paint updates
     if (lastPaintedCellRef.current?.r === pos.r && 
         lastPaintedCellRef.current?.c === pos.c && 
         lastPaintedCellRef.current?.tool === selectedTool) {
@@ -2456,15 +2589,95 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return;
     }
 
-    if (draggingToken) {
-      if (draggingToken.currentR !== draggingToken.startR || draggingToken.currentC !== draggingToken.startC) {
-        const targetCell = grid[draggingToken.currentR]?.[draggingToken.currentC];
-        const isPortcullisClosed = targetCell?.type === 'portcullis' && targetCell.portcullisConfig?.status === 'closed';
-        if (!isCellBlockingVision(targetCell) && !isPortcullisClosed) {
-          moveToken(draggingToken.name, draggingToken.color, draggingToken.currentR, draggingToken.currentC);
-        }
+    // 1. Click without dragging -> Open configuration or select
+    if (dragCandidateRef.current) {
+      const cand = dragCandidateRef.current;
+      dragCandidateRef.current = null;
+      if (cand.kind === 'poi' && cand.cell && !isPlayerView) {
+        setIsDrawing(false);
+        setDrawButton(-1);
+        setEditingCell({
+          r: cand.startR,
+          c: cand.startC,
+          cell: cand.cell
+        });
+        return;
       }
-      setDraggingToken(null);
+      if (cand.kind === 'light' && cand.light) {
+        toast.info(`Fonte de luz (${cand.light.animation || 'tocha'}) selecionada. Arraste para reposicionar.`);
+        return;
+      }
+      if (cand.kind === 'token') {
+        return;
+      }
+    }
+
+    // 2. Drag & Drop release -> Move object to destination
+    if (draggingItem) {
+      if (draggingItem.kind === 'token' && draggingItem.tokenName) {
+        if (draggingItem.currentR !== draggingItem.startR || draggingItem.currentC !== draggingItem.startC) {
+          const targetCell = grid[draggingItem.currentR]?.[draggingItem.currentC];
+          const isPortcullisClosed = targetCell?.type === 'portcullis' && targetCell.portcullisConfig?.status === 'closed';
+          if (!isCellBlockingVision(targetCell) && !isPortcullisClosed) {
+            moveToken(draggingItem.tokenName, draggingItem.tokenColor || '', draggingItem.currentR, draggingItem.currentC);
+          }
+        }
+      } else if (draggingItem.kind === 'poi' && draggingItem.poiCell) {
+        if (draggingItem.currentR !== draggingItem.startR || draggingItem.currentC !== draggingItem.startC) {
+          const sourceR = draggingItem.startR;
+          const sourceC = draggingItem.startC;
+          const targetR = draggingItem.currentR;
+          const targetC = draggingItem.currentC;
+
+          if (targetR >= 0 && targetR < ROWS && targetC >= 0 && targetC < COLS) {
+            onGridChange((prev) => {
+              const copy = prev.map((row) => row.map((cell) => ({ ...cell })));
+              const src = copy[sourceR]?.[sourceC];
+              const dest = copy[targetR]?.[targetC];
+              if (src && dest) {
+                // Transfer functional data to destination
+                dest.type = src.type;
+                dest.doorConfig = src.doorConfig ? { ...src.doorConfig } : undefined;
+                dest.trapConfig = src.trapConfig ? { ...src.trapConfig } : undefined;
+                dest.chestConfig = src.chestConfig ? { ...src.chestConfig } : undefined;
+                dest.triggerConfig = src.triggerConfig ? { ...src.triggerConfig } : undefined;
+                dest.portcullisConfig = src.portcullisConfig ? { ...src.portcullisConfig } : undefined;
+                dest.illusionWallConfig = src.illusionWallConfig ? { ...src.illusionWallConfig } : undefined;
+                dest.transitionConfig = src.transitionConfig ? { ...src.transitionConfig } : undefined;
+
+                // Reset source cell to floor
+                src.type = 'floor';
+                src.doorConfig = undefined;
+                src.trapConfig = undefined;
+                src.chestConfig = undefined;
+                src.triggerConfig = undefined;
+                src.portcullisConfig = undefined;
+                src.illusionWallConfig = undefined;
+                src.transitionConfig = undefined;
+              }
+              return copy;
+            });
+            toast.success(`${getPOIName(draggingItem.poiCell)} movido para a nova posição!`);
+          }
+        }
+      } else if (draggingItem.kind === 'light' && draggingItem.light) {
+        const newPixelX = (draggingItem.currentC + 0.5) * CELL_SIZE;
+        const newPixelY = (draggingItem.currentR + 0.5) * CELL_SIZE;
+        const updatedLight: import('@/lib/types').LightSource = {
+          ...draggingItem.light,
+          x: newPixelX,
+          y: newPixelY
+        };
+        if (onUpdateLightSource) {
+          onUpdateLightSource(updatedLight);
+        } else if (onAddLightSource) {
+          onRemoveLightSource?.(draggingItem.light.id);
+          onAddLightSource(updatedLight);
+        }
+        toast.success('Fonte de luz movida!');
+      }
+
+      setDraggingItem(null);
       setHoveredCell(null);
       return;
     }
@@ -2857,7 +3070,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       const currentZoom = zoomRef.current;
       const currentPan = panOffsetRef.current;
 
-      const nextZoom = Math.max(0.3, Math.min(currentZoom * zoomFactor, 3.0));
+      const nextZoom = Math.max(0.05, Math.min(currentZoom * zoomFactor, 5.0));
 
       const localMouseX = (mouseX - currentPan.x) / currentZoom;
       const localMouseY = (mouseY - currentPan.y) / currentZoom;
@@ -2880,6 +3093,46 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     };
   }, []);
 
+  const handleFitToScreen = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const padding = 60;
+    const availWidth = Math.max(100, container.clientWidth - padding * 2);
+    const availHeight = Math.max(100, container.clientHeight - padding * 2);
+    const totalMapW = COLS * CELL_SIZE;
+    const totalMapH = ROWS * CELL_SIZE;
+
+    const fitZoom = Math.max(0.05, Math.min(availWidth / totalMapW, availHeight / totalMapH, 1.5));
+    const nextPan = {
+      x: (container.clientWidth - totalMapW * fitZoom) / 2,
+      y: (container.clientHeight - totalMapH * fitZoom) / 2,
+    };
+
+    zoomRef.current = fitZoom;
+    panOffsetRef.current = nextPan;
+    setZoom(fitZoom);
+    setPanOffset(nextPan);
+  }, [COLS, ROWS, CELL_SIZE]);
+
+  const handleZoomStep = (delta: number) => {
+    const container = containerRef.current;
+    if (!container) return;
+    const currentZoom = zoomRef.current;
+    const nextZoom = Math.max(0.05, Math.min(5.0, currentZoom + delta));
+    const centerX = container.clientWidth / 2;
+    const centerY = container.clientHeight / 2;
+    const localCenterX = (centerX - panOffsetRef.current.x) / currentZoom;
+    const localCenterY = (centerY - panOffsetRef.current.y) / currentZoom;
+    const nextPan = {
+      x: centerX - localCenterX * nextZoom,
+      y: centerY - localCenterY * nextZoom,
+    };
+    zoomRef.current = nextZoom;
+    panOffsetRef.current = nextPan;
+    setZoom(nextZoom);
+    setPanOffset(nextPan);
+  };
+
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (selectedTool === 'measure') {
       e.preventDefault();
@@ -2891,7 +3144,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     if (selectedTool === 'pan' || isSpacePressed) {
       return isPanning ? 'cursor-grabbing' : 'cursor-grab';
     }
-    if (draggingToken) return 'cursor-grabbing';
+    if (draggingItem) return 'cursor-grabbing';
     if (selectedTool === 'measure') return 'cursor-crosshair';
     if (selectedTool === 'paint' || selectedTool === 'box' || selectedTool.startsWith('draw-')) return 'cursor-crosshair';
     return 'cursor-default';
@@ -2930,7 +3183,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       );
       const delta = newDist - touchDistRef.current;
       if (Math.abs(delta) > 5) {
-        setZoom((prev) => Math.max(0.3, Math.min(3.0, prev + (delta > 0 ? 0.03 : -0.03))));
+        setZoom((prev) => Math.max(0.05, Math.min(5.0, prev + (delta > 0 ? 0.03 : -0.03))));
         touchDistRef.current = newDist;
       }
     }
@@ -2969,13 +3222,67 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           <div className="w-64 h-64 border-2 border-emerald-500/30 rounded-full animate-ping" />
         </div>
       )}
+      {/* Bottom Right Floating HUD with Zoom and Fit Controls */}
       <div 
         onMouseDown={(e) => e.stopPropagation()}
-        className="absolute bottom-4 right-4 bg-slate-900/80 backdrop-blur text-[11px] font-mono text-slate-400 px-2.5 py-1.5 rounded-lg border border-slate-800 shadow flex gap-3 z-20"
+        className="absolute bottom-4 right-4 bg-[#0d121a]/95 backdrop-blur-md text-xs font-mono text-slate-300 px-3 py-1.5 rounded-xl border border-[#222c3d] shadow-2xl flex items-center gap-2.5 z-20"
       >
-        <span>Zoom: {Math.round(zoom * 100)}%</span>
-        <span>Grid: {CELL_SIZE}px/célula</span>
-        <span className="text-slate-500">Mão para mover | Desenhe fora das bordas para expandir</span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => handleZoomStep(-0.15)}
+            className="w-6 h-6 flex items-center justify-center rounded-lg bg-[#141a26] hover:bg-[#1c2638] text-slate-300 hover:text-white border border-[#222c3d] font-bold text-sm cursor-pointer transition-colors"
+            title="Diminuir Zoom (-)"
+          >
+            -
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const currentZoom = zoomRef.current;
+              const nextZoom = 1.0;
+              const container = containerRef.current;
+              if (container) {
+                const centerX = container.clientWidth / 2;
+                const centerY = container.clientHeight / 2;
+                const localCenterX = (centerX - panOffsetRef.current.x) / currentZoom;
+                const localCenterY = (centerY - panOffsetRef.current.y) / currentZoom;
+                const nextPan = {
+                  x: centerX - localCenterX * nextZoom,
+                  y: centerY - localCenterY * nextZoom,
+                };
+                panOffsetRef.current = nextPan;
+                setPanOffset(nextPan);
+              }
+              zoomRef.current = nextZoom;
+              setZoom(nextZoom);
+            }}
+            className="min-w-[48px] text-center font-bold text-amber-400 hover:text-amber-300 cursor-pointer text-xs"
+            title="Clique para resetar para 100%"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            type="button"
+            onClick={() => handleZoomStep(0.15)}
+            className="w-6 h-6 flex items-center justify-center rounded-lg bg-[#141a26] hover:bg-[#1c2638] text-slate-300 hover:text-white border border-[#222c3d] font-bold text-sm cursor-pointer transition-colors"
+            title="Aumentar Zoom (+)"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={fitAndCenterView}
+            className="px-2.5 py-1 flex items-center gap-1.5 rounded-lg bg-[#141a26] hover:bg-cyan-500/20 text-xs text-cyan-300 hover:text-cyan-200 border border-cyan-500/30 font-sans font-bold cursor-pointer ml-1 transition-all"
+            title="Enquadrar e centralizar o mapa inteiro na tela"
+          >
+            <Maximize2 className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Centralizar Mapa</span>
+          </button>
+        </div>
+
+        <div className="h-3 w-px bg-slate-700 hidden sm:block" />
+        <span className="text-[10px] text-slate-400 hidden sm:inline">Grid: {CELL_SIZE}px</span>
       </div>
 
       {editingCell && (
@@ -4543,18 +4850,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           })()}
         </div>
       )}
-      {/* Floating Center / Fit View Button */}
-      <button
-        type="button"
-        onClick={fitAndCenterView}
-        className="absolute bottom-4 right-4 z-30 p-2.5 bg-slate-950/85 hover:bg-slate-900 border border-slate-700/80 hover:border-amber-500/50 text-amber-400 rounded-xl shadow-xl backdrop-blur-md flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 cursor-pointer pointer-events-auto"
-        title={playerTokens.length > 0 ? "Focar e Centralizar nos Heróis" : "Centralizar e Enquadrar Masmorra na Tela"}
-      >
-        <Maximize2 className="w-4 h-4" />
-        <span className="hidden sm:inline">
-          {playerTokens.length > 0 ? 'Focar Heróis' : 'Centralizar Mapa'}
-        </span>
-      </button>
     </div>
   );
 };
+
