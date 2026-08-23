@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
 import {
   PartyLootSession,
   PartyLootItem,
@@ -15,7 +15,7 @@ export const partyLootService = {
    */
   async fetchActiveLootSession(campaignId: string): Promise<Result<PartyLootSession | null>> {
     try {
-      if (isSupabaseConfigured()) {
+      if (isSupabaseConfigured() && isValidUuid(campaignId)) {
         const { data, error } = await supabase
           .from('party_loot_sessions')
           .select('*')
@@ -82,6 +82,36 @@ export const partyLootService = {
     createdByName?: string;
   }): Promise<Result<PartyLootSession>> {
     try {
+      // 1. Se já houver uma sessão ativa na campanha, acumular moedas e anexar itens sem descartar
+      const existingRes = await this.fetchActiveLootSession(params.campaignId);
+      if (existingRes.ok && existingRes.value && existingRes.value.status === 'active') {
+        const existing = existingRes.value;
+        const mergedCurrency: CharacterCurrency = {
+          po: (existing.currency.po || 0) + (params.currency.po || 0),
+          pp: (existing.currency.pp || 0) + (params.currency.pp || 0),
+          pe: (existing.currency.pe || 0) + (params.currency.pe || 0),
+          pc: (existing.currency.pc || 0) + (params.currency.pc || 0),
+          pl: (existing.currency.pl || 0) + (params.currency.pl || 0),
+        };
+
+        const newItems: PartyLootItem[] = params.items.map((item) => ({
+          ...item,
+          id: item.id || `item_${Math.random().toString(36).substr(2, 9)}`,
+          claimedBy: null,
+        }));
+
+        const updatedSession: PartyLootSession = {
+          ...existing,
+          title: existing.title || params.title,
+          description: existing.description || params.description || '',
+          currency: mergedCurrency,
+          items: [...existing.items, ...newItems],
+          updatedAt: new Date().toISOString(),
+        };
+
+        return await this.updateLootSession(updatedSession);
+      }
+
       const newSession: PartyLootSession = {
         id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `loot_${Date.now()}`,
         campaignId: params.campaignId,
@@ -101,7 +131,7 @@ export const partyLootService = {
         createdAt: new Date().toISOString(),
       };
 
-      if (isSupabaseConfigured()) {
+      if (isSupabaseConfigured() && isValidUuid(newSession.campaignId)) {
         const { data, error } = await supabase
           .from('party_loot_sessions')
           .insert({
@@ -163,7 +193,7 @@ export const partyLootService = {
 
       session.updatedAt = new Date().toISOString();
 
-      if (isSupabaseConfigured()) {
+      if (isSupabaseConfigured() && isValidUuid(session.id)) {
         const { error } = await supabase
           .from('party_loot_sessions')
           .update({

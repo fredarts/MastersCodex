@@ -52,7 +52,13 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
 
     campaignService.fetchUserCampaigns(currentUserId).then((res) => {
       if (res.ok) {
-        setUserCampaigns(res.value);
+        const seen = new Set<string>();
+        const uniqueCampaigns = res.value.filter((c) => {
+          if (!c.id || seen.has(c.id)) return false;
+          seen.add(c.id);
+          return true;
+        });
+        setUserCampaigns(uniqueCampaigns);
       } else {
         setUserCampaigns([]);
         toast.error(res.error.message);

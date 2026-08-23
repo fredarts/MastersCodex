@@ -831,7 +831,14 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
       if (sheet) {
         const updated = { ...sheet };
         if (item) {
-          updated.equipment = [...(updated.equipment || []), item];
+          const currentEq = updated.equipment || [];
+          const existingIds = new Set(currentEq.map((e) => e.id));
+          let safeId = item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+          if (existingIds.has(safeId)) {
+            safeId = `${safeId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+          }
+          const itemWithUniqueId = { ...item, id: safeId };
+          updated.equipment = [...currentEq, itemWithUniqueId];
         }
         if (currency) {
           const cur = updated.currency || { po: 0, pp: 0, pc: 0, pe: 0, pl: 0 };

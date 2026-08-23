@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { CharacterSheet, CharacterEquipmentItem, TransactionEntry } from '@/lib/types';
+import { CharacterSheet, CharacterEquipmentItem, TransactionEntry, ReadableContent } from '@/lib/types';
 import { Coins, Package, Plus, Trash2, Gem, Weight, Scale, Sparkles, ShoppingCart, Lock, Unlock, History, Dices, ArrowDownRight } from 'lucide-react';
 import { ItemCompendiumModal } from '../Modals/ItemCompendiumModal';
 import { toast } from 'sonner';
 import { getEffectiveAttributeScore, recalculateSheetDerivedStats, WEAPON_TABLE } from '@/lib/dnd5e-calculator';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/context/CampaignContext';
+import { isItemReadable, getOrCreateReadableContent } from '@/lib/utils/readableLoreUtils';
+import { BG3ReadableModal } from '@/components/loot/BG3ReadableModal';
 
 interface EquipmentSectionProps {
   sheet: CharacterSheet;
@@ -41,6 +43,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
   const { createFeedEvent, activeCampaign } = useCampaign();
 
   const [isItemCompendiumOpen, setIsItemCompendiumOpen] = useState(false);
+  const [readingItem, setReadingItem] = useState<{ title: string; readableContent: ReadableContent } | null>(null);
   
   // Starting Wealth State
   const [selectedClassRoll, setSelectedClassRoll] = useState<string>('');
@@ -444,9 +447,9 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
     !consumables.includes(item)
   );
 
-  const renderItemRow = (item: CharacterEquipmentItem) => (
+  const renderItemRow = (item: CharacterEquipmentItem, index: number = 0) => (
     <div
-      key={item.id}
+      key={`${item.id || 'item'}-${index}`}
       className="bg-[#0b0f19]/60 border border-slate-800 rounded-xl p-2 flex flex-col gap-1.5"
     >
       <div className="flex items-center justify-between gap-1.5">
@@ -500,6 +503,23 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
             title={item.equipped ? 'Desequipar item' : 'Equipar item'}
           >
             {item.equipped ? 'Equipado' : 'Equipar'}
+          </button>
+        )}
+        {isItemReadable(item) && (
+          <button
+            type="button"
+            onClick={() => {
+              const lore = getOrCreateReadableContent({
+                name: item.name,
+                notes: item.notes,
+                readableContent: item.readableContent,
+              });
+              setReadingItem({ title: item.name, readableContent: lore });
+            }}
+            className="px-2 py-0.5 bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 border border-amber-700/50 rounded text-[8px] font-black uppercase tracking-wider h-[20px] shrink-0 cursor-pointer flex items-center gap-1 transition-all"
+            title={`Ler ${item.name}`}
+          >
+            📖 Ler
           </button>
         )}
         {(item.itemType === 'potion' || item.name.toLowerCase().includes('poção') || item.name.toLowerCase().includes('potion')) && (
@@ -899,6 +919,16 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
         </div>
 
       </div>
+
+      {/* BG3 Readable Item Modal */}
+      {readingItem && (
+        <BG3ReadableModal
+          isOpen={Boolean(readingItem)}
+          onClose={() => setReadingItem(null)}
+          title={readingItem.title}
+          readableContent={readingItem.readableContent}
+        />
+      )}
     </div>
   );
 };

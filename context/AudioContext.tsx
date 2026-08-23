@@ -243,10 +243,28 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 };
 
-export const useAudio = () => {
+export const useAudio = (): AudioContextType => {
   const context = useContext(AudioContext);
   if (!context) {
-    throw new Error('useAudio must be used within an AudioProvider');
+    return {
+      activeBgm: null,
+      isPlayingBgm: false,
+      volume: 0.6,
+      isMuted: false,
+      setVolume: () => {},
+      setIsMuted: () => {},
+      playBgm: () => {},
+      pauseBgm: () => {},
+      stopBgm: () => {},
+      playSfx: () => {},
+      playDiceSound: () => {},
+      toggleBgmLoop: () => {},
+      isLooping: () => false,
+      currentTime: 0,
+      duration: 0,
+      seekBgm: () => {},
+      resumeBgm: () => {},
+    };
   }
   return context;
 };

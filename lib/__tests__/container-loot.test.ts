@@ -75,7 +75,29 @@ describe('Container Loot & Party Box Resolution', () => {
     expect(sessionPayload.currency.po).toBe(150);
     expect(sessionPayload.currency.pp).toBe(80);
     expect(sessionPayload.currency.pl).toBe(5);
-    expect(sessionPayload.items).toHaveLength(2);
-    expect(sessionPayload.items[0].name).toBe('Espada Longa +1');
+    expect(partyItems).toHaveLength(2);
+    expect(partyItems[0].name).toBe('Espada Longa +1');
+    expect(partyItems[1].name).toBe('Poção de Invisibilidade');
+  });
+
+  it('deve normalizar strings de baú em objetos consistentes com o Compêndio para a ficha de personagem', async () => {
+    const { normalizeChestItem } = await import('@/lib/utils/lootItemUtils');
+
+    const sword = normalizeChestItem('Espada Longa');
+    expect(sword.name).toBe('Espada Longa');
+    expect(sword.itemType).toBe('weapon');
+    expect(sword.quantity).toBe(1);
+
+    const potion = normalizeChestItem('Poção de Cura');
+    expect(potion.name).toBe('Poção de Cura');
+    expect(potion.itemType).toBe('potion');
+    expect(potion.potionProps?.healingDice).toBe('2d4+2');
+
+    const arrows = normalizeChestItem('20 Flechas');
+    expect(arrows.quantity).toBe(20);
+    expect(arrows.itemType).toBe('weapon');
+
+    const armor = normalizeChestItem('Armadura de Couro');
+    expect(armor.itemType).toBe('armor');
   });
 });

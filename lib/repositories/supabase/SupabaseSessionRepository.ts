@@ -176,61 +176,135 @@ export class SupabaseSessionRepository implements ISessionRepository {
   }
 
   async fetchCampaignMaps(campaignId: string): Promise<CampaignMap[]> {
-    if (!isValidUuid(campaignId)) return [];
+    if (!isValidUuid(campaignId)) {
+      try {
+        const saved = typeof window !== 'undefined' ? localStorage.getItem('codex_campaign_maps') : null;
+        const all: CampaignMap[] = saved ? JSON.parse(saved) : [];
+        return all.filter(m => m.campaignId === campaignId);
+      } catch {
+        return [];
+      }
+    }
 
-    const { data, error } = await supabase
-      .from('campaign_maps')
-      .select('*')
-      .eq('campaign_id', campaignId)
-      .order('created_at', { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from('campaign_maps')
+        .select('*')
+        .eq('campaign_id', campaignId)
+        .order('created_at', { ascending: true });
 
-    if (error) throw error;
-    return (data as CampaignMapRow[]).map(mapCampaignMapRowToDomain);
+      if (error) {
+        console.warn('[SupabaseSessionRepository] Erro ao buscar mapas, usando fallback local:', error.message);
+        const saved = typeof window !== 'undefined' ? localStorage.getItem('codex_campaign_maps') : null;
+        const all: CampaignMap[] = saved ? JSON.parse(saved) : [];
+        return all.filter(m => m.campaignId === campaignId);
+      }
+      return (data as CampaignMapRow[]).map(mapCampaignMapRowToDomain);
+    } catch (_e) {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('codex_campaign_maps') : null;
+      const all: CampaignMap[] = saved ? JSON.parse(saved) : [];
+      return all.filter(m => m.campaignId === campaignId);
+    }
   }
 
   async createCampaignMap(campaignId: string, title: string, gridData: any): Promise<CampaignMap> {
+    const fallbackMap: CampaignMap = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `map-${Date.now()}`,
+      campaignId,
+      title,
+      gridData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
     if (!isValidUuid(campaignId)) {
-      throw new Error('Campaign ID inválido para criar mapa no Supabase.');
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('codex_campaign_maps');
+        const all: CampaignMap[] = saved ? JSON.parse(saved) : [];
+        all.push(fallbackMap);
+        localStorage.setItem('codex_campaign_maps', JSON.stringify(all));
+      }
+      return fallbackMap;
     }
 
-    const { data, error } = await supabase
-      .from('campaign_maps')
-      .insert({
-        campaign_id: campaignId,
-        title,
-        grid_data: gridData,
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('campaign_maps')
+        .insert({
+          campaign_id: campaignId,
+          title,
+          grid_data: gridData,
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
 
-    if (error) throw error;
-    return mapCampaignMapRowToDomain(data as CampaignMapRow);
+      if (error) {
+        console.warn('[SupabaseSessionRepository] Erro ao salvar mapa no Supabase, salvando local:', error.message);
+        if (typeof window !== 'undefined') {
+          const saved = localStorage.getItem('codex_campaign_maps');
+          const all: CampaignMap[] = saved ? JSON.parse(saved) : [];
+          all.push(fallbackMap);
+          localStorage.setItem('codex_campaign_maps', JSON.stringify(all));
+        }
+        return fallbackMap;
+      }
+      return mapCampaignMapRowToDomain(data as CampaignMapRow);
+    } catch (_e) {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('codex_campaign_maps');
+        const all: CampaignMap[] = saved ? JSON.parse(saved) : [];
+        all.push(fallbackMap);
+        localStorage.setItem('codex_campaign_maps', JSON.stringify(all));
+      }
+      return fallbackMap;
+    }
   }
 
   async updateCampaignMap(mapId: string, title: string, gridData: any): Promise<void> {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('codex_campaign_maps');
+        const all: CampaignMap[] = saved ? JSON.parse(saved) : [];
+        const idx = all.findIndex(m => m.id === mapId);
+        if (idx !== -1) {
+          all[idx] = { ...all[idx], title, gridData, updatedAt: new Date().toISOString() };
+          localStorage.setItem('codex_campaign_maps', JSON.stringify(all));
+        }
+      } catch {}
+    }
+
     if (!isValidUuid(mapId)) return;
 
-    const { error } = await supabase
-      .from('campaign_maps')
-      .update({
-        title,
-        grid_data: gridData,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', mapId);
-
-    if (error) throw error;
+    try {
+      await supabase
+        .from('campaign_maps')
+        .update({
+          title,
+          grid_data: gridData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', mapId);
+    } catch (_e) {}
   }
 
   async deleteCampaignMap(mapId: string): Promise<void> {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('codex_campaign_maps');
+        const all: CampaignMap[] = saved ? JSON.parse(saved) : [];
+        const filtered = all.filter(m => m.id !== mapId);
+        localStorage.setItem('codex_campaign_maps', JSON.stringify(filtered));
+      } catch {}
+    }
+
     if (!isValidUuid(mapId)) return;
 
-    const { error } = await supabase
-      .from('campaign_maps')
-      .delete()
-      .eq('id', mapId);
-
-    if (error) throw error;
+    try {
+      await supabase
+        .from('campaign_maps')
+        .delete()
+        .eq('id', mapId);
+    } catch (_e) {}
   }
 }

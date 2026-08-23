@@ -16,10 +16,13 @@ import {
   ShieldCheck,
   Package,
   BookOpen,
+  Scroll,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { ItemCompendiumModal } from '@/components/character-sheet/Modals/ItemCompendiumModal';
+import { CampaignDocumentSelectModal } from '@/components/loot/CampaignDocumentSelectModal';
+import { documentToEquipmentItem } from '@/lib/utils/campaignDocumentUtils';
 
 export const DmLootCreatorModal: React.FC = () => {
   const { isDmLootModalOpen, setIsDmLootModalOpen, createLootSession, sendDirectTransfer } = usePartyLoot();
@@ -53,6 +56,7 @@ export const DmLootCreatorModal: React.FC = () => {
   const [newItemNotes, setNewItemNotes] = useState('');
 
   const [isCompendiumOpen, setIsCompendiumOpen] = useState(false);
+  const [isCampaignDocsOpen, setIsCampaignDocsOpen] = useState(false);
 
   React.useEffect(() => {
     const handlePreloadItem = (e: any) => {
@@ -211,10 +215,10 @@ export const DmLootCreatorModal: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-xl font-bold tracking-wide text-amber-200">
-                  Criar Recompensa & Loot da Party
+                  Criar Recompensa & Enviar ao Baú da Party
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Defina o conteúdo do baú e envie em tempo real para os jogadores
+                  Defina o conteúdo e envie para o Baú da Party em tempo real para os jogadores
                 </p>
               </div>
             </div>
@@ -465,14 +469,22 @@ export const DmLootCreatorModal: React.FC = () => {
                   <Plus className="w-4 h-4" />
                   <span className="hidden lg:inline">Adicionar</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setIsCompendiumOpen(true)}
-                  className="flex items-center justify-center bg-slate-700 hover:bg-slate-600 text-amber-400 px-2 py-1.5 rounded transition"
-                  title="Abrir Compêndio"
-                >
-                  <BookOpen className="w-4 h-4" />
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsCampaignDocsOpen(true)}
+                    className="flex items-center justify-center bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/40 text-purple-300 px-2 py-1.5 rounded transition cursor-pointer"
+                    title="Inserir Livro, Carta, Diário ou Bilhete da Campanha"
+                  >
+                    <Scroll className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsCompendiumOpen(true)}
+                    className="flex items-center justify-center bg-slate-700 hover:bg-slate-600 text-amber-400 px-2 py-1.5 rounded transition"
+                    title="Abrir Compêndio D&D 5e"
+                  >
+                    <BookOpen className="w-4 h-4" />
+                  </button>
               </div>
             </form>
 
@@ -530,7 +542,7 @@ export const DmLootCreatorModal: React.FC = () => {
               <Sparkles className="w-4 h-4" />
               {recipientMode === 'specific'
                 ? 'Enviar Diretamente ao Membro'
-                : 'Enviar Loot para a Party em Tempo Real'}
+                : 'Enviar ao Baú da Party em Tempo Real'}
             </button>
           </div>
         </motion.div>
@@ -542,6 +554,26 @@ export const DmLootCreatorModal: React.FC = () => {
         isOpen={isCompendiumOpen}
         onClose={() => setIsCompendiumOpen(false)}
         onAddItem={handleAddItemFromCompendium}
+      />
+
+      <CampaignDocumentSelectModal
+        isOpen={isCampaignDocsOpen}
+        onClose={() => setIsCampaignDocsOpen(false)}
+        onSelectDocument={(doc) => {
+          const equipItem = documentToEquipmentItem(doc);
+          const item: Omit<PartyLootItem, 'claimedBy'> = {
+            id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            name: equipItem.name,
+            quantity: 1,
+            weight: equipItem.weight,
+            rarity: equipItem.rarity || 'Comum',
+            notes: equipItem.notes || '',
+            itemType: 'readable',
+            readableContent: equipItem.readableContent,
+          };
+          setItems((prev) => [...prev, item]);
+          toast.success(`"${doc.name}" adicionado à lista de recompensas!`);
+        }}
       />
     </>
   );

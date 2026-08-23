@@ -23,7 +23,9 @@ import {
   AlertTriangle,
   Shield,
   Heart,
-  Navigation
+  Navigation,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { 
   drawDysonCrosshatch, 
@@ -57,6 +59,11 @@ import { evaluateTokenStep } from '@/lib/reactive/reactiveSceneEngine';
 import { ReactiveTrapEffect } from '@/lib/reactive/reactiveTypes';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { ContainerLootModal } from '@/components/loot/ContainerLootModal';
+import { ItemCompendiumModal } from '@/components/character-sheet/Modals/ItemCompendiumModal';
+import { CampaignDocumentSelectModal } from '@/components/loot/CampaignDocumentSelectModal';
+import { normalizeChestItem, getItemTypeBadgeInfo } from '@/lib/utils/lootItemUtils';
+import { documentToEquipmentItem } from '@/lib/utils/campaignDocumentUtils';
+import { CharacterEquipmentItem } from '@/lib/types';
 
 const token2DImageCache = new Map<string, HTMLImageElement>();
 
@@ -200,6 +207,8 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [editingCell, setEditingCell] = useState<{ r: number; c: number; cell: Cell } | null>(null);
   const [activeLootContainer, setActiveLootContainer] = useState<{ r: number; c: number; cell: Cell } | null>(null);
+  const [isChestCompendiumOpen, setIsChestCompendiumOpen] = useState(false);
+  const [isChestCampaignDocsOpen, setIsChestCampaignDocsOpen] = useState(false);
   const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number; cell: Cell } | null>(null);
   const [draggingToken, setDraggingToken] = useState<{ name: string, color: string, startR: number, startC: number, currentR: number, currentC: number } | null>(null);
   const [draggingItem, setDraggingItem] = useState<DraggingItem | null>(null);
@@ -4141,29 +4150,97 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
                     </div>
                   </div>
 
-                  {/* Itens */}
-                  <div>
-                    <span className="block text-[9px] uppercase font-bold text-slate-400 mb-0.5">Itens / Poções (1 por linha)</span>
-                    <textarea
-                      rows={2}
-                      placeholder="Ex: Poção de Cura&#10;Pergaminho de Invisibilidade"
-                      value={(editingCell.cell.chestConfig?.loot?.items || []).join('\n')}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        const items = raw.split('\n').filter(line => line.trim().length > 0);
-                        setEditingCell(prev => prev ? {
-                          ...prev,
-                          cell: {
-                            ...prev.cell,
-                            chestConfig: {
-                              ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                              loot: { ...(prev.cell.chestConfig?.loot || {}), items }
-                            }
-                          }
-                        } : null);
-                      }}
-                      className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 resize-none font-mono"
-                    />
+                    {/* Itens do Compêndio e Customizados */}
+                    <div className="space-y-1.5 pt-1 border-t border-[#2a3449]/60">
+                      <div className="flex items-center justify-between gap-1 flex-wrap">
+                        <span className="block text-[9px] uppercase font-bold text-amber-400">
+                          Itens e Equipamentos ({editingCell.cell.chestConfig?.loot?.items?.length || 0})
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setIsChestCampaignDocsOpen(true)}
+                            className="px-2 py-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 rounded text-[9px] font-bold transition flex items-center gap-1 cursor-pointer"
+                            title="Inserir cartas, bilhetes, livros e diários criados na Campanha"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>📜 Lore / Carta</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsChestCompendiumOpen(true)}
+                            className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded text-[9px] font-bold transition flex items-center gap-1 cursor-pointer"
+                            title="Buscar e adicionar armas, armaduras, poções e itens diretamente do Compêndio D&D 5e"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Compêndio</span>
+                          </button>
+                        </div>
+                      </div>
+
+                    {/* Lista visual de itens no baú com badges de tipo/categoria */}
+                    <div className="space-y-1 max-h-32 overflow-y-auto pr-0.5">
+                      {(!editingCell.cell.chestConfig?.loot?.items || editingCell.cell.chestConfig.loot.items.length === 0) ? (
+                        <p className="text-[10px] text-slate-500 italic py-2 text-center bg-[#121824]/60 rounded border border-dashed border-[#2a3449]">
+                          Nenhum item adicionado. Clique em &quot;Adicionar do Compêndio&quot; acima.
+                        </p>
+                      ) : (
+                        editingCell.cell.chestConfig.loot.items.map((rawItem, idx) => {
+                          const item = normalizeChestItem(rawItem, editingCell.cell.chestConfig?.loot?.notes);
+                          const badge = getItemTypeBadgeInfo(item);
+
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between p-1.5 rounded bg-[#121824] border border-[#2a3449] text-xs"
+                            >
+                              <div className="flex items-center gap-1.5 truncate">
+                                <span className={`text-[8px] font-bold px-1 py-0.2 rounded border flex items-center gap-0.5 ${badge.badgeClass}`}>
+                                  <span>{badge.icon}</span>
+                                  <span>{badge.label}</span>
+                                </span>
+                                <span className="font-bold text-slate-100 truncate text-[11px]">
+                                  {item.quantity > 1 ? `${item.quantity}x ` : ''}{item.name}
+                                </span>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const currentItems = [...(editingCell.cell.chestConfig?.loot?.items || [])];
+                                  currentItems.splice(idx, 1);
+                                  setEditingCell((prev) =>
+                                    prev
+                                      ? {
+                                          ...prev,
+                                          cell: {
+                                            ...prev.cell,
+                                            chestConfig: {
+                                              ...(prev.cell.chestConfig || {
+                                                name: 'Baú',
+                                                containerType: 'wooden_chest',
+                                                status: 'locked',
+                                                lockpickDC: 15,
+                                                breakDC: 16,
+                                                revealedToPlayers: true,
+                                              }),
+                                              loot: { ...(prev.cell.chestConfig?.loot || {}), items: currentItems },
+                                            },
+                                          },
+                                        }
+                                      : null
+                                  );
+                                }}
+                                className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 rounded transition cursor-pointer"
+                                title="Remover item do baú"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
 
                   {/* Botão de Abrir Saque Interativo */}
@@ -5041,6 +5118,77 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
               }
               return updated;
             });
+          }}
+        />
+      )}
+
+      {/* Item Compendium Modal for Chest Item Selection */}
+      {isChestCompendiumOpen && (
+        <ItemCompendiumModal
+          isOpen={isChestCompendiumOpen}
+          onClose={() => setIsChestCompendiumOpen(false)}
+          onAddItem={(newItem) => {
+            if (!editingCell) return;
+            const currentItems = [...(editingCell.cell.chestConfig?.loot?.items || [])];
+            currentItems.push(newItem);
+            setEditingCell((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    cell: {
+                      ...prev.cell,
+                      chestConfig: {
+                        ...(prev.cell.chestConfig || {
+                          name: 'Baú',
+                          containerType: 'wooden_chest',
+                          status: 'locked',
+                          lockpickDC: 15,
+                          breakDC: 16,
+                          revealedToPlayers: true,
+                        }),
+                        loot: { ...(prev.cell.chestConfig?.loot || {}), items: currentItems },
+                      },
+                    },
+                  }
+                : null
+            );
+            toast.success(`"${newItem.name}" adicionado ao baú!`);
+          }}
+        />
+      )}
+
+      {/* Campaign Document Select Modal */}
+      {isChestCampaignDocsOpen && (
+        <CampaignDocumentSelectModal
+          isOpen={isChestCampaignDocsOpen}
+          onClose={() => setIsChestCampaignDocsOpen(false)}
+          onSelectDocument={(doc) => {
+            if (!editingCell) return;
+            const equipItem = documentToEquipmentItem(doc);
+            const currentItems = [...(editingCell.cell.chestConfig?.loot?.items || [])];
+            currentItems.push(equipItem);
+            setEditingCell((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    cell: {
+                      ...prev.cell,
+                      chestConfig: {
+                        ...(prev.cell.chestConfig || {
+                          name: 'Baú',
+                          containerType: 'wooden_chest',
+                          status: 'locked',
+                          lockpickDC: 15,
+                          breakDC: 16,
+                          revealedToPlayers: true,
+                        }),
+                        loot: { ...(prev.cell.chestConfig?.loot || {}), items: currentItems },
+                      },
+                    },
+                  }
+                : null
+            );
+            toast.success(`Documento "${doc.name}" colocado no baú!`);
           }}
         />
       )}

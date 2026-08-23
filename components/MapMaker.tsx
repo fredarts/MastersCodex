@@ -83,12 +83,14 @@ export interface DungeonTransitionConfig {
 export type ContainerType = 'wooden_chest' | 'iron_chest' | 'ornate_chest' | 'hidden_stash' | 'mimic';
 export type ContainerStatus = 'locked' | 'unlocked' | 'open' | 'looted';
 
+import { CharacterEquipmentItem } from '@/lib/types';
+
 export interface ChestLoot {
   gp?: number; // Peças de Ouro
   sp?: number; // Peças de Prata
   cp?: number; // Peças de Cobre
   pp?: number; // Peças de Platina
-  items?: string[]; // Itens e poções
+  items?: (string | CharacterEquipmentItem)[]; // Itens e poções (estruturados do Compêndio ou strings)
   notes?: string; // Cartas, pistas ou segredos
 }
 

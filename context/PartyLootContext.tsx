@@ -12,6 +12,7 @@ import {
 import { partyLootService } from '@/lib/services/partyLootService';
 import { useRealtimeSync } from '@/lib/hooks/useRealtimeSync';
 import { useCampaign } from '@/context/CampaignContext';
+import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 
 interface PartyLootContextType {
@@ -41,6 +42,7 @@ interface PartyLootContextType {
   }) => Promise<void>;
   claimItem: (itemId: string, characterName: string, userId?: string) => Promise<void>;
   distributeItem: (itemId: string, targetCharacterName: string, targetUserId?: string) => Promise<void>;
+  deleteItemFromPartyLoot: (itemId: string) => Promise<void>;
   splitCurrencyEqually: (characterNames: string[]) => Promise<void>;
   closeLootSession: () => Promise<void>;
   sendDirectTransfer: (payload: Omit<DirectTransferPayload, 'id' | 'sentAt'>) => Promise<void>;
@@ -50,7 +52,8 @@ const PartyLootContext = createContext<PartyLootContextType | undefined>(undefin
 
 export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { activeCampaign, campaignMembers } = useCampaign();
-  const campaignId = activeCampaign?.id || null;
+  const { roleMode } = useAuth();
+  const campaignId = activeCampaign?.id || 'default_campaign';
 
   const [activeLootSession, setActiveLootSession] = useState<PartyLootSession | null>(null);
   const [isDmLootModalOpen, setIsDmLootModalOpen] = useState<boolean>(false);
@@ -60,9 +63,9 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Flag: true quando o jogador está na view de campanha (feed) do modo jogador
   const [isOnPlayerCampaignView, setIsOnPlayerCampaignView] = useState<boolean>(false);
 
-  // Abre o modal de loot quando o jogador entra na tela de campanha e há loot ativo
+  // Abre o modal de loot quando o jogador entra na tela de campanha e há loot ativo (apenas modo jogador)
   useEffect(() => {
-    if (isOnPlayerCampaignView && activeLootSession?.status === 'active') {
+    if (roleMode !== 'dm' && isOnPlayerCampaignView && activeLootSession?.status === 'active') {
       // Checagem defensiva: só abrir o modal se realmente houver algum recurso a ser coletado
       const allItemsClaimed = activeLootSession.items.length === 0 || activeLootSession.items.every((i) => i.claimedBy !== null);
       const isCurrencyZero =
@@ -76,7 +79,7 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setIsPartyLootModalOpen(true);
       }
     }
-  }, [isOnPlayerCampaignView, activeLootSession]);
+  }, [roleMode, isOnPlayerCampaignView, activeLootSession]);
 
   // Escutar eventos em tempo real
   const handleRealtimeLootUpdate = useCallback(({ 
@@ -220,9 +223,12 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (res.ok) {
       setActiveLootSession(res.value);
       setIsDmLootModalOpen(false);
-      setIsPartyLootModalOpen(true);
+      // Não abre na tela do Mestre ao enviar loot
+      if (roleMode !== 'dm') {
+        setIsPartyLootModalOpen(true);
+      }
       broadcastPartyLootUpdate({ session: res.value });
-      toast.success('🎁 Loot de Party enviado para os jogadores!');
+      toast.success('🎁 Baú da Party atualizado!');
     } else {
       toast.error(res.error.message);
     }
@@ -314,6 +320,28 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
+  const deleteItemFromPartyLoot = async (itemId: string) => {
+    if (!activeLootSession) return;
+
+    const itemToDelete = activeLootSession.items.find((i) => i.id === itemId);
+    const updatedItems = activeLootSession.items.filter((item) => item.id !== itemId);
+
+    const updatedSession: PartyLootSession = {
+      ...activeLootSession,
+      items: updatedItems,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const res = await partyLootService.updateLootSession(updatedSession);
+    if (res.ok) {
+      setActiveLootSession(res.value);
+      broadcastPartyLootUpdate({ session: res.value });
+      toast.info(`🗑️ "${itemToDelete?.name || 'Item'}" foi descartado do Baú da Party.`);
+    } else {
+      toast.error('Erro ao descartar item do baú.');
+    }
+  };
+
   const splitCurrencyEqually = async (characterNames: string[]) => {
     if (!activeLootSession) return;
 
@@ -351,9 +379,7 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         });
       }
 
-      toast.success(
-        `💰 Dinheiro dividido! Cada um dos ${playerCount} membros recebeu: ${share.po} PO, ${share.pl} PL, ${share.pp} PP, ${share.pc} PC.`
-      );
+      toast.success('💰 Moedas divididas igualmente entre os aventureiros!');
     } else {
       toast.error(res.error.message);
     }
@@ -374,6 +400,9 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     if (res.ok) {
       broadcastPartyLootClose({ sessionId });
+      toast.success('Sessão de Loot finalizada e arquivada.');
+    } else {
+      toast.error(res.error.message);
     }
   };
 
@@ -411,6 +440,7 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         createLootSession,
         claimItem,
         distributeItem,
+        deleteItemFromPartyLoot,
         splitCurrencyEqually,
         closeLootSession,
         sendDirectTransfer,

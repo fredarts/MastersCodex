@@ -33,6 +33,7 @@ export interface CampaignRow {
   theme_tone?: string | null;
   created_at?: string;
   party_members?: any[];
+  documents?: any[] | null;
 }
 
 export interface CampaignMemberRow {

@@ -69,6 +69,7 @@ export function mapCampaignRowToDomain(row: CampaignRow, role: 'dm' | 'player' =
     role,
     characterName: characterName || undefined,
     partyMembers: Array.isArray(row.party_members) ? row.party_members : undefined,
+    documents: Array.isArray(row.documents) ? row.documents : (Array.isArray((row as any).documents) ? (row as any).documents : undefined),
   };
 }
 

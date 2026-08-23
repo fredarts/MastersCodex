@@ -40,6 +40,7 @@ import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { CampaignFeedEventType, CampaignMember } from '@/lib/types';
 import { CreateCampaignModal } from '@/components/CreateCampaignModal';
+import { CampaignDocumentsStudio } from '@/components/campaign/CampaignDocumentsStudio';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { useCustomDialog } from '@/context/CustomDialogContext';
 
@@ -64,13 +65,18 @@ export const CampaignSettingsStudio: React.FC = () => {
 
   const { openSheet } = useLiveCockpit();
 
-  const worldCampaigns = userCampaigns.filter((c) => {
-    if (c.role !== 'dm') return false;
-    if (!activeWorld) return true;
-    return c.worldId === activeWorld.id;
-  });
+  const worldCampaigns = React.useMemo(() => {
+    const seen = new Set<string>();
+    return userCampaigns.filter((c) => {
+      if (c.role !== 'dm') return false;
+      if (activeWorld && c.worldId !== activeWorld.id) return false;
+      if (!c.id || seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
+    });
+  }, [userCampaigns, activeWorld]);
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'feed' | 'roster' | 'party' | 'houserules' | 'safety' | 'ai' | 'export'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'feed' | 'documents' | 'roster' | 'party' | 'houserules' | 'safety' | 'ai' | 'export'>('overview');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('masters_codex_campaign_settings_sidebar_collapsed');
@@ -334,8 +340,8 @@ export const CampaignSettingsStudio: React.FC = () => {
                 }}
                 className="bg-[#0a0d14] border border-[#2a3449] rounded px-2 py-0.5 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-500"
               >
-                {worldCampaigns.map((c) => (
-                  <option key={c.id} value={c.id}>
+                {worldCampaigns.map((c, idx) => (
+                  <option key={`${c.id}-${idx}`} value={c.id}>
                     {c.title} ({c.inviteCode})
                   </option>
                 ))}
@@ -478,6 +484,28 @@ export const CampaignSettingsStudio: React.FC = () => {
               >
                 <BookOpen className={`w-4 h-4 flex-shrink-0 ${activeTab === 'feed' ? 'text-slate-950' : 'text-amber-400'}`} />
                 {!isSidebarCollapsed && <span className="truncate">Feed Chronológico ({feedEvents.length})</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('documents')}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'documents'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
+                }`}
+                title={`Documentos & Lore (${activeCampaign.documents?.length || 0})`}
+              >
+                <Scroll className={`w-4 h-4 flex-shrink-0 ${activeTab === 'documents' ? 'text-slate-950' : 'text-amber-400'}`} />
+                {!isSidebarCollapsed && (
+                  <span className="truncate flex items-center justify-between w-full">
+                    <span>Documentos & Lore</span>
+                    {(activeCampaign.documents?.length || 0) > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono bg-slate-900 text-amber-300 font-bold border border-slate-700">
+                        {activeCampaign.documents?.length}
+                      </span>
+                    )}
+                  </span>
+                )}
               </button>
 
               <button
@@ -1041,6 +1069,13 @@ export const CampaignSettingsStudio: React.FC = () => {
             </div>
           </div>
         </div>
+        )}
+
+        {/* Documents & Lore Tab Content */}
+        {activeTab === 'documents' && (
+          <div className="p-6 w-full max-w-6xl mx-auto">
+            <CampaignDocumentsStudio />
+          </div>
         )}
 
         {activeTab === 'roster' && (

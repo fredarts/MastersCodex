@@ -288,6 +288,21 @@ export interface CampaignPartyMember {
   avatarUrl?: string;
 }
 
+export interface CampaignDocumentItem {
+  id: string;
+  campaignId: string;
+  name: string;
+  documentType: ReadableItemType;
+  author?: string;
+  dateOrHeader?: string;
+  language?: string;
+  notes?: string;
+  readableContent: ReadableContent;
+  tags?: string[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface UserCampaign {
   id: string;
   dmId: string;
@@ -303,6 +318,7 @@ export interface UserCampaign {
   safetySettings?: import('./types/safety').CampaignSafetySettings;
   calendarConfig?: import('./types/calendar').CampaignCalendarConfig;
   calendarState?: import('./types/calendar').CampaignCalendarState;
+  documents?: CampaignDocumentItem[];
 }
 
 export interface StatusDuration {
@@ -837,7 +853,22 @@ export interface TransactionEntry {
 }
 
 
-export type ItemType = 'equipment' | 'weapon' | 'armor' | 'potion' | 'scroll';
+export type ItemType = 'equipment' | 'weapon' | 'armor' | 'potion' | 'scroll' | 'readable';
+
+export type ReadableItemType = 'book' | 'scroll' | 'letter' | 'diary' | 'note' | 'tome' | 'parchment';
+
+export interface ReadableContent {
+  isReadable: boolean;
+  readableType?: ReadableItemType;
+  title?: string;
+  author?: string;
+  dateOrHeader?: string;
+  language?: string;
+  pages?: string[];
+  content: string;
+  isSealed?: boolean;
+  sealColor?: string;
+}
 
 export interface CharacterEquipmentItem {
   id: string;
@@ -848,6 +879,7 @@ export interface CharacterEquipmentItem {
   rarity?: 'Comum' | 'Incomum' | 'Raro' | 'Muito Raro' | 'Lendário' | 'Artefato';
   itemType?: ItemType;
   equipped?: boolean;
+  readableContent?: ReadableContent;
   potionProps?: {
     healingDice?: string;
     effectDesc?: string;
@@ -1090,6 +1122,7 @@ export interface PartyLootItem {
     claimedAt: string;
   } | null;
   itemType?: ItemType;
+  readableContent?: ReadableContent;
   potionProps?: any;
   weaponProps?: any;
   armorProps?: any;

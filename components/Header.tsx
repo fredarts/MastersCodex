@@ -163,25 +163,21 @@ export const Header: React.FC<HeaderProps> = ({
         {/* PWA Install Button */}
         <PWAInstallButton variant="compact" />
 
-        {/* Party Loot Button */}
+        {/* Baú da Party Button */}
         <button
           onClick={() => {
-            if (roleMode === 'dm') {
-              setIsDmLootModalOpen(true);
-            } else {
-              setIsPartyLootModalOpen(true);
-            }
+            setIsPartyLootModalOpen(true);
           }}
           className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
             activeLootSession && activeLootSession.status === 'active'
               ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-950/40 animate-pulse'
               : 'bg-[#161c28] border-[#2a3449] text-slate-300 hover:text-amber-400 hover:border-amber-500/50'
           }`}
-          title={roleMode === 'dm' ? 'Criar & Enviar Loot para a Party' : 'Ver Loot Ativo da Party'}
+          title="Ver Baú da Party (Itens e Moedas Compartilhadas)"
         >
           <Gift className="w-4 h-4 text-amber-400" />
           <span className="hidden sm:inline">
-            {roleMode === 'dm' ? 'Enviar Loot' : 'Loot da Party'}
+            Baú da Party
           </span>
           {activeLootSession && activeLootSession.status === 'active' && (
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-0.5 -right-0.5" />

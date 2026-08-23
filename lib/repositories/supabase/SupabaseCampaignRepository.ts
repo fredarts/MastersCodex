@@ -210,20 +210,50 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
       throw new Error('ID de campanha inválido.');
     }
 
-    const { data, error } = await supabase
+    const updatePayload: Record<string, any> = {
+      title: campaign.title,
+      description: campaign.description,
+      world_id: isValidUuid(campaign.worldId) ? campaign.worldId : null,
+      party_members: campaign.partyMembers || [],
+      documents: campaign.documents || [],
+    };
+    if (campaign.coverImageUrl) updatePayload.cover_image_url = campaign.coverImageUrl;
+    if (campaign.themeTone) updatePayload.theme_tone = campaign.themeTone;
+
+    let { data, error } = await supabase
       .from('campaigns')
-      .update({
-        title: campaign.title,
-        description: campaign.description,
-        world_id: isValidUuid(campaign.worldId) ? campaign.worldId : null,
-        party_members: campaign.partyMembers || [],
-      })
+      .update(updatePayload)
       .eq('id', campaign.id)
       .select()
       .single();
 
-    if (error) throw error;
-    return mapCampaignRowToDomain(data as CampaignRow, campaign.role || 'dm');
+    // Fallback gracioso se a coluna documents ou cover_image_url não existir no banco
+    if (error && (error.message?.includes('documents') || error.message?.includes('cover_image_url') || error.code === 'PGRST204')) {
+      console.warn('Coluna ausente no Supabase ao atualizar campanha. Executando fallback sem colunas adicionais...', error.message);
+      const fallbackPayload = {
+        title: campaign.title,
+        description: campaign.description,
+        world_id: isValidUuid(campaign.worldId) ? campaign.worldId : null,
+        party_members: campaign.partyMembers || [],
+      };
+      const fallbackRes = await supabase
+        .from('campaigns')
+        .update(fallbackPayload)
+        .eq('id', campaign.id)
+        .select()
+        .single();
+
+      if (fallbackRes.error) throw fallbackRes.error;
+      data = fallbackRes.data;
+    } else if (error) {
+      throw error;
+    }
+
+    const domainCamp = mapCampaignRowToDomain(data as CampaignRow, campaign.role || 'dm');
+    if (campaign.documents && (!domainCamp.documents || domainCamp.documents.length === 0)) {
+      domainCamp.documents = campaign.documents;
+    }
+    return domainCamp;
   }
 
   async addCampaignMember(
