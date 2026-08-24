@@ -9,8 +9,8 @@ import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { useBattleGridState } from '@/lib/hooks/useBattleGridState';
 
-import { applySceneEnvironment } from './battle-3d/BattleEnvironment';
-import { setupCameraAndOrbit, DEFAULT_CAMERA_PRESETS } from './battle-3d/BattleCameraControls';
+import { applySceneEnvironment, calculateEnvironmentSettings } from './battle-3d/BattleEnvironment';
+import { setupCameraAndOrbit, DEFAULT_CAMERA_PRESETS, focusCameraOnTarget } from './battle-3d/BattleCameraControls';
 import { createTokenMesh, updateTokenMeshState, TokenMeshOptions } from './battle-3d/Token3DMesh';
 import { getModelUrlByNameOrPath, resolvePlayerModelUrl } from '@/lib/3d-models';
 import { createBattleSkyDome, SkyDomeInstance } from './battle-3d/BattleSkyDome';
@@ -19,11 +19,25 @@ import { createRainParticleSystem, createGroundFogSystem } from './battle-3d/Wea
 import { BattleControlsToolbar } from './battle-3d/BattleControlsToolbar';
 import { InstancedTokenManager } from './battle-3d/InstancedTokenManager';
 import { disposeHierarchy } from '@/lib/3d-asset-manager';
-import { HelpCircle, X } from 'lucide-react';
+import { HelpCircle, X, RotateCw, Settings, Trash2 } from 'lucide-react';
 import { patchWebGLContext } from '@/lib/webgl-utils';
 import { toast } from 'sonner';
 import { RangedAttackSplineSystem, RangedDistanceBadge } from './battle-3d/RangedAttackSplineMesh';
 import { calculateGridDistanceFeet, evaluateRangeStatus, parseRangeString, RangeStatus } from '@/lib/utils/dndRangeUtils';
+import {
+  GridConfig3D,
+  DEFAULT_GRID_CONFIG_3D,
+  BuildingBlock3D,
+  BuildingBlockType,
+  SpellTemplate3D,
+  worldPosToGridCell,
+  createDefaultBuildingBlock,
+  BUILDING_BLOCK_CATALOG,
+} from '@/lib/3d-building-blocks';
+import { createBuildingBlockMesh, createSpellTemplateMesh, createSelectionGizmoMesh } from './battle-3d/BuildingBlockMeshes';
+import { createInteractiveTransformGizmo } from './battle-3d/BuildingBlockGizmo';
+import { BattleForgeToolbar } from './battle-3d/BattleForgeToolbar';
+import { AssetInspectorTransform } from './battle-3d/AssetInspectorTransform';
 
 const getCombatantDisplayName = (combatant: Combatant, allCombatants: Combatant[]): string => {
   if (combatant.type !== 'monster') return combatant.name;
@@ -107,6 +121,12 @@ export interface BattleGrid3DProps {
   onFloorTextureChange?: (url: string) => void;
   onAttackTarget?: (target: Combatant) => void;
   isBattleStarted?: boolean;
+  initialBuildingBlocks?: BuildingBlock3D[];
+  onBuildingBlocksChange?: (blocks: BuildingBlock3D[]) => void;
+  initialGridConfig?: GridConfig3D;
+  onGridConfigChange?: (config: GridConfig3D) => void;
+  initialTokenElevations?: Record<string, number>;
+  onTokenElevationsChange?: (elevations: Record<string, number>) => void;
 }
 
 const getDirectionLabel = (angleDeg: number): string => {
@@ -175,6 +195,12 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   floorTextureUrl,
   onFloorTextureChange,
   onAttackTarget: propOnAttackTarget,
+  initialBuildingBlocks,
+  onBuildingBlocksChange,
+  initialGridConfig,
+  onGridConfigChange,
+  initialTokenElevations,
+  onTokenElevationsChange,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { roleMode, user } = useAuth();
@@ -204,8 +230,6 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     maxRangeM: number;
     isWeaponWithLongRange: boolean;
   } | null>(null);
-
-
 
   const activeSpellTargetingRef = useRef(activeSpellTargeting);
   const casterTokenKeyRef = useRef(casterTokenKey);
@@ -243,10 +267,129 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const [hoveredTargetId, setHoveredTargetId] = useState<string | undefined>(undefined);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [hoveredCombatantId, setHoveredCombatantId] = useState<string | undefined>(undefined);
+  const [isPlayerVisionMode, setIsPlayerVisionMode] = useState<boolean>(!isDm);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const dragGhostRef = useRef<THREE.Group | null>(null);
+
+  // 3D BattleForge (Building Blocks & Grid Config) State
+  const [gridConfig, setGridConfigState] = useState<GridConfig3D>(initialGridConfig || DEFAULT_GRID_CONFIG_3D);
+  const [buildingBlocks, setBuildingBlocksState] = useState<BuildingBlock3D[]>(initialBuildingBlocks || []);
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [isInspectorModalOpen, setIsInspectorModalOpen] = useState<boolean>(false);
+  const [activeBlockType, setActiveBlockType] = useState<BuildingBlockType | null>(null);
+  const [buildMode, setBuildMode] = useState<'idle' | 'place' | 'delete' | 'spell'>('idle');
+  const [blockRotation, setBlockRotation] = useState<number>(0);
+  const [isForgeMenuOpen, setIsForgeMenuOpen] = useState<boolean>(false);
+  const [activeSpellTemplate, setActiveSpellTemplate] = useState<SpellTemplate3D | null>(null);
+  const [tokenElevations, setTokenElevationsState] = useState<Record<string, number>>(initialTokenElevations || {});
+
+  // Wrappers to persist updates upward asynchronously without violating React reducer purity
+  const setBuildingBlocks = useCallback((updater: BuildingBlock3D[] | ((prev: BuildingBlock3D[]) => BuildingBlock3D[])) => {
+    setBuildingBlocksState((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (onBuildingBlocksChange) {
+        queueMicrotask(() => {
+          onBuildingBlocksChange(next);
+        });
+      }
+      return next;
+    });
+  }, [onBuildingBlocksChange]);
+
+  const setGridConfig = useCallback((updater: GridConfig3D | ((prev: GridConfig3D) => GridConfig3D)) => {
+    setGridConfigState((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (onGridConfigChange) {
+        queueMicrotask(() => {
+          onGridConfigChange(next);
+        });
+      }
+      return next;
+    });
+  }, [onGridConfigChange]);
+
+  const setTokenElevations = useCallback((updater: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => {
+    setTokenElevationsState((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (onTokenElevationsChange) {
+        queueMicrotask(() => {
+          onTokenElevationsChange(next);
+        });
+      }
+      return next;
+    });
+  }, [onTokenElevationsChange]);
+
+  // Sync when parent changes active scene props
+  useEffect(() => {
+    if (initialBuildingBlocks) {
+      setBuildingBlocksState(Array.isArray(initialBuildingBlocks) ? initialBuildingBlocks : []);
+    } else {
+      setBuildingBlocksState([]);
+    }
+  }, [initialBuildingBlocks]);
+
+  useEffect(() => {
+    if (initialGridConfig) {
+      setGridConfigState({ ...DEFAULT_GRID_CONFIG_3D, ...initialGridConfig });
+    } else {
+      setGridConfigState(DEFAULT_GRID_CONFIG_3D);
+    }
+  }, [initialGridConfig]);
+
+  useEffect(() => {
+    if (initialTokenElevations && typeof initialTokenElevations === 'object') {
+      setTokenElevationsState(initialTokenElevations);
+    } else {
+      setTokenElevationsState({});
+    }
+  }, [initialTokenElevations]);
+
+  const activeBlockDragRef = useRef<{
+    blockId: string;
+    mode: 'move' | 'rotate' | 'stretch';
+    startPoint: THREE.Vector3;
+    startRotation: number;
+    startSegments: number;
+    startPos: { x: number; z: number };
+  } | null>(null);
+
+  const forgeRef = useRef({
+    buildMode,
+    activeBlockType,
+    blockRotation,
+    gridConfig,
+    activeSpellTemplate,
+    buildingBlocks,
+    selectedBlockId,
+  });
+  forgeRef.current = {
+    buildMode,
+    activeBlockType,
+    blockRotation,
+    gridConfig,
+    activeSpellTemplate,
+    buildingBlocks,
+    selectedBlockId,
+  };
 
   // Three.js hover ring for attack targeting mode
   const hoverRingRef = useRef<THREE.Mesh | null>(null);
+  const blocksGroupRef = useRef<THREE.Group | null>(null);
+  const spellTemplateGroupRef = useRef<THREE.Group | null>(null);
+  const gridHelperRef = useRef<THREE.GridHelper | null>(null);
+  const floorMeshRef = useRef<THREE.Mesh | null>(null);
+
+  const handleToggleTorch = useCallback((c: Combatant) => {
+    if (!onUpdateCombatants) return;
+    const nextTorch = !c.hasTorch;
+    onUpdateCombatants(combatants.map((item) => (item.id === c.id ? { ...item, hasTorch: nextTorch } : item)));
+    if (nextTorch) {
+      toast.success(`🔥 ${c.name} acendeu uma tocha (Luz Dinâmica 3D ativa)!`);
+    } else {
+      toast.info(`🌑 ${c.name} apagou a tocha.`);
+    }
+  }, [combatants, onUpdateCombatants]);
 
   useEffect(() => {
     setTargetIdState(propSelectedTargetId);
@@ -744,8 +887,40 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       }
     }
 
+    const isNightTime = internalEnv.timeOfDayPreset === 'night' || internalEnv.timeOfDayHour < 6 || internalEnv.timeOfDayHour > 19;
+    const isPlayerViewEffective = !isDm || isPlayerVisionMode;
     const genericCombatants: Combatant[] = [];
     const genericOptionsMap = new Map<string, any>();
+
+    // 1. Mapear fontes de visão de todos os jogadores
+    const playerVisionSources = combatants
+      .filter((c) => c.type === 'player')
+      .map((p, pIdx) => {
+        const pKey = p.id ? p.id : `${p.name}__${pIdx}`;
+        const pPos = localPositions[pKey] || localPositions[p.id || p.name] || (p.x !== undefined && p.z !== undefined ? { x: p.x, z: p.z } : getStableDefaultPos(pKey));
+        
+        let visionRadiusUnits = 12; // 30 pés normal (6 células x 2 unidades)
+        if (p.hasTorch) {
+          visionRadiusUnits = Math.max(visionRadiusUnits, 16); // 40 pés tocha (20ft plena + 20ft penumbra)
+        }
+        if (p.visionType === 'darkvision') {
+          const dvRange = p.darkvisionRange || 60;
+          visionRadiusUnits = Math.max(visionRadiusUnits, (dvRange / 5) * 2);
+        } else if (p.visionType === 'blindsight' || p.visionType === 'tremorsense') {
+          const senseRange = p.visionRange || 30;
+          visionRadiusUnits = Math.max(visionRadiusUnits, (senseRange / 5) * 2);
+        } else if (p.visionType === 'truesight') {
+          const trueRange = p.visionRange || 120;
+          visionRadiusUnits = Math.max(visionRadiusUnits, (trueRange / 5) * 2);
+        }
+        
+        return {
+          combatant: p,
+          pos: pPos,
+          radiusUnits: visionRadiusUnits,
+          hasTorch: !!p.hasTorch,
+        };
+      });
 
     // Sync active combatants
     combatants.forEach((c, idx) => {
@@ -755,6 +930,25 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       const rot = localRotations[key] || localRotations[c.id || c.name] || 0;
 
       const targeted = activeSpellTargeting && casterTokenKey && isCombatantInSpellArea(c, pos);
+
+      // Checar se o combatente é visível aos jogadores na escuridão
+      let isSeenByPlayers = true;
+      if (isNightTime && c.type === 'monster') {
+        if (c.hasTorch) {
+          isSeenByPlayers = true;
+        } else if (playerVisionSources.length === 0) {
+          isSeenByPlayers = true;
+        } else {
+          isSeenByPlayers = playerVisionSources.some((pSource) => {
+            const dx = pos.x - pSource.pos.x;
+            const dz = pos.z - pSource.pos.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            return dist <= pSource.radiusUnits;
+          });
+        }
+      }
+
+      const isVisibleIn3D = isPlayerViewEffective ? (c.type === 'player' || isSeenByPlayers) : true;
 
       const options: TokenMeshOptions = {
         combatant: c,
@@ -766,6 +960,8 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         positionZ: pos.z,
         rotationAngleDeg: rot,
         isSpellTargeted: !!targeted,
+        isNight: isNightTime,
+        isIlluminated: isSeenByPlayers || !!c.hasTorch,
       };
 
       // Separar Genéricos de Únicos (Usamos instanciamento em massa apenas se houver >= 15 combatentes em tela)
@@ -781,8 +977,10 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
           tokenMeshMapRef.current.delete(key);
         }
 
-        genericCombatants.push(c);
-        genericOptionsMap.set(key, options);
+        if (isVisibleIn3D) {
+          genericCombatants.push(c);
+          genericOptionsMap.set(key, options);
+        }
       } else {
         const existingGroup = tokenMeshMapRef.current.get(key);
         let shouldCreate = !existingGroup;
@@ -813,9 +1011,11 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
           // Dynamic PointLight for Torches / Token Lighting
           let torchLight = existingGroup.getObjectByName('tokenTorchLight') as THREE.PointLight;
           if (c.hasTorch || c.visionType === 'darkvision') {
+            const lightColor = c.hasTorch ? 0xff9933 : 0x7dd3fc;
+            const lightIntensity = c.hasTorch ? 3.5 : 1.2;
+            const lightDistance = c.hasTorch ? 16 : Math.max(12, ((c.darkvisionRange || 60) / 5) * 2);
             if (!torchLight) {
-              const lightColor = c.hasTorch ? 0xffaa33 : 0x38bdf8;
-              torchLight = new THREE.PointLight(lightColor, c.hasTorch ? 3.0 : 1.5, c.hasTorch ? 15 : 10);
+              torchLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, c.hasTorch ? 1.2 : 1.5);
               torchLight.name = 'tokenTorchLight';
               torchLight.position.set(0, 1.8, 0);
               torchLight.castShadow = true;
@@ -824,20 +1024,42 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
               torchLight.shadow.bias = -0.002;
               existingGroup.add(torchLight);
             } else {
+              torchLight.color.setHex(lightColor);
+              torchLight.distance = lightDistance;
               if (c.hasTorch) {
                 // Flame flicker effect
-                torchLight.intensity = 2.8 + Math.sin(Date.now() * 0.01) * 0.4 + (Math.random() - 0.5) * 0.3;
+                torchLight.intensity = 3.2 + Math.sin(Date.now() * 0.01) * 0.4 + (Math.random() - 0.5) * 0.2;
+              } else {
+                torchLight.intensity = lightIntensity;
               }
             }
           } else if (torchLight) {
             existingGroup.remove(torchLight);
           }
+
+          // Visibilidade da malha no 3D
+          existingGroup.visible = isVisibleIn3D;
+
+          // No modo DM, se o monstro estiver oculto dos jogadores no escuro, aplica opacidade translúcida
+          if (!isPlayerViewEffective && c.type === 'monster' && !isSeenByPlayers && isNightTime) {
+            existingGroup.traverse((child) => {
+              if ((child as any).material) {
+                const mat = (child as any).material;
+                if (mat.opacity !== undefined) {
+                  mat.transparent = true;
+                  mat.opacity = 0.45;
+                }
+              }
+            });
+          }
         } else {
           const tokenMesh = createTokenMesh(options);
           
           if (c.hasTorch || c.visionType === 'darkvision') {
-            const lightColor = c.hasTorch ? 0xffaa33 : 0x38bdf8;
-            const torchLight = new THREE.PointLight(lightColor, c.hasTorch ? 3.0 : 1.5, c.hasTorch ? 15 : 10);
+            const lightColor = c.hasTorch ? 0xff9933 : 0x7dd3fc;
+            const lightIntensity = c.hasTorch ? 3.5 : 1.2;
+            const lightDistance = c.hasTorch ? 16 : Math.max(12, ((c.darkvisionRange || 60) / 5) * 2);
+            const torchLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, c.hasTorch ? 1.2 : 1.5);
             torchLight.name = 'tokenTorchLight';
             torchLight.position.set(0, 1.8, 0);
             torchLight.castShadow = true;
@@ -847,12 +1069,13 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
             tokenMesh.add(torchLight);
           }
 
+          tokenMesh.visible = isVisibleIn3D;
+
           tokenGroup.add(tokenMesh);
           tokenMeshMapRef.current.set(key, tokenMesh);
         }
       }
     });
-
 
     // Update InstancedMesh manager
     instancedTokenManagerRef.current.update(genericCombatants, genericOptionsMap);
@@ -868,6 +1091,10 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     activeSpellTargeting,
     casterTokenKey,
     isCombatantInSpellArea,
+    isPlayerVisionMode,
+    internalEnv.timeOfDayPreset,
+    internalEnv.timeOfDayHour,
+    isDm,
   ]);
 
   // Render / Sync 3D Pings on the floor plane
@@ -997,17 +1224,20 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     container.appendChild(renderer.domElement);
 
     // Grid Floor Helper (40 total size, 20 divisions -> each square is 2x2 units)
-    const gridHelper = new THREE.GridHelper(40, 20, 0x38bdf8, 0x334155);
-    // Raise grid slightly above the floor
+    const gridHelper = new THREE.GridHelper(40, 20, 0x0284c7, 0x1e293b);
+    const gridMat = gridHelper.material as THREE.LineBasicMaterial;
+    gridMat.transparent = true;
+    gridMat.opacity = 0.35;
     gridHelper.position.y = 0.01;
     scene.add(gridHelper);
+    gridHelperRef.current = gridHelper;
 
     // Floor Platform (same size as grid: 40x40)
     const floorGeo = new THREE.PlaneGeometry(40, 40);
     const floorMat = new THREE.MeshStandardMaterial({ 
-      color: 0x1e293b, 
-      roughness: 1.0, 
-      metalness: 0.0,
+      color: 0x0b1120, 
+      roughness: 0.95, 
+      metalness: 0.05,
       side: THREE.DoubleSide 
     });
     floorMatRef.current = floorMat;
@@ -1016,28 +1246,63 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     floorMesh.position.y = 0;
     floorMesh.receiveShadow = true;
     scene.add(floorMesh);
+    floorMeshRef.current = floorMesh;
+
+    // 3D Building Blocks Container
+    const blocksGroup = new THREE.Group();
+    blocksGroup.name = 'buildingBlocksGroup';
+    scene.add(blocksGroup);
+    blocksGroupRef.current = blocksGroup;
+
+    // 3D Spell Templates Container
+    const spellTemplateGroup = new THREE.Group();
+    spellTemplateGroup.name = 'spellTemplateGroup';
+    scene.add(spellTemplateGroup);
+    spellTemplateGroupRef.current = spellTemplateGroup;
 
     // Apply floor texture immediately if a URL is already available on mount
     if (floorTextureUrlRef.current) {
       const loader = new THREE.TextureLoader();
       loader.load(floorTextureUrlRef.current, (texture) => {
         texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(1, 1);
         if (floorMatRef.current) {
           floorMatRef.current.map = texture;
-          floorMatRef.current.emissive = new THREE.Color(0xffffff);
-          floorMatRef.current.emissiveMap = texture;
-          floorMatRef.current.emissiveIntensity = 0.6;
+          floorMatRef.current.color.setHex(0xffffff); // Permite que o mapa de textura apareça com 100% de nitidez
+          floorMatRef.current.roughness = 0.85;
+          floorMatRef.current.metalness = 0.05;
+          floorMatRef.current.emissive.setHex(0x000000);
+          floorMatRef.current.emissiveMap = null;
+          floorMatRef.current.emissiveIntensity = 0;
           floorMatRef.current.needsUpdate = true;
         }
       });
     }
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    // Dynamic Initial Lighting based on Time of Day & Weather presets
+    const initialEnv = calculateEnvironmentSettings(
+      envRef.current.timeOfDayHour,
+      envRef.current.timeOfDayPreset,
+      envRef.current.hasFog,
+      envRef.current.hasRain,
+      envRef.current.cloudDensity,
+      envRef.current.moonSize,
+      envRef.current.moonLuminosity,
+      envRef.current.moonOffsetAngle,
+      envRef.current.moonAltitude,
+      envRef.current.sunSize,
+      envRef.current.sunLightIntensity,
+      envRef.current.ambientLightIntensity,
+      envRef.current.globalFogDensity
+    );
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, initialEnv.ambientIntensity);
     scene.add(ambientLight);
     ambientLightRef.current = ambientLight;
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    const dirLight = new THREE.DirectionalLight(new THREE.Color(initialEnv.sunColor), initialEnv.sunIntensity);
     dirLight.position.set(10, 20, 10);
     dirLight.castShadow = true;
     scene.add(dirLight);
@@ -1063,6 +1328,39 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     hoverRing.name = 'attackHoverRing';
     scene.add(hoverRing);
     hoverRingRef.current = hoverRing;
+
+    // 3D Drag & Drop Hologram Ghost Indicator
+    const dragGhostGroup = new THREE.Group();
+    dragGhostGroup.name = 'dragGhostGroup';
+    dragGhostGroup.visible = false;
+
+    // Glowing footprint plane
+    const ghostPlaneGeo = new THREE.PlaneGeometry(2.0, 2.0);
+    const ghostPlaneMat = new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      transparent: true,
+      opacity: 0.35,
+      side: THREE.DoubleSide,
+    });
+    const ghostPlane = new THREE.Mesh(ghostPlaneGeo, ghostPlaneMat);
+    ghostPlane.rotation.x = -Math.PI / 2;
+    ghostPlane.position.y = 0.05;
+    dragGhostGroup.add(ghostPlane);
+
+    // Glowing wireframe box
+    const ghostBoxGeo = new THREE.BoxGeometry(2.0, 1.2, 2.0);
+    const ghostWireMat = new THREE.MeshBasicMaterial({
+      color: 0xfbbf24,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.85,
+    });
+    const ghostBox = new THREE.Mesh(ghostBoxGeo, ghostWireMat);
+    ghostBox.position.y = 0.6;
+    dragGhostGroup.add(ghostBox);
+
+    scene.add(dragGhostGroup);
+    dragGhostRef.current = dragGhostGroup;
 
     // Skysphere Dome
     const skyDome = createBattleSkyDome(scene);
@@ -1164,6 +1462,150 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
           });
         }
         return;
+      }
+
+      // 1. Clique no modo de Construção: Posicionar Bloco
+      if (event.button === 0 && forgeRef.current.buildMode === 'place' && forgeRef.current.activeBlockType) {
+        if (raycaster.ray.intersectPlane(groundPlane.current, planeIntersectPoint.current)) {
+          event.preventDefault();
+          event.stopPropagation();
+          const pt = planeIntersectPoint.current;
+          const snap = worldPosToGridCell(pt.x, pt.z, forgeRef.current.gridConfig.widthCells, forgeRef.current.gridConfig.heightCells);
+          const newBlock = createDefaultBuildingBlock(
+            forgeRef.current.activeBlockType,
+            snap.snappedX,
+            snap.snappedZ,
+            forgeRef.current.blockRotation
+          );
+          setBuildingBlocks((prev) => [...prev.filter((b) => !(Math.abs(b.x - snap.snappedX) < 0.1 && Math.abs(b.z - snap.snappedZ) < 0.1)), newBlock]);
+          setSelectedBlockId(newBlock.id);
+          toast.success('Bloco adicionado ao cenário!');
+          return;
+        }
+      }
+
+      // 2. Clique no modo Borracha: Deletar Bloco
+      if (event.button === 0 && forgeRef.current.buildMode === 'delete') {
+        if (blocksGroupRef.current) {
+          const hits = raycaster.intersectObjects(blocksGroupRef.current.children, true);
+          if (hits.length > 0) {
+            let obj: THREE.Object3D | null = hits[0].object;
+            while (obj && !obj.name.startsWith('block-')) {
+              obj = obj.parent;
+            }
+            if (obj && obj.userData.blockId) {
+              event.preventDefault();
+              event.stopPropagation();
+              const bId = obj.userData.blockId;
+              setBuildingBlocks((prev) => prev.filter((b) => b.id !== bId));
+              if (selectedBlockId === bId) setSelectedBlockId(null);
+              toast.info('Bloco removido.');
+              return;
+            }
+          }
+        }
+      }
+
+      // 3. Clique no modo Magia: Posicionar Template de Magia 3D
+      if (event.button === 0 && forgeRef.current.buildMode === 'spell' && forgeRef.current.activeSpellTemplate) {
+        if (raycaster.ray.intersectPlane(groundPlane.current, planeIntersectPoint.current)) {
+          event.preventDefault();
+          event.stopPropagation();
+          const pt = planeIntersectPoint.current;
+          setActiveSpellTemplate((prev) => prev ? { ...prev, x: pt.x, z: pt.z } : null);
+          toast.success('Área de magia posicionada!');
+          setBuildMode('idle');
+          return;
+        }
+      }
+
+      // 4. Clique em Gizmo ou Bloco no modo normal para Arrastar/Girar/Esticar/Configurar
+      if (event.button === 0 && blocksGroupRef.current) {
+        const hits = raycaster.intersectObjects(blocksGroupRef.current.children, true);
+        if (hits.length > 0) {
+          // 4.1 Checar se QUALQUER objeto atingido pelo raio é um handle do Gizmo
+          const gizmoHit = hits.find((h) => {
+            let o: THREE.Object3D | null = h.object;
+            while (o && !o.userData?.isGizmoHandle && o.parent) o = o.parent;
+            return o?.userData?.isGizmoHandle;
+          });
+
+          if (gizmoHit) {
+            let gizmoObj: THREE.Object3D | null = gizmoHit.object;
+            while (gizmoObj && !gizmoObj.userData?.isGizmoHandle && gizmoObj.parent) gizmoObj = gizmoObj.parent;
+            if (gizmoObj?.userData?.isGizmoHandle) {
+              event.preventDefault();
+              event.stopPropagation();
+              const hType = gizmoObj.userData.handleType as 'rotate' | 'stretch';
+              const bId = gizmoObj.userData.blockId;
+              const targetBlock = forgeRef.current.buildingBlocks.find((b) => b.id === bId);
+              if (targetBlock) {
+                controls.enabled = false;
+                activeBlockDragRef.current = {
+                  blockId: bId,
+                  mode: hType,
+                  startPoint: gizmoHit.point.clone(),
+                  startRotation: targetBlock.rotationDeg || 0,
+                  startSegments: targetBlock.segmentsCount || 1,
+                  startPos: { x: targetBlock.x, z: targetBlock.z },
+                };
+                return;
+              }
+            }
+          }
+
+          // 4.2 Checar se QUALQUER objeto atingido é o corpo de um bloco de construção
+          const blockHit = hits.find((h) => {
+            let o: THREE.Object3D | null = h.object;
+            while (o && !o.name.startsWith('block-') && o.parent) o = o.parent;
+            return o?.userData?.blockId;
+          });
+
+          if (blockHit) {
+            let obj: THREE.Object3D | null = blockHit.object;
+            while (obj && !obj.name.startsWith('block-') && obj.parent) obj = obj.parent;
+            if (obj?.userData?.blockId) {
+              event.preventDefault();
+              event.stopPropagation();
+              const bId = obj.userData.blockId;
+              const targetBlock = forgeRef.current.buildingBlocks.find((b) => b.id === bId);
+              setSelectedBlockId(bId);
+
+              // 2 Cliques rápidos no asset abrem o modal de configurações
+              if (event.detail >= 2) {
+                if (obj.userData.type === 'door_wood') {
+                  setBuildingBlocks((prev) =>
+                    prev.map((b) => (b.id === bId ? { ...b, state: b.state === 'open' ? 'closed' : 'open' } : b))
+                  );
+                } else {
+                  setIsInspectorModalOpen(true);
+                  toast.info(`⚙️ Configurações de ${targetBlock?.type || 'Asset'}`);
+                }
+                return;
+              }
+
+              // 1 Clique: Inicia arrasto direto para mover no grid (Snap)
+              if (targetBlock) {
+                controls.enabled = false;
+                activeBlockDragRef.current = {
+                  blockId: bId,
+                  mode: 'move',
+                  startPoint: blockHit.point.clone(),
+                  startRotation: targetBlock.rotationDeg || 0,
+                  startSegments: targetBlock.segmentsCount || 1,
+                  startPos: { x: targetBlock.x, z: targetBlock.z },
+                };
+              }
+              return;
+            }
+          }
+        } else if (!event.ctrlKey) {
+          // Clicou no chão vazio -> deseleciona o bloco
+          if (forgeRef.current.selectedBlockId) {
+            setSelectedBlockId(null);
+            setIsInspectorModalOpen(false);
+          }
+        }
       }
 
       // Se a mira de magia estiver ativa, confirma a conjuração
@@ -1396,6 +1838,50 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       if (tooltipRef.current) {
         tooltipRef.current.style.left = `${mouseX + 15}px`;
         tooltipRef.current.style.top = `${mouseY + 15}px`;
+      }
+
+      // 0. Dragging Building Block with Interactive 3D Gizmo (Move, Rotate or Stretch)
+      if (activeBlockDragRef.current) {
+        const drag = activeBlockDragRef.current;
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+
+        if (raycaster.ray.intersectPlane(groundPlane.current, planeIntersectPoint.current)) {
+          const pt = planeIntersectPoint.current;
+          const currentBlock = forgeRef.current.buildingBlocks.find((b) => b.id === drag.blockId);
+          if (currentBlock) {
+            if (drag.mode === 'move') {
+              const snap = worldPosToGridCell(pt.x, pt.z, forgeRef.current.gridConfig.widthCells, forgeRef.current.gridConfig.heightCells);
+              if (currentBlock.x !== snap.snappedX || currentBlock.z !== snap.snappedZ) {
+                setBuildingBlocks((prev) =>
+                  prev.map((b) => (b.id === drag.blockId ? { ...b, x: snap.snappedX, z: snap.snappedZ } : b))
+                );
+              }
+            } else if (drag.mode === 'rotate') {
+              const angleRad = Math.atan2(pt.x - currentBlock.x, pt.z - currentBlock.z);
+              const angleDeg = Math.round(((angleRad * 180) / Math.PI + 360) % 360);
+              const snapAngle = Math.round(angleDeg / 15) * 15;
+              if (currentBlock.rotationDeg !== snapAngle) {
+                setBuildingBlocks((prev) =>
+                  prev.map((b) => (b.id === drag.blockId ? { ...b, rotationDeg: snapAngle } : b))
+                );
+              }
+            } else if (drag.mode === 'stretch') {
+              const dx = pt.x - currentBlock.x;
+              const dz = pt.z - currentBlock.z;
+              const rad = ((currentBlock.rotationDeg || 0) * Math.PI) / 180;
+              const localDist = dx * Math.cos(rad) - dz * Math.sin(rad);
+              const newSegs = Math.max(1, Math.min(8, Math.round((Math.abs(localDist) * 2) / 2.0)));
+              if (currentBlock.segmentsCount !== newSegs) {
+                setBuildingBlocks((prev) =>
+                  prev.map((b) => (b.id === drag.blockId ? { ...b, segmentsCount: newSegs } : b))
+                );
+              }
+            }
+          }
+        }
+        return;
       }
 
       // 1. Raycast to find if we are hovering over any token (for the general tooltip)
@@ -1695,10 +2181,80 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         lastDragSnapRef.current = null;
         controls.enabled = true; // Reativa a câmera OrbitControls
       }
+
+      if (activeBlockDragRef.current) {
+        activeBlockDragRef.current = null;
+        controls.enabled = true;
+      }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'r' || e.key === 'R') {
+        if (forgeRef.current.selectedBlockId) {
+          setBuildingBlocks((prev) =>
+            prev.map((b) =>
+              b.id === forgeRef.current.selectedBlockId
+                ? { ...b, rotationDeg: ((b.rotationDeg || 0) + 45) % 360 }
+                : b
+            )
+          );
+        } else if (forgeRef.current.buildMode === 'place') {
+          setBlockRotation((r) => (r + 90) % 360);
+        }
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && forgeRef.current.selectedBlockId) {
+        const selId = forgeRef.current.selectedBlockId;
+        setBuildingBlocks((prev) => prev.filter((b) => b.id !== selId));
+        setSelectedBlockId(null);
+        toast.info('Asset excluído.');
+      }
+      if ((e.key === 'd' || e.key === 'D') && (e.ctrlKey || e.metaKey) && forgeRef.current.selectedBlockId) {
+        e.preventDefault();
+        const target = forgeRef.current.buildingBlocks.find((b) => b.id === forgeRef.current.selectedBlockId);
+        if (target) {
+          const dup: BuildingBlock3D = {
+            ...target,
+            id: `block-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            x: target.x + 2,
+          };
+          setBuildingBlocks((prev) => [...prev, dup]);
+          setSelectedBlockId(dup.id);
+          toast.success('Asset duplicado!');
+        }
+      }
+      // Foco de câmera no asset ou token selecionado (Estilo Numpad ',' / '.' do Blender & 'F' da Unreal)
+      const isFocusKey =
+        e.code === 'NumpadDecimal' ||
+        e.code === 'NumpadComma' ||
+        e.key === ',' ||
+        e.key === '.' ||
+        ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey);
+
+      if (isFocusKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (forgeRef.current.selectedBlockId) {
+          const b = forgeRef.current.buildingBlocks.find((bl) => bl.id === forgeRef.current.selectedBlockId);
+          if (b) {
+            e.preventDefault();
+            focusCameraOnTarget(camera, controls, { x: b.x, y: (b.heightScale || 1.0) * 1.4, z: b.z }, 6.5);
+            toast.info('🔭 Câmera focada no asset selecionado!');
+          }
+        } else if (selectedCombatantId) {
+          const cPos = localPositions[selectedCombatantId];
+          if (cPos) {
+            e.preventDefault();
+            focusCameraOnTarget(camera, controls, { x: cPos.x, y: 1.2, z: cPos.z }, 6.0);
+            toast.info('🔭 Câmera focada no personagem selecionado!');
+          }
+        }
+      }
       if (e.key === 'Escape') {
+        if (forgeRef.current.selectedBlockId) {
+          setSelectedBlockId(null);
+        }
+        if (forgeRef.current.buildMode !== 'idle') {
+          setBuildMode('idle');
+          setIsForgeMenuOpen(false);
+        }
         if (callbacksRef.current.pendingAttack) {
           callbacksRef.current.setPendingAttack(null);
           callbacksRef.current.setSplineBadgeInfo(null);
@@ -1713,8 +2269,34 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       }
     };
 
+    const handleDblClick = (event: MouseEvent) => {
+      if (!containerRef.current || !blocksGroupRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      const hits = raycaster.intersectObjects(blocksGroupRef.current.children, true);
+      if (hits.length > 0) {
+        let obj: THREE.Object3D | null = hits[0].object;
+        while (obj && !obj.name.startsWith('block-') && obj.parent) {
+          obj = obj.parent;
+        }
+        if (obj?.userData?.blockId) {
+          event.preventDefault();
+          event.stopPropagation();
+          const bId = obj.userData.blockId;
+          const targetBlock = forgeRef.current.buildingBlocks.find((b) => b.id === bId);
+          setSelectedBlockId(bId);
+          setIsInspectorModalOpen(true);
+          toast.info(`⚙️ Configurações de ${targetBlock?.type || 'Asset'}`);
+        }
+      }
+    };
+
     const domElem = renderer.domElement;
     domElem.addEventListener('pointerdown', handlePointerDown);
+    domElem.addEventListener('dblclick', handleDblClick);
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('keydown', handleKeyDown);
@@ -1792,6 +2374,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       cancelAnimationFrame(animId);
       resizeObserver.disconnect();
       domElem.removeEventListener('pointerdown', handlePointerDown);
+      domElem.removeEventListener('dblclick', handleDblClick);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('keydown', handleKeyDown);
@@ -1886,6 +2469,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     // Dynamically adjust ambient light intensity and color
     if (ambientLightRef.current) {
       ambientLightRef.current.intensity = env.ambientIntensity;
+      ambientLightRef.current.color.set(env.isNight ? 0x0f172a : 0xffffff);
     }
 
     // Dynamically adjust directional light intensity, color, and sun angle
@@ -1959,11 +2543,17 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       const loader = new THREE.TextureLoader();
       loader.load(floorTextureUrl, (texture) => {
         texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(1, 1);
         if (floorMatRef.current) {
           floorMatRef.current.map = texture;
-          floorMatRef.current.emissive = new THREE.Color(0xffffff);
-          floorMatRef.current.emissiveMap = texture;
-          floorMatRef.current.emissiveIntensity = 0.6;
+          floorMatRef.current.color.setHex(0xffffff); // Permite que a textura seja renderizada com 100% de nitidez e brilho natural
+          floorMatRef.current.roughness = 0.85;
+          floorMatRef.current.metalness = 0.05;
+          floorMatRef.current.emissive = new THREE.Color(0x000000);
+          floorMatRef.current.emissiveMap = null;
+          floorMatRef.current.emissiveIntensity = 0;
           floorMatRef.current.needsUpdate = true;
         }
       });
@@ -1977,16 +2567,98 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         floorMatRef.current.emissiveMap.dispose();
         floorMatRef.current.emissiveMap = null;
       }
+      floorMatRef.current.color.setHex(0x1e293b);
+      floorMatRef.current.roughness = 0.95;
+      floorMatRef.current.metalness = 0.05;
       floorMatRef.current.emissive = new THREE.Color(0x000000);
       floorMatRef.current.emissiveIntensity = 0;
       floorMatRef.current.needsUpdate = true;
     }
   }, [floorTextureUrl]);
 
+  // Dynamic Grid Dimensions & Shape (Square / Circle Arena)
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    const currentConfig = gridConfig || DEFAULT_GRID_CONFIG_3D;
+    const widthCells = currentConfig.widthCells || 20;
+    const heightCells = currentConfig.heightCells || 20;
+    const shape = currentConfig.shape || 'square';
+    const lineOpacity = typeof currentConfig.lineOpacity === 'number' ? currentConfig.lineOpacity : 0.4;
+
+    // 1. Update Floor Mesh Geometry
+    if (floorMeshRef.current && floorMatRef.current) {
+      floorMeshRef.current.geometry.dispose();
+      const widthUnits = widthCells * 2.0;
+      const heightUnits = heightCells * 2.0;
+      if (shape === 'circle') {
+        floorMeshRef.current.geometry = new THREE.CircleGeometry(widthUnits / 2, 64);
+      } else {
+        floorMeshRef.current.geometry = new THREE.PlaneGeometry(widthUnits, heightUnits);
+      }
+    }
+
+    // 2. Update Grid Helper
+    if (gridHelperRef.current) {
+      scene.remove(gridHelperRef.current);
+      gridHelperRef.current.geometry.dispose();
+      (gridHelperRef.current.material as THREE.Material).dispose();
+      gridHelperRef.current = null;
+    }
+
+    const widthUnits = widthCells * 2.0;
+    const gridHelper = new THREE.GridHelper(widthUnits, widthCells, 0x0284c7, 0x1e293b);
+    const gridMat = gridHelper.material as THREE.LineBasicMaterial;
+    gridMat.transparent = true;
+    gridMat.opacity = lineOpacity;
+    gridHelper.position.y = 0.01;
+    scene.add(gridHelper);
+    gridHelperRef.current = gridHelper;
+  }, [gridConfig]);
+
+  // Sync 3D Building Blocks (Walls, Pillars, Doors, Campfires, etc.)
+  useEffect(() => {
+    const group = blocksGroupRef.current;
+    if (!group) return;
+
+    while (group.children.length > 0) {
+      const child = group.children[0];
+      group.remove(child);
+      disposeHierarchy(child);
+    }
+
+    buildingBlocks.forEach((block) => {
+      const blockMesh = createBuildingBlockMesh(block);
+      if (block.id === selectedBlockId) {
+        const gizmo = createInteractiveTransformGizmo(block);
+        blockMesh.add(gizmo);
+      }
+      group.add(blockMesh);
+    });
+  }, [buildingBlocks, selectedBlockId]);
+
+  // Sync 3D Spell Templates (Spheres, Cones, Cubes, Lines)
+  useEffect(() => {
+    const group = spellTemplateGroupRef.current;
+    if (!group) return;
+
+    while (group.children.length > 0) {
+      const child = group.children[0];
+      group.remove(child);
+      disposeHierarchy(child);
+    }
+
+    if (activeSpellTemplate) {
+      const templateMesh = createSpellTemplateMesh(activeSpellTemplate);
+      group.add(templateMesh);
+    }
+  }, [activeSpellTemplate]);
+
   // 3. Sync token meshes on state updates
   useEffect(() => {
     syncTokens();
-  }, [syncTokens]);
+  }, [syncTokens, tokenElevations]);
 
   // Reachable movement range highlighting meshes dynamically
   useEffect(() => {
@@ -2177,7 +2849,92 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     }
   };
 
+  // Drag and Drop (Arrastar da Forja diretamente para a arena 3D)
+  const handleContainerDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
 
+    if (!containerRef.current || !cameraRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), cameraRef.current);
+
+    const intersectPt = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(groundPlane.current, intersectPt)) {
+      const cfg = gridConfig || DEFAULT_GRID_CONFIG_3D;
+      const snap = worldPosToGridCell(intersectPt.x, intersectPt.z, cfg.widthCells || 20, cfg.heightCells || 20);
+
+      if (dragGhostRef.current) {
+        dragGhostRef.current.position.set(snap.snappedX, 0, snap.snappedZ);
+        dragGhostRef.current.visible = true;
+      }
+    }
+  };
+
+  const handleContainerDragLeave = () => {
+    if (dragGhostRef.current) {
+      dragGhostRef.current.visible = false;
+    }
+  };
+
+  const handleContainerDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (dragGhostRef.current) {
+      dragGhostRef.current.visible = false;
+    }
+
+    if (!containerRef.current || !cameraRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), cameraRef.current);
+
+    const intersectPt = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(groundPlane.current, intersectPt)) {
+      const cfg = gridConfig || DEFAULT_GRID_CONFIG_3D;
+      const snap = worldPosToGridCell(intersectPt.x, intersectPt.z, cfg.widthCells || 20, cfg.heightCells || 20);
+
+      let blockType: BuildingBlockType | null = null;
+      try {
+        const raw = e.dataTransfer.getData('application/json');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.type === '3d_building_block' && parsed.blockType) {
+            blockType = parsed.blockType as BuildingBlockType;
+          }
+        }
+      } catch (_err) {}
+
+      if (!blockType) {
+        const text = e.dataTransfer.getData('text/plain') as BuildingBlockType;
+        if (text && BUILDING_BLOCK_CATALOG[text]) {
+          blockType = text;
+        }
+      }
+
+      if (blockType && BUILDING_BLOCK_CATALOG[blockType]) {
+        const def = BUILDING_BLOCK_CATALOG[blockType];
+        const newBlock = createDefaultBuildingBlock(
+          blockType,
+          snap.snappedX,
+          snap.snappedZ,
+          blockRotation
+        );
+
+        setBuildingBlocks((prev) => [
+          ...prev.filter((b) => !(Math.abs(b.x - snap.snappedX) < 0.1 && Math.abs(b.z - snap.snappedZ) < 0.1)),
+          newBlock,
+        ]);
+        setSelectedBlockId(newBlock.id);
+        toast.success(`🧱 ${def.label} adicionado ao grid!`);
+      }
+    }
+  };
 
   const selectedCombatant = combatants.find((c) => c.id === selectedCombatantId) ||
     combatants.find((c) => c.name === selectedCombatantId);
@@ -2202,6 +2959,9 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         }}
         onMouseDown={(e) => { if (!pendingAttack) e.currentTarget.style.cursor = 'grabbing'; }}
         onMouseUp={(e) => { if (!pendingAttack) e.currentTarget.style.cursor = 'grab'; }}
+        onDragOver={handleContainerDragOver}
+        onDragLeave={handleContainerDragLeave}
+        onDrop={handleContainerDrop}
       />
 
       {/* Attack mode: hover token name tooltip */}
@@ -2338,6 +3098,11 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         floorTextureUrl={floorTextureUrl}
         onFloorTextureChange={onFloorTextureChange}
         onConfirmPlacement={onConfirmPlacement}
+        isPlayerVisionMode={isPlayerVisionMode}
+        onTogglePlayerVisionMode={() => setIsPlayerVisionMode(!isPlayerVisionMode)}
+        onToggleTorch={handleToggleTorch}
+        isForgeMenuOpen={isForgeMenuOpen}
+        onToggleForgeMenu={() => setIsForgeMenuOpen(!isForgeMenuOpen)}
         onAttackTarget={pendingAttack ? undefined : (target) => {
           if (propOnAttackTarget) {
             propOnAttackTarget(target);
@@ -2347,6 +3112,148 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         }}
         onToggleHelp={() => setShowHelpModal(true)}
       />
+
+      {/* 3D BattleForge (Building Blocks, Grid Size & Spell Templates) Drawer */}
+      <BattleForgeToolbar
+        isDm={isDm}
+        isOpen={isForgeMenuOpen}
+        onClose={() => setIsForgeMenuOpen(false)}
+        gridConfig={gridConfig}
+        onGridConfigChange={setGridConfig}
+        activeBlockType={activeBlockType}
+        onSelectBlockType={setActiveBlockType}
+        buildMode={buildMode}
+        onSetBuildMode={setBuildMode}
+        blockRotation={blockRotation}
+        onRotateBlock={() => setBlockRotation((r) => (r + 90) % 360)}
+        onClearAllBlocks={() => setBuildingBlocks([])}
+        activeSpellTemplate={activeSpellTemplate}
+        onSpawnSpellTemplate={(t) => {
+          setActiveSpellTemplate({
+            id: `spell-${Date.now()}`,
+            ...t,
+            x: 0,
+            z: 0,
+          });
+        }}
+        onClearSpellTemplate={() => setActiveSpellTemplate(null)}
+        selectedTokenElevation={selectedCombatantId ? (tokenElevations[selectedCombatantId] || 0) : 0}
+        onSetTokenElevation={(elevFt) => {
+          if (selectedCombatantId) {
+            setTokenElevations((prev) => ({ ...prev, [selectedCombatantId]: elevFt }));
+            toast.info(`Altitude definida: +${elevFt}ft`);
+          } else {
+            toast.warning('Selecione um token primeiro para alterar a altitude de voo.');
+          }
+        }}
+        blocksCount={buildingBlocks.length}
+      />
+
+      {/* Selected 3D Asset Transform & Light Inspector (Aberto com 2 cliques rápidos no asset) */}
+      {isInspectorModalOpen && selectedBlockId && (() => {
+        const selBlock = buildingBlocks.find((b) => b.id === selectedBlockId);
+        if (!selBlock) return null;
+        return (
+          <AssetInspectorTransform
+            block={selBlock}
+            onUpdateBlock={(updated) => {
+              setBuildingBlocks((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+            }}
+            onDuplicateBlock={(target) => {
+              const dup: BuildingBlock3D = {
+                ...target,
+                id: `block-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                x: target.x + 2,
+              };
+              setBuildingBlocks((prev) => [...prev, dup]);
+              setSelectedBlockId(dup.id);
+            }}
+            onDeleteBlock={(bId) => {
+              setBuildingBlocks((prev) => prev.filter((b) => b.id !== bId));
+              setSelectedBlockId(null);
+              setIsInspectorModalOpen(false);
+            }}
+            onClose={() => setIsInspectorModalOpen(false)}
+          />
+        );
+      })()}
+
+      {/* Barra de Ações Rápidas do Asset Selecionado (HUD Inferior Central) */}
+      {selectedBlockId && !isInspectorModalOpen && (() => {
+        const selBlock = buildingBlocks.find((b) => b.id === selectedBlockId);
+        if (!selBlock) return null;
+        const def = BUILDING_BLOCK_CATALOG[selBlock.type];
+        return (
+          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-40 bg-slate-950/95 backdrop-blur-md border border-amber-500/50 px-3.5 py-2 rounded-full shadow-2xl flex items-center gap-2.5 text-xs text-slate-200 animate-in fade-in slide-in-from-bottom-2 duration-150">
+            <span className="font-bold text-amber-300 flex items-center gap-1.5 text-[11px] pr-1">
+              <span className="text-sm">{def?.icon || '🧱'}</span> {def?.label || 'Asset'}
+            </span>
+            <div className="h-4 w-px bg-slate-700" />
+            <button
+              onClick={() => {
+                setBuildingBlocks((prev) =>
+                  prev.map((b) => (b.id === selectedBlockId ? { ...b, rotationDeg: ((b.rotationDeg || 0) + 45) % 360 } : b))
+                );
+              }}
+              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg border border-slate-700 flex items-center gap-1 text-[10px] font-semibold active:scale-95 transition-all shadow-xs"
+              title="Girar 45° (Tecla R)"
+            >
+              <RotateCw className="w-3 h-3" /> Girar
+            </button>
+            {def?.supportsProceduralLength && (
+              <div className="flex items-center gap-1 bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-800 text-[10px]">
+                <span className="text-slate-400">Tam:</span>
+                <button
+                  onClick={() => {
+                    setBuildingBlocks((prev) =>
+                      prev.map((b) => (b.id === selectedBlockId ? { ...b, segmentsCount: Math.max(1, (b.segmentsCount || 1) - 1) } : b))
+                    );
+                  }}
+                  className="px-1 hover:text-amber-300 font-bold"
+                >
+                  -
+                </button>
+                <span className="font-mono text-emerald-400 font-bold">{selBlock.segmentsCount || 1}x</span>
+                <button
+                  onClick={() => {
+                    setBuildingBlocks((prev) =>
+                      prev.map((b) => (b.id === selectedBlockId ? { ...b, segmentsCount: Math.min(8, (b.segmentsCount || 1) + 1) } : b))
+                    );
+                  }}
+                  className="px-1 hover:text-amber-300 font-bold"
+                >
+                  +
+                </button>
+              </div>
+            )}
+            <button
+              onClick={() => setIsInspectorModalOpen(true)}
+              className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg flex items-center gap-1 text-[10px] font-bold active:scale-95 transition-all shadow-xs"
+              title="Abrir Configurações & Luz (Duplo Clique)"
+            >
+              <Settings className="w-3 h-3" /> Configurações
+            </button>
+            <button
+              onClick={() => {
+                setBuildingBlocks((prev) => prev.filter((b) => b.id !== selectedBlockId));
+                setSelectedBlockId(null);
+                toast.info('Asset excluído.');
+              }}
+              className="p-1 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 rounded-lg border border-transparent hover:border-rose-500/40 text-[10px] active:scale-95 transition-all"
+              title="Excluir (DEL)"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setSelectedBlockId(null)}
+              className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors"
+              title="Deselecionar (ESC)"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Help Modal */}
       {showHelpModal && (
@@ -2361,12 +3268,11 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
               </button>
             </div>
             <ul className="text-xs space-y-2 text-slate-300">
-              <li>• <strong className="text-white">Arrastar Personagem:</strong> Clique no token do seu personagem e arraste para posicionar no grid 3D.</li>
-              <li>• <strong className="text-white">Girar Direção:</strong> Selecione o personagem e use os botões 45° no painel inferior para definir a direção de frente.</li>
+              <li>• <strong className="text-white">Foco Rápido (Zoom no Alvo):</strong> Selecione um asset ou personagem e pressione <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-amber-300 font-mono text-[11px]">,</kbd> (Numpad) ou <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-amber-300 font-mono text-[11px]">F</kbd> para enquadrar a câmera instantaneamente.</li>
+              <li>• <strong className="text-white">Manipulação 3D (Unreal/Blender):</strong> Clique e arraste um bloco para mover; use o anel dourado para girar e a alça verde para esticar paredes sem distorcer.</li>
+              <li>• <strong className="text-white">Configurações Avançadas:</strong> 2 cliques rápidos no bloco abrem o painel com luzes, cores e propriedades finas.</li>
+              <li>• <strong className="text-white">Mover / Girar Câmera:</strong> Arraste o mouse no espaço vazio do grid para orbitar e use o scroll para zoom livre.</li>
               <li>• <strong className="text-white">Selecionar Alvo de Ataque:</strong> Clique na miniatura de um inimigo para marcá-lo como alvo e ativar ações de combate.</li>
-              <li>• <strong className="text-white">Mover Câmera:</strong> Arraste o mouse no espaço vazio do grid para girar a câmera.</li>
-              <li>• <strong className="text-white">Zoom:</strong> Use a roda do mouse (scroll) para aproximar ou afastar.</li>
-              <li>• <strong className="text-white">Presets de Câmera & Clima:</strong> Alterne entre visão Tática, Cinemática ou Top-Down e mude a iluminação/chuva pelo menu superior.</li>
             </ul>
           </div>
         </div>

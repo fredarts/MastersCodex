@@ -93,7 +93,12 @@ export class SupabaseSessionRepository implements ISessionRepository {
         floor_texture_url: sceneData.floorTextureUrl,
         scene_images: sceneData.sceneImages || [],
         active_image_index: sceneData.activeImageIndex || 0,
-        environment_settings: sceneData.environmentSettings || {},
+        environment_settings: {
+          ...(sceneData.environmentSettings || {}),
+          building_blocks_3d: sceneData.buildingBlocks ?? sceneData.environmentSettings?.building_blocks_3d ?? [],
+          grid_config_3d: sceneData.gridConfig3D ?? sceneData.environmentSettings?.grid_config_3d ?? null,
+          token_elevations: sceneData.tokenElevations ?? sceneData.environmentSettings?.token_elevations ?? {},
+        },
         associated_map_id: sceneData.associatedMapId,
         associated_map_ids: sceneData.associatedMapIds || [],
       })
@@ -128,7 +133,12 @@ export class SupabaseSessionRepository implements ISessionRepository {
         floor_texture_url: scene.floorTextureUrl,
         scene_images: scene.sceneImages || [],
         active_image_index: scene.activeImageIndex || 0,
-        environment_settings: scene.environmentSettings || {},
+        environment_settings: {
+          ...(scene.environmentSettings || {}),
+          building_blocks_3d: scene.buildingBlocks ?? scene.environmentSettings?.building_blocks_3d ?? [],
+          grid_config_3d: scene.gridConfig3D ?? scene.environmentSettings?.grid_config_3d ?? null,
+          token_elevations: scene.tokenElevations ?? scene.environmentSettings?.token_elevations ?? {},
+        },
         associated_map_id: scene.associatedMapId,
         associated_map_ids: scene.associatedMapIds || [],
       })

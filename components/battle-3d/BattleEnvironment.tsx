@@ -53,27 +53,37 @@ export const calculateEnvironmentSettings = (
 ) => {
   const isNight = timeOfDayPreset === 'night' || timeOfDayHour < 6 || timeOfDayHour > 19;
   const isSunset = timeOfDayPreset === 'sunset' || (timeOfDayHour >= 17 && timeOfDayHour <= 19);
+  const isStorm = timeOfDayPreset === 'storm';
 
   let bgColor = '#0f172a'; // slate-900
-  let ambientIntensity = 9.6;
-  let sunIntensity = 16.0;
+  let ambientIntensity = 0.65;
+  let sunIntensity = 1.0;
   let sunColor = '#ffffff';
 
   if (isNight) {
     bgColor = '#020617'; // slate-950
-    ambientIntensity = 3.2;
-    sunIntensity = 4.8;
-    sunColor = '#38bdf8'; // moon blue
+    ambientIntensity = 0.03; // Escuridão profunda para tochas e visão noturna brilharem
+    sunIntensity = 0.08;     // Luar suave
+    sunColor = '#38bdf8';    // moon blue
   } else if (isSunset) {
     bgColor = '#451a03';
-    ambientIntensity = 8.0;
-    sunIntensity = 12.8;
+    ambientIntensity = 0.35;
+    sunIntensity = 0.7;
     sunColor = '#f97316'; // orange sunset
+  } else if (isStorm) {
+    bgColor = '#090d16';
+    ambientIntensity = 0.22;
+    sunIntensity = 0.35;
+    sunColor = '#64748b'; // tempestade acinzentada
   }
 
-  // Fog preset only changes bgColor (used as fog tint), NOT lighting
+  // Fog preset changes bgColor (used as fog tint)
   if (hasFog || timeOfDayPreset === 'fog') {
     bgColor = '#1e293b';
+    if (!isNight) {
+      ambientIntensity = 0.4;
+      sunIntensity = 0.5;
+    }
   }
 
   // Override intensities if manually specified

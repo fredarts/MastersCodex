@@ -179,11 +179,12 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       document.removeEventListener('mousedown', handleOutsideClick);
     };
   }, [showCombatDropdown]);
-
   const [timeOfDayHour, setTimeOfDayHour] = useState<number>(12);
   const [hasFog, setHasFog] = useState(false);
   const [hasRain, setHasRain] = useState(false);
   const [environmentSettings, setEnvironmentSettings] = useState<Record<string, any>>({});
+  const [buildingBlocks3D, setBuildingBlocks3D] = useState<import('@/lib/3d-building-blocks').BuildingBlock3D[]>([]);
+  const [gridConfig3D, setGridConfig3D] = useState<import('@/lib/3d-building-blocks').GridConfig3D | undefined>(undefined);
   const [floorTextureUrl, setFloorTextureUrl] = useState<string | undefined>(undefined);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -214,6 +215,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       setHasFog(selectedScene.hasFog ?? false);
       setHasRain(selectedScene.hasRain ?? false);
       setEnvironmentSettings(selectedScene.environmentSettings || {});
+      setBuildingBlocks3D(selectedScene.buildingBlocks || selectedScene.environmentSettings?.building_blocks_3d || []);
+      setGridConfig3D(selectedScene.gridConfig3D || selectedScene.environmentSettings?.grid_config_3d || undefined);
       setFloorTextureUrl(selectedScene.floorTextureUrl || undefined);
       setSceneImages(selectedScene.sceneImages || []);
     } else {
@@ -232,6 +235,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       setHasFog(false);
       setHasRain(false);
       setEnvironmentSettings({});
+      setBuildingBlocks3D([]);
+      setGridConfig3D(undefined);
       setFloorTextureUrl(undefined);
       setSceneImages([]);
     }
@@ -402,6 +407,12 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       };
     });
 
+    const updatedEnv = {
+      ...environmentSettings,
+      building_blocks_3d: buildingBlocks3D,
+      grid_config_3d: gridConfig3D,
+    };
+
     const updated: GameScene = {
       ...selectedScene,
       title,
@@ -421,7 +432,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       hasRain,
       floorTextureUrl,
       sceneImages,
-      environmentSettings,
+      buildingBlocks: buildingBlocks3D,
+      gridConfig3D,
+      environmentSettings: updatedEnv,
       associatedMapIds: selectedScene.associatedMapIds || (selectedScene.associatedMapId ? [selectedScene.associatedMapId] : []),
     };
 
@@ -1962,6 +1975,16 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                               hasFog={hasFog}
                               hasRain={hasRain}
                               {...environmentSettings}
+                              initialBuildingBlocks={buildingBlocks3D}
+                              onBuildingBlocksChange={(blocks) => {
+                                setBuildingBlocks3D(blocks);
+                                setEnvironmentSettings((prev) => ({ ...prev, building_blocks_3d: blocks }));
+                              }}
+                              initialGridConfig={gridConfig3D}
+                              onGridConfigChange={(gridCfg) => {
+                                setGridConfig3D(gridCfg);
+                                setEnvironmentSettings((prev) => ({ ...prev, grid_config_3d: gridCfg }));
+                              }}
                               onEnvironmentChange={(env) => {
                                 setTimeOfDayHour(env.timeOfDayHour);
                                 setHasFog(env.hasFog);

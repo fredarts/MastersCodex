@@ -14,6 +14,8 @@ export interface TokenMeshOptions {
   positionZ: number;
   rotationAngleDeg: number;
   isSpellTargeted?: boolean;
+  isNight?: boolean;
+  isIlluminated?: boolean;
 }
 
 const gltfLoader = new GLTFLoader();
@@ -100,6 +102,11 @@ function normalizeAndPrepareModel(modelScene: THREE.Group, sizeStr?: string): TH
     if ((child as THREE.Mesh).isMesh) {
       child.castShadow = true;
       child.receiveShadow = true;
+      const mat = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      if (mat && mat.emissive && !mat.emissiveMap) {
+        mat.emissive.setHex(0x000000);
+        mat.emissiveIntensity = 0;
+      }
     }
   });
 
@@ -152,6 +159,31 @@ export function createTokenMesh(
   arrowMesh.position.set(0, 0.05, -1.0 * sizeScale);
   group.add(arrowMesh);
 
+  // 2.1. Dynamic Torch Light (3D PointLight)
+  const hasTorch = !!options.combatant.hasTorch;
+  const isDarkvision = options.combatant.visionType === 'darkvision';
+  const lightColor = hasTorch ? 0xff9933 : (isDarkvision ? 0x7dd3fc : 0xffaa44);
+  const lightIntensity = hasTorch ? 3.5 : (isDarkvision ? 1.2 : 0);
+  const lightDistance = hasTorch ? 16 : (isDarkvision ? ((options.combatant.darkvisionRange || 60) / 5) * 2 : 12);
+  const torchLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 1.2);
+  torchLight.name = 'tokenTorchLight';
+  torchLight.position.set(0, 1.5 * sizeScale, 0);
+  torchLight.castShadow = hasTorch;
+  torchLight.shadow.mapSize.width = 512;
+  torchLight.shadow.mapSize.height = 512;
+  torchLight.shadow.bias = -0.001;
+  torchLight.visible = hasTorch || isDarkvision;
+  group.add(torchLight);
+
+  // Flame particle sphere indicator
+  const flameGeo = new THREE.SphereGeometry(0.12 * sizeScale, 8, 8);
+  const flameMat = new THREE.MeshBasicMaterial({ color: 0xff8800 });
+  const flameMesh = new THREE.Mesh(flameGeo, flameMat);
+  flameMesh.name = 'torchFlameMesh';
+  flameMesh.position.set(0.3 * sizeScale, 1.6 * sizeScale, -0.3 * sizeScale);
+  flameMesh.visible = hasTorch;
+  group.add(flameMesh);
+
   // 3. Determine Token Mode & URLs
   const tokenType = options.combatant.tokenType || (options.combatant.tokenImageUrl ? 'billboard' : '3d');
   const imageUrl = options.combatant.tokenImageUrl || options.combatant.avatarUrl;
@@ -189,8 +221,20 @@ export function createTokenMesh(
         ? img.width / img.height
         : 1.0;
       
+      const spriteColor = new THREE.Color(0xffffff);
+      if (options.isNight) {
+        if (options.combatant.hasTorch || options.isIlluminated) {
+          spriteColor.setRGB(1.0, 0.95, 0.85);
+        } else if (options.combatant.visionType === 'darkvision') {
+          spriteColor.setRGB(0.5, 0.65, 0.85);
+        } else {
+          spriteColor.setRGB(0.05, 0.05, 0.08); // pitch dark
+        }
+      }
+
       const spriteMat = new THREE.SpriteMaterial({
         map: texture,
+        color: spriteColor,
         transparent: true,
         alphaTest: 0.05,
         depthWrite: false,
@@ -264,6 +308,22 @@ export function updateTokenMeshState(
   group.position.set(options.positionX, 0, options.positionZ);
   group.rotation.y = (options.rotationAngleDeg * Math.PI) / 180;
 
+  // Atualizar tonalidade do Sprite Billboard com a iluminação do ambiente/tocha
+  const sprite = group.getObjectByName('billboardSprite') as THREE.Sprite | undefined;
+  if (sprite && sprite.material) {
+    if (options.isNight) {
+      if (options.combatant.hasTorch || options.isIlluminated) {
+        sprite.material.color.setRGB(1.0, 0.95, 0.85);
+      } else if (options.combatant.visionType === 'darkvision') {
+        sprite.material.color.setRGB(0.5, 0.65, 0.85);
+      } else {
+        sprite.material.color.setRGB(0.05, 0.05, 0.08); // Escuridão profunda
+      }
+    } else {
+      sprite.material.color.setRGB(1.0, 1.0, 1.0);
+    }
+  }
+
   // Selection Ring
   let ringMesh = group.getObjectByName('selectionRing') as THREE.Mesh | undefined;
   const isSelected = options.isCurrentTurn || options.isSelectedForRotation || options.isSelectedTarget || options.isSpellTargeted;
@@ -297,6 +357,33 @@ export function updateTokenMeshState(
     }
   } else if (ringMesh) {
     ringMesh.visible = false;
+  }
+
+  // Update Dynamic Torch Light
+  const torchLight = group.getObjectByName('tokenTorchLight') as THREE.PointLight | undefined;
+  const flameMesh = group.getObjectByName('torchFlameMesh') as THREE.Mesh | undefined;
+  const hasTorch = !!options.combatant.hasTorch;
+  const isDarkvision = options.combatant.visionType === 'darkvision';
+
+  if (torchLight) {
+    torchLight.visible = hasTorch || isDarkvision;
+    if (hasTorch) {
+      torchLight.color.setHex(0xff9933);
+      torchLight.intensity = 3.5;
+      torchLight.distance = 16;
+      torchLight.castShadow = true;
+    } else if (isDarkvision) {
+      torchLight.color.setHex(0x7dd3fc);
+      torchLight.intensity = 1.2;
+      torchLight.distance = Math.max(12, ((options.combatant.darkvisionRange || 60) / 5) * 2);
+      torchLight.castShadow = false;
+    } else {
+      torchLight.intensity = 0;
+      torchLight.castShadow = false;
+    }
+  }
+  if (flameMesh) {
+    flameMesh.visible = hasTorch;
   }
 }
 

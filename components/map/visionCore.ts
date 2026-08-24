@@ -320,8 +320,21 @@ export function getTokenVisionRadius(
     c.name.slice(0, 3).toUpperCase() === cleanTokenName || 
     c.name.toUpperCase().startsWith(cleanTokenName)
   );
-  if (combatant && typeof combatant.visionRange === 'number') {
-    return Math.max(1, combatant.visionRange / 5);
+  if (combatant) {
+    if (combatant.hasTorch) {
+      const torchRadiusCells = 40 / 5; // 20ft bright + 20ft dim = 40ft
+      if (typeof combatant.visionRange === 'number') {
+        return Math.max(torchRadiusCells, combatant.visionRange / 5);
+      }
+      return Math.max(torchRadiusCells, 6.0);
+    }
+    if (combatant.visionType === 'darkvision') {
+      const dvRange = combatant.darkvisionRange || combatant.visionRange || 60;
+      return Math.max(1, dvRange / 5);
+    }
+    if (typeof combatant.visionRange === 'number') {
+      return Math.max(1, combatant.visionRange / 5);
+    }
   }
   return 6.0; // default 30 feet -> 6 cells
 }

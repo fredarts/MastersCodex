@@ -31,3 +31,30 @@ export function setupCameraAndOrbit(
 
   return { camera, controls };
 }
+
+/**
+ * Foca e aproxima a câmera 3D em torno de um alvo selecionado (Estilo Numpad '.' / ',' do Blender & 'F' da Unreal)
+ */
+export function focusCameraOnTarget(
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls,
+  targetPos: { x: number; y?: number; z: number },
+  distance = 7.0
+): void {
+  const targetY = targetPos.y ?? 1.0;
+
+  const currentOffset = new THREE.Vector3().subVectors(camera.position, controls.target);
+  if (currentOffset.length() === 0) {
+    currentOffset.set(0, 5, 5);
+  }
+  currentOffset.normalize().multiplyScalar(distance);
+  currentOffset.y = Math.max(3.5, currentOffset.y);
+
+  controls.target.set(targetPos.x, targetY, targetPos.z);
+  camera.position.set(
+    targetPos.x + currentOffset.x,
+    targetY + currentOffset.y,
+    targetPos.z + currentOffset.z
+  );
+  controls.update();
+}

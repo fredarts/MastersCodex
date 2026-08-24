@@ -188,6 +188,9 @@ export interface GameScene {
   sceneImages?: SceneImage[];
   activeImageIndex?: number;
   environmentSettings?: Record<string, any>;
+  buildingBlocks?: import('./3d-building-blocks').BuildingBlock3D[];
+  gridConfig3D?: import('./3d-building-blocks').GridConfig3D;
+  tokenElevations?: Record<string, number>;
   isBattleStarted?: boolean;
   battleStartSnapshot?: Combatant[];
   associatedMapId?: string; // ID do mapa da campanha vinculado a esta cena

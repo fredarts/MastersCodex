@@ -252,6 +252,54 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                   hasFog={liveHasFog}
                   hasRain={liveHasRain}
                   {...(liveEnvironmentSettings || {})}
+                  initialBuildingBlocks={activeScene?.buildingBlocks || liveEnvironmentSettings?.building_blocks_3d || []}
+                  onBuildingBlocksChange={(blocks) => {
+                    const newSettings = { ...(liveEnvironmentSettings || {}), building_blocks_3d: blocks };
+                    setLiveEnvironmentSettings(newSettings);
+                    if (activeScene && updateScene) {
+                      updateScene({
+                        ...activeScene,
+                        buildingBlocks: blocks,
+                        environmentSettings: newSettings,
+                      });
+                    }
+                    broadcastToPlayerView({
+                      building_blocks_3d: blocks,
+                      environmentSettings: newSettings,
+                    });
+                  }}
+                  initialGridConfig={activeScene?.gridConfig3D || liveEnvironmentSettings?.grid_config_3d}
+                  onGridConfigChange={(gridCfg) => {
+                    const newSettings = { ...(liveEnvironmentSettings || {}), grid_config_3d: gridCfg };
+                    setLiveEnvironmentSettings(newSettings);
+                    if (activeScene && updateScene) {
+                      updateScene({
+                        ...activeScene,
+                        gridConfig3D: gridCfg,
+                        environmentSettings: newSettings,
+                      });
+                    }
+                    broadcastToPlayerView({
+                      grid_config_3d: gridCfg,
+                      environmentSettings: newSettings,
+                    });
+                  }}
+                  initialTokenElevations={activeScene?.tokenElevations || liveEnvironmentSettings?.token_elevations}
+                  onTokenElevationsChange={(elevs) => {
+                    const newSettings = { ...(liveEnvironmentSettings || {}), token_elevations: elevs };
+                    setLiveEnvironmentSettings(newSettings);
+                    if (activeScene && updateScene) {
+                      updateScene({
+                        ...activeScene,
+                        tokenElevations: elevs,
+                        environmentSettings: newSettings,
+                      });
+                    }
+                    broadcastToPlayerView({
+                      token_elevations: elevs,
+                      environmentSettings: newSettings,
+                    });
+                  }}
                   onTimeOfDayChange={(preset) => {
                     setSelectedTimeOfDay(preset);
                     broadcastToPlayerView({

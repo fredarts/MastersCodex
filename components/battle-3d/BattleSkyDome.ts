@@ -149,8 +149,8 @@ export function createBattleSkyDome(scene: THREE.Scene): SkyDomeInstance {
   sunMesh.visible = false; // HIDE visual sphere so Sky shader's sun disc is the only sun!
   scene.add(sunMesh);
 
-  // Sun Light (for Lensflare anchoring)
-  const sunLight = new THREE.PointLight(0xfffbeb, 1.5, 0, 0);
+  // Sun Light (for Lensflare anchoring only - intensity 0 so dirLight and pointLights control scene lighting)
+  const sunLight = new THREE.PointLight(0xfffbeb, 0, 1, 1);
   sunLight.castShadow = false;
   sunMesh.add(sunLight);
 

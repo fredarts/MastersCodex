@@ -1,7 +1,6 @@
 'use client';
 
-import React from 'react';
-import { GripVertical, Dices, X, Swords, Sparkles, Check, Zap } from 'lucide-react';
+import { GripVertical, Dices, X, Swords, Sparkles, Check, Zap, Flame, Eye } from 'lucide-react';
 import { Combatant, ConditionType, CharacterSheet, CharacterSpell } from '@/lib/types';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
@@ -818,13 +817,43 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
             </div>
           </div>
 
-          {/* Alcance de Visão Config */}
-          <div className="mb-2.5 mt-2 flex flex-col gap-2">
-            <div>
-              <h5 className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                Alcance de Visão (Fog of War)
+          {/* Alcance de Visão & Iluminação Dinâmica Config */}
+          <div className="mb-2.5 mt-2 flex flex-col gap-2 p-2 bg-[#080b11] border border-[#2a3449]/70 rounded-lg">
+            <div className="flex items-center justify-between">
+              <h5 className="text-[9px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1">
+                <Eye className="w-3 h-3" /> Visão & Iluminação
               </h5>
-              <div className="flex items-center gap-1.5">
+              
+              {/* Botão de Tocha / Luz Rápida */}
+              <button
+                type="button"
+                onClick={() => {
+                  const nextTorch = !c.hasTorch;
+                  onUpdateCombatants((prev) =>
+                    prev.map((x) => (x.id === c.id ? { ...x, hasTorch: nextTorch } : x))
+                  );
+                  if (nextTorch) {
+                    toast.success(`🔥 ${c.name} acendeu uma tocha (20ft plena / 20ft penumbra)!`);
+                  } else {
+                    toast.info(`🌑 ${c.name} apagou a tocha.`);
+                  }
+                }}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold transition-all border ${
+                  c.hasTorch
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/20'
+                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                }`}
+              >
+                <Flame className={`w-3 h-3 ${c.hasTorch ? 'text-amber-400 animate-pulse' : ''}`} />
+                {c.hasTorch ? 'Tocha Acesa' : 'Acender Tocha'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Raio Visão (pés)
+                </label>
                 <input
                   type="number"
                   value={c.visionRange ?? 30}
@@ -835,16 +864,37 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                       prev.map((x) => (x.id === c.id ? { ...x, visionRange: updatedVal } : x))
                     );
                   }}
-                  className="w-16 px-1.5 py-0.5 bg-[#0a0d14] border border-[#2a3449] focus:border-cyan-500 outline-none rounded text-[10px] text-slate-300 font-mono"
+                  className="w-full px-1.5 py-0.5 bg-[#0a0d14] border border-[#2a3449] focus:border-cyan-500 outline-none rounded text-[10px] text-slate-300 font-mono"
+                  placeholder="30"
                 />
-                <span className="text-[9px] text-slate-400">pés (padrão: 30 pés / 6 cel)</span>
               </div>
+
+              {c.visionType === 'darkvision' && (
+                <div>
+                  <label className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Darkvision (pés)
+                  </label>
+                  <input
+                    type="number"
+                    value={c.darkvisionRange ?? 60}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      const updatedVal = isNaN(val) ? undefined : val;
+                      onUpdateCombatants((prev) =>
+                        prev.map((x) => (x.id === c.id ? { ...x, darkvisionRange: updatedVal } : x))
+                      );
+                    }}
+                    className="w-full px-1.5 py-0.5 bg-[#0a0d14] border border-[#2a3449] focus:border-cyan-500 outline-none rounded text-[10px] text-slate-300 font-mono"
+                    placeholder="60"
+                  />
+                </div>
+              )}
             </div>
             
             <div>
-              <h5 className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                Tipo de Visão
-              </h5>
+              <label className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                Tipo de Sentido / Visão
+              </label>
               <select
                 value={c.visionType || 'normal'}
                 onChange={(e) => {
@@ -855,11 +905,11 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                 }}
                 className="w-full bg-[#0a0d14] text-[10px] font-semibold text-slate-300 border border-[#2a3449] rounded px-1.5 py-1 outline-none focus:border-cyan-500"
               >
-                <option value="normal">Visão Normal</option>
-                <option value="darkvision">Darkvision (Escala de Cinza)</option>
-                <option value="blindsight">Blindsight</option>
-                <option value="tremorsense">Tremorsense (Sonar)</option>
-                <option value="truesight">Truesight</option>
+                <option value="normal">Visão Normal (Humano)</option>
+                <option value="darkvision">Visão no Escuro / Darkvision (Elfo/Anão)</option>
+                <option value="blindsight">Visão Cega / Blindsight</option>
+                <option value="tremorsense">Sentido Sísmico / Tremorsense</option>
+                <option value="truesight">Visão Verdadeira / Truesight</option>
               </select>
             </div>
           </div>

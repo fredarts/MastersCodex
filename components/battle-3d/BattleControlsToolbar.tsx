@@ -12,7 +12,10 @@ import {
   HelpCircle,
   Sliders,
   X,
-  Target
+  Target,
+  Eye,
+  Flame,
+  Box
 } from 'lucide-react';
 import { Combatant } from '@/lib/types';
 
@@ -83,6 +86,11 @@ export interface BattleControlsToolbarProps {
   onToggleHelp?: () => void;
   floorTextureUrl?: string;
   onFloorTextureChange?: (url: string) => void;
+  isPlayerVisionMode?: boolean;
+  onTogglePlayerVisionMode?: () => void;
+  onToggleTorch?: (c: Combatant) => void;
+  isForgeMenuOpen?: boolean;
+  onToggleForgeMenu?: () => void;
 }
 
 export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
@@ -103,8 +111,8 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   moonOffsetAngle: moonOffsetAngleProp = 180,
   moonAltitude: moonAltitudeProp = -1,
   sunSize: sunSizeProp = 1.0,
-  sunLightIntensity: sunLightIntensityProp = 16.0,
-  ambientLightIntensity: ambientLightIntensityProp = 9.6,
+  sunLightIntensity: sunLightIntensityProp = 1.0,
+  ambientLightIntensity: ambientLightIntensityProp = 0.65,
   skyTurbidity: skyTurbidityProp = 6,
   skyRayleigh: skyRayleighProp = 2,
   mieCoefficient: mieCoefficientProp = 0.005,
@@ -127,6 +135,11 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   onToggleHelp,
   floorTextureUrl,
   onFloorTextureChange,
+  isPlayerVisionMode = false,
+  onTogglePlayerVisionMode,
+  onToggleTorch,
+  isForgeMenuOpen = false,
+  onToggleForgeMenu,
 }) => {
   const [showEnvMenu, setShowEnvMenu] = useState(false);
   const [availableTextures, setAvailableTextures] = useState<{name: string, url: string}[]>([]);
@@ -301,14 +314,41 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
     let hour = 12;
     let fog = false;
     let rain = false;
+    let ambient = 0.65;
+    let sun = 1.0;
 
-    if (preset === 'night') hour = 24;
-    if (preset === 'sunset') hour = 18;
-    if (preset === 'fog') { hour = 10; fog = true; }
-    if (preset === 'storm') { hour = 14; rain = true; fog = true; }
+    if (preset === 'night') {
+      hour = 24;
+      ambient = 0.03;
+      sun = 0.08;
+    } else if (preset === 'sunset') {
+      hour = 18;
+      ambient = 0.35;
+      sun = 0.7;
+    } else if (preset === 'fog') {
+      hour = 10;
+      fog = true;
+      ambient = 0.4;
+      sun = 0.5;
+    } else if (preset === 'storm') {
+      hour = 14;
+      rain = true;
+      fog = true;
+      ambient = 0.22;
+      sun = 0.35;
+    }
+
+    setInternalAmbientLightIntensity(ambient);
+    setInternalSunLightIntensity(sun);
 
     if (onTimeOfDayChange) onTimeOfDayChange(preset);
-    triggerEnvChange({ timeOfDayHour: hour, hasFog: fog, hasRain: rain });
+    triggerEnvChange({
+      timeOfDayHour: hour,
+      hasFog: fog,
+      hasRain: rain,
+      ambientLightIntensity: ambient,
+      sunLightIntensity: sun,
+    });
   };
 
   return (
@@ -323,6 +363,38 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                 Fase de Posicionamento
               </span>
             </div>
+          )}
+
+          {/* DM / Player Vision Mode Toggle */}
+          {isDm && onTogglePlayerVisionMode && (
+            <button
+              onClick={onTogglePlayerVisionMode}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border backdrop-blur-md transition-all ${
+                isPlayerVisionMode
+                  ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300 shadow-sm shadow-cyan-500/20'
+                  : 'bg-slate-900/90 hover:bg-slate-800 border-slate-700/60 text-slate-300'
+              }`}
+              title={isPlayerVisionMode ? 'Visão dos Jogadores: Monstros fora de tochas/visão ficam ocultos no escuro' : 'Visão do Mestre: Todos os monstros visíveis'}
+            >
+              <Eye className={`w-3.5 h-3.5 ${isPlayerVisionMode ? 'text-cyan-400' : 'text-slate-400'}`} />
+              <span>{isPlayerVisionMode ? 'Visão: Jogador (FOW)' : 'Visão: Mestre'}</span>
+            </button>
+          )}
+
+          {/* DM 3D Building Blocks & Forge Toggle */}
+          {isDm && onToggleForgeMenu && (
+            <button
+              onClick={onToggleForgeMenu}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border backdrop-blur-md transition-all ${
+                isForgeMenuOpen
+                  ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-sm shadow-amber-500/20'
+                  : 'bg-slate-900/90 hover:bg-slate-800 border-slate-700/60 text-slate-300'
+              }`}
+              title="Forja de Cenários 3D (Paredes, Pilares, Grade & Magias)"
+            >
+              <Box className={`w-3.5 h-3.5 ${isForgeMenuOpen ? 'text-amber-400' : 'text-slate-400'}`} />
+              <span>Forja 3D</span>
+            </button>
           )}
 
           {/* DM Environment Settings Toggle */}
@@ -420,7 +492,20 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                             min="0"
                             max="24"
                             value={timeOfDayHour}
-                            onChange={(e) => triggerEnvChange({ timeOfDayHour: parseInt(e.target.value) })}
+                            onChange={(e) => {
+                              const h = parseInt(e.target.value);
+                              const isNight = h < 6 || h > 19;
+                              const isSunset = h >= 17 && h <= 19;
+                              const ambient = isNight ? 0.03 : (isSunset ? 0.35 : 0.65);
+                              const sun = isNight ? 0.08 : (isSunset ? 0.7 : 1.0);
+                              setInternalAmbientLightIntensity(ambient);
+                              setInternalSunLightIntensity(sun);
+                              triggerEnvChange({
+                                timeOfDayHour: h,
+                                ambientLightIntensity: ambient,
+                                sunLightIntensity: sun,
+                              });
+                            }}
                             className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
                           />
                         </div>
@@ -917,6 +1002,21 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
               >
                 <RotateCw className="w-3.5 h-3.5" />
               </button>
+
+              {onToggleTorch && (
+                <button
+                  onClick={() => onToggleTorch(selectedCombatant)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold transition-all border ml-1 active:scale-95 ${
+                    selectedCombatant.hasTorch
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/20'
+                      : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                  }`}
+                  title={selectedCombatant.hasTorch ? 'Apagar Tocha' : 'Acender Tocha 3D (20ft plena / 20ft penumbra)'}
+                >
+                  <Flame className={`w-3.5 h-3.5 ${selectedCombatant.hasTorch ? 'text-amber-400 animate-pulse' : ''}`} />
+                  <span>{selectedCombatant.hasTorch ? 'Tocha Acesa' : 'Acender Tocha'}</span>
+                </button>
+              )}
             </div>
           </div>
         )}

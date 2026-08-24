@@ -1456,6 +1456,9 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                           hasRain={currentScene?.hasRain}
                           floorTextureUrl={currentScene?.floorTextureUrl}
                           {...(currentScene?.environmentSettings || {})}
+                          initialBuildingBlocks={currentScene?.buildingBlocks || currentScene?.environmentSettings?.building_blocks_3d || []}
+                          initialGridConfig={currentScene?.gridConfig3D || currentScene?.environmentSettings?.grid_config_3d}
+                          initialTokenElevations={currentScene?.tokenElevations || currentScene?.environmentSettings?.token_elevations}
                           interactive={true}
                           userRole="player"
                         />
