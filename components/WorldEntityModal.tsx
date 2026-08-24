@@ -58,7 +58,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   defaultCategory = 'npc',
   editingEntity = null,
 }) => {
-  const { activeWorld, createWorldEntity, updateWorldEntity } = useWorld();
+  const { activeWorld, worldEntities, createWorldEntity, updateWorldEntity } = useWorld();
   const { settings } = useUserSettings();
   const [category, setCategory] = useState<WorldEntityCategory>(defaultCategory);
   const [name, setName] = useState('');
@@ -100,9 +100,6 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   const [questObjectives, setQuestObjectives] = useState<QuestObjective[]>([]);
   const [newObjectiveDesc, setNewObjectiveDesc] = useState<string>('');
   const [newObjectiveOptional, setNewObjectiveOptional] = useState<boolean>(false);
-  
-  // Lista de todas as outras entidades no mundo atual
-  const { worldEntities } = useWorld();
   
   // Lightbox State
   const [lightboxOpen, setLightboxOpen] = useState(false);

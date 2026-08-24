@@ -40,6 +40,8 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
 }) => {
   const {
     broadcastToPlayerView,
+    openSheet,
+    currentTurnIndex,
   } = useLiveCockpit();
 
   const {
@@ -59,7 +61,7 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
     setConfirmDeleteCombatant,
   } = useLiveCockpitStudioStore();
 
-  const isTurn = idx === useLiveCockpit().currentTurnIndex;
+  const isTurn = idx === currentTurnIndex;
   const isTarget = c.id === selectedTargetId;
   const isExpanded = expandedId === c.id;
   const isStatusOpen = statusMenuOpen === c.id;
@@ -262,7 +264,6 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
               <h4
                 onClick={(e) => {
                   e.stopPropagation();
-                  const { openSheet } = useLiveCockpit();
                   openSheet(c.id || c.name, c.type === 'player' ? 'pc' : c.type, c.name, c);
                 }}
                 className="font-bold text-slate-100 text-xs flex items-center gap-1 cursor-pointer hover:text-amber-400 hover:underline transition-colors truncate"

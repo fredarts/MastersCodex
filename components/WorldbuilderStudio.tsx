@@ -51,6 +51,14 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
     setEditingWorldId(null);
   };
 
+  const activeWorldCampaigns = React.useMemo(() => {
+    return userCampaigns.filter((c) => {
+      if (c.role !== 'dm') return false;
+      if (!activeWorld) return true;
+      return !c.worldId || c.worldId === activeWorld.id;
+    });
+  }, [userCampaigns, activeWorld]);
+
   if (isEditingActiveWorld && activeWorld) {
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -101,14 +109,6 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
       </div>
     );
   }
-
-  const activeWorldCampaigns = React.useMemo(() => {
-    return userCampaigns.filter((c) => {
-      if (c.role !== 'dm') return false;
-      if (!activeWorld) return true;
-      return !c.worldId || c.worldId === activeWorld.id;
-    });
-  }, [userCampaigns, activeWorld]);
 
   return (
     <div className="flex-1 bg-[#0a0d14] flex flex-col overflow-hidden select-none">

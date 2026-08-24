@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
+import { AppProviders } from '@/components/AppProviders';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useWorld } from '@/lib/hooks/useWorld';
@@ -245,187 +246,234 @@ function MainApp() {
     setActiveTab('ai');
   };
 
-  if (isLandingPage) {
-    return (
-      <div className="min-h-screen w-screen overflow-y-auto bg-[#06080d] text-slate-100">
-        <LandingPage
-          onEnterDM={() => {
-            setRoleMode('dm');
-            setIsLandingPage(false);
-          }}
-          onEnterPlayer={() => {
-            setRoleMode('player');
-            setIsLandingPage(false);
-          }}
-          onOpenAuthModal={() => setIsAuthModalOpen(true)}
-          onLoadDemo={() => {
-            loadDemoEverything();
-            setRoleMode('dm');
-            setIsLandingPage(false);
-          }}
-        />
-
-        {/* Auth Modal directly accessible from Landing Page */}
-        {isAuthModalOpen && (
-          <AuthModal
-            isOpen={isAuthModalOpen}
-            onClose={() => setIsAuthModalOpen(false)}
-          />
-        )}
-      </div>
-    );
-  }
-
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-[#07090e] text-slate-100">
-      {/* Top Header */}
-      <Header
-        onOpenSearch={() => setIsCompendiumOpen(true)}
-        onOpenPlayerView={() => setIsPlayerViewOpen(true)}
-        onOpenAuthModal={() => setIsAuthModalOpen(true)}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        isSidebarCollapsed={isSidebarCollapsed}
-        onToggleSidebar={toggleSidebar}
-        isAIPanelCollapsed={isAIPanelCollapsed}
-        onToggleAIPanel={roleMode === 'player' ? undefined : toggleAIPanel}
-        onGoToLandingPage={() => setIsLandingPage(true)}
-      />
-
-      {/* Main Workspace Body: Switch based on Role Mode */}
-      {roleMode === 'player' ? (
-        <PlayerLobby onOpenPlayerView={() => setIsPlayerViewOpen(true)} />
-      ) : (
-        <div className="flex-1 flex overflow-hidden relative">
-          {/* Left Sidebar Navigation */}
-          <Sidebar
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            onLoadEncounter={handleLoadEncounter}
-            onOpenCreateCampaign={() => {
-              setSelectedWorldForCampaign(activeWorld);
-              setIsCreateCampaignOpen(true);
+    <>
+      {/* Landing Page Mode */}
+      {isLandingPage ? (
+        <div className="min-h-screen w-screen overflow-y-auto bg-[#06080d] text-slate-100">
+          <LandingPage
+            onEnterDM={() => {
+              setRoleMode('dm');
+              setIsLandingPage(false);
             }}
-            onLoadDemoEverything={handleLoadDemoEverything}
-            isCollapsed={isSidebarCollapsed}
-            onToggleCollapse={toggleSidebar}
+            onEnterPlayer={() => {
+              setRoleMode('player');
+              setIsLandingPage(false);
+            }}
+            onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            onLoadDemo={() => {
+              loadDemoEverything();
+              setRoleMode('dm');
+              setIsLandingPage(false);
+            }}
+          />
+        </div>
+      ) : (
+        <div className="h-screen w-screen flex flex-col overflow-hidden bg-[#07090e] text-slate-100">
+          {/* Top Header */}
+          <Header
+            onOpenSearch={() => setIsCompendiumOpen(true)}
+            onOpenPlayerView={() => setIsPlayerViewOpen(true)}
+            onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleSidebar={toggleSidebar}
+            isAIPanelCollapsed={isAIPanelCollapsed}
+            onToggleAIPanel={roleMode === 'player' ? undefined : toggleAIPanel}
+            onGoToLandingPage={() => setIsLandingPage(true)}
           />
 
-          {/* Main Workspace Column */}
-          <div className="flex-1 flex flex-col overflow-hidden relative">
-            {/* DM Session & Scene Timeline Navigation Bar (Visible only in Session Studio) */}
-            {activeTab === 'session_studio' && (
-              <SessionNavigator onEquipScene={handleEquipScene} />
-            )}
+          {/* Main Workspace Body: Switch based on Role Mode */}
+          {roleMode === 'player' ? (
+            <PlayerLobby onOpenPlayerView={() => setIsPlayerViewOpen(true)} />
+          ) : (
+            <div className="flex-1 flex overflow-hidden relative">
+              {/* Left Sidebar Navigation */}
+              <Sidebar
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                onLoadEncounter={handleLoadEncounter}
+                onOpenCreateCampaign={() => {
+                  setSelectedWorldForCampaign(activeWorld);
+                  setIsCreateCampaignOpen(true);
+                }}
+                onLoadDemoEverything={handleLoadDemoEverything}
+                isCollapsed={isSidebarCollapsed}
+                onToggleCollapse={toggleSidebar}
+              />
 
-            {/* Main Central DM Workspace Module */}
-            <main className="flex-1 flex overflow-hidden relative">
-              {activeTab === 'worldbuilder' && (
-                <WorldbuilderStudio
-                  onOpenCreateCampaignWithWorld={handleOpenCreateCampaignWithWorld}
-                  onSelectCampaign={handleSelectCampaignFromWorld}
-                />
-              )}
+              {/* Main Workspace Column */}
+              <div className="flex-1 flex flex-col overflow-hidden relative">
+                {/* DM Session & Scene Timeline Navigation Bar (Visible only in Session Studio) */}
+                {activeTab === 'session_studio' && (
+                  <SessionNavigator onEquipScene={handleEquipScene} />
+                )}
 
-              {activeTab === 'live_cockpit' && (
-                <LiveCockpitStudio
-                  onGenerateLoot={handleGenerateLootForCombat}
-                  onOpenPlayerView={() => setIsPlayerViewOpen(true)}
-                  onOpenAudioPanel={() => setIsAudioModalOpen(true)}
-                />
-              )}
+                {/* Main Central DM Workspace Module */}
+                <main className="flex-1 flex overflow-hidden relative">
+                  {activeTab === 'worldbuilder' && (
+                    <WorldbuilderStudio
+                      onOpenCreateCampaignWithWorld={handleOpenCreateCampaignWithWorld}
+                      onSelectCampaign={handleSelectCampaignFromWorld}
+                    />
+                  )}
 
-              {activeTab === 'calendar' && (
-                <CampaignCalendarStudio />
-              )}
+                  {activeTab === 'live_cockpit' && (
+                    <LiveCockpitStudio
+                      onGenerateLoot={handleGenerateLootForCombat}
+                      onOpenPlayerView={() => setIsPlayerViewOpen(true)}
+                      onOpenAudioPanel={() => setIsAudioModalOpen(true)}
+                    />
+                  )}
 
-              {activeTab === 'session_studio' && (
-                <SessionStudio 
-                  onEquipScene={handleEquipScene}
-                  isMainSidebarCollapsed={isSidebarCollapsed}
-                  onSetMainSidebarCollapsed={(val) => {
-                    setIsSidebarCollapsed(val);
-                    if (typeof window !== 'undefined') {
-                      localStorage.setItem('masters_codex_sidebar_collapsed', String(val));
-                    }
-                  }}
-                />
-              )}
+                  {activeTab === 'calendar' && (
+                    <CampaignCalendarStudio />
+                  )}
 
-              {activeTab === 'campaign_settings' && (
-                <CampaignSettingsStudio />
-              )}
+                  {activeTab === 'session_studio' && (
+                    <SessionStudio 
+                      onEquipScene={handleEquipScene}
+                      isMainSidebarCollapsed={isSidebarCollapsed}
+                      onSetMainSidebarCollapsed={(val) => {
+                        setIsSidebarCollapsed(val);
+                        if (typeof window !== 'undefined') {
+                          localStorage.setItem('masters_codex_sidebar_collapsed', String(val));
+                        }
+                      }}
+                    />
+                  )}
 
-              {activeTab === 'combat' && (
-                <CombatTracker
-                  combatants={combatants}
-                  setCombatants={setCombatants}
-                  currentTurnIndex={currentTurnIndex}
-                  setCurrentTurnIndex={setCurrentTurnIndex}
-                  roundCount={roundCount}
-                  setRoundCount={setRoundCount}
-                  onGenerateLoot={handleGenerateLootForCombat}
-                  onLoadDemoEverything={handleLoadDemoEverything}
-                />
-              )}
+                  {activeTab === 'campaign_settings' && (
+                    <CampaignSettingsStudio />
+                  )}
 
-              {activeTab === 'map' && <MapMaker combatants={combatants} />}
+                  {activeTab === 'combat' && (
+                    <CombatTracker
+                      combatants={combatants}
+                      setCombatants={setCombatants}
+                      currentTurnIndex={currentTurnIndex}
+                      setCurrentTurnIndex={setCurrentTurnIndex}
+                      roundCount={roundCount}
+                      setRoundCount={setRoundCount}
+                      onGenerateLoot={handleGenerateLootForCombat}
+                      onLoadDemoEverything={handleLoadDemoEverything}
+                    />
+                  )}
 
-              {activeTab === 'ai' && (
-                <AICoPilot
-                  generatedLootResult={generatedLootResult}
-                  isCollapsed={false}
-                />
-              )}
+                  {activeTab === 'map' && <MapMaker combatants={combatants} />}
 
-              {activeTab === 'lore' && <LoreGraph />}
-
-              {activeTab === 'compendium' && (
-                <div className="flex-1 h-full w-full overflow-hidden flex flex-col bg-[#0a0d14]">
-                  <CompendiumView />
-                </div>
-              )}
-
-              {activeTab === 'audio' && (
-                <AudioMaestroPanel />
-              )}
-
-              {/* Right Panel AI Assistant always accessible on desktop when not on AI, Worldbuilder, Calendar, SessionStudio, Campaign Settings or Compendium tab */}
-              {activeTab !== 'ai' && activeTab !== 'worldbuilder' && activeTab !== 'calendar' && activeTab !== 'session_studio' && activeTab !== 'campaign_settings' && activeTab !== 'compendium' && (
-                !isAIPanelCollapsed ? (
-                  <div className="hidden xl:block h-full transition-all duration-300">
+                  {activeTab === 'ai' && (
                     <AICoPilot
                       generatedLootResult={generatedLootResult}
-                      isCollapsed={isAIPanelCollapsed}
-                      onToggleCollapse={toggleAIPanel}
+                      isCollapsed={false}
                     />
-                  </div>
-                ) : (
-                  <div className="hidden xl:flex items-center absolute right-0 top-1/2 -translate-y-1/2 z-30">
-                    <button
-                      onClick={toggleAIPanel}
-                      className="bg-[#161c28] hover:bg-[#1f2738] text-purple-400 hover:text-purple-300 border border-r-0 border-purple-500/40 py-4 px-1.5 rounded-l-xl shadow-xl backdrop-blur-sm flex flex-col items-center gap-2 transition-all group cursor-pointer"
-                      title="Expandir Widget IA Co-Mestre"
-                    >
-                      <Sparkles className="w-4 h-4 animate-pulse group-hover:scale-110 transition-transform" />
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300 [writing-mode:vertical-lr] rotate-180">
-                        IA CO-MESTRE
-                      </span>
-                    </button>
-                  </div>
-                )
-              )}
-            </main>
-          </div>
+                  )}
+
+                  {activeTab === 'lore' && <LoreGraph />}
+
+                  {activeTab === 'compendium' && (
+                    <div className="flex-1 h-full w-full overflow-hidden flex flex-col bg-[#0a0d14]">
+                      <CompendiumView />
+                    </div>
+                  )}
+
+                  {activeTab === 'audio' && (
+                    <AudioMaestroPanel />
+                  )}
+
+                  {/* Right Panel AI Assistant always accessible on desktop when not on AI, Worldbuilder, Calendar, SessionStudio, Campaign Settings or Compendium tab */}
+                  {activeTab !== 'ai' && activeTab !== 'worldbuilder' && activeTab !== 'calendar' && activeTab !== 'session_studio' && activeTab !== 'campaign_settings' && activeTab !== 'compendium' && (
+                    !isAIPanelCollapsed ? (
+                      <div className="hidden xl:block h-full transition-all duration-300">
+                        <AICoPilot
+                          generatedLootResult={generatedLootResult}
+                          isCollapsed={isAIPanelCollapsed}
+                          onToggleCollapse={toggleAIPanel}
+                        />
+                      </div>
+                    ) : (
+                      <div className="hidden xl:flex items-center absolute right-0 top-1/2 -translate-y-1/2 z-30">
+                        <button
+                          onClick={toggleAIPanel}
+                          className="bg-[#161c28] hover:bg-[#1f2738] text-purple-400 hover:text-purple-300 border border-r-0 border-purple-500/40 py-4 px-1.5 rounded-l-xl shadow-xl backdrop-blur-sm flex flex-col items-center gap-2 transition-all group cursor-pointer"
+                          title="Expandir Widget IA Co-Mestre"
+                        >
+                          <Sparkles className="w-4 h-4 animate-pulse group-hover:scale-110 transition-transform" />
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300 [writing-mode:vertical-lr] rotate-180">
+                            IA CO-MESTRE
+                          </span>
+                        </button>
+                      </div>
+                    )
+                  )}
+                </main>
+              </div>
+            </div>
+          )}
+
+          {/* Dock de Minimizados */}
+          <MinimizedSheetsDock
+            activeSheets={activeSheets}
+            onMaximizeSheet={maximizeSheet}
+            onCloseSheet={closeSheet}
+          />
+
+          {/* Modais de Fichas de Jogadores (PC) */}
+          {activeSheets
+            .filter((s) => (s.type === 'pc' || (s.type as string) === 'player') && s.state === 'open')
+            .map((sheetState) => {
+              const matchingSheet = characterSheets.find((cs) => {
+                if (cs.id === sheetState.id) return true;
+                const cClean = sheetState.characterName.split('(')[0].trim().toLowerCase();
+                const sheetClean = cs.characterName.split('(')[0].trim().toLowerCase();
+                return sheetClean === cClean || sheetClean.includes(cClean) || cClean.includes(sheetClean);
+              });
+              // Se não encontrou a ficha no array sincronizado, usa um fallback inteligente com o nome do personagem para NUNCA falhar silenciosamente
+              const sheetToRender = matchingSheet || (sheetState.data && sheetState.data.attributes ? sheetState.data : (() => {
+                const fallback = createEmptyCharacterSheet('player-1', activeCampaign?.id);
+                fallback.id = sheetState.id;
+                fallback.characterName = sheetState.characterName.split('(')[0].trim() || 'Aventureiro';
+                return fallback;
+              })());
+
+              return (
+                <CharacterSheetModal
+                  key={sheetState.id}
+                  sheet={sheetToRender}
+                  isOpen={true}
+                  onClose={() => closeSheet(sheetState.id)}
+                  onMinimize={() => minimizeSheet(sheetState.id)}
+                  onSave={handleSaveSheet}
+                />
+              );
+            })}
+
+          {/* Modais de Stat Blocks de Monstros/NPCs */}
+          {activeSheets
+            .filter((s) => (s.type === 'monster' || s.type === 'npc') && s.state === 'open')
+            .map((sheetState) => {
+              const combatant = combatants.find((c) => (c.id || c.name) === sheetState.id) || sheetState.data;
+              if (!combatant) return null;
+              return (
+                <MonsterStatBlockModal
+                  key={sheetState.id}
+                  combatant={combatant}
+                  isOpen={true}
+                  onClose={() => closeSheet(sheetState.id)}
+                  onMinimize={() => minimizeSheet(sheetState.id)}
+                  onRoll={handleMonsterRoll}
+                  onUpdateCombatant={handleUpdateCombatant}
+                />
+              );
+            })}
         </div>
       )}
 
-      {/* Global Compendium Search Modal (`Ctrl + Space`) */}
+      {/* === GLOBAL MODALS (always rendered to preserve hook count) === */}
       <CompendiumModal
         isOpen={isCompendiumOpen}
         onClose={() => setIsCompendiumOpen(false)}
       />
-
-      {/* Player View Second Screen Modal */}
       <PlayerViewModal
         isOpen={isPlayerViewOpen}
         onClose={() => setIsPlayerViewOpen(false)}
@@ -433,98 +481,31 @@ function MainApp() {
         currentTurnIndex={currentTurnIndex}
         roundCount={roundCount}
       />
-
-      {/* Audio Maestro Modal */}
       <AudioMaestroModal 
         isOpen={isAudioModalOpen}
         onClose={() => setIsAudioModalOpen(false)}
       />
-
-      {/* User Auth Modal (Google OAuth & Email Login) */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
       />
-
-      {/* User Settings Modal */}
       <UserSettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
       />
-
-      {/* Create Campaign Modal */}
       <CreateCampaignModal
         isOpen={isCreateCampaignOpen}
         onClose={() => setIsCreateCampaignOpen(false)}
         selectedWorldForCampaign={selectedWorldForCampaign}
       />
-
-      {/* Dock de Minimizados */}
-      <MinimizedSheetsDock
-        activeSheets={activeSheets}
-        onMaximizeSheet={maximizeSheet}
-        onCloseSheet={closeSheet}
-      />
-
-      {/* Modais de Fichas de Jogadores (PC) */}
-      {activeSheets
-        .filter((s) => (s.type === 'pc' || (s.type as string) === 'player') && s.state === 'open')
-        .map((sheetState) => {
-          const matchingSheet = characterSheets.find((cs) => {
-            if (cs.id === sheetState.id) return true;
-            const cClean = sheetState.characterName.split('(')[0].trim().toLowerCase();
-            const sheetClean = cs.characterName.split('(')[0].trim().toLowerCase();
-            return sheetClean === cClean || sheetClean.includes(cClean) || cClean.includes(sheetClean);
-          });
-          // Se não encontrou a ficha no array sincronizado, usa um fallback inteligente com o nome do personagem para NUNCA falhar silenciosamente
-          const sheetToRender = matchingSheet || (sheetState.data && sheetState.data.attributes ? sheetState.data : (() => {
-            const fallback = createEmptyCharacterSheet('player-1', activeCampaign?.id);
-            fallback.id = sheetState.id;
-            fallback.characterName = sheetState.characterName.split('(')[0].trim() || 'Aventureiro';
-            return fallback;
-          })());
-
-          return (
-            <CharacterSheetModal
-              key={sheetState.id}
-              sheet={sheetToRender}
-              isOpen={true}
-              onClose={() => closeSheet(sheetState.id)}
-              onMinimize={() => minimizeSheet(sheetState.id)}
-              onSave={handleSaveSheet}
-            />
-          );
-        })}
-
-      {/* Modais de Stat Blocks de Monstros/NPCs */}
-      {activeSheets
-        .filter((s) => (s.type === 'monster' || s.type === 'npc') && s.state === 'open')
-        .map((sheetState) => {
-          const combatant = combatants.find((c) => (c.id || c.name) === sheetState.id) || sheetState.data;
-          if (!combatant) return null;
-          return (
-            <MonsterStatBlockModal
-              key={sheetState.id}
-              combatant={combatant}
-              isOpen={true}
-              onClose={() => closeSheet(sheetState.id)}
-              onMinimize={() => minimizeSheet(sheetState.id)}
-              onRoll={handleMonsterRoll}
-              onUpdateCombatant={handleUpdateCombatant}
-            />
-          );
-        })}
-
-      {/* Campaign Calendar & Chronology Modals */}
       <RestModal />
       <TimeAdvanceModal />
       <CalendarDayModal />
       <CalendarSettingsModal />
-    </div>
+    </>
   );
 }
 
-import { AppProviders } from '@/components/AppProviders';
 
 export default function Home() {
   return (

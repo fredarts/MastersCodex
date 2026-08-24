@@ -216,6 +216,9 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     setCasterTokenKey,
     spellTargetPosition,
     setSpellTargetPosition,
+    pings,
+    broadcastPingLocation,
+    removePing,
   } = useLiveCockpit();
 
   const pendingAttack = useLiveCockpitStudioStore((state) => state.pendingAttack);
@@ -429,7 +432,6 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const floorTextureUrlRef = useRef<string | undefined>(floorTextureUrl);
   const pingGroupRef = useRef<THREE.Group | null>(null);
 
-  const { pings, broadcastPingLocation, removePing } = useLiveCockpit();
   useEffect(() => {
     floorTextureUrlRef.current = floorTextureUrl;
   }, [floorTextureUrl]);

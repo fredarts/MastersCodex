@@ -84,7 +84,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const { user } = useAuth();
   const [isNotebookOpen, setIsNotebookOpen] = useState(false);
   const [showStreamerOverlayModal, setShowStreamerOverlayModal] = useState(false);
-  const { characterSheets } = useCharacterSync({
+  const { characterSheets, saveSheet } = useCharacterSync({
     userId: user?.id || '',
     campaignId: activeCampaign?.id,
   });
@@ -797,7 +797,6 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
             [spell.level]: { ...currentSlots, used: currentSlots.used + 1 },
           },
         };
-        const { saveSheet } = useCharacterSync({ userId: user?.id || '' });
         await saveSheet(updatedSheet);
       } else {
         toast.error(`Sem slots disponíveis para o Nível ${spell.level}!`);
@@ -892,7 +891,6 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
             [spell.level]: { ...currentSlots, used: currentSlots.used + 1 },
           },
         };
-        const { saveSheet } = useCharacterSync({ userId: user?.id || '' });
         await saveSheet(updatedSheet);
       } else {
         toast.error(`Sem slots disponíveis para o Nível ${spell.level}!`);
@@ -994,7 +992,6 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
             [spell.level]: { ...currentSlots, used: currentSlots.used + 1 },
           },
         };
-        const { saveSheet } = useCharacterSync({ userId: user?.id || '' });
         await saveSheet(updatedSheet);
       }
     }
@@ -1076,7 +1073,6 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
             },
           },
         };
-        const { saveSheet } = useCharacterSync({ userId: user?.id || '' });
         await saveSheet(updatedSheet);
         toast.success(`Magia ${spell.name} lançada! Slot de Nível ${spell.level} consumido.`);
       } else {

@@ -63,6 +63,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
     drawings,
     updateCombatantState,
     broadcastXCardAlert,
+    broadcastChatMessage,
   } = useLiveCockpit();
   const { user } = useAuth();
 
@@ -766,7 +767,6 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
             content: command,
             timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
           };
-          const { broadcastChatMessage } = useLiveCockpit();
           if (broadcastChatMessage) broadcastChatMessage(message);
         }}
         activeSheet={activeSheet}
