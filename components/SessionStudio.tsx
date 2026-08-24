@@ -30,6 +30,8 @@ import {
   ChevronRight,
   Flame,
   Zap,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -65,9 +67,15 @@ interface CharacterSheetMinimal {
 
 interface SessionStudioProps {
   onEquipScene?: (scene: GameScene) => void;
+  isMainSidebarCollapsed?: boolean;
+  onSetMainSidebarCollapsed?: (collapsed: boolean) => void;
 }
 
-export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) => {
+export const SessionStudio: React.FC<SessionStudioProps> = ({ 
+  onEquipScene,
+  isMainSidebarCollapsed,
+  onSetMainSidebarCollapsed,
+}) => {
   const { activeCampaign, campaignMembers, createFeedEvent } = useCampaign();
   const { showAlert } = useCustomDialog();
   const { 
@@ -88,6 +96,25 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
   const [activeSubTab, setActiveSubTab] = useState<'image' | 'audio' | 'combat' | 'voice' | 'notes' | 'worldbuilding' | 'dungeon-maps'>('image');
   const [isScenesSidebarCollapsed, setIsScenesSidebarCollapsed] = useState(false);
   const [isSubTabsCollapsed, setIsSubTabsCollapsed] = useState(false);
+  const [is3DFullFocus, setIs3DFullFocus] = useState(false);
+  const wasMainSidebarCollapsedBeforeFocusRef = React.useRef<boolean>(false);
+
+  const toggle3DFullFocus = () => {
+    setIs3DFullFocus((prev) => {
+      const next = !prev;
+      if (next) {
+        wasMainSidebarCollapsedBeforeFocusRef.current = isMainSidebarCollapsed ?? false;
+        if (onSetMainSidebarCollapsed) {
+          onSetMainSidebarCollapsed(true);
+        }
+      } else {
+        if (onSetMainSidebarCollapsed && !wasMainSidebarCollapsedBeforeFocusRef.current) {
+          onSetMainSidebarCollapsed(false);
+        }
+      }
+      return next;
+    });
+  };
   const [worldSearch, setWorldSearch] = useState('');
   const [worldFilterCat, setWorldFilterCat] = useState('all');
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
@@ -751,7 +778,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* Left Scenes Timeline Sidebar */}
         <div className={`bg-[#0f141d] border-b md:border-b-0 md:border-r border-[#2a3449] flex flex-col justify-between p-3 select-none transition-all duration-300 flex-shrink-0 overflow-hidden relative z-10 ${
-          isScenesSidebarCollapsed ? 'w-full md:w-16' : 'w-full md:w-64'
+          is3DFullFocus ? 'hidden md:hidden' : isScenesSidebarCollapsed ? 'w-full md:w-16' : 'w-full md:w-64'
         }`}>
           <div>
             <div className={`flex items-center ${isScenesSidebarCollapsed ? 'justify-center flex-col gap-2 mb-3' : 'justify-between px-2 mb-2'}`}>
@@ -858,27 +885,34 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Scene Editor Header */}
-              <div className="bg-[#121824] border-b border-[#2a3449] p-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="bg-[#0a0d14] border border-[#2a3449] focus:border-purple-500 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-100 w-72"
-                  />
-                  <select
-                    value={sceneType}
-                    onChange={(e) => setSceneType(e.target.value as SceneType)}
-                    className="bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-amber-300 font-bold"
-                  >
-                    <option value="social">🍺 Social / Taverna</option>
-                    <option value="dialogue">🗣️ Diálogo NPC</option>
-                    <option value="combat">⚔️ Combate</option>
-                    <option value="exploration">🗺️ Exploração</option>
-                  </select>
+              <div className="p-3 bg-[#0d111a] border-b border-[#2a3449] flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                  <span className="p-2 rounded-xl bg-[#161c28] border border-[#2a3449] text-purple-400">
+                    {getSceneIcon(sceneType)}
+                  </span>
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Título da Cena..."
+                      className="w-full bg-transparent font-bold text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-b focus:border-purple-500 pb-0.5"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <select
+                    value={sceneType}
+                    onChange={(e) => setSceneType(e.target.value as SceneType)}
+                    className="bg-[#161c28] border border-[#2a3449] rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="combat">⚔️ Combate</option>
+                    <option value="social">🍺 Social</option>
+                    <option value="dialogue">💬 Diálogo</option>
+                    <option value="exploration">🧭 Exploração</option>
+                  </select>
+
                   <button
                     onClick={() => {
                       if (selectedScene) {
@@ -921,7 +955,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
               <div className="flex-1 flex overflow-hidden">
                 {/* Collapsible Sub-Tabs Sidebar (Sandwich Menu Style) */}
                 <aside className={`bg-[#0f141d] border-r border-[#2a3449] flex flex-col justify-between transition-all duration-300 z-10 flex-shrink-0 ${
-                  isSubTabsCollapsed ? 'w-full md:w-16' : 'w-full md:w-64'
+                  is3DFullFocus ? 'hidden' : isSubTabsCollapsed ? 'w-full md:w-16' : 'w-full md:w-64'
                 }`}>
                   <div>
                     <div className={`p-3 border-b border-[#2a3449]/60 flex items-center ${isSubTabsCollapsed ? 'justify-center flex-col gap-2' : 'justify-between'} bg-[#121824]/50`}>
@@ -1054,7 +1088,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                 </aside>
 
                 {/* Sub-Tab Editor Content */}
-                <div className="flex-1 overflow-y-auto p-6 bg-[#0a0d14]">
+                <div className={`flex-1 bg-[#0a0d14] ${is3DFullFocus ? 'p-2 overflow-hidden' : 'overflow-y-auto p-6'}`}>
                 {activeSubTab === 'image' && (
                   <div className="max-w-2xl mx-auto space-y-6">
                     {/* Add Image Options */}
@@ -1478,12 +1512,12 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
                 )}
 
                 {activeSubTab === 'combat' && (
-                  <div className={`w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5 items-start transition-all duration-300 ${
-                    areMenusCollapsed ? 'max-w-[95%] xl:max-w-[1550px]' : 'max-w-7xl'
+                  <div className={`w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 items-start transition-all duration-300 ${
+                    is3DFullFocus ? 'max-w-none px-0' : areMenusCollapsed ? 'max-w-[95%] xl:max-w-[1550px]' : 'max-w-7xl'
                   }`}>
                     {/* Left Column: Monster/Player Selection & Current Scene Combatants List */}
                     <div className={`space-y-3.5 bg-[#121824]/90 p-4 rounded-2xl border border-[#2a3449] shadow-xl transition-all duration-300 ${
-                      areMenusCollapsed ? 'lg:col-span-4' : 'lg:col-span-5'
+                      is3DFullFocus ? 'hidden' : areMenusCollapsed ? 'lg:col-span-4' : 'lg:col-span-5'
                     }`}>
                       {/* Medidor de Dificuldade de Encontros (CR/XP D&D 5e) */}
                       <EncounterDifficultyMeter
@@ -1938,20 +1972,50 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({ onEquipScene }) =>
 
                     {/* Right Column: 3D Battle Grid Interactive Preview */}
                     <div className={`space-y-2.5 bg-[#121824]/90 p-4 rounded-2xl border border-amber-500/30 shadow-xl transition-all duration-300 ${
-                      areMenusCollapsed ? 'lg:col-span-8' : 'lg:col-span-7'
+                      is3DFullFocus ? 'lg:col-span-12 w-full' : areMenusCollapsed ? 'lg:col-span-8' : 'lg:col-span-7'
                     }`}>
                       <div className="flex items-center justify-between text-xs font-bold text-slate-200 uppercase tracking-wider">
                         <span className="flex items-center gap-2">
                           <Swords className="w-4 h-4 text-amber-400" />
                           <span>Pré-configuração e Posicionamento 3D no Grid:</span>
+                          {is3DFullFocus && (
+                            <span className="bg-amber-500/20 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/40 normal-case tracking-normal animate-pulse">
+                              ⚡ Tela Máxima
+                            </span>
+                          )}
                         </span>
-                        <span className="text-[10px] text-amber-400 font-mono font-normal">
-                          Arraste & posicione no painel 3D
-                        </span>
+                        
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-[10px] text-amber-400 font-mono font-normal hidden sm:inline normal-case">
+                            Arraste & posicione no painel 3D
+                          </span>
+                          <button
+                            type="button"
+                            onClick={toggle3DFullFocus}
+                            className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-md active:scale-95 cursor-pointer ${
+                              is3DFullFocus
+                                ? 'bg-amber-500 text-slate-950 border-amber-400 hover:bg-amber-400 font-black'
+                                : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-amber-500/40 hover:border-amber-400'
+                            }`}
+                            title={is3DFullFocus ? 'Restaurar Painéis e Menus da Sessão' : 'Expandir Tela Máxima (Foco Total no Grid de Batalha 3D)'}
+                          >
+                            {is3DFullFocus ? (
+                              <>
+                                <Minimize2 className="w-3.5 h-3.5" />
+                                <span>Restaurar Menus</span>
+                              </>
+                            ) : (
+                              <>
+                                <Maximize2 className="w-3.5 h-3.5" />
+                                <span>Expandir Tela Máxima</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
 
                       <div className={`w-full bg-black rounded-2xl border border-amber-500/30 overflow-hidden relative shadow-2xl transition-all duration-300 ${
-                        areMenusCollapsed ? 'h-[600px]' : 'h-[490px]'
+                        is3DFullFocus ? 'h-[calc(100vh-360px)]' : areMenusCollapsed ? 'h-[460px]' : 'h-[400px]'
                       }`}>
                         {sceneCombatants.length === 0 ? (
                           <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center text-slate-400 bg-slate-950/80 backdrop-blur-sm">

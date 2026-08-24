@@ -339,7 +339,16 @@ function MainApp() {
               )}
 
               {activeTab === 'session_studio' && (
-                <SessionStudio onEquipScene={handleEquipScene} />
+                <SessionStudio 
+                  onEquipScene={handleEquipScene}
+                  isMainSidebarCollapsed={isSidebarCollapsed}
+                  onSetMainSidebarCollapsed={(val) => {
+                    setIsSidebarCollapsed(val);
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('masters_codex_sidebar_collapsed', String(val));
+                    }
+                  }}
+                />
               )}
 
               {activeTab === 'campaign_settings' && (
