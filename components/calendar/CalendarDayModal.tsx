@@ -18,6 +18,7 @@ import {
   Compass
 } from 'lucide-react';
 import { useCampaignCalendar } from '@/lib/hooks/useCampaignCalendar';
+import { useWorld } from '@/lib/hooks/useWorld';
 import { 
   calculateMoonPhases, 
   calculateTide, 
@@ -38,6 +39,8 @@ export const CalendarDayModal: React.FC = () => {
     createCalendarNote,
     deleteCalendarNote,
   } = useCampaignCalendar();
+
+  const { worldEntities } = useWorld();
 
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
@@ -68,6 +71,14 @@ export const CalendarDayModal: React.FC = () => {
   const dayNotes = calendarNotes.filter(
     (n) => n.year === year && n.monthIndex === monthIndex && n.day === day
   );
+
+  // Filtrar eventos históricos da Cronologia do Mundo ocorridos neste mês e dia (qualquer ano)
+  const historicalEvents = worldEntities.filter((e) => {
+    if (e.category !== 'lore_event' && e.category !== 'military_conflict' && e.category !== 'tradition') {
+      if (!e.attributes?.era && e.attributes?.yearNumeric === undefined) return false;
+    }
+    return e.attributes?.monthIndex === monthIndex && e.attributes?.day === day;
+  });
 
   const handleSetAsCurrentDay = async () => {
     await setInGameDate(year, monthIndex, day, calendarState.currentHour, calendarState.currentMinute);
@@ -141,44 +152,75 @@ export const CalendarDayModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-6 space-y-5 overflow-y-auto flex-1">
-          {/* Celestial & Astronomy Info Bar */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Moons */}
-            <div className="bg-[#121824] border border-[#2a3449] p-3 rounded-xl space-y-1.5">
-              <span className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
-                <Moon className="w-3 h-3 text-cyan-400" /> Corpos Celestes & Fases
+        {/* Content Body */}
+        <div className="p-6 overflow-y-auto space-y-5 flex-1">
+          {/* Fases Lunares & Maré */}
+          <div className="bg-[#121824] border border-[#2a3449] p-4 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Moon className="w-3.5 h-3.5 text-amber-400" /> Corpos Celestes & Luas
               </span>
+              {tide && (
+                <span className="text-[11px] text-blue-300 bg-blue-500/10 border border-blue-500/30 px-2 py-0.5 rounded flex items-center gap-1">
+                  <Waves className="w-3 h-3 text-blue-400" /> {tide.label}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {moons.map((m) => (
-                <div key={m.moonId} className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300 font-medium">{m.moonName}:</span>
-                  <span className="text-cyan-300 font-semibold flex items-center gap-1">
-                    {m.phaseLabel} ({m.illuminationPercentage}%)
-                  </span>
+                <div
+                  key={m.moonId}
+                  className="bg-[#0a0d14] border border-[#2a3449]/60 p-2.5 rounded-lg flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">
+                      {m.phase === 'full_moon' ? '🌕' : m.phase === 'new_moon' ? '🌑' : m.phase.includes('waxing') ? '🌓' : '🌗'}
+                    </span>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-200" style={{ color: m.color }}>
+                        {m.moonName}
+                      </h4>
+                      <p className="text-[10px] text-slate-400">{m.phaseLabel}</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-500">{m.illuminationPercentage}% Ilum.</span>
                 </div>
               ))}
             </div>
-
-            {/* Tides & Weather */}
-            <div className="bg-[#121824] border border-[#2a3449] p-3 rounded-xl space-y-1.5">
-              <span className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
-                <Waves className="w-3 h-3 text-blue-400" /> Marés & Fenômenos
-              </span>
-              <div className="text-xs text-slate-300">
-                <p className="font-semibold text-blue-300">{tide.label}</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">Influência gravitacional das luas ativas</p>
-              </div>
-            </div>
           </div>
 
-          {/* Holiday / Festival Banner */}
+          {/* Holiday Banner */}
           {holiday && (
-            <div className="bg-gradient-to-r from-rose-950/40 to-amber-950/30 border border-rose-500/40 p-3 rounded-xl flex items-center gap-3">
-              <span className="text-xl">🎉</span>
+            <div className="bg-gradient-to-r from-rose-500/20 to-amber-500/20 border border-rose-500/40 p-3.5 rounded-xl flex items-start gap-3">
+              <Sparkles className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
               <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400">FESTIVAL / FERIADO REGIONAL</span>
                 <h4 className="text-xs font-bold text-rose-300">{holiday.name}</h4>
                 <p className="text-[11px] text-slate-300 mt-0.5">{holiday.description}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Neste Dia na História (Cronologia do Mundo) */}
+          {historicalEvents.length > 0 && (
+            <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl space-y-2">
+              <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>Neste Dia na História da Cronologia ({historicalEvents.length})</span>
+              </div>
+              <div className="space-y-2">
+                {historicalEvents.map((evt) => (
+                  <div key={evt.id} className="bg-[#0a0d14] border border-[#2a3449] p-3 rounded-lg">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-slate-200">{evt.name}</span>
+                      <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded">
+                        {evt.attributes?.era || evt.attributes?.ano || evt.subType}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 mt-1 font-serif">{evt.shortDesc}</p>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -254,7 +296,7 @@ export const CalendarDayModal: React.FC = () => {
             {/* List of day notes */}
             {dayNotes.length === 0 && !isAddingNote ? (
               <p className="text-xs text-slate-500 italic py-4 text-center border border-dashed border-[#2a3449] rounded-xl bg-[#0c1017]">
-                Nenhum acontecimento registrado neste dia.
+                Nenhum acontecimento recente registrado neste dia.
               </p>
             ) : (
               <div className="space-y-2">

@@ -170,6 +170,8 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   const [editSelectedArtStyle, setEditSelectedArtStyle] = useState<string>('none');
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '9:16' | '16:9' | '3:4' | '4:3'>('9:16');
   const [editAspectRatio, setEditAspectRatio] = useState<'1:1' | '9:16' | '16:9' | '3:4' | '4:3'>('9:16');
+  const [isCombatPinMode, setIsCombatPinMode] = useState(false);
+  const [combatPinIndex, setCombatPinIndex] = useState<number | null>(null);
   const [useCoverAsReference, setUseCoverAsReference] = useState(true);
   const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null);
   const [aiEditPrompt, setAiEditPrompt] = useState('');
@@ -195,6 +197,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         ? editingEntity.tags
         : (attrs.tags ? (typeof attrs.tags === 'string' ? JSON.parse(attrs.tags) : attrs.tags) : []);
       setTags(Array.isArray(resolvedTags) ? resolvedTags : []);
+      setCombatPinIndex(typeof attrs.combatPinIndex === 'number' ? attrs.combatPinIndex : null);
 
       if (editingEntity.category === 'npc') {
         setNpcRace(attrs.npcRace || attrs.race || '');
@@ -348,6 +351,12 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
 
   const handleDeleteImage = (index: number) => {
     setImages((prev) => prev.filter((_, i) => i !== index));
+    setCombatPinIndex((prev) => {
+      if (prev === null) return null;
+      if (prev === index) return null;
+      if (prev > index) return prev - 1;
+      return prev;
+    });
   };
 
   const handleSetCoverImage = (index: number) => {
@@ -356,6 +365,13 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       const selected = prev[index];
       const rest = prev.filter((_, i) => i !== index);
       return [selected, ...rest];
+    });
+    setCombatPinIndex((prev) => {
+      if (prev === null) return null;
+      if (prev === index) return 0;
+      if (prev === 0) return 1;
+      if (prev < index) return prev + 1;
+      return prev;
     });
   };
 
@@ -380,11 +396,21 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
 
       const noTextRule = 'No text, no typography, no letters, no words, no watermark, no signatures, no UI borders.';
 
-      // Construct rich prompt (with consistency instructions if reference is active)
-      let promptText = `High detailed fantasy RPG concept art of ${name.trim() || categoryName}: ${baseDescription}. Genre: ${activeWorld.genre}. ${stylePromptPart} ${extraPrompt.trim() ? `Additional style details: ${extraPrompt.trim()}` : 'Digital painting, atmospheric lighting, 8k resolution, cinematic composition.'} ${noTextRule}`;
-      
-      if (referenceCoverImage) {
+      // Determine the actual aspect ratio (combat pin always uses 1:1)
+      const effectiveAspectRatio = isCombatPinMode ? '1:1' as const : aspectRatio;
+
+      let promptText: string;
+
+      if (isCombatPinMode) {
+        // Combat Pin Mode: front-facing, combat stance, pure white background
+        const pinConsistency = referenceCoverImage
+          ? `Maintain exact facial features, skin tone, hair style, race, physical identity, armor, clothing and aesthetic style from the provided reference image.`
+          : '';
+        promptText = `Full body character art of ${name.trim() || categoryName}, facing directly forward toward the viewer, in a dynamic combat ready stance, holding their weapon or preparing a spell. ${pinConsistency} Character details: ${baseDescription}. The character must be centered in the frame with the entire body visible from head to feet. MANDATORY: Pure clean solid white background (#FFFFFF), absolutely no environment, no scenery, no ground, no shadows on background, no props behind the character. The character should look like a tabletop RPG miniature token. ${stylePromptPart} ${extraPrompt.trim() ? `Additional details: ${extraPrompt.trim()}` : ''} High quality, sharp details, clean edges for easy cutout. ${noTextRule}`;
+      } else if (referenceCoverImage) {
         promptText = `Character visual consistency artwork of ${name.trim() || categoryName}. Maintain exact facial features, skin tone, hair style, race, physical identity and aesthetic style from the provided reference image. Scene, pose or context details: ${baseDescription}. ${stylePromptPart} ${extraPrompt.trim() ? `Additional custom details: ${extraPrompt.trim()}` : ''}. High quality fantasy RPG concept art, cinematic lighting, 8k resolution. ${noTextRule}`;
+      } else {
+        promptText = `High detailed fantasy RPG concept art of ${name.trim() || categoryName}: ${baseDescription}. Genre: ${activeWorld.genre}. ${stylePromptPart} ${extraPrompt.trim() ? `Additional style details: ${extraPrompt.trim()}` : 'Digital painting, atmospheric lighting, 8k resolution, cinematic composition.'} ${noTextRule}`;
       }
 
       const response = await fetch('/api/ai/image', {
@@ -393,7 +419,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         body: JSON.stringify({ 
           prompt: promptText,
           sourceImage: referenceCoverImage,
-          aspectRatio,
+          aspectRatio: effectiveAspectRatio,
           userSettings: settings,
         }),
       });
@@ -404,11 +430,12 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       const base64Data = data.base64;
       let finalUrl = `data:image/jpeg;base64,${base64Data}`;
 
+      const fileSuffix = isCombatPinMode ? '-combat-pin' : '';
       if (isSupabaseConfigured()) {
         try {
           const res = await fetch(finalUrl);
           const blob = await res.blob();
-          const file = new File([blob], generateTimestampId(categoryName.toLowerCase().replace(/\s+/g, '-')) + '.jpg', { type: 'image/jpeg' });
+          const file = new File([blob], generateTimestampId(categoryName.toLowerCase().replace(/\s+/g, '-') + fileSuffix) + '.png', { type: 'image/png' });
           const publicUrl = await storageService.uploadAsset(file, 'avatars');
           finalUrl = publicUrl;
         } catch (uploadErr) {
@@ -416,7 +443,13 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         }
       }
 
-      setImages((prev) => [...prev, finalUrl]);
+      setImages((prev) => {
+        const newImages = [...prev, finalUrl];
+        if (isCombatPinMode) {
+          setCombatPinIndex(newImages.length - 1);
+        }
+        return newImages;
+      });
 
     } catch (err: unknown) {
       console.error('Failed to generate AI image', err);
@@ -498,6 +531,9 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
     setIsSubmitting(true);
 
     const attributes: Record<string, any> = { ...(editingEntity?.attributes || {}) };
+    if (combatPinIndex !== null) {
+      attributes.combatPinIndex = combatPinIndex;
+    }
 
     if (category === 'npc') {
       attributes.npcRace = npcRace.trim();
@@ -1801,9 +1837,9 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                         <button
                           key={r.id}
                           type="button"
-                          onClick={() => setAspectRatio(r.id)}
+                          onClick={() => { setAspectRatio(r.id); setIsCombatPinMode(false); }}
                           className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold transition-all ${
-                            aspectRatio === r.id
+                            aspectRatio === r.id && !isCombatPinMode
                               ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30 ring-1 ring-purple-400'
                               : 'bg-[#161c28] hover:bg-[#1f2738] text-slate-300 border border-[#2a3449]'
                           }`}
@@ -1812,7 +1848,37 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                           {r.label}
                         </button>
                       ))}
+                      {/* Combat Pin Button - Special mode */}
+                      <button
+                        type="button"
+                        onClick={() => { setIsCombatPinMode(true); }}
+                        className={`px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold transition-all flex items-center gap-1 ${
+                          isCombatPinMode
+                            ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400 animate-pulse'
+                            : 'bg-[#161c28] hover:bg-emerald-950 text-emerald-300 border border-emerald-500/40 hover:border-emerald-400'
+                        }`}
+                        title="Gera imagem frontal em posição de combate com fundo branco, ideal para usar como pino/token no mapa 3D de batalha"
+                      >
+                        🎯 Pino de Combate
+                      </button>
                     </div>
+
+                    {/* Combat Pin Mode Info Banner */}
+                    {isCombatPinMode && (
+                      <div className="flex items-center gap-2.5 p-2.5 bg-emerald-950/40 border border-emerald-500/30 rounded-xl animate-fade-in">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center flex-shrink-0">
+                          <Target className="w-4 h-4 text-emerald-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-emerald-200 block">
+                            Modo Pino de Combate Ativo
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            Gera o personagem de frente, em posição de combate, com fundo branco limpo (1:1). Ideal para token/pino no mapa 3D de batalha.
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Visual Consistency Anchor Banner */}
@@ -1905,7 +1971,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                         Imagens da Galeria ({images.length})
                       </span>
                       <span className="text-[10px] text-amber-400/90 font-mono">
-                        ⭐ Capa • 🔍 Zoom • ✨ Edição com IA • 🗑️ Excluir
+                        ⭐ Capa • 🎯 Pino • 🔍 Zoom • ✨ Edição com IA • 🗑️ Excluir
                       </span>
                     </div>
 
@@ -1985,6 +2051,11 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                           {idx === 0 && (
                             <span className="absolute top-1 left-1 bg-amber-500 text-slate-950 text-[9px] font-bold px-1.5 py-0.5 rounded shadow font-mono pointer-events-none flex items-center gap-1">
                               <Star className="w-2.5 h-2.5 fill-slate-950" /> CAPA
+                            </span>
+                          )}
+                          {combatPinIndex === idx && (
+                            <span className="absolute top-1 right-1 bg-emerald-500 text-slate-950 text-[9px] font-bold px-1.5 py-0.5 rounded shadow font-mono pointer-events-none flex items-center gap-1">
+                              <Target className="w-2.5 h-2.5" /> PINO
                             </span>
                           )}
                         </div>

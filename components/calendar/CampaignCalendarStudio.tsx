@@ -46,7 +46,7 @@ export const CampaignCalendarStudio: React.FC = () => {
     setInGameDate,
   } = useCampaignCalendar();
 
-  const { activeWorld } = useWorld();
+  const { activeWorld, worldEntities } = useWorld();
   const { userCampaigns, activeCampaign, setActiveCampaign, feedEvents } = useCampaign();
 
   const dmCampaigns = userCampaigns.filter((c) => {
@@ -104,7 +104,16 @@ export const CampaignCalendarStudio: React.FC = () => {
   const firstDayAbs = dateToAbsoluteDays(calendarConfig, viewYear, viewMonthIndex, 1);
   const firstDayWeekOffset = ((firstDayAbs % daysOfWeek.length) + daysOfWeek.length) % daysOfWeek.length;
 
-  // Filtered chronicle items strictly for active campaign
+  // Resgatar eventos de linha do tempo da Cronologia do Mundo
+  const worldTimelineEvents = worldEntities.filter(
+    (e) =>
+      e.category === 'lore_event' ||
+      e.category === 'military_conflict' ||
+      e.category === 'tradition' ||
+      (e.attributes && (e.attributes.era || e.attributes.yearNumeric !== undefined))
+  );
+
+  // Filtered chronicle items strictly for active campaign + world timeline
   const allChronicleItems = [
     ...calendarNotes.map((n) => ({
       id: n.id,
@@ -117,6 +126,24 @@ export const CampaignCalendarStudio: React.FC = () => {
       day: n.day,
       type: 'note' as const,
     })),
+    ...worldTimelineEvents.map((e) => {
+      const year = typeof e.attributes?.yearNumeric === 'number' ? e.attributes.yearNumeric : 0;
+      const monthIdx = typeof e.attributes?.monthIndex === 'number' ? e.attributes.monthIndex : 0;
+      const day = typeof e.attributes?.day === 'number' ? e.attributes.day : 1;
+      const dateLabel = e.attributes?.formattedDate || e.attributes?.era || e.subType || 'Lore do Mundo';
+
+      return {
+        id: e.id,
+        title: e.name,
+        content: e.shortDesc,
+        category: e.category as string,
+        inGameDate: dateLabel,
+        year,
+        monthIndex: monthIdx,
+        day,
+        type: 'lore' as const,
+      };
+    }),
     ...feedEvents
       .filter((f) => f.inGameDate || f.inGameTimestamp)
       .map((f) => ({
@@ -370,6 +397,10 @@ export const CampaignCalendarStudio: React.FC = () => {
                       (n) => n.year === viewYear && n.monthIndex === viewMonthIndex && n.day === dayNum
                     );
 
+                    const dayHistoricalEvents = worldTimelineEvents.filter(
+                      (e) => e.attributes?.monthIndex === viewMonthIndex && e.attributes?.day === dayNum
+                    );
+
                     return (
                       <div
                         key={dayNum}
@@ -404,13 +435,23 @@ export const CampaignCalendarStudio: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Middle: Holiday / Events preview */}
+                        {/* Middle: Holiday / Historical / Events preview */}
                         <div className="space-y-1 my-1">
                           {holiday && (
                             <div className="bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded text-[9px] font-bold truncate">
                               🎉 {holiday.name}
                             </div>
                           )}
+
+                          {dayHistoricalEvents.slice(0, 1).map((evt) => (
+                            <div
+                              key={evt.id}
+                              className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded text-[9px] font-bold truncate flex items-center gap-1"
+                              title={`Neste dia na história: ${evt.name}`}
+                            >
+                              📜 {evt.name}
+                            </div>
+                          ))}
 
                           {dayNotes.slice(0, 2).map((note) => (
                             <div
@@ -429,9 +470,9 @@ export const CampaignCalendarStudio: React.FC = () => {
                             </div>
                           ))}
 
-                          {dayNotes.length > 2 && (
+                          {dayNotes.length + dayHistoricalEvents.length > 2 && (
                             <span className="text-[9px] text-slate-500 font-mono">
-                              +{dayNotes.length - 2} mais...
+                              +{dayNotes.length + dayHistoricalEvents.length - 2} mais...
                             </span>
                           )}
                         </div>
@@ -463,7 +504,7 @@ export const CampaignCalendarStudio: React.FC = () => {
                       type="text"
                       value={chronicleSearch}
                       onChange={(e) => setChronicleSearch(e.target.value)}
-                      placeholder="Buscar nos anais e diário..."
+                      placeholder="Buscar nos anais, cronologia e diário..."
                       className="bg-[#0a0d14] border border-[#2a3449] rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500 w-64"
                     />
                   </div>
@@ -474,6 +515,9 @@ export const CampaignCalendarStudio: React.FC = () => {
                     className="bg-[#0a0d14] border border-[#2a3449] rounded-xl px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-amber-500"
                   >
                     <option value="all">Todas as Categorias</option>
+                    <option value="lore_event">📜 Eventos de Lore do Mundo</option>
+                    <option value="military_conflict">⚔️ Guerras & Conflitos</option>
+                    <option value="tradition">🔮 Ritos & Tradições</option>
                     <option value="rest">🌙 Descansos da Party</option>
                     <option value="travel">🧭 Viagens & Marchas</option>
                     <option value="session_log">📜 Resumos de Sessão</option>

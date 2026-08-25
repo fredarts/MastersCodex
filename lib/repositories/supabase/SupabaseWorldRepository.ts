@@ -61,7 +61,6 @@ export class SupabaseWorldRepository implements IWorldRepository {
         },
         connections: entityData.connections || [],
         images: entityData.images || [],
-        tags: entityData.tags || [],
       })
       .select()
       .single();
@@ -88,7 +87,6 @@ export class SupabaseWorldRepository implements IWorldRepository {
         },
         connections: entity.connections || [],
         images: entity.images || [],
-        tags: entity.tags || [],
       })
       .eq('id', entity.id);
 

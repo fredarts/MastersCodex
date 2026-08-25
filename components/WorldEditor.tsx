@@ -58,6 +58,149 @@ import { CreateMonsterModal } from '@/components/modals/CreateMonsterModal';
 import { customMonsterService } from '@/lib/services/customMonsterService';
 import { CustomMonster } from '@/lib/types';
 
+function renderEntityCardAttributes(ent: WorldEntity) {
+  const attrs = ent.attributes || {};
+  const customBadge = attrs.customBadge || attrs.badge;
+
+  const displayItems: { label: string; value: string }[] = [];
+
+  const addIfVal = (label: string, val: any) => {
+    if (val !== undefined && val !== null && displayItems.length < 4) {
+      const strVal = String(val).trim();
+      if (strVal && strVal !== '[object Object]' && strVal.toLowerCase() !== 'undefined' && strVal.toLowerCase() !== 'null') {
+        if (!displayItems.some((item) => item.label === label)) {
+          displayItems.push({ label, value: strVal });
+        }
+      }
+    }
+  };
+
+  if (ent.category === 'npc') {
+    const race = attrs.npcRace || attrs.race || attrs.raca;
+    const cls = attrs.npcClass || attrs.class || attrs.classe;
+    const align = attrs.npcAlignment || attrs.alignment || attrs.alinhamento;
+    const house = attrs.houseOrDynasty || attrs.house || attrs.clan;
+
+    if (race) addIfVal('Raça', race);
+    if (cls) addIfVal('Classe/Cargo', cls);
+    if (align) addIfVal('Alinhamento', align);
+    if (house) addIfVal('Casa / Clã', house);
+  } else if (ent.category === 'quest') {
+    if (attrs.questDifficulty) addIfVal('Dificuldade', attrs.questDifficulty);
+    if (attrs.questStatus) addIfVal('Status', attrs.questStatus);
+    const xp = attrs.questXpReward ? `${attrs.questXpReward} XP` : '';
+    const gold = attrs.questGoldReward ? `${attrs.questGoldReward} PO` : '';
+    const rewardStr = [xp, gold].filter(Boolean).join(' / ');
+    if (rewardStr) addIfVal('Recompensa', rewardStr);
+  } else {
+    const KEY_MAP: Record<string, string> = {
+      alinhamento: 'Alinhamento',
+      raca: 'Raça',
+      populacao: 'População',
+      lider: 'Líder',
+      dominio: 'Domínio',
+      era: 'Era',
+      raridade: 'Raridade',
+      escola_magia: 'Escola de Magia',
+      nivel_perigo: 'Nível de Perigo',
+      dificuldade_tipo: 'Dificuldade',
+      recompensas: 'Recompensas',
+      clima: 'Clima',
+      influencia: 'Influência',
+      simbolo: 'Símbolo Sagrado',
+      propriedades: 'Propriedades',
+      autor: 'Autor',
+      rarity: 'Raridade',
+    };
+
+    const SKIP_KEYS = new Set([
+      'characterSheet',
+      'statSheetMode',
+      'combatPinIndex',
+      'familyMemberId',
+      'secrets',
+      'dmSecrets',
+      'isAlive',
+      'generation',
+      'birthEra',
+      'deathEra',
+      'successionStatus',
+      'gender',
+      'tags',
+      'customBadge',
+      'badge',
+      'npcRace',
+      'npcClass',
+      'npcAlignment',
+      'houseOrDynasty',
+      'questObjectives',
+      'questStatus',
+      'questXpReward',
+      'questGoldReward',
+      'questItemReward',
+      'questGiverNpcId',
+      'questTargetLocationId',
+    ]);
+
+    Object.entries(attrs).forEach(([k, v]) => {
+      if (SKIP_KEYS.has(k)) return;
+      if (!v || typeof v === 'object') return;
+
+      const label = KEY_MAP[k] || k.replace(/([A-Z])/g, ' $1').replace(/^npc/i, '').replace(/_/g, ' ').trim();
+      const formattedLabel = label.charAt(0).toUpperCase() + label.slice(1);
+      addIfVal(formattedLabel, v);
+    });
+  }
+
+  // Tags array
+  let tagsList: string[] = [];
+  if (Array.isArray(ent.tags) && ent.tags.length > 0) {
+    tagsList = ent.tags;
+  } else if (attrs.tags) {
+    try {
+      tagsList = typeof attrs.tags === 'string' ? JSON.parse(attrs.tags) : Array.isArray(attrs.tags) ? attrs.tags : [];
+    } catch {
+      tagsList = [];
+    }
+  }
+
+  if (displayItems.length === 0 && !customBadge && tagsList.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 space-y-2">
+      {/* Badges / Custom Badge / Tags */}
+      {(customBadge || (tagsList && tagsList.length > 0)) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {customBadge && (
+            <span className="text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md flex items-center gap-1 font-mono">
+              {customBadge}
+            </span>
+          )}
+          {tagsList.slice(0, 3).map((tag, idx) => (
+            <span key={idx} className="text-[10px] font-medium bg-[#0a0d14] text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-md font-mono">
+              #{tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Main Attribute Key-Values */}
+      {displayItems.length > 0 && (
+        <div className="p-2.5 bg-[#0a0d14]/80 rounded-xl border border-[#2a3449]/70 space-y-1.5 text-[11px]">
+          {displayItems.map((item, idx) => (
+            <div key={idx} className="flex items-start justify-between gap-3 border-b border-[#1b2333] last:border-0 pb-1 last:pb-0">
+              <span className="text-slate-400 font-mono text-[11px] shrink-0 pt-0.5">{item.label}:</span>
+              <span className="text-slate-200 font-bold text-right text-xs break-words min-w-0 flex-1 leading-snug">{item.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface WorldEditorProps {
   onOpenCreateCampaignWithWorld: () => void;
 }
@@ -953,7 +1096,7 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
                                 setLightboxImages([ent.tokenImageUrl!]);
                                 setIsLightboxOpen(true);
                               }}
-                              className="relative h-36 -mx-4 -mt-4 mb-3 overflow-hidden bg-[#0a0d14] cursor-pointer group/img"
+                              className="relative aspect-video -mx-4 -mt-4 mb-3 overflow-hidden bg-[#0a0d14] cursor-pointer group/img"
                               title="Clique para dar zoom na imagem"
                             >
                               <img src={ent.tokenImageUrl} alt={ent.name} className="w-full h-full object-cover group-hover/img:scale-105 transition-transform" />
@@ -1030,7 +1173,7 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
                               setLightboxImages(ent.images || []);
                               setIsLightboxOpen(true);
                             }}
-                            className="relative h-36 -mx-4 -mt-4 mb-3 overflow-hidden bg-[#0a0d14] cursor-pointer group/img"
+                            className="relative aspect-video -mx-4 -mt-4 mb-3 overflow-hidden bg-[#0a0d14] cursor-pointer group/img"
                             title="Clique para dar zoom na imagem"
                           >
                             <img src={ent.images[0]} alt={ent.name} className="w-full h-full object-cover group-hover/img:scale-105 transition-transform" />
@@ -1080,16 +1223,7 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
                           <WikiTextRenderer text={ent.shortDesc || ''} worldEntities={worldEntities} />
                         </div>
 
-                        {ent.attributes && Object.keys(ent.attributes).length > 0 && (
-                          <div className="mt-3 p-2 bg-[#0a0d14] rounded-lg border border-[#2a3449] space-y-1 text-[11px]">
-                            {Object.entries(ent.attributes).map(([k, v]) => (
-                              <div key={k} className="flex justify-between text-slate-400 font-mono">
-                                <span className="capitalize">{k.replace('_', ' ')}:</span>
-                                <span className="text-slate-200 font-semibold truncate max-w-[140px]">{String(v)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        {renderEntityCardAttributes(ent)}
                       </div>
                     </div>
                   ))}

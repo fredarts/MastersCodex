@@ -2238,7 +2238,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                           >
                             <div>
                               {ent.images && ent.images.length > 0 && (
-                                <div className="relative h-28 -mx-4 -mt-4 mb-3 overflow-hidden bg-[#0a0d14]">
+                                <div className="relative aspect-video -mx-4 -mt-4 mb-3 overflow-hidden bg-[#0a0d14]">
                                   <img src={ent.images[0]} alt={ent.name} className="w-full h-full object-cover" />
                                 </div>
                               )}
