@@ -8,6 +8,8 @@ import { CampaignProvider } from '@/context/CampaignContext';
 import { SessionProvider } from '@/context/SessionContext';
 import { LiveCockpitProvider } from '@/context/LiveCockpitContext';
 import { AudioProvider } from '@/context/AudioContext';
+import { VoiceCallProvider } from '@/context/VoiceCallContext';
+import { VoiceCallFloatingWidget } from '@/components/voice/VoiceCallFloatingWidget';
 
 import { PartyLootProvider } from '@/context/PartyLootContext';
 import { DmLootCreatorModal } from '@/components/loot/DmLootCreatorModal';
@@ -29,7 +31,13 @@ function InnerProviders({ children }: { children: React.ReactNode }) {
             <PartyLootProvider>
               <SessionProvider>
                 <AudioProvider>
-                  <LiveCockpitProvider>{children}</LiveCockpitProvider>
+                  <LiveCockpitProvider>
+                    <VoiceCallProvider>
+                      {children}
+                      {/* Widget Flutuante Global de Chamada de Voz */}
+                      <VoiceCallFloatingWidget />
+                    </VoiceCallProvider>
+                  </LiveCockpitProvider>
                 </AudioProvider>
               </SessionProvider>
 
@@ -54,4 +62,3 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     </AuthProvider>
   );
 }
-

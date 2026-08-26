@@ -26,11 +26,11 @@ export class VoiceSignalingManager {
     this.onPeerDisconnect = config.onPeerDisconnect;
   }
 
-  async initialize(): Promise<MediaStream | null> {
-    return this.voiceManager.initializeLocalStream();
+  async initialize(deviceId?: string): Promise<MediaStream | null> {
+    return this.voiceManager.initializeLocalStream(deviceId);
   }
 
-  getVoiceManager() {
+  getVoiceManager(): WebRTCVoiceManager {
     return this.voiceManager;
   }
 
@@ -38,6 +38,14 @@ export class VoiceSignalingManager {
    * Initiate connection to a remote peer (caller side)
    */
   async connectToPeer(remotePeerId: string): Promise<void> {
+    const existingPcs = this.voiceManager.getPeerConnections();
+    if (existingPcs.has(remotePeerId)) {
+      const pc = existingPcs.get(remotePeerId)!;
+      if (pc.connectionState === 'connected' || pc.connectionState === 'connecting') {
+        return;
+      }
+    }
+
     const pc = this.voiceManager.createPeerConnection(remotePeerId, (candidate) => {
       this.sendSignal({
         type: 'ice-candidate',
@@ -49,15 +57,19 @@ export class VoiceSignalingManager {
 
     this.setupTrackHandler(pc, remotePeerId);
 
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
 
-    this.sendSignal({
-      type: 'offer',
-      fromUserId: this.localUserId,
-      toUserId: remotePeerId,
-      data: offer,
-    });
+      this.sendSignal({
+        type: 'offer',
+        fromUserId: this.localUserId,
+        toUserId: remotePeerId,
+        data: offer,
+      });
+    } catch (err) {
+      console.warn(`Erro ao criar oferta WebRTC para peer ${remotePeerId}:`, err);
+    }
   }
 
   /**
@@ -82,23 +94,31 @@ export class VoiceSignalingManager {
 
         this.setupTrackHandler(pc, peerId);
 
-        await pc.setRemoteDescription(new RTCSessionDescription(signal.data));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(signal.data));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
 
-        this.sendSignal({
-          type: 'answer',
-          fromUserId: this.localUserId,
-          toUserId: peerId,
-          data: answer,
-        });
+          this.sendSignal({
+            type: 'answer',
+            fromUserId: this.localUserId,
+            toUserId: peerId,
+            data: answer,
+          });
+        } catch (err) {
+          console.warn(`Erro ao processar oferta WebRTC do peer ${peerId}:`, err);
+        }
         break;
       }
 
       case 'answer': {
         const existingPc = this.getPeerConnection(peerId);
-        if (existingPc) {
-          await existingPc.setRemoteDescription(new RTCSessionDescription(signal.data));
+        if (existingPc && existingPc.signalingState !== 'stable') {
+          try {
+            await existingPc.setRemoteDescription(new RTCSessionDescription(signal.data));
+          } catch (err) {
+            console.warn(`Erro ao processar resposta WebRTC do peer ${peerId}:`, err);
+          }
         }
         break;
       }
@@ -119,33 +139,47 @@ export class VoiceSignalingManager {
 
   private setupTrackHandler(pc: RTCPeerConnection, peerId: string) {
     pc.ontrack = (event) => {
-      if (event.streams[0] && this.onRemoteStream) {
-        this.onRemoteStream(peerId, event.streams[0]);
+      if (event.streams[0]) {
+        const stream = event.streams[0];
+        this.voiceManager.attachRemoteStream(peerId, stream);
+        if (this.onRemoteStream) {
+          this.onRemoteStream(peerId, stream);
+        }
       }
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-        if (this.onPeerDisconnect) this.onPeerDisconnect(peerId);
+      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        this.voiceManager.detachRemoteStream(peerId);
+        if (this.onPeerDisconnect) {
+          this.onPeerDisconnect(peerId);
+        }
       }
     };
   }
 
   private getPeerConnection(peerId: string): RTCPeerConnection | undefined {
-    // Access the internal peer connections map via the voice manager
-    return (this.voiceManager as any).peerConnections?.get(peerId);
+    return this.voiceManager.getPeerConnections().get(peerId);
   }
 
   toggleMute(): boolean {
     return this.voiceManager.toggleMute();
   }
 
+  setMuted(muted: boolean): boolean {
+    return this.voiceManager.setMuted(muted);
+  }
+
   getIsMuted(): boolean {
     return this.voiceManager.getIsMuted();
   }
 
-  setOnSpeakingChange(cb: (isSpeaking: boolean) => void) {
-    this.voiceManager.setOnSpeakingChange(cb);
+  setDeafened(deafened: boolean): boolean {
+    return this.voiceManager.setDeafened(deafened);
+  }
+
+  getIsDeafened(): boolean {
+    return this.voiceManager.getIsDeafened();
   }
 
   destroy() {
