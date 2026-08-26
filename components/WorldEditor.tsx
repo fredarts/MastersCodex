@@ -49,6 +49,7 @@ import {
 import { useWorld } from '@/lib/hooks/useWorld';
 import { WorldEntityCategory, WorldEntity, QuestObjective } from '@/lib/types';
 import { WorldEntityModal } from '@/components/WorldEntityModal';
+import { WorldEntityAiGeneratorModal } from '@/components/WorldEntityAiGeneratorModal';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
 import { LoreGraph } from '@/components/LoreGraph';
 import { WorldTimelineView } from '@/components/WorldTimelineView';
@@ -225,6 +226,8 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
   const [activeTab, setActiveTab] = useState<ActiveViewTab>('npc');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAiGenModal, setShowAiGenModal] = useState(false);
+  const [aiGenCategory, setAiGenCategory] = useState<WorldEntityCategory>('npc');
   const [editingEntity, setEditingEntity] = useState<WorldEntity | null>(null);
   const [modalCategory, setModalCategory] = useState<WorldEntityCategory>('npc');
   const [searchQuery, setSearchQuery] = useState('');
@@ -703,52 +706,138 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
           ) : activeTab === 'map' ? (
             <WorldInteractiveMapView />
           ) : activeTab === 'ai' ? (
-            <div className="max-w-2xl mx-auto space-y-4">
-              <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-purple-400" /> Geradores de Worldbuilding com IA
-              </h3>
-              <p className="text-xs text-slate-400">
-                Gere elementos de história ajustados para o estilo de <strong>{activeWorld.title}</strong>:
-              </p>
+            <div className="max-w-5xl mx-auto space-y-6 pb-12">
+              <div className="bg-gradient-to-r from-purple-950/40 via-[#161c28] to-[#121824] p-6 rounded-3xl border border-purple-500/30 shadow-xl relative overflow-hidden">
+                <div className="flex items-center gap-4 relative z-10">
+                  <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 shadow-inner">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                      <span>Geradores de Worldbuilding com Inteligência Artificial</span>
+                      <span className="text-[10px] font-mono font-bold uppercase bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/30">
+                        {activeWorld.title}
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                      Selecione uma categoria abaixo para descrever livremente suas ideias. A IA preencherá todos os campos de lore, resumos e atributos conectando elementos da história do seu mundo.
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={async () => {
-                    await createWorldEntity({
-                      worldId: activeWorld.id,
-                      category: 'npc',
-                      name: 'Mestre Eldrin, o Sábio',
-                      subType: 'Arquimago',
-                      status: 'active',
-                      shortDesc: 'Guardião dos tomos sagrados da biblioteca arcana do reino.',
-                      attributes: { alinhamento: 'Neutro e Bom', raca: 'Elfo' },
-                    });
-                  }}
-                  className="p-4 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] hover:border-amber-500/40 rounded-2xl text-left transition-all group"
-                >
-                  <Users className="w-5 h-5 text-amber-400 mb-2 group-hover:scale-110 transition-transform" />
-                  <div className="text-xs font-bold text-slate-200">Gerar NPC Aleatório com Segredo</div>
-                  <div className="text-[10px] text-slate-500 mt-1">Cria ficha com raça, papel e motivação</div>
-                </button>
+              {/* Categorized AI Generator Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  {
+                    category: 'npc' as WorldEntityCategory,
+                    title: 'NPCs & Vilões',
+                    badge: 'PERSONAGEM',
+                    desc: 'Crie arquimagos, taverneiros, vilões e líderes com raça, motivações e segredos.',
+                    icon: Users,
+                    color: 'hover:border-amber-500/60 bg-gradient-to-br from-[#161c28] to-amber-950/20',
+                    iconColor: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+                  },
+                  {
+                    category: 'location' as WorldEntityCategory,
+                    title: 'Cidades & Masmorras',
+                    badge: 'LOCALIZAÇÃO',
+                    desc: 'Crie fortalezas ancestrais, portos comerciais e masmorras ricas em atmosfera.',
+                    icon: MapPin,
+                    color: 'hover:border-emerald-500/60 bg-gradient-to-br from-[#161c28] to-emerald-950/20',
+                    iconColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+                  },
+                  {
+                    category: 'faction' as WorldEntityCategory,
+                    title: 'Facções & Guildas',
+                    badge: 'ORGANIZAÇÃO',
+                    desc: 'Crie ordens de cavaleiros, guildas de ladrões e cultos com objetivos e sedes.',
+                    icon: Shield,
+                    color: 'hover:border-blue-500/60 bg-gradient-to-br from-[#161c28] to-blue-950/20',
+                    iconColor: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
+                  },
+                  {
+                    category: 'religion' as WorldEntityCategory,
+                    title: 'Religiões & Deuses',
+                    badge: 'DIVINDADE',
+                    desc: 'Estruture divindades, domínios clericais, dogmas sagrados e símbolos devotos.',
+                    icon: Zap,
+                    color: 'hover:border-purple-500/60 bg-gradient-to-br from-[#161c28] to-purple-950/20',
+                    iconColor: 'text-purple-400 bg-purple-500/10 border-purple-500/30',
+                  },
+                  {
+                    category: 'item' as WorldEntityCategory,
+                    title: 'Itens Mágicos & Artefatos',
+                    badge: 'ARTEFATO',
+                    desc: 'Forje espadas lendárias, anéis arcanos e relíquias com propriedades extraordinárias.',
+                    icon: Package,
+                    color: 'hover:border-rose-500/60 bg-gradient-to-br from-[#161c28] to-rose-950/20',
+                    iconColor: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
+                  },
+                  {
+                    category: 'beast' as WorldEntityCategory,
+                    title: 'Monstros & Criaturas',
+                    badge: 'BESTIÁRIO',
+                    desc: 'Dê vida a criaturas míticas, perigos das profundezas, hábitos e habilidades.',
+                    icon: PawPrint,
+                    color: 'hover:border-orange-500/60 bg-gradient-to-br from-[#161c28] to-orange-950/20',
+                    iconColor: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
+                  },
+                  {
+                    category: 'military_conflict' as WorldEntityCategory,
+                    title: 'Guerras & Conflitos',
+                    badge: 'CONFLITO',
+                    desc: 'Gere guerras territoriais, rebeliões, batalhas históricas e suas consequências.',
+                    icon: Swords,
+                    color: 'hover:border-red-500/60 bg-gradient-to-br from-[#161c28] to-red-950/20',
+                    iconColor: 'text-red-400 bg-red-500/10 border-red-500/30',
+                  },
+                  {
+                    category: 'lore_event' as WorldEntityCategory,
+                    title: 'Tradições & Eras',
+                    badge: 'HISTÓRIA',
+                    desc: 'Gere rituais milenares, cataclismos celestiais e acontecimentos que moldaram o mundo.',
+                    icon: Scroll,
+                    color: 'hover:border-cyan-500/60 bg-gradient-to-br from-[#161c28] to-cyan-950/20',
+                    iconColor: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
+                  },
+                ].map((card) => {
+                  const Icon = card.icon;
+                  return (
+                    <button
+                      key={card.category}
+                      type="button"
+                      onClick={() => {
+                        setAiGenCategory(card.category);
+                        setShowAiGenModal(true);
+                      }}
+                      className={`p-5 rounded-2xl border border-[#2a3449] text-left transition-all duration-200 group flex flex-col justify-between shadow-lg hover:shadow-2xl hover:-translate-y-1 cursor-pointer ${card.color}`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-transform group-hover:scale-110 ${card.iconColor}`}>
+                            <Icon className="w-5 h-5" />
+                          </div>
+                          <span className="text-[9px] font-bold font-mono tracking-wider text-slate-400 uppercase bg-slate-900/80 px-2 py-0.5 rounded border border-slate-800">
+                            {card.badge}
+                          </span>
+                        </div>
 
-                <button
-                  onClick={async () => {
-                    await createWorldEntity({
-                      worldId: activeWorld.id,
-                      category: 'location',
-                      name: 'Porto dos Ventos Místicos',
-                      subType: 'Cidade Portuária',
-                      status: 'active',
-                      shortDesc: 'Cidade costeira fortificada famosa pelo comércio de artefatos raros.',
-                      attributes: { populacao: '28.000 hab', clima: 'Marítimo' },
-                    });
-                  }}
-                  className="p-4 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] hover:border-amber-500/40 rounded-2xl text-left transition-all group"
-                >
-                  <MapPin className="w-5 h-5 text-cyan-400 mb-2 group-hover:scale-110 transition-transform" />
-                  <div className="text-xs font-bold text-slate-200">Gerar Cidade Portuária ou Fortaleza</div>
-                  <div className="text-[10px] text-slate-500 mt-1">Cria localização com clima e população</div>
-                </button>
+                        <h4 className="text-sm font-bold text-slate-100 group-hover:text-amber-300 transition-colors">
+                          {card.title}
+                        </h4>
+                        <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed font-serif">
+                          {card.desc}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-[#2a3449]/50 flex items-center justify-between text-[11px] font-bold text-amber-400 group-hover:text-amber-300">
+                        <span>Gerar com IA</span>
+                        <Wand2 className="w-3.5 h-3.5 transition-transform group-hover:rotate-12" />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : activeTab === 'quest' ? (
@@ -1260,6 +1349,96 @@ export const WorldEditor: React.FC<WorldEditorProps> = ({
         }}
         defaultCategory={modalCategory}
         editingEntity={editingEntity}
+      />
+
+      {/* World Entity AI Generator Modal */}
+      <WorldEntityAiGeneratorModal
+        isOpen={showAiGenModal}
+        onClose={() => setShowAiGenModal(false)}
+        categoryContext={(() => {
+          switch (aiGenCategory) {
+            case 'npc':
+              return {
+                categoryTitle: 'NPC / Personagem',
+                namePlaceholder: 'Ex: Lorde Valthor, o Sombrio',
+                attr1Label: 'Papel / Ocupação',
+                attr2Label: 'Alinhamento / Personalidade',
+              };
+            case 'location':
+              return {
+                categoryTitle: 'Localização / Geografia',
+                namePlaceholder: 'Ex: Cidadela de Ferro Negro',
+                attr1Label: 'Tipo de Terreno / Clima',
+                attr2Label: 'População / Importância',
+              };
+            case 'faction':
+              return {
+                categoryTitle: 'Facção ou Guilda',
+                namePlaceholder: 'Ex: Ordem dos Corvos Prateados',
+                attr1Label: 'Líder / Sede',
+                attr2Label: 'Influência / Alinhamento',
+              };
+            case 'religion':
+              return {
+                categoryTitle: 'Religião ou Divindade',
+                namePlaceholder: 'Ex: Sol Invictus, Deus da Alvorada',
+                attr1Label: 'Domínio / Dogma',
+                attr2Label: 'Símbolo Sagrado',
+              };
+            case 'item':
+              return {
+                categoryTitle: 'Item / Artefato Mágico',
+                namePlaceholder: 'Ex: Lâmina do Crepúsculo Eterno',
+                attr1Label: 'Raridade / Tipo',
+                attr2Label: 'Poder Principal / Origem',
+              };
+            case 'beast':
+              return {
+                categoryTitle: 'Monstro ou Criatura',
+                namePlaceholder: 'Ex: Serpente do Abismo Vulcânico',
+                attr1Label: 'Nível de Perigo / Habitat',
+                attr2Label: 'Habilidade Notável',
+              };
+            case 'military_conflict':
+              return {
+                categoryTitle: 'Guerra ou Conflito Militar',
+                namePlaceholder: 'Ex: A Queda dos Mil Portões',
+                attr1Label: 'Facções Envolvidas',
+                attr2Label: 'Resultado / Consequência',
+              };
+            case 'lore_event':
+            default:
+              return {
+                categoryTitle: 'Evento Histórico / Tradição',
+                namePlaceholder: 'Ex: A Noite das Luas Gêmeas',
+                attr1Label: 'Era / Época',
+                attr2Label: 'Impacto no Mundo',
+              };
+          }
+        })()}
+        worldEntities={worldEntities}
+        onApply={async (data) => {
+          if (!activeWorld) return;
+          const created = await createWorldEntity({
+            worldId: activeWorld.id,
+            category: aiGenCategory,
+            name: data.name || 'Nova Entidade',
+            subType: data.subType || '',
+            shortDesc: data.shortDesc || '',
+            fullContent: data.fullContent || '',
+            status: 'active',
+            attributes: {
+              ...(data.extraAttr1 ? { attr1: data.extraAttr1 } : {}),
+              ...(data.extraAttr2 ? { attr2: data.extraAttr2 } : {}),
+            },
+          });
+          if (created) {
+            setEditingEntity(created);
+            setModalCategory(aiGenCategory);
+            setShowAddModal(true);
+          }
+          setShowAiGenModal(false);
+        }}
       />
 
       {/* Image Lightbox / Zoom Carousel Modal for Cards */}

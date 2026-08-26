@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Tv, Swords, Shield, Heart, Sparkles, Map, ScrollText, ListOrdered, FileText, MessageSquare, Layers } from 'lucide-react';
+import { X, Tv, Swords, Shield, Heart, Sparkles, Map, ScrollText, ListOrdered, FileText, MessageSquare, Layers, Mic, MicOff, PhoneCall } from 'lucide-react';
 import { Combatant, CharacterSheet } from '@/lib/types';
 import { useSession } from '@/context/SessionContext';
 import { useCampaign } from '@/context/CampaignContext';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
+import { useVoiceCall } from '@/context/VoiceCallContext';
 import { useAuth } from '@/context/AuthContext';
 import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl } from '@/lib/imageUtils';
 import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
@@ -66,6 +67,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
     broadcastChatMessage,
   } = useLiveCockpit();
   const { user } = useAuth();
+  const { isInCall, isConnecting, isMuted, isSpeaking, joinCall, toggleMute, setIsWidgetOpen, participants } = useVoiceCall();
 
   const combatants = (propCombatants && propCombatants.length > 0) ? propCombatants : liveCombatants;
   const currentTurnIndex = propCurrentTurnIndex ?? liveCurrentTurnIndex;
@@ -368,6 +370,52 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
 
         <div className="flex items-center gap-3">
           <PresenceIndicator users={onlineUsers} className="border-r border-[#2a3449] pr-3 mr-1" />
+
+          {/* Chamada de Voz (Voice Call) no Player View */}
+          {isInCall ? (
+            <div className="flex items-center gap-1 bg-[#121824] border border-emerald-500/40 rounded-xl p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setIsWidgetOpen((prev: boolean) => !prev)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-300 hover:bg-emerald-500/10 transition-all cursor-pointer"
+                title="Abrir Painel da Chamada de Voz"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span className="hidden sm:inline">Na Call</span>
+                <span className="font-mono text-[10px] text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded">
+                  {participants.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={toggleMute}
+                className={`p-1.5 rounded-lg text-xs transition-all ${
+                  isMuted
+                    ? 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30'
+                    : isSpeaking
+                    ? 'bg-emerald-500/20 text-emerald-300 animate-pulse'
+                    : 'text-slate-300 hover:text-white hover:bg-[#1f2738]'
+                }`}
+                title={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
+              >
+                {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => joinCall()}
+              disabled={isConnecting}
+              className="flex items-center gap-1.5 bg-[#161c28] hover:bg-[#1f2738] text-slate-300 hover:text-emerald-400 border border-[#2a3449] hover:border-emerald-500/50 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              title="Conectar à Chamada de Voz da Mesa"
+            >
+              <PhoneCall className={`w-3.5 h-3.5 text-emerald-400 ${isConnecting ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">{isConnecting ? 'Conectando...' : 'Entrar na Call'}</span>
+            </button>
+          )}
 
           <XCardButton
             campaignId={activeCampaign?.id}

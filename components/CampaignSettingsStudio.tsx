@@ -35,6 +35,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { LinesAndVeilsPanel } from '@/components/safety/LinesAndVeilsPanel';
+import { PushNotificationToggle } from '@/components/push/PushNotificationToggle';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useWorld } from '@/lib/hooks/useWorld';
@@ -904,6 +905,9 @@ export const CampaignSettingsStudio: React.FC = () => {
                       ))}
                     </div>
                   </div>
+
+                  {/* Push Notification Integration */}
+                  <PushNotificationToggle campaignId={activeCampaign?.id} userId={user?.id} />
 
                 </div>
 

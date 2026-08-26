@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { PushSubscriptionData, DEFAULT_PUSH_PREFERENCES } from '@/lib/push/pushTypes';
-
-// In-memory fallback for local development without active Supabase database table
-const memorySubscriptions = new Map<string, PushSubscriptionData>();
+import { memorySubscriptions } from '@/lib/push/pushStore';
 
 export async function POST(req: NextRequest) {
   try {

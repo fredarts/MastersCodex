@@ -44,6 +44,7 @@ import { MentionTextarea } from '@/components/ui/MentionTextarea';
 import { WikiTextRenderer } from '@/components/ui/WikiTextRenderer';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
+import { SceneImageAiModal } from '@/components/modals/SceneImageAiModal';
 import { customMonsterService } from '@/lib/services/customMonsterService';
 import { normalizeImageUrl, isYouTubeUrl, getYouTubeThumbnailUrl } from '@/lib/imageUtils';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
@@ -118,6 +119,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
   const [worldSearch, setWorldSearch] = useState('');
   const [worldFilterCat, setWorldFilterCat] = useState('all');
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
+  const [showImageAiModal, setShowImageAiModal] = useState(false);
   const [showNewSessionInput, setShowNewSessionInput] = useState(false);
   const [newSessionTitle, setNewSessionTitle] = useState('');
 
@@ -1210,15 +1212,11 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                         </div>
                       </div>
 
-                      {/* AI Mock button */}
+                      {/* AI Generation button */}
                       <div className="pt-2 border-t border-[#2a3449]/40 flex justify-end">
                         <button
                           type="button"
-                          onClick={() => showAlert({
-                            title: 'Em Breve',
-                            message: 'Integração com Nano Banana/Gemini IA estará disponível em breve!',
-                            variant: 'info',
-                          })}
+                          onClick={() => setShowImageAiModal(true)}
                           className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow active:scale-95 cursor-pointer"
                         >
                           <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
@@ -2372,6 +2370,25 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       <CreateSceneModal
         isOpen={showCreateSceneModal}
         onClose={() => setShowCreateSceneModal(false)}
+      />
+
+      {/* AI Scene Image Generation Modal (Nano Banana 2) */}
+      <SceneImageAiModal
+        isOpen={showImageAiModal}
+        onClose={() => setShowImageAiModal(false)}
+        sceneTitle={title}
+        sensoryText={sensoryText}
+        onApplyImage={(generatedUrl) => {
+          const newImg: SceneImage = {
+            id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            imageUrl: generatedUrl,
+            overlayText: '',
+            secretNotes: '',
+            mediaType: 'image',
+          };
+          setSceneImages((prev) => [...prev, newImg]);
+          if (!imageUrl) setImageUrl(generatedUrl);
+        }}
       />
     </div>
   );

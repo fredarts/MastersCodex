@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Shield, Key, Sparkles, Cpu, Image as ImageIcon, Save, CheckCircle } from 'lucide-react';
+import { X, Shield, Key, Sparkles, Cpu, Image as ImageIcon, Save, CheckCircle, Bell } from 'lucide-react';
 import { useUserSettings, UserSettings } from '@/lib/hooks/useUserSettings';
 import { PWAInstallButton } from '@/components/ui/PWAInstallButton';
+import { PushNotificationToggle } from '@/components/push/PushNotificationToggle';
 
 interface UserSettingsModalProps {
   isOpen: boolean;
@@ -274,6 +275,9 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, on
                   </select>
                 </div>
               </div>
+
+              {/* Push Notifications Section */}
+              <PushNotificationToggle />
 
               {/* PWA App Installation Option */}
               <PWAInstallButton variant="card" />

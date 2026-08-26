@@ -1,9 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { isPushNotificationSupported, formatGamePushMessage } from '@/lib/push/vapidUtils';
+import { isPushNotificationSupported, formatGamePushMessage, urlBase64ToUint8Array } from '@/lib/push/vapidUtils';
 import { PushNotificationPreferences, DEFAULT_PUSH_PREFERENCES } from '@/lib/push/pushTypes';
 import { toast } from 'sonner';
+
+const PUBLIC_VAPID_KEY =
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+  'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBKr3qBUYIhbQFLXYp5Nksh8U';
 
 export function usePushNotifications(userId?: string, campaignId?: string) {
   const [isSupported, setIsSupported] = useState(false);
@@ -51,33 +55,38 @@ export function usePushNotifications(userId?: string, campaignId?: string) {
       let subscription = await registration.pushManager.getSubscription();
 
       if (!subscription) {
-        // Subscribe with mock/dev or real applicationServerKey
         try {
+          const applicationServerKey = urlBase64ToUint8Array(PUBLIC_VAPID_KEY) as unknown as BufferSource;
           subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
+            applicationServerKey,
           });
         } catch (subErr) {
-          console.warn('[Push] Browser requires applicationServerKey for push subscription, simulated locally:', subErr);
+          console.warn('[Push] Tentando subscrição padrão sem VAPID:', subErr);
+          try {
+            subscription = await registration.pushManager.subscribe({
+              userVisibleOnly: true,
+            });
+          } catch (innerErr) {
+            console.warn('[Push] Subscrição local simulada:', innerErr);
+          }
         }
       }
+
+      const subJson = subscription ? subscription.toJSON() : null;
+      const endpoint = subscription?.endpoint || `mock-endpoint-${userId || 'anon'}-${Date.now()}`;
+      const p256dh = subJson?.keys?.p256dh || 'dev-p256dh';
+      const auth = subJson?.keys?.auth || 'dev-auth';
 
       // Save to server
       await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          subscription: subscription
-            ? {
-                endpoint: subscription.endpoint,
-                keys: {
-                  p256dh: 'mock-p256dh',
-                  auth: 'mock-auth',
-                },
-              }
-            : {
-                endpoint: `mock-endpoint-${Date.now()}`,
-                keys: { p256dh: 'dev', auth: 'dev' },
-              },
+          subscription: {
+            endpoint,
+            keys: { p256dh, auth },
+          },
           userId: userId || 'anonymous',
           campaignId,
           preferences,
@@ -118,10 +127,29 @@ export function usePushNotifications(userId?: string, campaignId?: string) {
 
   const sendTestNotification = useCallback(
     async (type: 'combat_turn' | 'session_reminder' | 'whisper' | 'safety_alert' = 'combat_turn') => {
-      const msg = formatGamePushMessage(type, { characterName: 'Seu Personagem' });
+      const msg = formatGamePushMessage(type, { characterName: 'Seu Personagem', campaignTitle: 'Mesa Principal' });
 
-      // If notification permission is granted, display immediately
+      // If notification permission is granted, dispatch through server API and display locally
       if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          await fetch('/api/push/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              payload: {
+                title: msg.title,
+                body: msg.body,
+                type,
+              },
+              targetUserId: userId,
+              campaignId,
+            }),
+          });
+        } catch (apiErr) {
+          console.warn('[Push Test API Error]:', apiErr);
+        }
+
+        // Direct local fallback trigger for instant feedback
         if ('serviceWorker' in navigator) {
           const reg = await navigator.serviceWorker.ready;
           reg.showNotification(msg.title, {
@@ -137,7 +165,7 @@ export function usePushNotifications(userId?: string, campaignId?: string) {
         toast.error('Ative as notificações primeiro para receber o teste.');
       }
     },
-    []
+    [userId, campaignId]
   );
 
   return {

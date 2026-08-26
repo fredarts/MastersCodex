@@ -140,6 +140,24 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
       nextIdx = currentTurnIndex + 1;
     }
 
+    const nextCombatant = combatants[nextIdx];
+    if (nextCombatant && nextCombatant.type === 'player' && activeCampaign?.id) {
+      try {
+        fetch('/api/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            payload: {
+              title: '⚔️ Seu Turno no Combate!',
+              body: `É a vez de ${nextCombatant.name} agir na mesa!`,
+              type: 'combat_turn',
+            },
+            campaignId: activeCampaign.id,
+          }),
+        }).catch((err) => console.warn('[Push Combat Turn]', err));
+      } catch (err) {}
+    }
+
     setCombatants(prev => prev.map((c, idx) => {
       if (idx === nextIdx) {
         return processCombatantTurnStart(c);
