@@ -1553,7 +1553,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                         onStartAttackTargeting={(attack) => {
                           const cleanBonus = parseInt(attack.atkBonus.replace(/[^0-9-]/g, '')) || 0;
                           const rangeText = attack.rangeText || attack.range || attack.name;
-                          const rangeInfo = parseRangeString(rangeText);
+                          const rangeInfo = parseRangeString(rangeText, attack.name);
                           setPendingAttack({
                             title: `Ataque: ${attack.name}`,
                             mod: cleanBonus,

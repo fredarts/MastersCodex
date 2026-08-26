@@ -6,6 +6,7 @@ import { useAudio } from '@/context/AudioContext';
 import { Bg3DiceOverlayState } from '@/lib/stores/useLiveCockpitStudioStore';
 
 import { parseDamageInfo } from '@/lib/dnd5e-damage-resolver';
+import { parseRangeString } from '@/lib/utils/dndRangeUtils';
 
 export type { Bg3DiceOverlayState };
 
@@ -27,6 +28,8 @@ export function useLiveCockpitCombat(
     mod: number;
     actorCombatant?: Combatant;
     actionDesc?: string;
+    rangeText?: string;
+    rangeInfo?: import('@/lib/utils/dndRangeUtils').RangeInfo;
   } | null>(null);
 
   const [bg3DiceOverlay, setBg3DiceOverlay] = useState<Bg3DiceOverlayState | null>(null);
@@ -68,7 +71,8 @@ export function useLiveCockpitCombat(
     const target = combatants.find((c) => c.id === selectedTargetId);
 
     if (title.startsWith('Ataque') && !target && !forceNoTarget) {
-      setPendingAttack({ title, mod, actorCombatant: currentActor, actionDesc });
+      const rangeInfo = parseRangeString(actionDesc || title, title);
+      setPendingAttack({ title, mod, actorCombatant: currentActor, actionDesc, rangeInfo });
       return false;
     }
 

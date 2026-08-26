@@ -31,6 +31,34 @@ describe('dndRangeUtils', () => {
   });
 
   describe('parseRangeString', () => {
+    it('analisa arma pelo nome exato (ex: Arco Longo -> 150/600 ft / 45/180m)', () => {
+      const res = parseRangeString('Arco Longo');
+      expect(res.normalRangeFt).toBe(150);
+      expect(res.maxRangeFt).toBe(600);
+      expect(res.normalRangeM).toBe(45);
+      expect(res.maxRangeM).toBe(180);
+      expect(res.isRanged).toBe(true);
+      expect(res.isWeaponWithLongRange).toBe(true);
+    });
+
+    it('analisa ataque pelo título de ação (ex: Ataque: Arco Longo +1)', () => {
+      const res = parseRangeString('Ataque: Arco Longo +1');
+      expect(res.normalRangeFt).toBe(150);
+      expect(res.maxRangeFt).toBe(600);
+      expect(res.normalRangeM).toBe(45);
+      expect(res.maxRangeM).toBe(180);
+    });
+
+    it('analisa propriedade de munição métrica PT-BR (ex: Munição (45/180m) e distância 45/180)', () => {
+      const res1 = parseRangeString('Munição (45/180m)');
+      expect(res1.normalRangeFt).toBe(150);
+      expect(res1.maxRangeFt).toBe(600);
+
+      const res2 = parseRangeString('distância 45/180');
+      expect(res2.normalRangeFt).toBe(150);
+      expect(res2.maxRangeFt).toBe(600);
+    });
+
     it('analisa alcance duplo de arma (ex: Arco Curto 80/320 ft)', () => {
       const res = parseRangeString('80/320 ft');
       expect(res.normalRangeFt).toBe(80);
@@ -66,6 +94,40 @@ describe('dndRangeUtils', () => {
       expect(res.normalRangeFt).toBe(5);
       expect(res.maxRangeFt).toBe(5);
       expect(res.isRanged).toBe(false);
+    });
+
+    it('analisa arma de haste / chicote (Reach 10ft)', () => {
+      const res = parseRangeString('Chicote');
+      expect(res.normalRangeFt).toBe(10);
+      expect(res.isRanged).toBe(false);
+    });
+
+    it('analisa armas corpo a corpo padrão (Espada Longa, Machado, etc. -> 5ft / 1.5m)', () => {
+      const res1 = parseRangeString('Espada Longa');
+      expect(res1.normalRangeFt).toBe(5);
+      expect(res1.maxRangeFt).toBe(5);
+      expect(res1.normalRangeM).toBe(1.5);
+      expect(res1.maxRangeM).toBe(1.5);
+      expect(res1.isRanged).toBe(false);
+
+      const res2 = parseRangeString('Ataque: Espada Curta');
+      expect(res2.normalRangeFt).toBe(5);
+      expect(res2.maxRangeFt).toBe(5);
+      expect(res2.normalRangeM).toBe(1.5);
+      expect(res2.maxRangeM).toBe(1.5);
+      expect(res2.isRanged).toBe(false);
+    });
+
+    it('ignora fórmulas de dados de dano (ex: 1d8+3, 2d6) sem unidade, retornando 5ft / 1.5m', () => {
+      const res1 = parseRangeString('1d8 + 3');
+      expect(res1.normalRangeFt).toBe(5);
+      expect(res1.normalRangeM).toBe(1.5);
+      expect(res1.isRanged).toBe(false);
+
+      const res2 = parseRangeString('2d6');
+      expect(res2.normalRangeFt).toBe(5);
+      expect(res2.normalRangeM).toBe(1.5);
+      expect(res2.isRanged).toBe(false);
     });
   });
 

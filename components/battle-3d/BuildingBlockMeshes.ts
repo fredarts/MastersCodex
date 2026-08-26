@@ -1,8 +1,41 @@
-/**
- * Three.js Procedural Meshes para Building Blocks 3D, Procedural Arrays e Iluminação Medieval
- */
 import * as THREE from 'three';
-import { BuildingBlock3D, SpellTemplate3D } from '@/lib/3d-building-blocks';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { BuildingBlock3D, SpellTemplate3D, BUILDING_BLOCK_CATALOG } from '@/lib/3d-building-blocks';
+
+// Gerenciador de Carregamento e Cache de Modelos 3D Customizados
+const gltfLoader = new GLTFLoader();
+const forgeModelCache = new Map<string, THREE.Group>();
+const failedForgeModelCache = new Set<string>();
+
+function normalizeAndPrepareForgeModel(
+  modelScene: THREE.Group,
+  targetWidth: number,
+  targetHeight: number
+): THREE.Group {
+  const box = new THREE.Box3().setFromObject(modelScene);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+
+  const naturalH = size.y || 1.0;
+  const scale = targetHeight / naturalH;
+
+  modelScene.scale.set(scale, scale, scale);
+
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+  modelScene.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+
+  modelScene.traverse((child) => {
+    if ((child as THREE.Mesh).isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+
+  const wrapper = new THREE.Group();
+  wrapper.add(modelScene);
+  return wrapper;
+}
 
 // Cache de materiais compartilhados para alta performance
 const stoneMaterial = new THREE.MeshStandardMaterial({
@@ -115,19 +148,63 @@ const bookMaterials = bookCoverColors.map(color => new THREE.MeshStandardMateria
   metalness: 0.1,
 }));
 
-/**
- * Cria a malha Three.js para um bloco de construção com sombras, PBR e suporte a repetição procedural (sem distorção)
- */
-export function createBuildingBlockMesh(block: BuildingBlock3D): THREE.Group {
-  const group = new THREE.Group();
-  group.name = `block-${block.id}`;
-  group.position.set(block.x, block.yElevation || 0, block.z);
-  group.rotation.y = ((block.rotationDeg || 0) * Math.PI) / 180;
-  group.userData = { blockId: block.id, type: block.type, isBuildingBlock: true };
+const pineFoliageMaterial = new THREE.MeshStandardMaterial({
+  color: 0x14532d, // green-900
+  roughness: 0.85,
+  metalness: 0.05,
+});
 
-  const segments = Math.max(1, Math.min(12, block.segmentsCount || 1));
-  const hScale = Math.max(0.5, Math.min(3.0, block.heightScale || 1.0));
-  const lightCfg = block.lightConfig;
+const waterMaterial = new THREE.MeshStandardMaterial({
+  color: 0x0284c7, // sky-600
+  transparent: true,
+  opacity: 0.75,
+  roughness: 0.1,
+  metalness: 0.1,
+});
+
+const goldCoinsMaterial = new THREE.MeshStandardMaterial({
+  color: 0xf59e0b, // amber-500
+  roughness: 0.25,
+  metalness: 0.95,
+});
+
+const leatherTentMaterial = new THREE.MeshStandardMaterial({
+  color: 0x92400e, // amber-800
+  roughness: 0.85,
+  metalness: 0.05,
+});
+
+const boneSkeletonMaterial = new THREE.MeshStandardMaterial({
+  color: 0xfef3c7, // amber-100
+  roughness: 0.8,
+  metalness: 0.05,
+});
+
+const amethystPortalMaterial = new THREE.MeshStandardMaterial({
+  color: 0xa855f7, // purple-500
+  emissive: 0x7e22ce,
+  emissiveIntensity: 2.2,
+  transparent: true,
+  opacity: 0.75,
+  roughness: 0.2,
+  metalness: 0.3,
+});
+
+const crystalCyanMaterial = new THREE.MeshStandardMaterial({
+  color: 0x38bdf8, // sky-400
+  emissive: 0x0284c7,
+  emissiveIntensity: 1.8,
+  transparent: true,
+  opacity: 0.85,
+  roughness: 0.15,
+  metalness: 0.4,
+});
+
+/**
+ * Cria a malha procedural padrão de fallback caso nenhum modelo GLB customizado esteja disponível
+ */
+function buildProceduralMesh(block: BuildingBlock3D, segments: number, hScale: number): THREE.Group {
+  const group = new THREE.Group();
 
   switch (block.type) {
     // --- PAREDE DE PEDRA PROCEDURAL (ESTICA SEM DISTORCER) ---
@@ -1293,6 +1370,615 @@ export function createBuildingBlockMesh(block: BuildingBlock3D): THREE.Group {
       }
       break;
     }
+
+    // --- CERCA DE MADEIRA PROCEDURAL ---
+    case 'fence_wood': {
+      const segWidth = 2.0;
+      const totalW = segments * segWidth;
+      const startX = -totalW / 2 + segWidth / 2;
+
+      for (let s = 0; s < segments; s++) {
+        const segX = startX + s * segWidth;
+        // Mourões verticais
+        for (const px of [-segWidth / 2 + 0.08, segWidth / 2 - 0.08]) {
+          const postGeo = new THREE.CylinderGeometry(0.06, 0.07, 1.1 * hScale, 6);
+          const post = new THREE.Mesh(postGeo, darkWoodMaterial);
+          post.position.set(segX + px, 0.55 * hScale, 0);
+          post.castShadow = true;
+          group.add(post);
+        }
+        // Travessas horizontais de madeira
+        for (const py of [0.35, 0.75]) {
+          const plankGeo = new THREE.BoxGeometry(segWidth - 0.04, 0.08 * hScale, 0.04);
+          const plank = new THREE.Mesh(plankGeo, woodMaterial);
+          plank.position.set(segX, py * hScale, 0);
+          plank.castShadow = true;
+          group.add(plank);
+        }
+        // Estaca diagonal
+        const diagGeo = new THREE.BoxGeometry(segWidth * 0.95, 0.06 * hScale, 0.03);
+        const diag = new THREE.Mesh(diagGeo, woodMaterial);
+        diag.position.set(segX, 0.55 * hScale, 0.01);
+        diag.rotation.z = Math.PI / 8;
+        group.add(diag);
+      }
+      break;
+    }
+
+    // --- POÇO DE ÁGUA MEDIEVAL ---
+    case 'well_stone': {
+      // Base redonda de pedra
+      const basinGeo = new THREE.CylinderGeometry(0.85, 0.9, 0.9 * hScale, 16, 1, true);
+      const basin = new THREE.Mesh(basinGeo, stoneMaterial);
+      basin.position.y = 0.45 * hScale;
+      basin.castShadow = true;
+      group.add(basin);
+
+      // Fundo e Água
+      const waterGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.05, 16);
+      const water = new THREE.Mesh(waterGeo, waterMaterial);
+      water.position.y = 0.65 * hScale;
+      group.add(water);
+
+      // Pilares de sustentação do telhado
+      for (const sx of [-0.75, 0.75]) {
+        const pillarGeo = new THREE.CylinderGeometry(0.06, 0.07, 1.8 * hScale, 6);
+        const pillar = new THREE.Mesh(pillarGeo, darkWoodMaterial);
+        pillar.position.set(sx, 1.1 * hScale, 0);
+        pillar.castShadow = true;
+        group.add(pillar);
+      }
+
+      // Eixo de corda com manivela
+      const axleGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.5, 8);
+      const axle = new THREE.Mesh(axleGeo, woodMaterial);
+      axle.rotation.z = Math.PI / 2;
+      axle.position.set(0, 1.4 * hScale, 0);
+      group.add(axle);
+
+      // Telhadinho de duas águas
+      const roofGeo = new THREE.ConeGeometry(1.2, 0.6 * hScale, 4);
+      const roof = new THREE.Mesh(roofGeo, darkWoodMaterial);
+      roof.position.y = 2.1 * hScale;
+      roof.rotation.y = Math.PI / 4;
+      roof.castShadow = true;
+      group.add(roof);
+      break;
+    }
+
+    // --- CRISTAL ARCANO FLUTUANTE ---
+    case 'crystal_pylon': {
+      // Pedestal de pedra rúnica
+      const baseGeo = new THREE.CylinderGeometry(0.5, 0.65, 0.8 * hScale, 8);
+      const base = new THREE.Mesh(baseGeo, stoneMaterial);
+      base.position.y = 0.4 * hScale;
+      base.castShadow = true;
+      group.add(base);
+
+      // Anéis de contenção de latão
+      const ringGeo = new THREE.TorusGeometry(0.55, 0.04, 8, 16);
+      const ring = new THREE.Mesh(ringGeo, brassMaterial);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.8 * hScale;
+      group.add(ring);
+
+      // Cristal Arcano Flutuante
+      const crystalGeo = new THREE.OctahedronGeometry(0.45 * hScale, 0);
+      const crystal = new THREE.Mesh(crystalGeo, crystalCyanMaterial);
+      crystal.position.y = 1.7 * hScale;
+      crystal.scale.set(0.8, 1.6, 0.8);
+      crystal.castShadow = true;
+      group.add(crystal);
+      break;
+    }
+
+    // --- CADEIRA / BANCO DE TAVERNA ---
+    case 'chair_wood': {
+      // 4 Pés
+      for (const [x, z] of [[-0.22, -0.22], [0.22, -0.22], [-0.22, 0.22], [0.22, 0.22]]) {
+        const legGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.5 * hScale, 6);
+        const leg = new THREE.Mesh(legGeo, darkWoodMaterial);
+        leg.position.set(x, 0.25 * hScale, z);
+        leg.castShadow = true;
+        group.add(leg);
+      }
+      // Assento
+      const seatGeo = new THREE.BoxGeometry(0.55, 0.06 * hScale, 0.55);
+      const seat = new THREE.Mesh(seatGeo, woodMaterial);
+      seat.position.y = 0.52 * hScale;
+      seat.castShadow = true;
+      group.add(seat);
+
+      // Encosto
+      for (const x of [-0.2, 0.2]) {
+        const postGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.45 * hScale, 6);
+        const post = new THREE.Mesh(postGeo, darkWoodMaterial);
+        post.position.set(x, 0.77 * hScale, -0.23);
+        group.add(post);
+      }
+      const slatGeo = new THREE.BoxGeometry(0.48, 0.12 * hScale, 0.03);
+      const slat = new THREE.Mesh(slatGeo, woodMaterial);
+      slat.position.set(0, 0.9 * hScale, -0.23);
+      group.add(slat);
+      break;
+    }
+
+    // --- CAMA MEDIEVAL ---
+    case 'bed_medieval': {
+      // Estrutura de madeira
+      const frameGeo = new THREE.BoxGeometry(1.4, 0.35 * hScale, 2.1);
+      const frame = new THREE.Mesh(frameGeo, darkWoodMaterial);
+      frame.position.y = 0.2 * hScale;
+      frame.castShadow = true;
+      group.add(frame);
+
+      // Colchão com lençol
+      const matGeo = new THREE.BoxGeometry(1.25, 0.2 * hScale, 1.95);
+      const mattress = new THREE.Mesh(matGeo, parchmentMaterial);
+      mattress.position.y = 0.42 * hScale;
+      group.add(mattress);
+
+      // Cobertor vermelho bordô
+      const blanketGeo = new THREE.BoxGeometry(1.28, 0.22 * hScale, 1.3);
+      const blanket = new THREE.Mesh(blanketGeo, clothRedMaterial);
+      blanket.position.set(0, 0.43 * hScale, 0.3);
+      blanket.castShadow = true;
+      group.add(blanket);
+
+      // Travesseiro
+      const pillowGeo = new THREE.BoxGeometry(0.9, 0.12 * hScale, 0.35);
+      const pillow = new THREE.Mesh(pillowGeo, parchmentMaterial);
+      pillow.position.set(0, 0.52 * hScale, -0.7);
+      group.add(pillow);
+
+      // Cabeceira
+      const headGeo = new THREE.BoxGeometry(1.45, 0.9 * hScale, 0.1);
+      const head = new THREE.Mesh(headGeo, woodMaterial);
+      head.position.set(0, 0.55 * hScale, -1.02);
+      head.castShadow = true;
+      group.add(head);
+      break;
+    }
+
+    // --- BALCÃO DE TAVERNA ---
+    case 'tavern_bar': {
+      // Corpo principal
+      const bodyGeo = new THREE.BoxGeometry(2.5, 1.05 * hScale, 0.7);
+      const body = new THREE.Mesh(bodyGeo, darkWoodMaterial);
+      body.position.y = 0.55 * hScale;
+      body.castShadow = true;
+      group.add(body);
+
+      // Tampo espesso e polido
+      const topGeo = new THREE.BoxGeometry(2.65, 0.12 * hScale, 0.85);
+      const top = new THREE.Mesh(topGeo, woodMaterial);
+      top.position.y = 1.12 * hScale;
+      top.castShadow = true;
+      group.add(top);
+
+      // Barra de latão para os pés
+      const railGeo = new THREE.CylinderGeometry(0.03, 0.03, 2.5, 8);
+      const rail = new THREE.Mesh(railGeo, brassMaterial);
+      rail.rotation.z = Math.PI / 2;
+      rail.position.set(0, 0.15 * hScale, 0.4);
+      group.add(rail);
+
+      // 3 Canecos de cerveja sobre o balcão
+      for (const bx of [-0.8, 0, 0.7]) {
+        const mugGeo = new THREE.CylinderGeometry(0.08, 0.09, 0.18 * hScale, 8);
+        const mug = new THREE.Mesh(mugGeo, woodMaterial);
+        mug.position.set(bx, 1.25 * hScale, 0.05);
+        group.add(mug);
+      }
+      break;
+    }
+
+    // --- PILHA DE CAIXOTES ---
+    case 'crate_stack': {
+      const positions: [number, number, number, number, number][] = [
+        [-0.4, 0.4 * hScale, -0.3, 0.8, 0],
+        [0.4, 0.45 * hScale, 0.2, 0.85, 0.2],
+        [-0.1, 1.05 * hScale, 0.0, 0.7, -0.15],
+      ];
+      positions.forEach(([cx, cy, cz, sz, rot]) => {
+        const boxGeo = new THREE.BoxGeometry(sz, sz * hScale, sz);
+        const box = new THREE.Mesh(boxGeo, woodMaterial);
+        box.position.set(cx, cy, cz);
+        box.rotation.y = rot;
+        box.castShadow = true;
+        group.add(box);
+
+        // Moldura de ferro
+        const edgeGeo = new THREE.EdgesGeometry(boxGeo);
+        const edges = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: 0x1e293b }));
+        edges.position.copy(box.position);
+        edges.rotation.copy(box.rotation);
+        group.add(edges);
+      });
+      break;
+    }
+
+    // --- PILHA DE BARRIS ---
+    case 'barrel_stack': {
+      const bPositions: [number, number, number, number][] = [
+        [-0.5, 0.5 * hScale, 0, 0],
+        [0.5, 0.5 * hScale, 0, 0],
+        [0, 1.35 * hScale, 0, 0],
+      ];
+      bPositions.forEach(([bx, by, bz]) => {
+        const barrelGeo = new THREE.CylinderGeometry(0.4, 0.44, 0.9 * hScale, 12);
+        const barrel = new THREE.Mesh(barrelGeo, darkWoodMaterial);
+        barrel.position.set(bx, by, bz);
+        barrel.castShadow = true;
+        group.add(barrel);
+
+        for (const ringY of [-0.3, 0.3]) {
+          const rGeo = new THREE.TorusGeometry(0.43, 0.02, 6, 12);
+          const rMesh = new THREE.Mesh(rGeo, ironMaterial);
+          rMesh.rotation.x = Math.PI / 2;
+          rMesh.position.set(bx, by + ringY * hScale, bz);
+          group.add(rMesh);
+        }
+      });
+      break;
+    }
+
+    // --- MESA DE TORTURA MEDIEVAL ---
+    case 'torture_rack': {
+      // Estrutura de madeira reforçada
+      const bedGeo = new THREE.BoxGeometry(1.0, 0.45 * hScale, 2.2);
+      const bed = new THREE.Mesh(bedGeo, darkWoodMaterial);
+      bed.position.y = 0.4 * hScale;
+      bed.castShadow = true;
+      group.add(bed);
+
+      // Cilindros / Rolos de ferro de estiramento
+      for (const rz of [-0.9, 0.9]) {
+        const rollerGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.95, 10);
+        const roller = new THREE.Mesh(rollerGeo, ironMaterial);
+        roller.rotation.z = Math.PI / 2;
+        roller.position.set(0, 0.65 * hScale, rz);
+        roller.castShadow = true;
+        group.add(roller);
+      }
+
+      // Manivela de roda dentada de madeira lateral
+      const wheelGeo = new THREE.TorusGeometry(0.25, 0.04, 6, 12);
+      const wheel = new THREE.Mesh(wheelGeo, woodMaterial);
+      wheel.rotation.y = Math.PI / 2;
+      wheel.position.set(0.55, 0.65 * hScale, 0.9);
+      group.add(wheel);
+      break;
+    }
+
+    // --- DAMA DE FERRO (IRON MAIDEN) ---
+    case 'iron_maiden': {
+      // Corpo oval/cilíndrico de ferro
+      const bodyGeo = new THREE.CylinderGeometry(0.48, 0.55, 2.2 * hScale, 12);
+      const body = new THREE.Mesh(bodyGeo, ironMaterial);
+      body.position.y = 1.1 * hScale;
+      body.castShadow = true;
+      group.add(body);
+
+      // Rosto estilizado em relevo de bronze
+      const faceGeo = new THREE.SphereGeometry(0.22, 8, 8);
+      const face = new THREE.Mesh(faceGeo, brassMaterial);
+      face.position.set(0, 1.85 * hScale, 0.42);
+      face.scale.set(0.9, 1.2, 0.5);
+      group.add(face);
+
+      // Dobradiças e trincos de ferro
+      for (const hy of [0.7, 1.4]) {
+        const hingeGeo = new THREE.BoxGeometry(0.15, 0.08 * hScale, 0.08);
+        const hinge = new THREE.Mesh(hingeGeo, brassMaterial);
+        hinge.position.set(0.45, hy * hScale, 0.2);
+        group.add(hinge);
+      }
+      break;
+    }
+
+    // --- GAIOLA DE MASMORRA (GIBBET CAGE) ---
+    case 'gibbet_cage': {
+      // Base e teto circulares de ferro
+      for (const cy of [0.3, 2.2]) {
+        const capGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.08 * hScale, 12);
+        const cap = new THREE.Mesh(capGeo, ironMaterial);
+        cap.position.y = cy * hScale;
+        cap.castShadow = true;
+        group.add(cap);
+      }
+
+      // Barras verticais
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2;
+        const bx = Math.cos(ang) * 0.48;
+        const bz = Math.sin(ang) * 0.48;
+        const barGeo = new THREE.CylinderGeometry(0.02, 0.02, 1.9 * hScale, 6);
+        const bar = new THREE.Mesh(barGeo, ironMaterial);
+        bar.position.set(bx, 1.25 * hScale, bz);
+        group.add(bar);
+      }
+
+      // Esqueleto/Crânio dentro da gaiola
+      const skullGeo = new THREE.SphereGeometry(0.15, 8, 8);
+      const skull = new THREE.Mesh(skullGeo, boneSkeletonMaterial);
+      skull.position.set(0, 1.35 * hScale, 0);
+      group.add(skull);
+      break;
+    }
+
+    // --- GUILHOTINA DE EXECUÇÃO ---
+    case 'guillotine': {
+      // Base de madeira
+      const baseGeo = new THREE.BoxGeometry(1.4, 0.4 * hScale, 2.2);
+      const base = new THREE.Mesh(baseGeo, darkWoodMaterial);
+      base.position.y = 0.2 * hScale;
+      base.castShadow = true;
+      group.add(base);
+
+      // Pilares verticais da lâmina
+      for (const px of [-0.4, 0.4]) {
+        const poleGeo = new THREE.BoxGeometry(0.1, 2.4 * hScale, 0.12);
+        const pole = new THREE.Mesh(poleGeo, darkWoodMaterial);
+        pole.position.set(px, 1.4 * hScale, 0);
+        pole.castShadow = true;
+        group.add(pole);
+      }
+
+      // Topo de madeira
+      const topGeo = new THREE.BoxGeometry(1.0, 0.12 * hScale, 0.15);
+      const top = new THREE.Mesh(topGeo, woodMaterial);
+      top.position.set(0, 2.55 * hScale, 0);
+      group.add(top);
+
+      // Lâmina de aço diagonal
+      const bladeGeo = new THREE.BoxGeometry(0.7, 0.4 * hScale, 0.03);
+      const blade = new THREE.Mesh(bladeGeo, steelBladeMaterial);
+      blade.position.set(0, 2.0 * hScale, 0);
+      blade.rotation.z = Math.PI / 12;
+      blade.castShadow = true;
+      group.add(blade);
+
+      // Cepo / Luneta do pescoço
+      const pilloryGeo = new THREE.BoxGeometry(0.7, 0.35 * hScale, 0.08);
+      const pillory = new THREE.Mesh(pilloryGeo, woodMaterial);
+      pillory.position.set(0, 0.65 * hScale, 0);
+      group.add(pillory);
+      break;
+    }
+
+    // --- FONTE / CHAFARIZ SAGRADO DE PEDRA ---
+    case 'fountain_stone': {
+      // Bacia octogonal
+      const basinGeo = new THREE.CylinderGeometry(1.1, 1.2, 0.6 * hScale, 8);
+      const basin = new THREE.Mesh(basinGeo, stoneMaterial);
+      basin.position.y = 0.3 * hScale;
+      basin.castShadow = true;
+      group.add(basin);
+
+      // Água cristalina na bacia
+      const waterGeo = new THREE.CylinderGeometry(0.98, 0.98, 0.05, 8);
+      const water = new THREE.Mesh(waterGeo, waterMaterial);
+      water.position.y = 0.5 * hScale;
+      group.add(water);
+
+      // Coluna central e taça superior
+      const colGeo = new THREE.CylinderGeometry(0.2, 0.28, 1.1 * hScale, 8);
+      const col = new THREE.Mesh(colGeo, mossStoneMaterial);
+      col.position.y = 0.85 * hScale;
+      group.add(col);
+
+      const upperBowlGeo = new THREE.CylinderGeometry(0.5, 0.25, 0.35 * hScale, 8);
+      const upperBowl = new THREE.Mesh(upperBowlGeo, stoneMaterial);
+      upperBowl.position.y = 1.35 * hScale;
+      upperBowl.castShadow = true;
+      group.add(upperBowl);
+      break;
+    }
+
+    // --- BANCADA DE ALQUIMIA ---
+    case 'alchemy_workbench': {
+      // Mesa de madeira sólida
+      const tableGeo = new THREE.BoxGeometry(2.0, 0.85 * hScale, 0.9);
+      const table = new THREE.Mesh(tableGeo, darkWoodMaterial);
+      table.position.y = 0.42 * hScale;
+      table.castShadow = true;
+      group.add(table);
+
+      // Prateleira superior
+      const shelfGeo = new THREE.BoxGeometry(1.9, 0.08 * hScale, 0.3);
+      const shelf = new THREE.Mesh(shelfGeo, woodMaterial);
+      shelf.position.set(0, 1.2 * hScale, -0.25);
+      group.add(shelf);
+
+      // Frascos de poções coloridos
+      const potionColors = [0xef4444, 0x10b981, 0x3b82f6, 0xa855f7];
+      potionColors.forEach((color, idx) => {
+        const vialGeo = new THREE.CylinderGeometry(0.05, 0.07, 0.16 * hScale, 8);
+        const vialMat = new THREE.MeshStandardMaterial({ color, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.9 });
+        const vial = new THREE.Mesh(vialGeo, vialMat);
+        vial.position.set(-0.6 + idx * 0.35, 1.32 * hScale, -0.25);
+        group.add(vial);
+      });
+
+      // Retorta de vidro para destilação sobre a mesa
+      const flaskGeo = new THREE.SphereGeometry(0.14, 8, 8);
+      const flask = new THREE.Mesh(flaskGeo, waterMaterial);
+      flask.position.set(0.6, 0.98 * hScale, 0.15);
+      group.add(flask);
+      break;
+    }
+
+    // --- PORTAL ARCANO DIMENSIONAL ---
+    case 'magic_portal': {
+      // Obeliscos laterais de pedra com runas
+      for (const px of [-1.0, 1.0]) {
+        const pillarGeo = new THREE.BoxGeometry(0.35, 3.0 * hScale, 0.4);
+        const pillar = new THREE.Mesh(pillarGeo, mossStoneMaterial);
+        pillar.position.set(px, 1.5 * hScale, 0);
+        pillar.castShadow = true;
+        group.add(pillar);
+      }
+
+      // Lintrel superior em arco
+      const archGeo = new THREE.BoxGeometry(2.35, 0.35 * hScale, 0.45);
+      const arch = new THREE.Mesh(archGeo, stoneMaterial);
+      arch.position.set(0, 3.0 * hScale, 0);
+      group.add(arch);
+
+      // Vórtice Dimensional Translúcido Amethyst/Violeta
+      const vortexGeo = new THREE.CircleGeometry(0.95 * hScale, 24);
+      const vortex = new THREE.Mesh(vortexGeo, amethystPortalMaterial);
+      vortex.position.set(0, 1.5 * hScale, 0);
+      group.add(vortex);
+      break;
+    }
+
+    // --- PILHA DE TESOURO & OURO ---
+    case 'treasure_pile': {
+      // Monte de moedas de ouro
+      const pileGeo = new THREE.ConeGeometry(0.85, 0.45 * hScale, 12);
+      const pile = new THREE.Mesh(pileGeo, goldCoinsMaterial);
+      pile.position.y = 0.22 * hScale;
+      pile.castShadow = true;
+      group.add(pile);
+
+      // Cálice dourado e gemas
+      const cupGeo = new THREE.CylinderGeometry(0.09, 0.05, 0.25 * hScale, 8);
+      const cup = new THREE.Mesh(cupGeo, brassMaterial);
+      cup.position.set(0.2, 0.45 * hScale, 0.1);
+      group.add(cup);
+
+      // Gemas brilhantes
+      const gemGeo = new THREE.OctahedronGeometry(0.08, 0);
+      const gem1 = new THREE.Mesh(gemGeo, new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.1 }));
+      gem1.position.set(-0.3, 0.25 * hScale, 0.3);
+      group.add(gem1);
+
+      const gem2 = new THREE.Mesh(gemGeo, crystalCyanMaterial);
+      gem2.position.set(0.3, 0.28 * hScale, -0.2);
+      group.add(gem2);
+      break;
+    }
+
+    // --- PINHEIRO DE FLORESTA ---
+    case 'tree_pine': {
+      // Tronco
+      const trunkGeo = new THREE.CylinderGeometry(0.18, 0.28, 1.4 * hScale, 8);
+      const trunk = new THREE.Mesh(trunkGeo, darkWoodMaterial);
+      trunk.position.y = 0.7 * hScale;
+      trunk.castShadow = true;
+      group.add(trunk);
+
+      // 3 Camadas cônicas de folhagem verde escura
+      const layers: [number, number, number][] = [
+        [1.1, 1.6 * hScale, 1.6 * hScale],
+        [0.85, 1.4 * hScale, 2.6 * hScale],
+        [0.55, 1.2 * hScale, 3.5 * hScale],
+      ];
+      layers.forEach(([radius, height, yPos]) => {
+        const foliageGeo = new THREE.ConeGeometry(radius, height, 8);
+        const foliage = new THREE.Mesh(foliageGeo, pineFoliageMaterial);
+        foliage.position.y = yPos;
+        foliage.castShadow = true;
+        group.add(foliage);
+      });
+      break;
+    }
+
+    // --- PEDREGULHO DE CAVERNA ---
+    case 'rock_boulder': {
+      const rockGeo = new THREE.DodecahedronGeometry(0.85 * hScale, 1);
+      const rock = new THREE.Mesh(rockGeo, mossStoneMaterial);
+      rock.position.y = 0.65 * hScale;
+      rock.scale.set(1.1, 0.85, 1.2);
+      rock.castShadow = true;
+      group.add(rock);
+      break;
+    }
+
+    // --- TENDA DE ACAMPAMENTO ---
+    case 'tent_camp': {
+      // Tenda em forma de prisma triangular (cone de 4 lados esticado)
+      const tentGeo = new THREE.ConeGeometry(1.6, 2.0 * hScale, 4);
+      const tent = new THREE.Mesh(tentGeo, leatherTentMaterial);
+      tent.position.y = 1.0 * hScale;
+      tent.rotation.y = Math.PI / 4;
+      tent.scale.set(0.9, 1.0, 1.4);
+      tent.castShadow = true;
+      group.add(tent);
+
+      // Mastros de madeira frontais
+      const poleGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.1 * hScale, 6);
+      const pole = new THREE.Mesh(poleGeo, darkWoodMaterial);
+      pole.position.set(0, 1.05 * hScale, 1.1);
+      group.add(pole);
+      break;
+    }
+  }
+
+  return group;
+}
+
+/**
+ * Cria a malha Three.js para um bloco de construção.
+ * Tenta carregar automaticamente o modelo customizado de /assets/3d/forge/{type}.glb.
+ * Se não existir ou estiver carregando, exibe a malha procedural como fallback instantâneo.
+ */
+export function createBuildingBlockMesh(block: BuildingBlock3D): THREE.Group {
+  const group = new THREE.Group();
+  group.name = `block-${block.id}`;
+  group.position.set(block.x, block.yElevation || 0, block.z);
+  group.rotation.y = ((block.rotationDeg || 0) * Math.PI) / 180;
+  group.userData = { blockId: block.id, type: block.type, isBuildingBlock: true };
+
+  const segments = Math.max(1, Math.min(12, block.segmentsCount || 1));
+  const hScale = Math.max(0.5, Math.min(3.0, block.heightScale || 1.0));
+  const lightCfg = block.lightConfig;
+
+  const def = BUILDING_BLOCK_CATALOG[block.type];
+  const targetW = (def?.widthUnits || 2.0) * segments;
+  const targetH = (def?.heightUnits || 2.8) * hScale;
+
+  const visualContainer = new THREE.Group();
+  visualContainer.name = 'visualContainer';
+  group.add(visualContainer);
+
+  // 1. Se já está em cache em memória, usa a réplica do modelo customizado GLB
+  const cached = forgeModelCache.get(block.type);
+  if (cached) {
+    const customInstance = normalizeAndPrepareForgeModel(cached.clone(), targetW, targetH);
+    customInstance.name = 'customGlbMesh';
+    visualContainer.add(customInstance);
+  } else {
+    // 2. Cria a malha procedural como fallback imediato
+    const procMesh = buildProceduralMesh(block, segments, hScale);
+    procMesh.name = 'proceduralMesh';
+    visualContainer.add(procMesh);
+
+    // 3. Tenta carregar o modelo GLB de /assets/3d/forge/{type}.glb se ainda não tiver falhado
+    if (!failedForgeModelCache.has(block.type)) {
+      const url = `/assets/3d/forge/${block.type}.glb`;
+      gltfLoader.load(
+        url,
+        (gltf) => {
+          forgeModelCache.set(block.type, gltf.scene);
+          // Substitui a malha procedural pelo modelo 3D customizado se o nó ainda estiver na cena
+          const oldProc = visualContainer.getObjectByName('proceduralMesh');
+          if (oldProc) {
+            visualContainer.remove(oldProc);
+          }
+          const customInstance = normalizeAndPrepareForgeModel(gltf.scene.clone(), targetW, targetH);
+          customInstance.name = 'customGlbMesh';
+          visualContainer.add(customInstance);
+        },
+        undefined,
+        () => {
+          // Arquivo não existe no disco (404) -> memoriza para não re-tentar e mantém a malha procedural
+          failedForgeModelCache.add(block.type);
+        }
+      );
+    }
   }
 
   // --- Dynamic PointLight Attachment if block has lightConfig ---
@@ -1322,10 +2008,7 @@ export function createBuildingBlockMesh(block: BuildingBlock3D): THREE.Group {
       baseY: lightY,
       baseZ: lightZ,
     };
-    light.castShadow = true;
-    light.shadow.bias = -0.002;
-    light.shadow.mapSize.width = 512;
-    light.shadow.mapSize.height = 512;
+    light.castShadow = false; // PointLights locais usam iluminação direta; sombras vêm da luz direcional primária
     group.add(light);
   }
 

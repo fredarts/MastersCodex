@@ -32,6 +32,7 @@ import { getSpellAoEDefinition } from '@/lib/dnd5e-spells-shapes';
 import { Combatant, CharacterSheet, CharacterSpell, CombatLogEntry, ConditionType } from '@/lib/types';
 import { BattleSetupMode } from '@/components/live-cockpit/BattleSetupModal';
 import { parseDamageInfo, calculateEffectiveDamage } from '@/lib/dnd5e-damage-resolver';
+import { parseRangeString } from '@/lib/utils/dndRangeUtils';
 
 interface LiveCockpitStudioProps {
   onGenerateLoot: () => void;
@@ -624,7 +625,8 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     const target = explicitTarget || combatants.find((c) => c.id === selectedTargetId);
 
     if (title.startsWith('Ataque') && !target && !forceNoTarget) {
-      setPendingAttack({ title, mod, actorCombatant: currentActor, actionDesc });
+      const rangeInfo = parseRangeString(actionDesc || title, title);
+      setPendingAttack({ title, mod, actorCombatant: currentActor, actionDesc, rangeInfo });
       toast.info(`Mirando ${title}: Selecione o alvo no Grid 3D.`);
       return false;
     }

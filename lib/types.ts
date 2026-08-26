@@ -190,6 +190,7 @@ export interface GameScene {
   activeImageIndex?: number;
   environmentSettings?: Record<string, any>;
   buildingBlocks?: import('./3d-building-blocks').BuildingBlock3D[];
+  terrainSurfaces?: import('./3d-terrains').TerrainCellData[];
   gridConfig3D?: import('./3d-building-blocks').GridConfig3D;
   tokenElevations?: Record<string, number>;
   isBattleStarted?: boolean;

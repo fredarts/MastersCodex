@@ -10,6 +10,11 @@ import {
   SpellTemplate3D 
 } from '@/lib/3d-building-blocks';
 import { 
+  TerrainSurfaceType,
+  TERRAIN_SURFACE_CATALOG,
+  TerrainSurfaceDefinition
+} from '@/lib/3d-terrains';
+import { 
   Box, 
   Layers, 
   Trash2, 
@@ -24,7 +29,11 @@ import {
   Plus,
   ArrowUp,
   Save,
-  Download
+  Download,
+  Paintbrush,
+  Eraser,
+  Droplet,
+  Info
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -36,8 +45,8 @@ export interface BattleForgeToolbarProps {
   onGridConfigChange: (config: GridConfig3D) => void;
   activeBlockType: BuildingBlockType | null;
   onSelectBlockType: (type: BuildingBlockType | null) => void;
-  buildMode: 'idle' | 'place' | 'delete' | 'spell';
-  onSetBuildMode: (mode: 'idle' | 'place' | 'delete' | 'spell') => void;
+  buildMode: 'idle' | 'place' | 'delete' | 'spell' | 'terrain';
+  onSetBuildMode: (mode: 'idle' | 'place' | 'delete' | 'spell' | 'terrain') => void;
   blockRotation: number;
   onRotateBlock: () => void;
   onClearAllBlocks: () => void;
@@ -47,6 +56,15 @@ export interface BattleForgeToolbarProps {
   selectedTokenElevation?: number;
   onSetTokenElevation?: (elevationFt: number) => void;
   blocksCount: number;
+  // Novos controles de Terreno & Superfície (BG3)
+  activeTerrainType?: TerrainSurfaceType;
+  onSelectTerrainType?: (type: TerrainSurfaceType) => void;
+  terrainBrushSize?: 1 | 2 | 3;
+  onSetTerrainBrushSize?: (size: 1 | 2 | 3) => void;
+  terrainOpacity?: number;
+  onSetTerrainOpacity?: (opacity: number) => void;
+  terrainsCount?: number;
+  onClearAllTerrains?: () => void;
 }
 
 export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
@@ -68,8 +86,16 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
   selectedTokenElevation = 0,
   onSetTokenElevation,
   blocksCount,
+  activeTerrainType = 'shallow_water',
+  onSelectTerrainType,
+  terrainBrushSize = 1,
+  onSetTerrainBrushSize,
+  terrainOpacity = 0.65,
+  onSetTerrainOpacity,
+  terrainsCount = 0,
+  onClearAllTerrains,
 }) => {
-  const [activeTab, setActiveTab] = useState<'blocks' | 'grid' | 'spells' | 'elevation'>('blocks');
+  const [activeTab, setActiveTab] = useState<'blocks' | 'terrains' | 'grid' | 'spells' | 'elevation'>('blocks');
   const [blockCategory, setBlockCategory] = useState<'all' | 'structures' | 'lights' | 'props'>('all');
 
   if (!isDm || !isOpen) return null;
@@ -78,6 +104,10 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
     if (blockCategory === 'all') return true;
     return BUILDING_BLOCK_CATALOG[type].category === blockCategory;
   });
+
+  const availableTerrains = (Object.keys(TERRAIN_SURFACE_CATALOG) as TerrainSurfaceType[]).filter(
+    (t) => t !== 'normal'
+  );
 
   const handleQuickSpell = (name: string, shape: SpellTemplateShape, radiusFeet: number, color: string, widthFeet?: number) => {
     onSpawnSpellTemplate({
@@ -93,7 +123,7 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
   };
 
   return (
-    <div className="absolute top-14 left-4 z-40 w-84 bg-slate-950/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col text-xs text-slate-200 animate-in fade-in zoom-in-95 duration-150">
+    <div className="absolute top-14 left-4 z-40 w-92 bg-slate-950/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col text-xs text-slate-200 animate-in fade-in zoom-in-95 duration-150">
       {/* Top Header */}
       <div className="px-3.5 py-2.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -106,8 +136,13 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
               <span className="bg-sky-500/20 text-sky-400 text-[9px] px-1.5 py-0.2 rounded font-mono">
                 {blocksCount} blocos
               </span>
+              {terrainsCount > 0 && (
+                <span className="bg-emerald-500/20 text-emerald-400 text-[9px] px-1.5 py-0.2 rounded font-mono">
+                  {terrainsCount} terrenos
+                </span>
+              )}
             </h3>
-            <p className="text-[10px] text-slate-400">Paredes procedurais, luzes e props</p>
+            <p className="text-[10px] text-slate-400">Paredes, superfícies BG3, luzes e props</p>
           </div>
         </div>
         <button 
@@ -121,8 +156,17 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
       {/* Mode Status Bar */}
       <div className="px-3 py-1.5 bg-slate-900/50 border-b border-slate-800/80 flex items-center justify-between text-[10px]">
         <span className="text-slate-400">
-          Modo: <strong className="text-amber-300 uppercase">
-            {buildMode === 'place' ? '🏗️ Construindo' : buildMode === 'delete' ? '🧹 Deletando' : buildMode === 'spell' ? '✨ Magia 3D' : '👀 Seleção (Clique no Bloco)'}
+          Modo:{' '}
+          <strong className="text-amber-300 uppercase">
+            {buildMode === 'place'
+              ? '🏗️ Construindo'
+              : buildMode === 'terrain'
+              ? '🖌️ Pintando Terreno'
+              : buildMode === 'delete'
+              ? '🧹 Deletando'
+              : buildMode === 'spell'
+              ? '✨ Magia 3D'
+              : '👀 Seleção (Clique no Bloco/Porta)'}
           </strong>
         </span>
         <div className="flex items-center gap-1">
@@ -143,7 +187,7 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
                 ? 'bg-rose-500/20 text-rose-300 border-rose-500'
                 : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
             }`}
-            title="Modo Borracha / Deletar Bloco"
+            title="Modo Borracha / Deletar Bloco ou Terreno"
           >
             <Trash2 className="w-3 h-3" />
           </button>
@@ -154,13 +198,21 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
       <div className="flex border-b border-slate-800 bg-slate-900/30 p-1 gap-1">
         {([
           { id: 'blocks', label: 'Blocos', icon: <Box className="w-3 h-3" /> },
-          { id: 'grid', label: 'Grade & Arena', icon: <Sliders className="w-3 h-3" /> },
+          { id: 'terrains', label: 'Terrenos', icon: <Paintbrush className="w-3 h-3 text-emerald-400" /> },
+          { id: 'grid', label: 'Grade', icon: <Sliders className="w-3 h-3" /> },
           { id: 'spells', label: 'Magias 3D', icon: <Sparkles className="w-3 h-3 text-amber-400" /> },
-          { id: 'elevation', label: 'Voo/Altura', icon: <ArrowUp className="w-3 h-3 text-sky-400" /> },
+          { id: 'elevation', label: 'Voo', icon: <ArrowUp className="w-3 h-3 text-sky-400" /> },
         ] as const).map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              if (tab.id === 'terrains') {
+                onSetBuildMode('terrain');
+              } else if (tab.id === 'blocks' && buildMode === 'terrain') {
+                onSetBuildMode('idle');
+              }
+            }}
             className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1 text-[10px] font-semibold transition-all ${
               activeTab === tab.id
                 ? 'bg-slate-800 text-amber-300 shadow-sm border border-slate-700'
@@ -174,7 +226,7 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
       </div>
 
       {/* Content Panels */}
-      <div className="p-3 max-h-84 overflow-y-auto custom-scrollbar">
+      <div className="p-3 max-h-96 overflow-y-auto custom-scrollbar">
         {/* TAB 1: BLOCKS */}
         {activeTab === 'blocks' && (
           <div className="space-y-2.5">
@@ -275,7 +327,161 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
           </div>
         )}
 
-        {/* TAB 2: GRID & ARENA */}
+        {/* TAB 2: TERRAINS & SURFACES (BG3 STYLE) */}
+        {activeTab === 'terrains' && (
+          <div className="space-y-3">
+            {/* Brush Controls & Sizes */}
+            <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase text-slate-400 flex items-center gap-1">
+                  <Paintbrush className="w-3 h-3 text-emerald-400" /> Tamanho do Pincel:
+                </span>
+                <div className="flex items-center gap-1">
+                  {([1, 2, 3] as const).map((sz) => (
+                    <button
+                      key={sz}
+                      onClick={() => onSetTerrainBrushSize && onSetTerrainBrushSize(sz)}
+                      className={`px-2 py-0.5 rounded font-mono font-bold text-[10px] border transition-all ${
+                        terrainBrushSize === sz
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {sz}x{sz}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Modo de ação: Pincel vs Borracha de Chão */}
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => onSetBuildMode('terrain')}
+                  className={`flex-1 py-1 rounded-lg border flex items-center justify-center gap-1.5 text-[10px] font-bold transition-all ${
+                    buildMode === 'terrain'
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Paintbrush className="w-3 h-3" /> Pintar Terreno
+                </button>
+                <button
+                  onClick={() => onSetBuildMode(buildMode === 'delete' ? 'terrain' : 'delete')}
+                  className={`flex-1 py-1 rounded-lg border flex items-center justify-center gap-1.5 text-[10px] font-bold transition-all ${
+                    buildMode === 'delete'
+                      ? 'bg-rose-500/20 border-rose-500 text-rose-300'
+                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Eraser className="w-3 h-3" /> Borracha de Terreno
+                </button>
+              </div>
+            </div>
+
+            {/* Controle de Opacidade da Cor do Terreno */}
+            <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase text-slate-400 flex items-center gap-1">
+                  <Sliders className="w-3 h-3 text-emerald-400" /> Opacidade do Terreno:
+                </span>
+                <span className="font-mono font-bold text-[10px] text-emerald-300 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/30">
+                  {Math.round((terrainOpacity ?? 0.65) * 100)}%
+                </span>
+              </div>
+              <div className="flex items-center gap-2 pt-0.5">
+                <span className="text-[9px] text-slate-500 font-mono">10%</span>
+                <input
+                  type="range"
+                  min={0.1}
+                  max={1.0}
+                  step={0.05}
+                  value={terrainOpacity ?? 0.65}
+                  onChange={(e) => onSetTerrainOpacity && onSetTerrainOpacity(parseFloat(e.target.value))}
+                  className="flex-1 accent-emerald-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer hover:accent-emerald-400 transition-all"
+                />
+                <span className="text-[9px] text-slate-500 font-mono">100%</span>
+              </div>
+            </div>
+
+            {/* Terrain Catalog Palette */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold uppercase text-slate-400">Superfícies & Efeitos BG3:</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {availableTerrains.map((type) => {
+                  const def = TERRAIN_SURFACE_CATALOG[type];
+                  const isSelected = activeTerrainType === type && buildMode === 'terrain';
+
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => {
+                        if (onSelectTerrainType) onSelectTerrainType(type);
+                        onSetBuildMode('terrain');
+                        toast.info(`Superfície selecionada: ${def.label}. Clique e arraste na arena 3D para pintar.`);
+                      }}
+                      className={`p-2 rounded-xl border text-left flex items-start gap-2 transition-all select-none hover:scale-[1.02] active:scale-95 ${
+                        isSelected
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-200 shadow-md shadow-emerald-500/10'
+                          : 'bg-slate-900/80 hover:bg-slate-850 border-slate-800 text-slate-300 hover:border-slate-700'
+                      }`}
+                    >
+                      <span className="text-base shrink-0">{def.icon}</span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-bold text-[11px] truncate">{def.label}</span>
+                        <span className="text-[9px] text-slate-400 line-clamp-2 leading-tight mt-0.5">
+                          {def.description}
+                        </span>
+                        <div className="flex items-center gap-1 mt-1">
+                          {def.isDifficultTerrain && (
+                            <span className="bg-amber-500/20 text-amber-300 text-[8.5px] px-1 py-0.2 rounded font-mono font-bold">
+                              2x Mov
+                            </span>
+                          )}
+                          {def.isHazard && (
+                            <span className="bg-rose-500/20 text-rose-300 text-[8.5px] px-1 py-0.2 rounded font-mono font-bold">
+                              Perigo
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Selected Terrain Info Card */}
+            {activeTerrainType && TERRAIN_SURFACE_CATALOG[activeTerrainType] && (
+              <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl space-y-1 text-[10px]">
+                <div className="flex items-center gap-1.5 font-bold text-slate-200">
+                  <span className="text-base">{TERRAIN_SURFACE_CATALOG[activeTerrainType].icon}</span>
+                  <span>{TERRAIN_SURFACE_CATALOG[activeTerrainType].label}</span>
+                </div>
+                <p className="text-slate-400">{TERRAIN_SURFACE_CATALOG[activeTerrainType].description}</p>
+                <div className="text-[9px] text-emerald-400/90 pt-1 border-t border-slate-800/80 flex items-center gap-1">
+                  <Info className="w-3 h-3 shrink-0" />
+                  <span>Tokens que pisarem sofrem o custo de movimento e reações elementais automáticas!</span>
+                </div>
+              </div>
+            )}
+
+            {terrainsCount > 0 && onClearAllTerrains && (
+              <button
+                onClick={() => {
+                  if (window.confirm('Tem certeza que deseja limpar todas as superfícies de terreno do mapa 3D?')) {
+                    onClearAllTerrains();
+                    toast.success('Todas as superfícies foram removidas.');
+                  }
+                }}
+                className="w-full py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-colors active:scale-98 mt-1"
+              >
+                <Trash2 className="w-3 h-3" /> Limpar Todas as Superfícies
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: GRID & ARENA */}
         {activeTab === 'grid' && (
           <div className="space-y-3">
             {/* Shape Selector */}
@@ -355,7 +561,7 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
           </div>
         )}
 
-        {/* TAB 3: 3D SPELL TEMPLATES */}
+        {/* TAB 4: 3D SPELL TEMPLATES */}
         {activeTab === 'spells' && (
           <div className="space-y-2.5">
             <p className="text-[10px] text-slate-400">Selecione uma magia para medir a área de efeito 3D:</p>
@@ -365,7 +571,7 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
                 className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-red-500/50 rounded-xl text-left flex flex-col gap-0.5"
               >
                 <span className="font-bold text-red-400">🔥 Bola de Fogo</span>
-                <span className="text-[9px] text-slate-500">Esfera 20ft (40ft diâmetro)</span>
+                <span className="text-[9px] text-slate-500">Esfera 20ft (Fogo)</span>
               </button>
 
               <button
@@ -373,7 +579,7 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
                 className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-orange-500/50 rounded-xl text-left flex flex-col gap-0.5"
               >
                 <span className="font-bold text-orange-400">📐 Cone de Chamas</span>
-                <span className="text-[9px] text-slate-500">Cone 15ft</span>
+                <span className="text-[9px] text-slate-500">Cone 15ft (Fogo)</span>
               </button>
 
               <button
@@ -381,7 +587,7 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
                 className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-sky-500/50 rounded-xl text-left flex flex-col gap-0.5"
               >
                 <span className="font-bold text-sky-400">❄️ Sopro Gélido</span>
-                <span className="text-[9px] text-slate-500">Cone 30ft</span>
+                <span className="text-[9px] text-slate-500">Cone 30ft (Gelo)</span>
               </button>
 
               <button
@@ -404,7 +610,7 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
           </div>
         )}
 
-        {/* TAB 4: ELEVATION & FLY */}
+        {/* TAB 5: ELEVATION & FLY */}
         {activeTab === 'elevation' && (
           <div className="space-y-3">
             <p className="text-[10px] text-slate-400">Defina a altitude de voo / andar do token selecionado:</p>

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
-import { Combatant } from '@/lib/types';
+import { Combatant, ConditionType } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -35,6 +35,17 @@ import {
   createDefaultBuildingBlock,
   BUILDING_BLOCK_CATALOG,
 } from '@/lib/3d-building-blocks';
+import {
+  TerrainSurfaceType,
+  TerrainCellData,
+  TERRAIN_SURFACE_CATALOG,
+  evaluateSurfaceReaction,
+  calculateTrailTerrainCost,
+} from '@/lib/3d-terrains';
+import {
+  createTerrainMeshManager,
+  TerrainMeshManagerInstance,
+} from './battle-3d/TerrainSurfaceMesh';
 import { createBuildingBlockMesh, createSpellTemplateMesh, createSelectionGizmoMesh } from './battle-3d/BuildingBlockMeshes';
 import { createInteractiveTransformGizmo } from './battle-3d/BuildingBlockGizmo';
 import { BattleForgeToolbar } from './battle-3d/BattleForgeToolbar';
@@ -127,6 +138,8 @@ export interface BattleGrid3DProps {
   isBattleStarted?: boolean;
   initialBuildingBlocks?: import('../lib/3d-building-blocks').BuildingBlock3D[];
   onBuildingBlocksChange?: (blocks: import('../lib/3d-building-blocks').BuildingBlock3D[]) => void;
+  initialTerrainSurfaces?: import('../lib/3d-terrains').TerrainCellData[];
+  onTerrainSurfacesChange?: (surfaces: import('../lib/3d-terrains').TerrainCellData[]) => void;
   initialGridConfig?: import('../lib/3d-building-blocks').GridConfig3D;
   onGridConfigChange?: (config: import('../lib/3d-building-blocks').GridConfig3D) => void;
   initialTokenElevations?: Record<string, number>;
@@ -206,6 +219,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   onGridConfigChange,
   initialTokenElevations,
   onTokenElevationsChange,
+  initialTerrainSurfaces,
+  onTerrainSurfacesChange,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { roleMode, user } = useAuth();
@@ -237,6 +252,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     normalRangeM: number;
     maxRangeM: number;
     isWeaponWithLongRange: boolean;
+    isRanged?: boolean;
   } | null>(null);
 
   const activeSpellTargetingRef = useRef(activeSpellTargeting);
@@ -257,6 +273,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     localPositions,
     setLocalPositions,
     localRotations,
+    setLocalRotations,
     canUserControlCombatant,
     handleRotateSelected,
   } = useBattleGridState(
@@ -279,13 +296,16 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const dragGhostRef = useRef<THREE.Group | null>(null);
 
-  // 3D BattleForge (Building Blocks & Grid Config) State
+  // 3D BattleForge (Building Blocks & Grid Config & Terrains) State
   const [gridConfig, setGridConfigState] = useState<GridConfig3D>(initialGridConfig || DEFAULT_GRID_CONFIG_3D);
   const [buildingBlocks, setBuildingBlocksState] = useState<BuildingBlock3D[]>(initialBuildingBlocks || []);
+  const [terrainSurfaces, setTerrainSurfacesState] = useState<TerrainCellData[]>(initialTerrainSurfaces || []);
+  const [activeTerrainType, setActiveTerrainType] = useState<TerrainSurfaceType>('shallow_water');
+  const [terrainBrushSize, setTerrainBrushSize] = useState<1 | 2 | 3>(1);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [isInspectorModalOpen, setIsInspectorModalOpen] = useState<boolean>(false);
   const [activeBlockType, setActiveBlockType] = useState<BuildingBlockType | null>(null);
-  const [buildMode, setBuildMode] = useState<'idle' | 'place' | 'delete' | 'spell'>('idle');
+  const [buildMode, setBuildMode] = useState<'idle' | 'place' | 'delete' | 'spell' | 'terrain'>('idle');
   const [blockRotation, setBlockRotation] = useState<number>(0);
   const [isForgeMenuOpen, setIsForgeMenuOpen] = useState<boolean>(false);
   const [activeSpellTemplate, setActiveSpellTemplate] = useState<SpellTemplate3D | null>(null);
@@ -303,6 +323,18 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       return next;
     });
   }, [onBuildingBlocksChange]);
+
+  const setTerrainSurfaces = useCallback((updater: TerrainCellData[] | ((prev: TerrainCellData[]) => TerrainCellData[])) => {
+    setTerrainSurfacesState((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (onTerrainSurfacesChange) {
+        queueMicrotask(() => {
+          onTerrainSurfacesChange(next);
+        });
+      }
+      return next;
+    });
+  }, [onTerrainSurfacesChange]);
 
   const setGridConfig = useCallback((updater: GridConfig3D | ((prev: GridConfig3D) => GridConfig3D)) => {
     setGridConfigState((prev) => {
@@ -338,6 +370,14 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   }, [initialBuildingBlocks]);
 
   useEffect(() => {
+    if (initialTerrainSurfaces) {
+      setTerrainSurfacesState(Array.isArray(initialTerrainSurfaces) ? initialTerrainSurfaces : []);
+    } else {
+      setTerrainSurfacesState([]);
+    }
+  }, [initialTerrainSurfaces]);
+
+  useEffect(() => {
     if (initialGridConfig) {
       setGridConfigState({ ...DEFAULT_GRID_CONFIG_3D, ...initialGridConfig });
     } else {
@@ -362,6 +402,25 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     startPos: { x: number; z: number };
   } | null>(null);
 
+  const terrainMeshManagerRef = useRef<TerrainMeshManagerInstance | null>(null);
+  const isPaintingTerrainRef = useRef<boolean>(false);
+  const surfacesMapRef = useRef<Map<string, TerrainSurfaceType>>(new Map());
+
+  // Manter mapa rápido de coordenadas (snappedX_snappedZ -> TerrainSurfaceType)
+  useEffect(() => {
+    const map = new Map<string, TerrainSurfaceType>();
+    terrainSurfaces.forEach((cell) => {
+      map.set(`${Math.round(cell.x)}_${Math.round(cell.z)}`, cell.type);
+    });
+    surfacesMapRef.current = map;
+    terrainMeshManagerRef.current?.updateSurfaces(terrainSurfaces, gridConfig.terrainOpacity ?? 0.65);
+  }, [terrainSurfaces, gridConfig.terrainOpacity]);
+
+  // Atualizar opacidade dos materiais Three.js dinamicamente quando o usuário mexer no slider
+  useEffect(() => {
+    terrainMeshManagerRef.current?.setOpacity(gridConfig.terrainOpacity ?? 0.65);
+  }, [gridConfig.terrainOpacity]);
+
   const forgeRef = useRef({
     buildMode,
     activeBlockType,
@@ -370,6 +429,9 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     activeSpellTemplate,
     buildingBlocks,
     selectedBlockId,
+    activeTerrainType,
+    terrainBrushSize,
+    terrainSurfaces,
   });
   forgeRef.current = {
     buildMode,
@@ -379,6 +441,9 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     activeSpellTemplate,
     buildingBlocks,
     selectedBlockId,
+    activeTerrainType,
+    terrainBrushSize,
+    terrainSurfaces,
   };
 
   // Three.js hover ring for attack targeting mode
@@ -387,6 +452,48 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const spellTemplateGroupRef = useRef<THREE.Group | null>(null);
   const gridHelperRef = useRef<THREE.GridHelper | null>(null);
   const floorMeshRef = useRef<THREE.Mesh | null>(null);
+
+  const paintTerrainAtPoint = useCallback((pt: THREE.Vector3, isErasing: boolean = false) => {
+    const wCells = forgeRef.current.gridConfig.widthCells || 20;
+    const hCells = forgeRef.current.gridConfig.heightCells || 20;
+    const snap = worldPosToGridCell(pt.x, pt.z, wCells, hCells);
+    const type = isErasing ? 'normal' : forgeRef.current.activeTerrainType;
+    const brush = isErasing ? 1 : (forgeRef.current.terrainBrushSize || 1);
+
+    const halfBrush = Math.floor(brush / 2);
+    const newCells: TerrainCellData[] = [];
+    const keysToUpdate = new Set<string>();
+
+    for (let dx = -halfBrush; dx <= halfBrush; dx++) {
+      for (let dz = -halfBrush; dz <= halfBrush; dz++) {
+        const col = Math.max(0, Math.min(wCells - 1, snap.col + dx));
+        const row = Math.max(0, Math.min(hCells - 1, snap.row + dz));
+        const pos = worldPosToGridCell(
+          pt.x + dx * 2.0,
+          pt.z + dz * 2.0,
+          wCells,
+          hCells
+        );
+        const cellId = `${col}_${row}`;
+        keysToUpdate.add(cellId);
+        if (type !== 'normal') {
+          newCells.push({
+            id: cellId,
+            col,
+            row,
+            x: pos.snappedX,
+            z: pos.snappedZ,
+            type,
+          });
+        }
+      }
+    }
+
+    setTerrainSurfaces((prev) => {
+      const filtered = prev.filter((c) => !keysToUpdate.has(c.id));
+      return [...filtered, ...newCells];
+    });
+  }, [setTerrainSurfaces]);
 
   const handleToggleTorch = useCallback((c: Combatant) => {
     if (!onUpdateCombatants) return;
@@ -699,19 +806,31 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     trailGroupRef.current = trailGroup;
     scene.add(trailGroup);
 
-    // 1. Highlight tiles in trail (amber translucent)
+    // Calcular custo real de terreno
+    const costInfo = calculateTrailTerrainCost(trail, surfacesMapRef.current);
+
+    // 1. Highlight tiles in trail (amber para normal, laranja/vermelho para difícil)
     const tileGeo = new THREE.PlaneGeometry(1.8, 1.8);
-    const tileMat = new THREE.MeshBasicMaterial({
-      color: 0xf59e0b, // Amber-500
-      transparent: true,
-      opacity: 0.28,
-      side: THREE.DoubleSide
-    });
     const edges = new THREE.EdgesGeometry(tileGeo);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.8 });
 
     for (let i = 1; i < trail.length; i++) {
       const pt = trail[i];
+      const snapKey = `${Math.round(pt.x)}_${Math.round(pt.z)}`;
+      const sType = surfacesMapRef.current.get(snapKey) || 'normal';
+      const isDiff = TERRAIN_SURFACE_CATALOG[sType]?.isDifficultTerrain;
+
+      const tileMat = new THREE.MeshBasicMaterial({
+        color: isDiff ? 0xf97316 : 0xf59e0b,
+        transparent: true,
+        opacity: isDiff ? 0.42 : 0.28,
+        side: THREE.DoubleSide
+      });
+      const lineMat = new THREE.LineBasicMaterial({
+        color: isDiff ? 0xfb923c : 0xfbbf24,
+        transparent: true,
+        opacity: 0.85
+      });
+
       const mesh = new THREE.Mesh(tileGeo, tileMat);
       mesh.rotation.x = -Math.PI / 2;
       mesh.position.set(pt.x, 0.025, pt.z);
@@ -723,31 +842,30 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       trailGroup.add(border);
     }
 
-    // 2. Bright connecting line along trail center points
+    // 2. Linha conectora ao longo dos pontos
     const points: THREE.Vector3[] = trail.map((pt) => new THREE.Vector3(pt.x, 0.04, pt.z));
     const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
     const pathLineMat = new THREE.LineBasicMaterial({
-      color: 0x38bdf8, // Sky-400 glowing path
+      color: costInfo.difficultSquares > 0 ? 0xf97316 : 0x38bdf8,
       linewidth: 3
     });
     const pathLine = new THREE.Line(lineGeo, pathLineMat);
     trailGroup.add(pathLine);
 
-    // 3. Floating distance badge (in meters) above token's head
-    const distanceMeters = (trail.length - 1) * 1.5;
+    // 3. Badge flutuante de distância e terreno
+    const distanceMeters = costInfo.totalCostMeters;
     const currentHead = trail[trail.length - 1];
 
     const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 128;
+    canvas.width = 280;
+    canvas.height = 140;
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      // Rounded pill background
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)'; // Dark slate transparent
-      ctx.strokeStyle = '#38bdf8'; // Glowing sky-400 border
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
+      ctx.strokeStyle = costInfo.difficultSquares > 0 ? '#f97316' : '#38bdf8';
       ctx.lineWidth = 6;
 
-      const x = 12, y = 12, w = 232, h = 104, r = 28;
+      const x = 10, y = 10, w = 260, h = 120, r = 24;
       ctx.beginPath();
       ctx.moveTo(x + r, y);
       ctx.lineTo(x + w - r, y);
@@ -762,12 +880,21 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       ctx.fill();
       ctx.stroke();
 
-      // Footsteps icon + distance text
       ctx.fillStyle = '#f8fafc';
-      ctx.font = 'bold 36px Inter, system-ui, sans-serif';
+      ctx.font = 'bold 34px Inter, system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(`👣 ${distanceMeters.toFixed(1)}m`, 128, 64);
+      ctx.fillText(`👣 ${distanceMeters.toFixed(1)}m`, 140, 50);
+
+      if (costInfo.difficultSquares > 0) {
+        ctx.fillStyle = '#fb923c';
+        ctx.font = 'bold 18px Inter, system-ui, sans-serif';
+        ctx.fillText(`⚠️ Terreno Difícil (+${(costInfo.difficultSquares * 1.5).toFixed(1)}m)`, 140, 92);
+      } else {
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = 'bold 18px Inter, system-ui, sans-serif';
+        ctx.fillText(`${(trail.length - 1)} passos (${(distanceMeters / 0.3).toFixed(0)}ft)`, 140, 92);
+      }
     }
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -778,8 +905,8 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       depthTest: false
     });
     const distanceSprite = new THREE.Sprite(spriteMat);
-    distanceSprite.scale.set(2.4, 1.2, 1);
-    distanceSprite.position.set(currentHead.x, 2.5, currentHead.z);
+    distanceSprite.scale.set(2.6, 1.3, 1);
+    distanceSprite.position.set(currentHead.x, 2.6, currentHead.z);
     trailGroup.add(distanceSprite);
   }, []);
 
@@ -1271,6 +1398,11 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     scene.add(blocksGroup);
     blocksGroupRef.current = blocksGroup;
 
+    // 3D Tactical Terrain Surfaces Mesh Manager (BG3 Surfaces)
+    const terrainManager = createTerrainMeshManager(scene);
+    terrainMeshManagerRef.current = terrainManager;
+    terrainManager.updateSurfaces(forgeRef.current.terrainSurfaces);
+
     // 3D Spell Templates Container
     const spellTemplateGroup = new THREE.Group();
     spellTemplateGroup.name = 'spellTemplateGroup';
@@ -1482,6 +1614,18 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         return;
       }
 
+      // 0. Clique no modo Terreno: Pintar Superfície 3D (BG3)
+      if (event.button === 0 && forgeRef.current.buildMode === 'terrain') {
+        if (raycaster.ray.intersectPlane(groundPlane.current, planeIntersectPoint.current)) {
+          event.preventDefault();
+          event.stopPropagation();
+          isPaintingTerrainRef.current = true;
+          controls.enabled = false;
+          paintTerrainAtPoint(planeIntersectPoint.current, false);
+          return;
+        }
+      }
+
       // 1. Clique no modo de Construção: Posicionar Bloco
       if (event.button === 0 && forgeRef.current.buildMode === 'place' && forgeRef.current.activeBlockType) {
         if (raycaster.ray.intersectPlane(groundPlane.current, planeIntersectPoint.current)) {
@@ -1502,8 +1646,9 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         }
       }
 
-      // 2. Clique no modo Borracha: Deletar Bloco
+      // 2. Clique no modo Borracha: Deletar Bloco ou Apagar Terreno
       if (event.button === 0 && forgeRef.current.buildMode === 'delete') {
+        let deletedBlock = false;
         if (blocksGroupRef.current) {
           const hits = raycaster.intersectObjects(blocksGroupRef.current.children, true);
           if (hits.length > 0) {
@@ -1518,20 +1663,59 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
               setBuildingBlocks((prev) => prev.filter((b) => b.id !== bId));
               if (selectedBlockId === bId) setSelectedBlockId(null);
               toast.info('Bloco removido.');
+              deletedBlock = true;
               return;
             }
           }
         }
+        if (!deletedBlock && raycaster.ray.intersectPlane(groundPlane.current, planeIntersectPoint.current)) {
+          event.preventDefault();
+          event.stopPropagation();
+          isPaintingTerrainRef.current = true;
+          controls.enabled = false;
+          paintTerrainAtPoint(planeIntersectPoint.current, true);
+          return;
+        }
       }
 
-      // 3. Clique no modo Magia: Posicionar Template de Magia 3D
+      // 3. Clique no modo Magia: Posicionar Template de Magia 3D + Reações Elementais BG3
       if (event.button === 0 && forgeRef.current.buildMode === 'spell' && forgeRef.current.activeSpellTemplate) {
         if (raycaster.ray.intersectPlane(groundPlane.current, planeIntersectPoint.current)) {
           event.preventDefault();
           event.stopPropagation();
           const pt = planeIntersectPoint.current;
+          const tpl = forgeRef.current.activeSpellTemplate;
           setActiveSpellTemplate((prev) => prev ? { ...prev, x: pt.x, z: pt.z } : null);
           toast.success('Área de magia posicionada!');
+
+          // Detectar elemento e disparar reações em cadeia BG3
+          const spellName = (tpl.name || '').toLowerCase();
+          const isFire = spellName.includes('fogo') || spellName.includes('flame') || spellName.includes('fire') || tpl.color === '#ef4444' || tpl.color === '#f97316';
+          const isCold = spellName.includes('gelo') || spellName.includes('frio') || spellName.includes('frost') || spellName.includes('ice') || tpl.color === '#38bdf8';
+          const element = isFire ? 'fire' : isCold ? 'cold' : null;
+
+          if (element) {
+            const radiusUnits = (tpl.radiusFeet / 5) * 2.0;
+            setTerrainSurfaces((prev) => {
+              let reactionMsg = '';
+              const updated = prev.map((cell) => {
+                const dist = Math.sqrt((cell.x - pt.x) ** 2 + (cell.z - pt.z) ** 2);
+                if (dist <= radiusUnits) {
+                  const reaction = evaluateSurfaceReaction(cell.type, element);
+                  if (reaction) {
+                    reactionMsg = reaction.triggeredEventText || '';
+                    return { ...cell, type: reaction.nextType };
+                  }
+                }
+                return cell;
+              });
+              if (reactionMsg) {
+                toast.warning(reactionMsg);
+              }
+              return updated;
+            });
+          }
+
           setBuildMode('idle');
           return;
         }
@@ -1589,16 +1773,20 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
               const targetBlock = forgeRef.current.buildingBlocks.find((b) => b.id === bId);
               setSelectedBlockId(bId);
 
+              // Interação Direta com Portas e Portais Medievais
+              if (targetBlock && (targetBlock.type.startsWith('door_') || targetBlock.type === 'portcullis_iron')) {
+                const nextState = targetBlock.state === 'open' ? 'closed' : 'open';
+                setBuildingBlocks((prev) =>
+                  prev.map((b) => (b.id === bId ? { ...b, state: nextState } : b))
+                );
+                toast.info(`🚪 ${targetBlock.type === 'portcullis_iron' ? 'Grade Levadiça' : 'Porta'} ${nextState === 'open' ? 'aberta' : 'fechada'}!`);
+                return;
+              }
+
               // 2 Cliques rápidos no asset abrem o modal de configurações
               if (event.detail >= 2) {
-                if (obj.userData.type === 'door_wood') {
-                  setBuildingBlocks((prev) =>
-                    prev.map((b) => (b.id === bId ? { ...b, state: b.state === 'open' ? 'closed' : 'open' } : b))
-                  );
-                } else {
-                  setIsInspectorModalOpen(true);
-                  toast.info(`⚙️ Configurações de ${targetBlock?.type || 'Asset'}`);
-                }
+                setIsInspectorModalOpen(true);
+                toast.info(`⚙️ Configurações de ${targetBlock?.type || 'Asset'}`);
                 return;
               }
 
@@ -1725,7 +1913,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
                   const attackerPos2D = getPos(currentActor.id || currentActor.name);
                   const targetPos2D = getPos(clicked.id || clicked.name);
                   const distFt = calculateGridDistanceFeet(attackerPos2D, targetPos2D);
-                  const rInfo = currentPending.rangeInfo || parseRangeString(currentPending.rangeText || currentPending.actionDesc || currentPending.title);
+                  const rInfo = currentPending.rangeInfo || parseRangeString(currentPending.rangeText || currentPending.actionDesc || currentPending.title, currentPending.title);
                   const rStatus = evaluateRangeStatus(distFt, rInfo);
 
                   if (rStatus === 'OUT_OF_RANGE') {
@@ -1786,7 +1974,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
                   const attackerPos2D = getPos(currentActor.id || currentActor.name);
                   const targetPos2D = getPos(clicked.id || clicked.name);
                   const distFt = calculateGridDistanceFeet(attackerPos2D, targetPos2D);
-                  const rInfo = currentPending.rangeInfo || parseRangeString(currentPending.rangeText || currentPending.actionDesc || currentPending.title);
+                  const rInfo = currentPending.rangeInfo || parseRangeString(currentPending.rangeText || currentPending.actionDesc || currentPending.title, currentPending.title);
                   const rStatus = evaluateRangeStatus(distFt, rInfo);
 
                   if (rStatus === 'OUT_OF_RANGE') {
@@ -1975,7 +2163,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
             const targetPos2D = pos;
             const distFt = calculateGridDistanceFeet(attackerPos2D, targetPos2D);
             const pendingAtk = callbacksRef.current.pendingAttack;
-            const rInfo = pendingAtk.rangeInfo || parseRangeString(pendingAtk.rangeText || pendingAtk.actionDesc || pendingAtk.title);
+            const rInfo = pendingAtk.rangeInfo || parseRangeString(pendingAtk.rangeText || pendingAtk.actionDesc || pendingAtk.title, pendingAtk.title);
             const rStatus = evaluateRangeStatus(distFt, rInfo);
 
             if (splineSystemRef.current) {
@@ -1994,6 +2182,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
               normalRangeM: rInfo.normalRangeM,
               maxRangeM: rInfo.maxRangeM,
               isWeaponWithLongRange: rInfo.isWeaponWithLongRange,
+              isRanged: rInfo.isRanged,
             });
           } else {
             (ring.material as THREE.MeshBasicMaterial).opacity = 0.0;
@@ -2012,6 +2201,17 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         (hoverRingRef.current.material as THREE.MeshBasicMaterial).opacity = 0.0;
         if (splineSystemRef.current) splineSystemRef.current.clear();
         callbacksRef.current.setSplineBadgeInfo(null);
+      }
+
+      // Pintura arrastada contínua de terreno
+      if (isPaintingTerrainRef.current && (forgeRef.current.buildMode === 'terrain' || forgeRef.current.buildMode === 'delete')) {
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        if (raycaster.ray.intersectPlane(groundPlane.current, planeIntersectPoint.current)) {
+          paintTerrainAtPoint(planeIntersectPoint.current, forgeRef.current.buildMode === 'delete');
+        }
+        return;
       }
 
       if (!isDraggingRef.current || !draggedTokenKeyRef.current) return;
@@ -2065,19 +2265,22 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
               steps.push({ x: curX, z: curZ });
             }
 
-            // Check movement budget
-            const totalTrailSquares = (trail.length - 1) + steps.length;
-            const totalTrailCost = totalTrailSquares * 1.5;
+            // Check movement budget with real terrain cost
+            const candidateTrail = [...trail, ...steps];
+            const costObj = calculateTrailTerrainCost(candidateTrail, surfacesMapRef.current);
 
-            if (totalTrailCost <= remainingMovementTotal) {
-              trail = [...trail, ...steps];
+            if (costObj.totalCostMeters <= remainingMovementTotal) {
+              trail = candidateTrail;
             } else {
-              // Exceeds total remaining movement budget!
-              // Cap steps to allowable distance
-              const maxSquares = Math.floor(remainingMovementTotal / 1.5);
-              const allowedStepsCount = maxSquares - (trail.length - 1);
-              if (allowedStepsCount > 0) {
-                trail = [...trail, ...steps.slice(0, allowedStepsCount)];
+              // Exceeds total remaining movement budget! Cap step by step
+              for (const step of steps) {
+                const nextCandidate = [...trail, step];
+                const nextCost = calculateTrailTerrainCost(nextCandidate, surfacesMapRef.current);
+                if (nextCost.totalCostMeters <= remainingMovementTotal) {
+                  trail = nextCandidate;
+                } else {
+                  break;
+                }
               }
             }
           }
@@ -2103,8 +2306,8 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
           callbacksRef.current.renderDragTrail(trail);
 
           // Dynamic Highlight Reduction: calculate remaining movement after current trail cost
-          const trailCostMeters = (trail.length - 1) * 1.5;
-          const remainingMeters = Math.max(0, remainingMovementTotal - trailCostMeters);
+          const costInfo = calculateTrailTerrainCost(trail, surfacesMapRef.current);
+          const remainingMeters = Math.max(0, remainingMovementTotal - costInfo.totalCostMeters);
           const startPt = trail[0] || { x: currentHead.x, z: currentHead.z };
           callbacksRef.current.renderMovementHighlights(
             currentHead.x,
@@ -2136,6 +2339,11 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     };
 
     const handlePointerUp = () => {
+      if (isPaintingTerrainRef.current) {
+        isPaintingTerrainRef.current = false;
+        controls.enabled = true;
+      }
+
       if (isDraggingRef.current) {
         const key = draggedTokenKeyRef.current;
         if (key) {
@@ -2149,7 +2357,6 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
             if (targetC) {
               if (isPlacementPhase || !battleStarted) {
                 // Placement phase or before battle starts: only update position without tracking movement cost
-                // Use strict ID match only — prevents same-named monsters from all moving together
                 const nextCombatants = activeCombatants.map((c) => {
                   if (c.id === targetC.id) {
                     return { ...c, x: snappedX, z: snappedZ };
@@ -2162,11 +2369,10 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
                 }
               } else {
                 // Combat phase: track movement cost via trail
-                // Use strict ID match only — prevents same-named monsters from all moving together
-                const trailSquares = Math.max(0, dragTrailRef.current.length - 1);
-                const trailCostMeters = trailSquares * 1.5;
+                const costInfo = calculateTrailTerrainCost(dragTrailRef.current, surfacesMapRef.current);
+                const trailCostMeters = costInfo.totalCostMeters;
 
-                const nextCombatants = activeCombatants.map((c) => {
+                let nextCombatants = activeCombatants.map((c) => {
                   if (c.id === targetC.id) {
                     return {
                       ...c,
@@ -2177,6 +2383,53 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
                   }
                   return c;
                 });
+
+                // Automated Hazard Resolution (Gelo, Óleo, Fogo, Ácido, Teias)
+                const endSnapKey = `${Math.round(snappedX)}_${Math.round(snappedZ)}`;
+                const surfaceType = surfacesMapRef.current.get(endSnapKey);
+                if (surfaceType && surfaceType !== 'normal') {
+                  const def = TERRAIN_SURFACE_CATALOG[surfaceType];
+                  if (def.isHazard) {
+                    if (def.requiresSave && def.saveAbility === 'dex') {
+                      const d20 = Math.floor(Math.random() * 20) + 1;
+                      const dexMod = targetC.dex ? Math.floor((targetC.dex - 10) / 2) : 0;
+                      const totalSave = d20 + dexMod;
+                      const dc = def.saveDC || 10;
+                      if (totalSave < dc) {
+                        const existingConditions = targetC.conditions || [];
+                        const hasProne = existingConditions.some((c) => String(c).toLowerCase().includes('caído') || String(c).toLowerCase().includes('prone'));
+                        if (!hasProne) {
+                          const newConditions = [...existingConditions, 'Caído' as ConditionType];
+                          nextCombatants = nextCombatants.map((c) => (c.id === targetC.id ? { ...c, conditions: newConditions } : c));
+                        }
+                        toast.error(`❄️ ${targetC.name} escorregou em ${def.label} e caiu Caído (Prone)! (Teste de DES: ${totalSave} vs CD ${dc})`);
+                      } else {
+                        toast.success(`🛡️ ${targetC.name} manteve o equilíbrio em ${def.label}! (Teste de DES: ${totalSave} vs CD ${dc})`);
+                      }
+                    } else if (def.requiresSave && def.saveAbility === 'str') {
+                      const d20 = Math.floor(Math.random() * 20) + 1;
+                      const strMod = targetC.str ? Math.floor((targetC.str - 10) / 2) : 0;
+                      const totalSave = d20 + strMod;
+                      const dc = def.saveDC || 12;
+                      if (totalSave < dc) {
+                        const existingConditions = targetC.conditions || [];
+                        const hasRestrained = existingConditions.some((c) => String(c).toLowerCase().includes('restrito') || String(c).toLowerCase().includes('contido') || String(c).toLowerCase().includes('restrained'));
+                        if (!hasRestrained) {
+                          const newConditions = [...existingConditions, 'Restrito' as ConditionType];
+                          nextCombatants = nextCombatants.map((c) => (c.id === targetC.id ? { ...c, conditions: newConditions } : c));
+                        }
+                        toast.error(`🕸️ ${targetC.name} ficou Restrito em ${def.label}! (Teste de FOR: ${totalSave} vs CD ${dc})`);
+                      } else {
+                        toast.success(`💪 ${targetC.name} escapou de ${def.label}! (Teste de FOR: ${totalSave} vs CD ${dc})`);
+                      }
+                    } else if (def.hazardDamageDice) {
+                      const dmg = def.hazardDamageDice === '2d4' 
+                        ? (Math.floor(Math.random() * 4) + 1 + Math.floor(Math.random() * 4) + 1)
+                        : (Math.floor(Math.random() * 4) + 1);
+                      toast.warning(`⚠️ ${targetC.name} pisou em ${def.label} e sofreu ${dmg} de dano de ${def.hazardDamageType || 'superfície'}!`);
+                    }
+                  }
+                }
 
                 if (callbacksRef.current.onUpdateCombatants) {
                   callbacksRef.current.onUpdateCombatants(nextCombatants);
@@ -3055,6 +3308,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
           normalRangeM={splineBadgeInfo.normalRangeM}
           maxRangeM={splineBadgeInfo.maxRangeM}
           isWeaponWithLongRange={splineBadgeInfo.isWeaponWithLongRange}
+          isRanged={splineBadgeInfo.isRanged}
           screenPos={badgeScreenPos}
         />
       )}
@@ -3157,7 +3411,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         onToggleHelp={() => setShowHelpModal(true)}
       />
 
-      {/* 3D BattleForge (Building Blocks, Grid Size & Spell Templates) Drawer */}
+      {/* 3D BattleForge (Building Blocks, Grid Size, Terrains & Spell Templates) Drawer */}
       <BattleForgeToolbar
         isDm={isDm}
         isOpen={isForgeMenuOpen}
@@ -3191,6 +3445,14 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
           }
         }}
         blocksCount={buildingBlocks.length}
+        activeTerrainType={activeTerrainType}
+        onSelectTerrainType={setActiveTerrainType}
+        terrainBrushSize={terrainBrushSize}
+        onSetTerrainBrushSize={setTerrainBrushSize}
+        terrainOpacity={gridConfig.terrainOpacity ?? 0.65}
+        onSetTerrainOpacity={(op) => setGridConfig((prev) => ({ ...prev, terrainOpacity: op }))}
+        terrainsCount={terrainSurfaces.length}
+        onClearAllTerrains={() => setTerrainSurfaces([])}
       />
 
       {/* Selected 3D Asset Transform & Light Inspector (Aberto com 2 cliques rápidos no asset) */}

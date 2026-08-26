@@ -259,6 +259,7 @@ interface RangedDistanceBadgeProps {
   normalRangeM: number;
   maxRangeM: number;
   isWeaponWithLongRange: boolean;
+  isRanged?: boolean;
   screenPos: { x: number; y: number } | null;
 }
 
@@ -268,6 +269,7 @@ export const RangedDistanceBadge: React.FC<RangedDistanceBadgeProps> = ({
   normalRangeM,
   maxRangeM,
   isWeaponWithLongRange,
+  isRanged = true,
   screenPos,
 }) => {
   if (!screenPos) return null;
@@ -276,7 +278,7 @@ export const RangedDistanceBadge: React.FC<RangedDistanceBadgeProps> = ({
 
   let statusBadge = (
     <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1">
-      <span>🎯</span> Alcance Normal ({normalRangeM}m)
+      <span>{isRanged ? '🎯' : '⚔️'}</span> {isRanged ? `Alcance Normal (${normalRangeM}m)` : `Corpo a Corpo (${normalRangeM}m)`}
     </span>
   );
 
@@ -289,7 +291,7 @@ export const RangedDistanceBadge: React.FC<RangedDistanceBadgeProps> = ({
   } else if (status === 'OUT_OF_RANGE') {
     statusBadge = (
       <span className="bg-rose-500/25 text-rose-300 border border-rose-500/50 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
-        <span>⛔</span> Fora de Alcance (max {maxRangeM}m)
+        <span>⛔</span> {isRanged ? `Fora de Alcance (max ${maxRangeM}m)` : `Fora de Alcance Corpo a Corpo (max ${maxRangeM}m)`}
       </span>
     );
   }
@@ -304,7 +306,7 @@ export const RangedDistanceBadge: React.FC<RangedDistanceBadgeProps> = ({
     >
       <div className="bg-slate-950/90 border border-slate-700/80 shadow-2xl backdrop-blur-md rounded-xl p-2 flex flex-col items-center gap-1 min-w-[140px]">
         <div className="flex items-center gap-1.5 font-mono text-sm font-black text-slate-100">
-          <span className="text-cyan-400 font-sans">🏹</span>
+          <span className="text-cyan-400 font-sans">{isRanged ? '🏹' : '⚔️'}</span>
           <span>{formatted.meters}</span>
           <span className="text-slate-400 text-xs font-normal">({formatted.feet})</span>
         </div>

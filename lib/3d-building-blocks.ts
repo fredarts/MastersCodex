@@ -14,6 +14,7 @@ export interface GridConfig3D {
   lineColor: string;       // Ex: '#0284c7'
   lineOpacity: number;     // 0.0 a 1.0
   gridType: 'lines' | 'dots' | 'borderless';
+  terrainOpacity?: number; // 0.1 a 1.0 (opacidade das superfícies pintadas)
 }
 
 export const DEFAULT_GRID_CONFIG_3D: GridConfig3D = {
@@ -24,6 +25,7 @@ export const DEFAULT_GRID_CONFIG_3D: GridConfig3D = {
   lineColor: '#0284c7',
   lineOpacity: 0.35,
   gridType: 'lines',
+  terrainOpacity: 0.65,
 };
 
 export type BuildingBlockCategory = 'structures' | 'lights' | 'props';
@@ -36,6 +38,8 @@ export type BuildingBlockType =
   | 'pillar_square' 
   | 'pillar_broken'
   | 'half_wall' 
+  | 'fence_wood'
+  | 'well_stone'
   | 'door_wood' 
   | 'door_double_wood'
   | 'door_stone'
@@ -44,7 +48,7 @@ export type BuildingBlockType =
   | 'portcullis_iron'
   | 'jail_bars'
   | 'stairs' 
-  // Luzes & Tochas
+  // Luzes & Tochas & Cristais Arcanos
   | 'candle'
   | 'torch_wall'
   | 'torch_standing'
@@ -53,17 +57,34 @@ export type BuildingBlockType =
   | 'lantern_medieval'
   | 'brazier'
   | 'campfire'
-  // Props & Mobiliário Fantasia Medieval
+  | 'crystal_pylon'
+  // Props, Masmorras, Mobiliário & Cenário Medieval
   | 'chest' 
   | 'barrel'
+  | 'barrel_stack'
+  | 'crate_stack'
   | 'table_wood'
+  | 'chair_wood'
+  | 'bed_medieval'
+  | 'tavern_bar'
   | 'throne_stone'
   | 'altar_stone'
   | 'sarcophagus'
   | 'statue_knight'
   | 'bookshelf'
   | 'cauldron'
-  | 'weapon_rack';
+  | 'weapon_rack'
+  | 'torture_rack'
+  | 'iron_maiden'
+  | 'gibbet_cage'
+  | 'guillotine'
+  | 'fountain_stone'
+  | 'alchemy_workbench'
+  | 'magic_portal'
+  | 'treasure_pile'
+  | 'tree_pine'
+  | 'rock_boulder'
+  | 'tent_camp';
 
 export interface BuildingBlockDefinition {
   type: BuildingBlockType;
@@ -141,6 +162,29 @@ export const BUILDING_BLOCK_CATALOG: Record<BuildingBlockType, BuildingBlockDefi
     heightUnits: 1.2,
     widthUnits: 2.0,
     supportsProceduralLength: true,
+  },
+  fence_wood: {
+    type: 'fence_wood',
+    label: 'Cerca de Madeira',
+    category: 'structures',
+    icon: '🪵',
+    blocksVision: false,
+    blocksMovement: false,
+    providesCover: 'half',
+    heightUnits: 1.1,
+    widthUnits: 2.0,
+    supportsProceduralLength: true,
+  },
+  well_stone: {
+    type: 'well_stone',
+    label: 'Poço de Água',
+    category: 'structures',
+    icon: '🪣',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 2.4,
+    widthUnits: 1.8,
   },
   door_wood: {
     type: 'door_wood',
@@ -364,6 +408,21 @@ export const BUILDING_BLOCK_CATALOG: Record<BuildingBlockType, BuildingBlockDefi
     defaultLightIntensity: 3.8,
     defaultLightRadiusFt: 40,
   },
+  crystal_pylon: {
+    type: 'crystal_pylon',
+    label: 'Cristal Arcano Flutuante',
+    category: 'lights',
+    icon: '💎',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 2.5,
+    widthUnits: 1.2,
+    isLightSource: true,
+    defaultLightColor: '#38bdf8',
+    defaultLightIntensity: 3.5,
+    defaultLightRadiusFt: 45,
+  },
 
   // --- PROPS & MOBILIÁRIO MEDIEVAL ---
   chest: {
@@ -388,6 +447,28 @@ export const BUILDING_BLOCK_CATALOG: Record<BuildingBlockType, BuildingBlockDefi
     heightUnits: 1.2,
     widthUnits: 0.9,
   },
+  barrel_stack: {
+    type: 'barrel_stack',
+    label: 'Pilha de Barris',
+    category: 'props',
+    icon: '🛢️',
+    blocksVision: true,
+    blocksMovement: true,
+    providesCover: 'three_quarters',
+    heightUnits: 1.7,
+    widthUnits: 1.8,
+  },
+  crate_stack: {
+    type: 'crate_stack',
+    label: 'Pilha de Caixotes',
+    category: 'props',
+    icon: '📦',
+    blocksVision: true,
+    blocksMovement: true,
+    providesCover: 'three_quarters',
+    heightUnits: 1.8,
+    widthUnits: 1.6,
+  },
   table_wood: {
     type: 'table_wood',
     label: 'Mesa de Taverna',
@@ -398,6 +479,39 @@ export const BUILDING_BLOCK_CATALOG: Record<BuildingBlockType, BuildingBlockDefi
     providesCover: 'half',
     heightUnits: 1.0,
     widthUnits: 2.4,
+  },
+  chair_wood: {
+    type: 'chair_wood',
+    label: 'Cadeira / Banco',
+    category: 'props',
+    icon: '🪑',
+    blocksVision: false,
+    blocksMovement: false,
+    providesCover: 'none',
+    heightUnits: 0.9,
+    widthUnits: 0.7,
+  },
+  bed_medieval: {
+    type: 'bed_medieval',
+    label: 'Cama Medieval',
+    category: 'props',
+    icon: '🛏️',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 1.2,
+    widthUnits: 2.0,
+  },
+  tavern_bar: {
+    type: 'tavern_bar',
+    label: 'Balcão de Taverna',
+    category: 'props',
+    icon: '🍺',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 1.2,
+    widthUnits: 2.6,
   },
   throne_stone: {
     type: 'throne_stone',
@@ -479,6 +593,131 @@ export const BUILDING_BLOCK_CATALOG: Record<BuildingBlockType, BuildingBlockDefi
     providesCover: 'half',
     heightUnits: 1.8,
     widthUnits: 2.0,
+  },
+  torture_rack: {
+    type: 'torture_rack',
+    label: 'Mesa de Tortura',
+    category: 'props',
+    icon: '⛓️',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 0.9,
+    widthUnits: 2.2,
+  },
+  iron_maiden: {
+    type: 'iron_maiden',
+    label: 'Dama de Ferro',
+    category: 'props',
+    icon: '🚪',
+    blocksVision: true,
+    blocksMovement: true,
+    providesCover: 'full',
+    heightUnits: 2.4,
+    widthUnits: 1.2,
+  },
+  gibbet_cage: {
+    type: 'gibbet_cage',
+    label: 'Gaiola de Masmorra',
+    category: 'props',
+    icon: '💀',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 2.8,
+    widthUnits: 1.2,
+  },
+  guillotine: {
+    type: 'guillotine',
+    label: 'Guilhotina de Execução',
+    category: 'props',
+    icon: '🪓',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 2.8,
+    widthUnits: 1.6,
+  },
+  fountain_stone: {
+    type: 'fountain_stone',
+    label: 'Fonte de Pedra',
+    category: 'props',
+    icon: '⛲',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 1.5,
+    widthUnits: 2.2,
+  },
+  alchemy_workbench: {
+    type: 'alchemy_workbench',
+    label: 'Bancada Alquímica',
+    category: 'props',
+    icon: '🔮',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 1.4,
+    widthUnits: 2.2,
+  },
+  magic_portal: {
+    type: 'magic_portal',
+    label: 'Portal Arcano',
+    category: 'props',
+    icon: '🌀',
+    blocksVision: false,
+    blocksMovement: false,
+    providesCover: 'none',
+    heightUnits: 3.2,
+    widthUnits: 2.4,
+    isLightSource: true,
+    defaultLightColor: '#8b5cf6',
+    defaultLightIntensity: 3.8,
+    defaultLightRadiusFt: 40,
+  },
+  treasure_pile: {
+    type: 'treasure_pile',
+    label: 'Pilha de Tesouro & Ouro',
+    category: 'props',
+    icon: '💰',
+    blocksVision: false,
+    blocksMovement: false,
+    providesCover: 'none',
+    heightUnits: 0.6,
+    widthUnits: 1.6,
+  },
+  tree_pine: {
+    type: 'tree_pine',
+    label: 'Pinheiro de Floresta',
+    category: 'props',
+    icon: '🌲',
+    blocksVision: true,
+    blocksMovement: true,
+    providesCover: 'three_quarters',
+    heightUnits: 4.5,
+    widthUnits: 2.4,
+  },
+  rock_boulder: {
+    type: 'rock_boulder',
+    label: 'Pedregulho de Caverna',
+    category: 'props',
+    icon: '🪨',
+    blocksVision: true,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 1.4,
+    widthUnits: 1.8,
+  },
+  tent_camp: {
+    type: 'tent_camp',
+    label: 'Tenda de Acampamento',
+    category: 'props',
+    icon: '⛺',
+    blocksVision: true,
+    blocksMovement: true,
+    providesCover: 'full',
+    heightUnits: 2.2,
+    widthUnits: 2.6,
   },
 };
 

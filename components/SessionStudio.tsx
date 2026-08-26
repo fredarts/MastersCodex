@@ -212,6 +212,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
   const [hasRain, setHasRain] = useState(false);
   const [environmentSettings, setEnvironmentSettings] = useState<Record<string, any>>({});
   const [buildingBlocks3D, setBuildingBlocks3D] = useState<import('@/lib/3d-building-blocks').BuildingBlock3D[]>([]);
+  const [terrainSurfaces3D, setTerrainSurfaces3D] = useState<import('@/lib/3d-terrains').TerrainCellData[]>([]);
   const [gridConfig3D, setGridConfig3D] = useState<import('@/lib/3d-building-blocks').GridConfig3D | undefined>(undefined);
   const [floorTextureUrl, setFloorTextureUrl] = useState<string | undefined>(undefined);
   const [isSaved, setIsSaved] = useState(false);
@@ -245,6 +246,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       setHasRain(selectedScene.hasRain ?? false);
       setEnvironmentSettings(selectedScene.environmentSettings || {});
       setBuildingBlocks3D(selectedScene.buildingBlocks || selectedScene.environmentSettings?.building_blocks_3d || []);
+      setTerrainSurfaces3D(selectedScene.terrainSurfaces || selectedScene.environmentSettings?.terrain_surfaces_3d || []);
       setGridConfig3D(selectedScene.gridConfig3D || selectedScene.environmentSettings?.grid_config_3d || undefined);
       setFloorTextureUrl(selectedScene.floorTextureUrl || undefined);
       setSceneImages(selectedScene.sceneImages || []);
@@ -265,6 +267,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       setHasRain(false);
       setEnvironmentSettings({});
       setBuildingBlocks3D([]);
+      setTerrainSurfaces3D([]);
       setGridConfig3D(undefined);
       setFloorTextureUrl(undefined);
       setSceneImages([]);
@@ -439,6 +442,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
     const updatedEnv = {
       ...environmentSettings,
       building_blocks_3d: buildingBlocks3D,
+      terrain_surfaces_3d: terrainSurfaces3D,
       grid_config_3d: gridConfig3D,
     };
 
@@ -463,6 +467,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       floorTextureUrl,
       sceneImages,
       buildingBlocks: buildingBlocks3D,
+      terrainSurfaces: terrainSurfaces3D,
       gridConfig3D,
       environmentSettings: updatedEnv,
       associatedMapIds: selectedScene.associatedMapIds || (selectedScene.associatedMapId ? [selectedScene.associatedMapId] : []),
@@ -2046,6 +2051,11 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                               onBuildingBlocksChange={(blocks) => {
                                 setBuildingBlocks3D(blocks);
                                 setEnvironmentSettings((prev) => ({ ...prev, building_blocks_3d: blocks }));
+                              }}
+                              initialTerrainSurfaces={terrainSurfaces3D}
+                              onTerrainSurfacesChange={(surfaces) => {
+                                setTerrainSurfaces3D(surfaces);
+                                setEnvironmentSettings((prev) => ({ ...prev, terrain_surfaces_3d: surfaces }));
                               }}
                               initialGridConfig={gridConfig3D}
                               onGridConfigChange={(gridCfg) => {

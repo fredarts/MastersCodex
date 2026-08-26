@@ -269,6 +269,22 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                       environmentSettings: newSettings,
                     });
                   }}
+                  initialTerrainSurfaces={activeScene?.terrainSurfaces || liveEnvironmentSettings?.terrain_surfaces_3d || []}
+                  onTerrainSurfacesChange={(surfaces) => {
+                    const newSettings = { ...(liveEnvironmentSettings || {}), terrain_surfaces_3d: surfaces };
+                    setLiveEnvironmentSettings(newSettings);
+                    if (activeScene && updateScene) {
+                      updateScene({
+                        ...activeScene,
+                        terrainSurfaces: surfaces,
+                        environmentSettings: newSettings,
+                      });
+                    }
+                    broadcastToPlayerView({
+                      terrain_surfaces_3d: surfaces,
+                      environmentSettings: newSettings,
+                    });
+                  }}
                   initialGridConfig={activeScene?.gridConfig3D || liveEnvironmentSettings?.grid_config_3d}
                   onGridConfigChange={(gridCfg) => {
                     const newSettings = { ...(liveEnvironmentSettings || {}), grid_config_3d: gridCfg };

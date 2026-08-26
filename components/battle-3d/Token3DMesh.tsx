@@ -168,9 +168,7 @@ export function createTokenMesh(
   const torchLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 1.2);
   torchLight.name = 'tokenTorchLight';
   torchLight.position.set(0, 1.5 * sizeScale, 0);
-  torchLight.castShadow = hasTorch;
-  torchLight.shadow.mapSize.width = 512;
-  torchLight.shadow.mapSize.height = 512;
+  torchLight.castShadow = false;
   torchLight.userData = {
     baseIntensity: lightIntensity,
     isFlickeringLight: hasTorch,
@@ -375,7 +373,7 @@ export function updateTokenMeshState(
       torchLight.color.setHex(0xff9933);
       torchLight.intensity = 3.5;
       torchLight.distance = 16;
-      torchLight.castShadow = true;
+      torchLight.castShadow = false;
     } else if (isDarkvision) {
       torchLight.color.setHex(0x7dd3fc);
       torchLight.intensity = 1.2;
