@@ -16,6 +16,7 @@ import { getModelUrlByNameOrPath, resolvePlayerModelUrl } from '@/lib/3d-models'
 import { createBattleSkyDome, SkyDomeInstance } from './battle-3d/BattleSkyDome';
 import { createCloudSystem, CloudSystemInstance } from './battle-3d/BattleClouds';
 import { createRainParticleSystem, createGroundFogSystem } from './battle-3d/WeatherEffects';
+import { createFireParticleSystem, FireParticleSystemInstance } from './battle-3d/FireParticleSystem';
 import { BattleControlsToolbar } from './battle-3d/BattleControlsToolbar';
 import { InstancedTokenManager } from './battle-3d/InstancedTokenManager';
 import { disposeHierarchy } from '@/lib/3d-asset-manager';
@@ -428,6 +429,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const tokenMeshMapRef = useRef<Map<string, THREE.Group>>(new Map());
   const rainSysRef = useRef<ReturnType<typeof createRainParticleSystem> | null>(null);
   const groundFogSysRef = useRef<ReturnType<typeof createGroundFogSystem> | null>(null);
+  const fireSysRef = useRef<FireParticleSystemInstance | null>(null);
   const skyDomeRef = useRef<SkyDomeInstance | null>(null);
   const cloudSystemRef = useRef<CloudSystemInstance | null>(null);
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
@@ -2321,6 +2323,10 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     const splineSys = new RangedAttackSplineSystem(scene);
     splineSystemRef.current = splineSys;
 
+    // Inicializar o FireParticleSystem para iluminação de fogo e tochas
+    const fireSys = createFireParticleSystem(scene);
+    fireSysRef.current = fireSys;
+
     // Animation loop
     let animId: number;
     let lastTime = performance.now();
@@ -2361,6 +2367,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       }
       if (rainSysRef.current) rainSysRef.current.update(delta);
       if (groundFogSysRef.current) groundFogSysRef.current.update(delta);
+      if (fireSysRef.current) fireSysRef.current.update(delta);
 
       // Animar e projetar o Badge de Distância da Trajetória Spline Curva
       if (splineSystemRef.current) {
@@ -2411,6 +2418,10 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       if (groundFogSysRef.current) {
         groundFogSysRef.current.dispose();
         groundFogSysRef.current = null;
+      }
+      if (fireSysRef.current) {
+        fireSysRef.current.dispose();
+        fireSysRef.current = null;
       }
       if (hoverRingRef.current) {
         scene.remove(hoverRingRef.current);
@@ -2658,6 +2669,18 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       group.add(blockMesh);
     });
   }, [buildingBlocks, selectedBlockId]);
+
+  // Sync Fire Particle Emitters (Tochas, Fogueiras, Braseiros, Caldeirões, Velas e Tochas de Tokens)
+  useEffect(() => {
+    if (!fireSysRef.current) return;
+    const activeTorches = (combatants || [])
+      .filter((c) => c.hasTorch)
+      .map((c) => {
+        const pos = getCombatantPos(c.id || c.name);
+        return { x: pos.x, y: (tokenElevations[c.id || c.name] || 0) * (2 / 5), z: pos.z };
+      });
+    fireSysRef.current.updateEmitters(buildingBlocks, activeTorches);
+  }, [buildingBlocks, combatants, tokenElevations, getCombatantPos]);
 
   // Sync 3D Spell Templates (Spheres, Cones, Cubes, Lines)
   useEffect(() => {

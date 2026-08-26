@@ -29,13 +29,20 @@ export const DEFAULT_GRID_CONFIG_3D: GridConfig3D = {
 export type BuildingBlockCategory = 'structures' | 'lights' | 'props';
 
 export type BuildingBlockType = 
-  // Estruturas
+  // Estruturas & Portais Medievais
   | 'wall_stone' 
   | 'wall_wood' 
   | 'pillar_round' 
   | 'pillar_square' 
+  | 'pillar_broken'
   | 'half_wall' 
   | 'door_wood' 
+  | 'door_double_wood'
+  | 'door_stone'
+  | 'door_arch'
+  | 'archway_stone'
+  | 'portcullis_iron'
+  | 'jail_bars'
   | 'stairs' 
   // Luzes & Tochas
   | 'candle'
@@ -46,9 +53,17 @@ export type BuildingBlockType =
   | 'lantern_medieval'
   | 'brazier'
   | 'campfire'
-  // Props
+  // Props & Mobiliário Fantasia Medieval
   | 'chest' 
-  | 'barrel';
+  | 'barrel'
+  | 'table_wood'
+  | 'throne_stone'
+  | 'altar_stone'
+  | 'sarcophagus'
+  | 'statue_knight'
+  | 'bookshelf'
+  | 'cauldron'
+  | 'weapon_rack';
 
 export interface BuildingBlockDefinition {
   type: BuildingBlockType;
@@ -137,6 +152,84 @@ export const BUILDING_BLOCK_CATALOG: Record<BuildingBlockType, BuildingBlockDefi
     providesCover: 'full',
     heightUnits: 2.8,
     widthUnits: 2.0,
+  },
+  door_double_wood: {
+    type: 'door_double_wood',
+    label: 'Portão Duplo de Carvalho',
+    category: 'structures',
+    icon: '🚪',
+    blocksVision: true,
+    blocksMovement: true,
+    providesCover: 'full',
+    heightUnits: 3.2,
+    widthUnits: 4.0,
+  },
+  door_stone: {
+    type: 'door_stone',
+    label: 'Porta Rúnica de Pedra',
+    category: 'structures',
+    icon: '🗿',
+    blocksVision: true,
+    blocksMovement: true,
+    providesCover: 'full',
+    heightUnits: 2.8,
+    widthUnits: 2.0,
+  },
+  door_arch: {
+    type: 'door_arch',
+    label: 'Porta em Arco Gótico',
+    category: 'structures',
+    icon: '🏰',
+    blocksVision: true,
+    blocksMovement: true,
+    providesCover: 'full',
+    heightUnits: 3.2,
+    widthUnits: 2.0,
+  },
+  archway_stone: {
+    type: 'archway_stone',
+    label: 'Arco / Passagem de Pedra',
+    category: 'structures',
+    icon: '⛩️',
+    blocksVision: false,
+    blocksMovement: false,
+    providesCover: 'half',
+    heightUnits: 3.2,
+    widthUnits: 2.0,
+  },
+  portcullis_iron: {
+    type: 'portcullis_iron',
+    label: 'Rastrilho / Grade Levadiça',
+    category: 'structures',
+    icon: '⛓️',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'three_quarters',
+    heightUnits: 3.0,
+    widthUnits: 2.0,
+  },
+  jail_bars: {
+    type: 'jail_bars',
+    label: 'Grade de Cela / Prisão',
+    category: 'structures',
+    icon: '🪟',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 2.8,
+    widthUnits: 2.0,
+    supportsProceduralLength: true,
+  },
+  pillar_broken: {
+    type: 'pillar_broken',
+    label: 'Pilar em Ruínas',
+    category: 'structures',
+    icon: '🏛️',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 1.8,
+    widthUnits: 1.4,
   },
   stairs: {
     type: 'stairs',
@@ -272,7 +365,7 @@ export const BUILDING_BLOCK_CATALOG: Record<BuildingBlockType, BuildingBlockDefi
     defaultLightRadiusFt: 40,
   },
 
-  // --- PROPS ---
+  // --- PROPS & MOBILIÁRIO MEDIEVAL ---
   chest: {
     type: 'chest',
     label: 'Baú de Madeira',
@@ -294,6 +387,98 @@ export const BUILDING_BLOCK_CATALOG: Record<BuildingBlockType, BuildingBlockDefi
     providesCover: 'half',
     heightUnits: 1.2,
     widthUnits: 0.9,
+  },
+  table_wood: {
+    type: 'table_wood',
+    label: 'Mesa de Taverna',
+    category: 'props',
+    icon: '🪵',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 1.0,
+    widthUnits: 2.4,
+  },
+  throne_stone: {
+    type: 'throne_stone',
+    label: 'Trono do Rei',
+    category: 'props',
+    icon: '👑',
+    blocksVision: true,
+    blocksMovement: true,
+    providesCover: 'three_quarters',
+    heightUnits: 2.4,
+    widthUnits: 1.6,
+  },
+  altar_stone: {
+    type: 'altar_stone',
+    label: 'Altar Ritualístico',
+    category: 'props',
+    icon: '🕯️',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 1.1,
+    widthUnits: 2.2,
+  },
+  sarcophagus: {
+    type: 'sarcophagus',
+    label: 'Sarcófago de Cripta',
+    category: 'props',
+    icon: '⚰️',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 1.0,
+    widthUnits: 1.3,
+  },
+  statue_knight: {
+    type: 'statue_knight',
+    label: 'Estátua do Guardião',
+    category: 'props',
+    icon: '🗿',
+    blocksVision: true,
+    blocksMovement: true,
+    providesCover: 'three_quarters',
+    heightUnits: 3.2,
+    widthUnits: 1.4,
+  },
+  bookshelf: {
+    type: 'bookshelf',
+    label: 'Estante de Grimórios',
+    category: 'props',
+    icon: '📚',
+    blocksVision: true,
+    blocksMovement: true,
+    providesCover: 'full',
+    heightUnits: 2.6,
+    widthUnits: 2.0,
+  },
+  cauldron: {
+    type: 'cauldron',
+    label: 'Caldeirão Mágico',
+    category: 'props',
+    icon: '🧪',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 1.2,
+    widthUnits: 1.4,
+    isLightSource: true,
+    defaultLightColor: '#10b981',
+    defaultLightIntensity: 3.0,
+    defaultLightRadiusFt: 25,
+  },
+  weapon_rack: {
+    type: 'weapon_rack',
+    label: 'Suporte de Armas',
+    category: 'props',
+    icon: '⚔️',
+    blocksVision: false,
+    blocksMovement: true,
+    providesCover: 'half',
+    heightUnits: 1.8,
+    widthUnits: 2.0,
   },
 };
 
@@ -399,7 +584,7 @@ export function createDefaultBuildingBlock(
     rotationDeg,
     segmentsCount: 1,
     heightScale: 1.0,
-    state: type === 'door_wood' ? 'closed' : undefined,
+    state: (type === 'door_wood' || type === 'door_double_wood' || type === 'door_stone' || type === 'door_arch' || type === 'portcullis_iron') ? 'closed' : undefined,
   };
 
   if (def && def.isLightSource) {

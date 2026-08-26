@@ -182,7 +182,7 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
             <div className="flex bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[9px] font-bold">
               {[
                 { id: 'all', label: 'Todos' },
-                { id: 'structures', label: '🧱 Paredes' },
+                { id: 'structures', label: '🧱 Estruturas' },
                 { id: 'lights', label: '🔥 Luzes' },
                 { id: 'props', label: '📦 Objetos' },
               ].map((cat) => (

@@ -22,7 +22,7 @@ export function createInteractiveTransformGizmo(block: BuildingBlock3D): THREE.G
   const hScale = block.heightScale || 1.0;
   const totalW = (def?.widthUnits || 2.0) * segs;
   const totalH = (def?.heightUnits || 2.8) * hScale;
-  const depth = def?.category === 'structures' ? 0.8 : 1.2;
+  const depth = def?.category === 'structures' ? 1.1 : 1.3;
 
   // 1. CAIXA DE SELEÇÃO WIREFRAME (Apenas visual - raycast desativado para não bloquear cliques)
   const boxGeo = new THREE.BoxGeometry(totalW + 0.15, totalH + 0.15, depth + 0.15);

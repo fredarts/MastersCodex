@@ -171,7 +171,11 @@ export function createTokenMesh(
   torchLight.castShadow = hasTorch;
   torchLight.shadow.mapSize.width = 512;
   torchLight.shadow.mapSize.height = 512;
-  torchLight.shadow.bias = -0.001;
+  torchLight.userData = {
+    baseIntensity: lightIntensity,
+    isFlickeringLight: hasTorch,
+    flickerOffset: Math.random() * 100,
+  };
   torchLight.visible = hasTorch || isDarkvision;
   group.add(torchLight);
 
