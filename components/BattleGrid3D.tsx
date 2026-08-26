@@ -63,8 +63,9 @@ export interface BattleGrid3DProps {
   interactive?: boolean;
   isPlacementPhase?: boolean;
   setupMode?: 'normal' | 'player_ambush' | 'player_surprised';
-  timeOfDayPreset?: 'day' | 'sunset' | 'night' | 'fog' | 'storm';
+  timeOfDayPreset?: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors';
   timeOfDayHour?: number;
+  isIndoor?: boolean;
   hasFog?: boolean;
   hasRain?: boolean;
   cloudDensity?: number;
@@ -88,8 +89,10 @@ export interface BattleGrid3DProps {
   groundFogHeight?: number;
   groundFogSpeed?: number;
   globalFogDensity?: number;
-  onTimeOfDayChange?: (time: 'day' | 'sunset' | 'night' | 'fog' | 'storm') => void;
+  onTimeOfDayChange?: (time: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors') => void;
   onEnvironmentChange?: (env: {
+    timeOfDayPreset?: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors';
+    isIndoor?: boolean;
     timeOfDayHour: number;
     hasFog: boolean;
     hasRain: boolean;
@@ -121,10 +124,10 @@ export interface BattleGrid3DProps {
   onFloorTextureChange?: (url: string) => void;
   onAttackTarget?: (target: Combatant) => void;
   isBattleStarted?: boolean;
-  initialBuildingBlocks?: BuildingBlock3D[];
-  onBuildingBlocksChange?: (blocks: BuildingBlock3D[]) => void;
-  initialGridConfig?: GridConfig3D;
-  onGridConfigChange?: (config: GridConfig3D) => void;
+  initialBuildingBlocks?: import('../lib/3d-building-blocks').BuildingBlock3D[];
+  onBuildingBlocksChange?: (blocks: import('../lib/3d-building-blocks').BuildingBlock3D[]) => void;
+  initialGridConfig?: import('../lib/3d-building-blocks').GridConfig3D;
+  onGridConfigChange?: (config: import('../lib/3d-building-blocks').GridConfig3D) => void;
   initialTokenElevations?: Record<string, number>;
   onTokenElevationsChange?: (elevations: Record<string, number>) => void;
 }
@@ -165,6 +168,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   setupMode = 'normal',
   timeOfDayPreset: propTimeOfDayPreset = 'day',
   timeOfDayHour: propTimeOfDayHour = 12,
+  isIndoor: propIsIndoor = false,
   hasFog: propHasFog = false,
   hasRain: propHasRain = false,
   cloudDensity: propCloudDensity = 30,
@@ -440,6 +444,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const [internalEnv, setInternalEnv] = useState({
     timeOfDayHour: propTimeOfDayHour,
     timeOfDayPreset: propTimeOfDayPreset,
+    isIndoor: propIsIndoor,
     hasFog: propHasFog,
     hasRain: propHasRain,
     cloudDensity: propCloudDensity,
@@ -471,6 +476,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       // Only sync props that parent components actually manage
       timeOfDayHour: propTimeOfDayHour,
       timeOfDayPreset: propTimeOfDayPreset,
+      isIndoor: propIsIndoor,
       hasFog: propHasFog,
       hasRain: propHasRain,
       cloudDensity: propCloudDensity,
@@ -478,6 +484,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   }, [
     propTimeOfDayHour,
     propTimeOfDayPreset,
+    propIsIndoor,
     propHasFog,
     propHasRain,
     propCloudDensity,
@@ -485,6 +492,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
   const handleEnvironmentChange = useCallback(
     (env: {
+      timeOfDayPreset?: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors';
+      isIndoor?: boolean;
       timeOfDayHour: number;
       hasFog: boolean;
       hasRain: boolean;
@@ -511,9 +520,13 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       globalFogDensity?: number;
     }) => {
       const prev = envRef.current;
+      const nextPreset = env.timeOfDayPreset ?? prev.timeOfDayPreset;
+      const nextIndoor = env.isIndoor ?? (nextPreset === 'indoors');
       const next = {
         ...prev,
         ...env,
+        timeOfDayPreset: nextPreset,
+        isIndoor: nextIndoor,
         cloudDensity: env.cloudDensity ?? prev.cloudDensity,
         moonSize: env.moonSize ?? prev.moonSize,
         moonLuminosity: env.moonLuminosity ?? prev.moonLuminosity,
@@ -889,7 +902,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       }
     }
 
-    const isNightTime = internalEnv.timeOfDayPreset === 'night' || internalEnv.timeOfDayHour < 6 || internalEnv.timeOfDayHour > 19;
+    const isNightTime = internalEnv.timeOfDayPreset === 'indoors' || internalEnv.isIndoor || internalEnv.timeOfDayPreset === 'night' || internalEnv.timeOfDayHour < 6 || internalEnv.timeOfDayHour > 19;
     const isPlayerViewEffective = !isDm || isPlayerVisionMode;
     const genericCombatants: Combatant[] = [];
     const genericOptionsMap = new Map<string, any>();
@@ -1371,6 +1384,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     const {
       timeOfDayHour: h,
       timeOfDayPreset: p,
+      isIndoor: ind,
       hasFog: f,
       hasRain: r,
       cloudDensity: cd,
@@ -1385,7 +1399,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       mieDirectionalG: mg,
     } = envRef.current;
 
-    skyDome.update(h, p, f, r, ms, ml, ma, malt, ss, st, sr, mc, mg);
+    skyDome.update(h, p, f, r, ms, ml, ma, malt, ss, st, sr, mc, mg, ind);
 
     // Stylized Cloud System
     const cloudSystem = createCloudSystem(scene);
@@ -2321,6 +2335,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         const {
           timeOfDayHour: h,
           timeOfDayPreset: p,
+          isIndoor: ind,
           hasFog: f,
           hasRain: r,
           moonSize: ms,
@@ -2333,7 +2348,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
           mieCoefficient: mc,
           mieDirectionalG: mg,
         } = envRef.current;
-        skyDomeRef.current.update(h, p, f, r, ms, ml, ma, malt, ss, st, sr, mc, mg);
+        skyDomeRef.current.update(h, p, f, r, ms, ml, ma, malt, ss, st, sr, mc, mg, ind);
 
         // Align directional light with sun position for accurate shadows & specular highlights
         if (dirLightRef.current && skyDomeRef.current.sunPosition) {
@@ -2427,6 +2442,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     const {
       timeOfDayHour,
       timeOfDayPreset,
+      isIndoor,
       hasFog,
       hasRain,
       cloudDensity,
@@ -2460,18 +2476,20 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       hasRain,
       cloudDensity,
       moonSize,
+      moonLuminosity,
       moonOffsetAngle,
       moonAltitude,
       sunSize,
       sunLightIntensity,
       ambientLightIntensity,
-      globalFogDensity
+      globalFogDensity,
+      isIndoor
     );
 
     // Dynamically adjust ambient light intensity and color
     if (ambientLightRef.current) {
       ambientLightRef.current.intensity = env.ambientIntensity;
-      ambientLightRef.current.color.set(env.isNight ? 0x0f172a : 0xffffff);
+      ambientLightRef.current.color.set(env.isIndoor ? 0x000000 : (env.isNight ? 0x0f172a : 0xffffff));
     }
 
     // Dynamically adjust directional light intensity, color, and sun angle
@@ -2498,7 +2516,8 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         skyTurbidity,
         skyRayleigh,
         mieCoefficient,
-        mieDirectionalG
+        mieDirectionalG,
+        isIndoor
       );
     }
 

@@ -8,7 +8,7 @@ export type BattleSetupMode = 'normal' | 'player_ambush' | 'player_surprised';
 interface BattleSetupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirmSetup: (mode: BattleSetupMode, timeOfDay: 'day' | 'sunset' | 'night' | 'fog' | 'storm') => void;
+  onConfirmSetup: (mode: BattleSetupMode, timeOfDay: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors') => void;
 }
 
 export const BattleSetupModal: React.FC<BattleSetupModalProps> = ({
@@ -17,7 +17,7 @@ export const BattleSetupModal: React.FC<BattleSetupModalProps> = ({
   onConfirmSetup,
 }) => {
   const [selectedMode, setSelectedMode] = useState<BattleSetupMode>('normal');
-  const [selectedTimeOfDay, setSelectedTimeOfDay] = useState<'day' | 'sunset' | 'night' | 'fog' | 'storm'>('day');
+  const [selectedTimeOfDay, setSelectedTimeOfDay] = useState<'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors'>('day');
 
   if (!isOpen) return null;
 

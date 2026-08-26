@@ -94,6 +94,12 @@ export function createCloudSystem(scene: THREE.Scene): CloudSystemInstance {
     cloudDensity = 30,
     timeOfDayHour = 12
   ) => {
+    if (timeOfDayPreset === 'indoors') {
+      group.visible = false;
+      return;
+    }
+    group.visible = true;
+
     // Determine active cloud count based on density (0 to 100)
     const activeCount = Math.floor((cloudDensity / 100) * maxClouds);
 

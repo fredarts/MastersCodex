@@ -206,6 +206,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       document.removeEventListener('mousedown', handleOutsideClick);
     };
   }, [showCombatDropdown]);
+  const [timeOfDay, setTimeOfDay] = useState<'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors'>('day');
   const [timeOfDayHour, setTimeOfDayHour] = useState<number>(12);
   const [hasFog, setHasFog] = useState(false);
   const [hasRain, setHasRain] = useState(false);
@@ -238,6 +239,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       setSensoryText(selectedScene.sensoryText || '');
       setSecretNotes(selectedScene.secretNotes || '');
       setSceneCombatants(selectedScene.combatants || []);
+      setTimeOfDay(selectedScene.timeOfDay || 'day');
       setTimeOfDayHour(selectedScene.timeOfDayHour ?? 12);
       setHasFog(selectedScene.hasFog ?? false);
       setHasRain(selectedScene.hasRain ?? false);
@@ -453,7 +455,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       sensoryText: sensoryText || undefined,
       secretNotes: secretNotes || undefined,
       combatants: combatantsWithPositions,
-      timeOfDay: computedPreset,
+      timeOfDay: timeOfDay || (hasRain ? 'storm' : hasFog ? 'fog' : computedPreset),
+      isIndoor: timeOfDay === 'indoors',
       timeOfDayHour,
       hasFog,
       hasRain,
@@ -2032,13 +2035,13 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                               onUpdateCombatants={(updated) => setSceneCombatants(updated)}
                               interactive={true}
                               isPlacementPhase={true}
+                              {...environmentSettings}
                               timeOfDayHour={timeOfDayHour}
-                              timeOfDayPreset={
-                                hasRain ? 'storm' : hasFog ? 'fog' : (timeOfDayHour >= 21 || timeOfDayHour <= 4 ? 'night' : timeOfDayHour >= 16.5 ? 'sunset' : 'day')
-                              }
+                              timeOfDayPreset={timeOfDay}
+                              isIndoor={timeOfDay === 'indoors'}
                               hasFog={hasFog}
                               hasRain={hasRain}
-                              {...environmentSettings}
+                              onTimeOfDayChange={setTimeOfDay}
                               initialBuildingBlocks={buildingBlocks3D}
                               onBuildingBlocksChange={(blocks) => {
                                 setBuildingBlocks3D(blocks);
@@ -2050,6 +2053,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                 setEnvironmentSettings((prev) => ({ ...prev, grid_config_3d: gridCfg }));
                               }}
                               onEnvironmentChange={(env) => {
+                                if (env.timeOfDayPreset) {
+                                  setTimeOfDay(env.timeOfDayPreset);
+                                }
                                 setTimeOfDayHour(env.timeOfDayHour);
                                 setHasFog(env.hasFog);
                                 setHasRain(env.hasRain);

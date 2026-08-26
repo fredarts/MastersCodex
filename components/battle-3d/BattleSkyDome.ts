@@ -21,7 +21,8 @@ export interface SkyDomeInstance {
     skyTurbidity?: number,
     skyRayleigh?: number,
     mieCoefficient?: number,
-    mieDirectionalG?: number
+    mieDirectionalG?: number,
+    isIndoor?: boolean
   ) => void;
   dispose: () => void;
 }
@@ -232,8 +233,23 @@ export function createBattleSkyDome(scene: THREE.Scene): SkyDomeInstance {
     skyTurbidity?: number,
     skyRayleigh?: number,
     mieCoefficient?: number,
-    mieDirectionalG?: number
+    mieDirectionalG?: number,
+    isIndoorProp = false
   ) => {
+    const isIndoor = isIndoorProp || timeOfDayPreset === 'indoors';
+    if (isIndoor) {
+      sky.visible = false;
+      sunMesh.visible = false;
+      moonMesh.visible = false;
+      starField.visible = false;
+      starMaterial.opacity = 0.0;
+      lensflare.visible = false;
+      return;
+    }
+
+    sky.visible = true;
+    starField.visible = true;
+
     const isNight = timeOfDayPreset === 'night' || timeOfDayHour < 6 || timeOfDayHour > 19;
     const isSunset = timeOfDayPreset === 'sunset' || (timeOfDayHour >= 17 && timeOfDayHour <= 19);
 
@@ -289,24 +305,28 @@ export function createBattleSkyDome(scene: THREE.Scene): SkyDomeInstance {
       targetRayleigh = 0.5;
       sunMaterial.color.setHex(0x94a3b8);
       lensflare.visible = false;
+      starField.visible = false;
       starMaterial.opacity = 0.0;
     } else if (timeOfDayPreset === 'storm') {
       targetTurbidity = 30;
       targetRayleigh = 0.1;
       sunMaterial.color.setHex(0x475569);
       lensflare.visible = false;
+      starField.visible = false;
       starMaterial.opacity = 0.0;
     } else if (isNight) {
       targetTurbidity = 5;
       targetRayleigh = 0.1;
       sunMaterial.color.setHex(0x1e293b);
       lensflare.visible = false;
+      starField.visible = true;
       starMaterial.opacity = 0.95; // Stars visible at night
     } else if (isSunset) {
       targetTurbidity = 8;
       targetRayleigh = 4;
       sunMaterial.color.setHex(0xf97316); // Fiery orange
       lensflare.visible = sunPosition.y > 0;
+      starField.visible = true;
       starMaterial.opacity = 0.3;
     } else {
       // Normal Day
@@ -314,6 +334,7 @@ export function createBattleSkyDome(scene: THREE.Scene): SkyDomeInstance {
       targetRayleigh = 2;
       sunMaterial.color.setHex(0xfffbeb); // Bright white-gold
       lensflare.visible = sunPosition.y > 0;
+      starField.visible = false;
       starMaterial.opacity = 0.0;
     }
 

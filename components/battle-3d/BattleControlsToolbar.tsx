@@ -15,7 +15,8 @@ import {
   Target,
   Eye,
   Flame,
-  Box
+  Box,
+  Home
 } from 'lucide-react';
 import { Combatant } from '@/lib/types';
 
@@ -28,7 +29,7 @@ export interface BattleControlsToolbarProps {
   directionLabel?: string;
   canControlSelected?: boolean;
   timeOfDayHour?: number;
-  timeOfDayPreset?: 'day' | 'sunset' | 'night' | 'fog' | 'storm';
+  timeOfDayPreset?: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors';
   hasFog?: boolean;
   hasRain?: boolean;
   cloudDensity?: number;
@@ -55,6 +56,8 @@ export interface BattleControlsToolbarProps {
   onRotateSelected?: (angle: number) => void;
   onSelectCameraPreset?: (preset: 'tactical' | 'cinematic' | 'topDown') => void;
   onEnvironmentChange?: (env: {
+    timeOfDayPreset?: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors';
+    isIndoor?: boolean;
     timeOfDayHour: number;
     hasFog: boolean;
     hasRain: boolean;
@@ -80,7 +83,7 @@ export interface BattleControlsToolbarProps {
     groundFogSpeed?: number;
     globalFogDensity?: number;
   }) => void;
-  onTimeOfDayChange?: (preset: 'day' | 'sunset' | 'night' | 'fog' | 'storm') => void;
+  onTimeOfDayChange?: (preset: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors') => void;
   onConfirmPlacement?: () => void;
   onAttackTarget?: (target: Combatant) => void;
   onToggleHelp?: () => void;
@@ -145,6 +148,7 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   const [availableTextures, setAvailableTextures] = useState<{name: string, url: string}[]>([]);
 
   // State variables for all new weather controls
+  const [internalPreset, setInternalPreset] = useState<'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors'>(timeOfDayPreset);
   const [internalCloudDensity, setInternalCloudDensity] = useState(cloudDensityProp);
   const [internalMoonSize, setInternalMoonSize] = useState(moonSizeProp);
   const [internalMoonLuminosity, setInternalMoonLuminosity] = useState(moonLuminosityProp);
@@ -167,6 +171,7 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   const [internalGroundFogSpeed, setInternalGroundFogSpeed] = useState(groundFogSpeedProp);
   const [internalGlobalFogDensity, setInternalGlobalFogDensity] = useState(globalFogDensityProp);
 
+  useEffect(() => { setInternalPreset(timeOfDayPreset); }, [timeOfDayPreset]);
   useEffect(() => { setInternalCloudDensity(cloudDensityProp); }, [cloudDensityProp]);
   useEffect(() => { 
     setInternalMoonSize(moonSizeProp);
@@ -195,6 +200,8 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   const [activeTab, setActiveTab] = useState<'luz' | 'sky' | 'fog' | 'rain'>('luz');
 
   const triggerEnvChange = (updates: Partial<{
+    timeOfDayPreset: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors';
+    isIndoor: boolean;
     timeOfDayHour: number;
     hasFog: boolean;
     hasRain: boolean;
@@ -220,6 +227,9 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
     groundFogSpeed: number;
     globalFogDensity: number;
   }>) => {
+    const nextPreset = updates.timeOfDayPreset ?? internalPreset;
+    const nextIndoor = updates.isIndoor ?? (nextPreset === 'indoors');
+    if (updates.timeOfDayPreset !== undefined) setInternalPreset(updates.timeOfDayPreset);
     const nextHour = updates.timeOfDayHour ?? timeOfDayHour;
     const nextFog = updates.hasFog ?? hasFog;
     const nextRain = updates.hasRain ?? hasRain;
@@ -269,6 +279,8 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
 
     if (onEnvironmentChange) {
       onEnvironmentChange({
+        timeOfDayPreset: nextPreset,
+        isIndoor: nextIndoor,
         timeOfDayHour: nextHour,
         hasFog: nextFog,
         hasRain: nextRain,
@@ -310,14 +322,18 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
     }
   }, [isDm]);
 
-  const handlePresetSelect = (preset: 'day' | 'sunset' | 'night' | 'fog' | 'storm') => {
+  const handlePresetSelect = (preset: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors') => {
     let hour = 12;
     let fog = false;
     let rain = false;
     let ambient = 0.65;
     let sun = 1.0;
 
-    if (preset === 'night') {
+    if (preset === 'indoors') {
+      hour = 0;
+      ambient = 0.0;
+      sun = 0.0;
+    } else if (preset === 'night') {
       hour = 24;
       ambient = 0.03;
       sun = 0.08;
@@ -341,8 +357,11 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
     setInternalAmbientLightIntensity(ambient);
     setInternalSunLightIntensity(sun);
 
+    setInternalPreset(preset);
     if (onTimeOfDayChange) onTimeOfDayChange(preset);
     triggerEnvChange({
+      timeOfDayPreset: preset,
+      isIndoor: preset === 'indoors',
       timeOfDayHour: hour,
       hasFog: fog,
       hasRain: rain,
@@ -428,19 +447,20 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                   {/* Presets Grid */}
                   <div className="space-y-1">
                     <label className="text-[9px] font-bold uppercase text-slate-500 tracking-wider">Presets Rápido:</label>
-                    <div className="grid grid-cols-5 gap-1">
+                    <div className="grid grid-cols-6 gap-1">
                       {([
                         { id: 'day', label: 'Dia', icon: <Sun className="w-3 h-3 text-amber-400" /> },
                         { id: 'sunset', label: 'Tarde', icon: <Sun className="w-3 h-3 text-orange-400" /> },
                         { id: 'night', label: 'Noite', icon: <Moon className="w-3 h-3 text-sky-400" /> },
                         { id: 'fog', label: 'Névoa', icon: <CloudFog className="w-3 h-3 text-slate-400" /> },
-                        { id: 'storm', label: 'Temp', icon: <CloudRain className="w-3 h-3 text-indigo-400" /> }
+                        { id: 'storm', label: 'Temp', icon: <CloudRain className="w-3 h-3 text-indigo-400" /> },
+                        { id: 'indoors', label: 'Fechado', icon: <Home className="w-3 h-3 text-emerald-400" /> }
                       ] as const).map(preset => (
                         <button
                           key={preset.id}
                           onClick={() => handlePresetSelect(preset.id)}
                           className={`p-1 rounded flex flex-col items-center justify-center gap-0.5 border text-[9px] font-semibold transition-all ${
-                            timeOfDayPreset === preset.id
+                            internalPreset === preset.id
                               ? 'bg-amber-500/20 border-amber-500 text-amber-300'
                               : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
                           }`}

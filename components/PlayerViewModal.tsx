@@ -413,12 +413,13 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 combatants={combatants}
                 currentTurnIndex={currentTurnIndex}
                 isBattleStarted={currentScene?.isBattleStarted}
+                {...(currentScene?.environmentSettings || {})}
                 timeOfDayHour={currentScene?.timeOfDayHour}
                 timeOfDayPreset={currentScene?.timeOfDay}
+                isIndoor={currentScene?.timeOfDay === 'indoors'}
                 hasFog={currentScene?.hasFog}
                 hasRain={currentScene?.hasRain}
                 floorTextureUrl={currentScene?.floorTextureUrl}
-                {...(currentScene?.environmentSettings || {})}
                 initialBuildingBlocks={currentScene?.buildingBlocks || currentScene?.environmentSettings?.building_blocks_3d || []}
                 initialGridConfig={currentScene?.gridConfig3D || currentScene?.environmentSettings?.grid_config_3d}
                 initialTokenElevations={currentScene?.tokenElevations || currentScene?.environmentSettings?.token_elevations}

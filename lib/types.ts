@@ -178,8 +178,9 @@ export interface GameScene {
   npcAudioUrl?: string;
   sfxShortcuts?: string[]; // IDs dos botões SFX
   combatants?: Combatant[];
-  timeOfDay?: 'day' | 'sunset' | 'night' | 'fog' | 'storm';
+  timeOfDay?: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors';
   timeOfDayHour?: number; // 0.0 - 24.0 horas
+  isIndoor?: boolean; // Se true, escuridão total de caverna/dungeon sem céu
   hasFog?: boolean; // Neblina independente
   hasRain?: boolean; // Chuva e relâmpagos independentes
   floorTextureUrl?: string; // Textura do chão 3D

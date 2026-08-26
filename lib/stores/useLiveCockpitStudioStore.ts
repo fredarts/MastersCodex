@@ -113,7 +113,7 @@ interface LiveCockpitStudioState {
   battleSetupMode: BattleSetupMode;
 
   // Live Environment Overrides (DM controls)
-  selectedTimeOfDay: 'day' | 'sunset' | 'night' | 'fog' | 'storm';
+  selectedTimeOfDay: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors';
   liveTimeOfDayHour: number;
   liveHasFog: boolean;
   liveHasRain: boolean;
@@ -170,7 +170,7 @@ interface LiveCockpitStudioState {
   setBattleSetupMode: (m: BattleSetupMode) => void;
 
   // Live Environment Overrides
-  setSelectedTimeOfDay: (t: 'day' | 'sunset' | 'night' | 'fog' | 'storm') => void;
+  setSelectedTimeOfDay: (t: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors') => void;
   setLiveTimeOfDayHour: (h: number) => void;
   setLiveHasFog: (v: boolean) => void;
   setLiveHasRain: (v: boolean) => void;

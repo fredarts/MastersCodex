@@ -247,11 +247,12 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                   interactive={true}
                   isPlacementPhase={isPlacementPhase}
                   setupMode={battleSetupMode}
+                  {...(liveEnvironmentSettings || {})}
                   timeOfDayHour={liveTimeOfDayHour}
                   timeOfDayPreset={selectedTimeOfDay}
+                  isIndoor={selectedTimeOfDay === 'indoors'}
                   hasFog={liveHasFog}
                   hasRain={liveHasRain}
-                  {...(liveEnvironmentSettings || {})}
                   initialBuildingBlocks={activeScene?.buildingBlocks || liveEnvironmentSettings?.building_blocks_3d || []}
                   onBuildingBlocksChange={(blocks) => {
                     const newSettings = { ...(liveEnvironmentSettings || {}), building_blocks_3d: blocks };
@@ -307,6 +308,9 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                     });
                   }}
                   onEnvironmentChange={(env) => {
+                    if (env.timeOfDayPreset) {
+                      setSelectedTimeOfDay(env.timeOfDayPreset);
+                    }
                     setLiveTimeOfDayHour(env.timeOfDayHour);
                     setLiveHasFog(env.hasFog);
                     setLiveHasRain(env.hasRain);
@@ -315,6 +319,7 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                     setLiveEnvironmentSettings(newSettings);
 
                     broadcastToPlayerView({
+                      timeOfDay: env.timeOfDayPreset || selectedTimeOfDay,
                       timeOfDayHour: env.timeOfDayHour,
                       hasFog: env.hasFog,
                       hasRain: env.hasRain,

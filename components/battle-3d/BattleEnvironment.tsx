@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 
 export interface BattleEnvironmentProps {
-  timeOfDayPreset?: 'day' | 'sunset' | 'night' | 'fog' | 'storm';
+  timeOfDayPreset?: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors';
   timeOfDayHour?: number;
+  isIndoor?: boolean;
   hasFog?: boolean;
   hasRain?: boolean;
   cloudDensity?: number;
@@ -49,8 +50,10 @@ export const calculateEnvironmentSettings = (
   sunSize = 1.0,
   sunLightIntensity?: number,
   ambientLightIntensity?: number,
-  globalFogDensity?: number
+  globalFogDensity?: number,
+  isIndoorProp = false
 ) => {
+  const isIndoor = isIndoorProp || timeOfDayPreset === 'indoors';
   const isNight = timeOfDayPreset === 'night' || timeOfDayHour < 6 || timeOfDayHour > 19;
   const isSunset = timeOfDayPreset === 'sunset' || (timeOfDayHour >= 17 && timeOfDayHour <= 19);
   const isStorm = timeOfDayPreset === 'storm';
@@ -60,7 +63,12 @@ export const calculateEnvironmentSettings = (
   let sunIntensity = 1.0;
   let sunColor = '#ffffff';
 
-  if (isNight) {
+  if (isIndoor) {
+    bgColor = '#000000'; // Escuridão absoluta de caverna/masmorra
+    ambientIntensity = 0.0; // Sem luz ambiente externa
+    sunIntensity = 0.0;     // Sem luz solar/direcional externa
+    sunColor = '#000000';
+  } else if (isNight) {
     bgColor = '#020617'; // slate-950
     ambientIntensity = 0.03; // Escuridão profunda para tochas e visão noturna brilharem
     sunIntensity = 0.08;     // Luar suave
@@ -78,7 +86,7 @@ export const calculateEnvironmentSettings = (
   }
 
   // Fog preset changes bgColor (used as fog tint)
-  if (hasFog || timeOfDayPreset === 'fog') {
+  if (!isIndoor && (hasFog || timeOfDayPreset === 'fog')) {
     bgColor = '#1e293b';
     if (!isNight) {
       ambientIntensity = 0.4;
@@ -86,7 +94,7 @@ export const calculateEnvironmentSettings = (
     }
   }
 
-  // Override intensities if manually specified
+  // Override intensities if manually specified (unless indoors forces 0 unless specified)
   if (ambientLightIntensity !== undefined) {
     ambientIntensity = ambientLightIntensity;
   }
@@ -101,6 +109,7 @@ export const calculateEnvironmentSettings = (
     sunColor,
     isNight,
     isSunset,
+    isIndoor,
     cloudDensity,
     moonSize,
     moonLuminosity,
@@ -118,12 +127,14 @@ export const applySceneEnvironment = (
   hasRain = false,
   cloudDensity = 30,
   moonSize = 1.5,
+  moonLuminosity = 1.0,
   moonOffsetAngle = 180,
   moonAltitude = -1,
   sunSize = 1.0,
   sunLightIntensity?: number,
   ambientLightIntensity?: number,
-  globalFogDensity?: number
+  globalFogDensity?: number,
+  isIndoorProp = false
 ) => {
   const env = calculateEnvironmentSettings(
     timeOfDayHour,
@@ -132,18 +143,26 @@ export const applySceneEnvironment = (
     hasRain,
     cloudDensity,
     moonSize,
+    moonLuminosity,
     moonOffsetAngle,
     moonAltitude,
     sunSize,
     sunLightIntensity,
     ambientLightIntensity,
-    globalFogDensity
+    globalFogDensity,
+    isIndoorProp
   );
-  scene.background = null;
+
+  if (env.isIndoor) {
+    scene.background = new THREE.Color(0x000000);
+  } else {
+    scene.background = null;
+  }
 
   if (hasFog || timeOfDayPreset === 'fog') {
     const fogDensityVal = globalFogDensity !== undefined ? globalFogDensity : 0.003;
-    scene.fog = new THREE.FogExp2(0x1e293b, fogDensityVal);
+    const fogColor = env.isIndoor ? 0x000000 : 0x1e293b;
+    scene.fog = new THREE.FogExp2(fogColor, fogDensityVal);
   } else {
     scene.fog = null;
   }
