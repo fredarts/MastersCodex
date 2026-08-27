@@ -19,15 +19,31 @@ import {
   ChevronRight, 
   Play, 
   Layers, 
-  Lock,
-  Award,
-  Sparkle,
-  RefreshCw,
-  Zap,
-  Music,
-  Send,
-  Skull,
-  HelpCircle
+  Lock, 
+  Award, 
+  Sparkle, 
+  RefreshCw, 
+  Zap, 
+  Music, 
+  Send, 
+  Skull, 
+  HelpCircle,
+  Video,
+  VideoOff,
+  Mic,
+  MicOff,
+  Bell,
+  BellRing,
+  Tv,
+  Download,
+  Calendar,
+  Coins,
+  Box,
+  Network,
+  Wand2,
+  Sliders,
+  ExternalLink,
+  Activity
 } from 'lucide-react';
 // @ts-ignore
 import confetti from 'canvas-confetti';
@@ -51,7 +67,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   // Carousel State
   const [currentSlide, setCurrentSlide] = useState<number>(0);
   const [isSlideHovered, setIsSlideHovered] = useState<boolean>(false);
-  const [activeModuleTab, setActiveModuleTab] = useState<'live_cockpit' | 'battle_3d' | 'worldbuilder' | 'audio' | 'ai'>('live_cockpit');
+  const [activeArsenalTab, setActiveArsenalTab] = useState<'ai_scenes' | 'battle_3d' | 'calendar' | 'party_loot' | 'reactive_traps' | 'cockpit'>('ai_scenes');
   const [comparisonFilter, setComparisonFilter] = useState<'all' | 'roll20' | 'foundry' | 'beyond' | 'alchemy'>('all');
 
   // Interactive Dice Roller State
@@ -76,6 +92,29 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     hook: 'Possui uma chave de ferro enferrujada para as catacumbas sob a adega da taverna.',
   });
 
+  // Interactive Demo States for New Killer Features
+  // 1. Voice Call Demo
+  const [isVoiceDemoMuted, setIsVoiceDemoMuted] = useState<boolean>(false);
+  const [isVoiceDemoCameraOn, setIsVoiceDemoCameraOn] = useState<boolean>(true);
+  const [voiceDemoActiveSpeaker, setVoiceDemoActiveSpeaker] = useState<number>(1); // 1 = GM, 2 = Warrior, 3 = Rogue, 4 = Mage
+
+  // 2. Web Push Notification Demo
+  const [pushNotificationActive, setPushNotificationActive] = useState<boolean>(false);
+  const [pushNotificationType, setPushNotificationType] = useState<'turn' | 'whisper' | 'invite'>('turn');
+
+  // 3. D&D Beyond Importer Demo
+  const [beyondInputUrl, setBeyondInputUrl] = useState<string>('https://ddb.ac/characters/98421034/Aelith_Starweaver');
+  const [beyondImporting, setBeyondImporting] = useState<boolean>(false);
+  const [beyondImportedCharacter, setBeyondImportedCharacter] = useState<any>({
+    name: 'Aelith Starweaver',
+    class: 'Maga (Evocação) 5º Nível • Elfa Nobre',
+    ac: 15,
+    hp: '38/38',
+    spells: ['Bola de Fogo (3º)', 'Mísseis Mágicos (1º)', 'Escudo Arcano (1º)', 'Passo Nebuloso (2º)'],
+    stats: 'STR 10 • DEX 16 (+3) • CON 14 (+2) • INT 18 (+4) • WIS 12 • CHA 10',
+    synced: true,
+  });
+
   const heroSlides = [
     {
       id: 0,
@@ -90,43 +129,61 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     {
       id: 1,
       image: '/assets/landing/slide-2-battle3d.jpg',
-      badge: '⚔️ BATTLE GRID 3D WEBGL',
+      badge: '⚔️ BATTLE GRID 3D & PROPS MEDIEVAIS',
       badgeColor: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
       title: 'Combates 3D Imersivos Direto no Navegador',
-      subtitle: 'Posicione miniaturas 3D detalhadas, projete áreas de magias (cones, esferas e linhas iluminadas), controle clima de tempestade e lute a 60 FPS sem baixar nada.',
-      tags: ['Miniaturas 3D', 'Áreas de Magia (AoE)', 'Clima & Tempestade', '100% WebGL'],
+      subtitle: 'Posicione miniaturas 3D detalhadas, projete áreas de magias (cones, esferas e linhas iluminadas), construa com blocos modulares e lute a 60 FPS sem instalar nada.',
+      tags: ['Miniaturas 3D', 'Áreas de Magia (AoE)', 'Building Blocks', '100% WebGL'],
       actionText: 'Explorar Grid 3D',
     },
     {
       id: 2,
       image: '/assets/landing/slide-3-cockpit.jpg',
+      badge: '🎙️ WEBRTC VOICE & VÍDEO NATIVO',
+      badgeColor: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+      title: 'Zero Alt+Tab: Voz e Vídeo sem Precisar do Discord',
+      subtitle: 'Chamada de áudio e vídeo P2P com câmeras flutuantes sobre a mesa, indicador de voz ativo, compartilhamento de tela e push-to-talk totalmente integrado.',
+      tags: ['Voz & Câmera P2P', 'Widget Flutuante', 'Sem Depender de Discord', 'Baixa Latência'],
+      actionText: 'Testar Chamada',
+    },
+    {
+      id: 3,
+      image: '/assets/landing/slide-3-cockpit.jpg',
       badge: '🎲 LIVE COCKPIT & DADOS 3D SINCRONIZADOS',
       badgeColor: 'text-amber-300 border-amber-400/40 bg-amber-500/15',
       title: 'Centro de Comando do Mestre & Dados Estilo BG3',
       subtitle: 'Rolagens de dados 3D cinematográficas sincronizadas para todos os jogadores com física real. Controle iniciativa, teleprompter, HP live e divisão de loot com um clique.',
-      tags: ['Dados 3D Baldur\'s Gate', 'Rolagens Secretas', 'HP Sincronizado', 'Party Loot'],
+      tags: ['Dados 3D Baldur\'s Gate', 'Rolagens Secretas', 'HP Sincronizado', 'Party Loot Coletivo'],
       actionText: 'Entrar no Cockpit',
     },
     {
-      id: 3,
+      id: 4,
       image: '/assets/landing/slide-4-worldbuilder.jpg',
-      badge: '🗺️ WORLDBUILDER & LOREGRAPH RELACIONAL',
-      badgeColor: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
-      title: 'Crie Mundos Vivos e Teias de Conspiração',
-      subtitle: 'Conecte continentes, facções, dinastias nobres e NPCs em um grafo relacional interativo. Mapas mundi com pins clicáveis e IA Co-Pilot com memória de campanha.',
-      tags: ['Grafo de Facções', 'Pins no Mapa Mundi', 'Quest Tracker', 'IA Co-Pilot RAG'],
+      badge: '🗺️ WORLDBUILDER & ARTE IA',
+      badgeColor: 'text-rose-400 border-rose-500/30 bg-rose-500/10',
+      title: 'Crie Mundos Vivos, Árvores Genealógicas e Arte com IA',
+      subtitle: 'Conecte continentes, dinastias nobres e NPCs em um grafo relacional interativo. Gere cenas de combate épicas e controle calendários astronômicos de fantasia.',
+      tags: ['Árvores Genealógicas', 'Geração de Cenas IA', 'Calendário de Fantasia', 'LoreGraph'],
       actionText: 'Criar Cenário',
     },
   ];
 
-  // Auto-play effect with 6.5s duration
+  // Auto-play effect with 7s duration
   useEffect(() => {
     if (isSlideHovered) return;
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
-    }, 6500);
+    }, 7000);
     return () => clearInterval(interval);
   }, [isSlideHovered, heroSlides.length]);
+
+  // Voice Demo Speaker cycling simulation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVoiceDemoActiveSpeaker((prev) => (prev % 4) + 1);
+    }, 2800);
+    return () => clearInterval(interval);
+  }, []);
 
   // Ambient Embers / Sparks Canvas
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -147,7 +204,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     };
     window.addEventListener('resize', handleResize);
 
-    // Create 45 ambient fire ember particles
     const particles = Array.from({ length: 45 }, () => ({
       x: Math.random() * width,
       y: Math.random() * height,
@@ -242,10 +298,44 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     }, 70);
   };
 
+  // Trigger Interactive Push Notification Simulation
+  const handleTriggerPushDemo = (type: 'turn' | 'whisper' | 'invite') => {
+    setPushNotificationType(type);
+    setPushNotificationActive(true);
+
+    setTimeout(() => {
+      setPushNotificationActive(false);
+    }, 4500);
+  };
+
+  // Trigger Interactive D&D Beyond Import Simulation
+  const handleImportBeyondDemo = () => {
+    setBeyondImporting(true);
+    setTimeout(() => {
+      setBeyondImportedCharacter({
+        name: 'Aelith Starweaver',
+        class: 'Maga (Evocação) 5º Nível • Elfa Nobre',
+        ac: 15,
+        hp: '38/38',
+        spells: ['Bola de Fogo (3º)', 'Mísseis Mágicos (1º)', 'Escudo Arcano (1º)', 'Passo Nebuloso (2º)'],
+        stats: 'STR 10 • DEX 16 (+3) • CON 14 (+2) • INT 18 (+4) • WIS 12 • CHA 10',
+        synced: true,
+      });
+      setBeyondImporting(false);
+      try {
+        confetti({
+          particleCount: 40,
+          spread: 50,
+          origin: { y: 0.8 },
+          colors: ['#06b6d4', '#3b82f6', '#10b981'],
+        });
+      } catch (e) {}
+    }, 700);
+  };
+
   // Synthesize ambient sound preview
   const playSoundtrackPreview = (type: 'tavern' | 'battle' | 'dungeon') => {
     if (activeSoundtrack === type) {
-      // Stop
       activeOscillatorsRef.current.forEach((node) => {
         try {
           node.stop();
@@ -257,7 +347,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       return;
     }
 
-    // Stop current
     activeOscillatorsRef.current.forEach((node) => {
       try {
         node.stop();
@@ -281,7 +370,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       masterGain.connect(ctx.destination);
 
       if (type === 'tavern') {
-        // Warm tavern chords
         const freqs = [220, 277.18, 329.63, 440];
         freqs.forEach((freq, i) => {
           const osc = ctx.createOscillator();
@@ -295,7 +383,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           activeOscillatorsRef.current.push(osc);
         });
       } else if (type === 'battle') {
-        // Deep war drum pulses
         const osc = ctx.createOscillator();
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(110, ctx.currentTime);
@@ -310,10 +397,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         osc.start();
         activeOscillatorsRef.current.push(osc, lfo);
       } else if (type === 'dungeon') {
-        // Mystic dungeon drone
         const osc = ctx.createOscillator();
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(73.42, ctx.currentTime); // D2
+        osc.frequency.setValueAtTime(73.42, ctx.currentTime);
         const osc2 = ctx.createOscillator();
         osc2.type = 'sine';
         osc2.frequency.setValueAtTime(146.83, ctx.currentTime);
@@ -380,6 +466,41 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </div>
 
       {/* ========================================================= */}
+      {/* 🔔 SIMULATED WEB PUSH NOTIFICATION POPUP                  */}
+      {/* ========================================================= */}
+      {pushNotificationActive && (
+        <div className="fixed top-24 right-4 sm:right-8 z-50 animate-bounce duration-500 max-w-sm w-full bg-[#0c1220] border-2 border-amber-400 rounded-2xl p-4 shadow-[0_0_30px_rgba(245,158,11,0.5)] flex items-start gap-3.5 backdrop-blur-xl">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0">
+            <BellRing className="w-5 h-5 animate-pulse" />
+          </div>
+          <div className="flex-1 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-amber-300 font-mono uppercase">Web Push Notification</span>
+              <span className="text-[10px] text-slate-400 font-mono">agora</span>
+            </div>
+            {pushNotificationType === 'turn' && (
+              <>
+                <p className="text-xs font-bold text-slate-100">⚔️ É a sua vez na Iniciativa!</p>
+                <p className="text-[11px] text-slate-300">O Beholder completou o turno. Escolha sua ação ou magia.</p>
+              </>
+            )}
+            {pushNotificationType === 'whisper' && (
+              <>
+                <p className="text-xs font-bold text-rose-300">📜 Sussurro Secreto do Mestre</p>
+                <p className="text-[11px] text-slate-300">"Sua percepção passiva nota uma runa de armadilha no piso."</p>
+              </>
+            )}
+            {pushNotificationType === 'invite' && (
+              <>
+                <p className="text-xs font-bold text-emerald-300">🛡️ A Sessão Começou!</p>
+                <p className="text-[11px] text-slate-300">O Mestre abriu a mesa "A Forja da Perdição". Entre agora.</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
       {/* 1. TOP NAVBAR / HEADER DE ACESSO FIXO NO TOPO            */}
       {/* ========================================================= */}
       <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-[#080b12]/95 border-b border-[#1c2438] shadow-2xl transition-all duration-300">
@@ -409,19 +530,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           {/* Navigation Anchors */}
-          <nav className="hidden xl:flex items-center gap-6 2xl:gap-8 text-sm font-medium text-slate-300 shrink-0">
+          <nav className="hidden xl:flex items-center gap-5 2xl:gap-7 text-sm font-medium text-slate-300 shrink-0">
             <button 
-              onClick={() => scrollToSection('dice-playground')} 
-              className="hover:text-amber-400 transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5"
+              onClick={() => scrollToSection('killer-features')} 
+              className="hover:text-amber-400 transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 font-bold text-amber-300"
             >
-              <Dices className="w-4 h-4 text-amber-400" />
-              <span>Rolar 1d20</span>
+              <Zap className="w-4 h-4 text-amber-400" />
+              <span>Diferenciais Killer</span>
+              <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-mono uppercase">
+                Novo
+              </span>
             </button>
             <button 
-              onClick={() => scrollToSection('recursos')} 
-              className="hover:text-amber-400 transition-colors cursor-pointer whitespace-nowrap"
+              onClick={() => scrollToSection('arsenal')} 
+              className="hover:text-amber-400 transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5"
             >
-              Recursos
+              <Compass className="w-4 h-4 text-cyan-400" />
+              <span>Arsenal Completo</span>
             </button>
             <button 
               onClick={() => scrollToSection('comparativo')} 
@@ -433,10 +558,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </span>
             </button>
             <button 
-              onClick={() => scrollToSection('modulos')} 
-              className="hover:text-amber-400 transition-colors cursor-pointer whitespace-nowrap"
+              onClick={() => scrollToSection('dice-playground')} 
+              className="hover:text-amber-400 transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5"
             >
-              Módulos
+              <Dices className="w-4 h-4 text-amber-400" />
+              <span>Rolar 1d20</span>
             </button>
           </nav>
 
@@ -481,14 +607,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </header>
 
       {/* ========================================================= */}
-      {/* 2. FULL-WIDTH HERO SLIDESHOW                              */}
+      {/* 2. FULL-WIDTH HERO SLIDESHOW (5 SLIDES)                   */}
       {/* ========================================================= */}
       <section 
         className="pt-20 relative w-full overflow-hidden bg-[#06080d] border-b border-[#1c2438] select-none group z-10"
         onMouseEnter={() => setIsSlideHovered(true)}
         onMouseLeave={() => setIsSlideHovered(false)}
       >
-        <div className="relative w-full h-[500px] sm:h-[560px] md:h-[620px] lg:h-[660px] overflow-hidden">
+        <div className="relative w-full h-[520px] sm:h-[580px] md:h-[640px] lg:h-[680px] overflow-hidden">
           
           {heroSlides.map((slide, idx) => {
             const isActive = currentSlide === idx;
@@ -582,22 +708,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
         {/* Bottom Tabs Bar */}
         <div className="w-full bg-[#080b12]/95 border-t border-[#1b253b] backdrop-blur-md">
-          <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 divide-x divide-[#1b253b]">
+          <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-5 divide-x divide-[#1b253b]">
             {heroSlides.map((slide, idx) => {
               const isActive = currentSlide === idx;
               return (
                 <button
                   key={slide.id}
                   onClick={() => setCurrentSlide(idx)}
-                  className={`p-3.5 sm:p-4 text-left transition-all relative overflow-hidden cursor-pointer ${
+                  className={`p-3 sm:p-4 text-left transition-all relative overflow-hidden cursor-pointer ${
                     isActive ? 'bg-[#121929]' : 'hover:bg-[#0d1320] opacity-70 hover:opacity-100'
                   }`}
                 >
                   {isActive && (
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 to-amber-500 animate-[progress_6.5s_linear]" />
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 to-amber-500 animate-[progress_7s_linear]" />
                   )}
                   
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2">
                     <span className={`text-xs font-mono font-bold ${isActive ? 'text-amber-400' : 'text-slate-500'}`}>
                       0{idx + 1}
                     </span>
@@ -605,7 +731,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       {slide.title.split(' ')[0]} {slide.title.split(' ')[1]}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-500 truncate mt-0.5 hidden sm:block">
+                  <div className="text-[10px] text-slate-500 truncate mt-0.5 hidden sm:block">
                     {slide.badge.replace(/[^a-zA-Z &]/g, '')}
                   </div>
                 </button>
@@ -616,9 +742,326 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ========================================================= */}
-      {/* 3. 🎲 INTERACTIVE 1D20 PLAYGROUND WIDGET                 */}
+      {/* 3. 🔥 OS 4 DIFERENCIAIS MATADORES (TIER 1 KILLER FEATURES) */}
       {/* ========================================================= */}
-      <section id="dice-playground" className="py-14 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto relative z-10">
+      <section id="killer-features" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto relative z-10 space-y-12">
+        <div className="text-center max-w-3xl mx-auto space-y-4">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-wider font-mono shadow-sm">
+            <Zap className="w-4 h-4 text-amber-400 animate-pulse" />
+            <span>Exclusividades de Última Geração</span>
+          </div>
+          <h2 className="text-3xl sm:text-5xl font-black text-slate-100 tracking-tight">
+            Os 4 Diferenciais Que Nenhum Outro VTT Oferece
+          </h2>
+          <p className="text-slate-400 text-base sm:text-lg">
+            Projetado para eliminar toda fricção da sua mesa: sem downloads, sem apps paralelos e com conexões instantâneas.
+          </p>
+        </div>
+
+        {/* 4 Killer Cards Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {/* KILLER 1: WebRTC Voice & Video Call Nativo */}
+          <div className="p-7 sm:p-8 rounded-3xl bg-gradient-to-br from-[#0c1220] via-[#090e18] to-[#0d1424] border-2 border-emerald-500/30 hover:border-emerald-500/60 shadow-[0_0_30px_rgba(16,185,129,0.08)] transition-all space-y-6 flex flex-col justify-between group">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold font-mono uppercase">
+                  <Video className="w-4 h-4" />
+                  <span>🔥 ZERO ALT+TAB • NATIVO WEBRTC</span>
+                </div>
+                <span className="text-[10px] text-slate-400 font-mono bg-[#131b2c] px-2.5 py-1 rounded-lg border border-[#222e44]">
+                  P2P MESH / SFU
+                </span>
+              </div>
+
+              <h3 className="text-2xl font-black text-slate-100">
+                Call de Áudio & Vídeo Integrada na Mesa
+              </h3>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                Adeus Discord consumindo memória e dividindo a tela. Converse por voz e veja as reações de vídeo dos jogadores em um <strong className="text-emerald-400">widget flutuante persistente</strong> enquanto navega por mapas, combates e fichas.
+              </p>
+
+              {/* Interactive Voice Simulator Box */}
+              <div className="p-4 rounded-2xl bg-[#060910] border border-[#1b253b] space-y-3 shadow-inner">
+                <div className="flex items-center justify-between text-xs text-slate-400 pb-1 border-b border-[#172033]">
+                  <span className="font-mono text-emerald-400 font-bold flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5 animate-pulse" />
+                    SALA DE VOZ ATIVA (4 JOGADORES)
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-500">Latência: 18ms</span>
+                </div>
+
+                {/* 4 Player Video Thumbnails */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className={`p-2.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
+                    voiceDemoActiveSpeaker === 1 ? 'bg-emerald-500/20 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-[#0e1422] border-[#222d42]'
+                  }`}>
+                    <div className="relative w-10 h-10 rounded-full bg-amber-500/20 border border-amber-400 flex items-center justify-center font-bold text-xs text-amber-300">
+                      👑 DM
+                      {voiceDemoActiveSpeaker === 1 && (
+                        <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-slate-950 flex items-center justify-center animate-ping" />
+                      )}
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-200">Mestre</span>
+                    <span className="text-[9px] font-mono text-emerald-400">Falando...</span>
+                  </div>
+
+                  <div className={`p-2.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
+                    voiceDemoActiveSpeaker === 2 ? 'bg-emerald-500/20 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-[#0e1422] border-[#222d42]'
+                  }`}>
+                    <div className="relative w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-400 flex items-center justify-center font-bold text-xs text-cyan-300">
+                      ⚔️ Torin
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-200">Guerreiro</span>
+                    <span className="text-[9px] font-mono text-slate-400">Ouvindo</span>
+                  </div>
+
+                  <div className={`p-2.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
+                    voiceDemoActiveSpeaker === 3 ? 'bg-emerald-500/20 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-[#0e1422] border-[#222d42]'
+                  }`}>
+                    <div className="relative w-10 h-10 rounded-full bg-rose-500/20 border border-rose-400 flex items-center justify-center font-bold text-xs text-rose-300">
+                      🗡️ Varis
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-200">Ladino</span>
+                    <span className="text-[9px] font-mono text-slate-400">Mudo</span>
+                  </div>
+
+                  <div className={`p-2.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
+                    voiceDemoActiveSpeaker === 4 ? 'bg-emerald-500/20 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-[#0e1422] border-[#222d42]'
+                  }`}>
+                    <div className="relative w-10 h-10 rounded-full bg-purple-500/20 border border-purple-400 flex items-center justify-center font-bold text-xs text-purple-300">
+                      🔮 Lyra
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-200">Maga</span>
+                    <span className="text-[9px] font-mono text-slate-400">Ouvindo</span>
+                  </div>
+                </div>
+
+                {/* Simulated Quick Action Bar */}
+                <div className="flex items-center justify-between pt-1 text-xs">
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setIsVoiceDemoMuted(!isVoiceDemoMuted)}
+                      className={`px-3 py-1 rounded-lg font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+                        isVoiceDemoMuted ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' : 'bg-[#151d2e] text-slate-300 border border-[#26344d]'
+                      }`}
+                    >
+                      {isVoiceDemoMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-emerald-400" />}
+                      <span>{isVoiceDemoMuted ? 'Desmutar' : 'Mutar'}</span>
+                    </button>
+
+                    <button 
+                      onClick={() => setIsVoiceDemoCameraOn(!isVoiceDemoCameraOn)}
+                      className={`px-3 py-1 rounded-lg font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+                        !isVoiceDemoCameraOn ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' : 'bg-[#151d2e] text-slate-300 border border-[#26344d]'
+                      }`}
+                    >
+                      {isVoiceDemoCameraOn ? <Video className="w-3.5 h-3.5 text-emerald-400" /> : <VideoOff className="w-3.5 h-3.5" />}
+                      <span>{isVoiceDemoCameraOn ? 'Câmera Ativa' : 'Câmera Off'}</span>
+                    </button>
+                  </div>
+                  <span className="text-[11px] text-emerald-400 font-mono hidden sm:inline">P2P Seguro Criptografado</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-slate-400 pt-2 border-t border-[#1a2336]">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>Funciona no Chrome, Edge, Safari e Mobile sem extensões.</span>
+            </div>
+          </div>
+
+          {/* KILLER 2: Web Push Notifications */}
+          <div className="p-7 sm:p-8 rounded-3xl bg-gradient-to-br from-[#0c1220] via-[#090e18] to-[#0d1424] border-2 border-amber-500/30 hover:border-amber-500/60 shadow-[0_0_30px_rgba(245,158,11,0.08)] transition-all space-y-6 flex flex-col justify-between group">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold font-mono uppercase">
+                  <Bell className="w-4 h-4" />
+                  <span>🔥 NOTIFICAÇÕES WEB PUSH (VAPID)</span>
+                </div>
+                <span className="text-[10px] text-slate-400 font-mono bg-[#131b2c] px-2.5 py-1 rounded-lg border border-[#222e44]">
+                  SERVICE WORKER PWA
+                </span>
+              </div>
+
+              <h3 className="text-2xl font-black text-slate-100">
+                Seu Celular Avisa Quando For Seu Turno
+              </h3>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                Chega de jogadores distraídos perdendo o andamento do combate. Notificações reais no navegador e no smartphone avisam quando for sua vez, quando o Mestre enviar um sussurro ou quando a sessão iniciar.
+              </p>
+
+              {/* Push Trigger Simulator */}
+              <div className="p-4 rounded-2xl bg-[#060910] border border-[#1b253b] space-y-3">
+                <span className="text-xs font-mono font-bold text-amber-300 block">
+                  TESTE O DISPARO DE PUSH EM TEMPO REAL:
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    onClick={() => handleTriggerPushDemo('turn')}
+                    className="p-2.5 rounded-xl bg-[#121929] hover:bg-amber-500/20 border border-[#24314c] hover:border-amber-400/60 text-left transition-all cursor-pointer group"
+                  >
+                    <span className="text-xs font-bold text-slate-200 block group-hover:text-amber-300">⚔️ Alerta de Turno</span>
+                    <span className="text-[10px] text-slate-400 block">Iniciativa no combate</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleTriggerPushDemo('whisper')}
+                    className="p-2.5 rounded-xl bg-[#121929] hover:bg-rose-500/20 border border-[#24314c] hover:border-rose-400/60 text-left transition-all cursor-pointer group"
+                  >
+                    <span className="text-xs font-bold text-slate-200 block group-hover:text-rose-300">📜 Sussurro DM</span>
+                    <span className="text-[10px] text-slate-400 block">Bilhete secreto ao ladino</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleTriggerPushDemo('invite')}
+                    className="p-2.5 rounded-xl bg-[#121929] hover:bg-emerald-500/20 border border-[#24314c] hover:border-emerald-400/60 text-left transition-all cursor-pointer group"
+                  >
+                    <span className="text-xs font-bold text-slate-200 block group-hover:text-emerald-300">🛡️ Convite de Sessão</span>
+                    <span className="text-[10px] text-slate-400 block">Mesa aberta agora</span>
+                  </button>
+                </div>
+
+                <div className="text-[11px] text-slate-400 italic">
+                  💡 Clique nos botões acima para ver o pop-up de notificação simulado no topo direito da tela.
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-slate-400 pt-2 border-t border-[#1a2336]">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>Receba alertas mesmo com a aba em segundo plano ou no celular.</span>
+            </div>
+          </div>
+
+          {/* KILLER 3: Streamer Overlay System (OBS Studio) */}
+          <div className="p-7 sm:p-8 rounded-3xl bg-gradient-to-br from-[#0c1220] via-[#090e18] to-[#0d1424] border-2 border-cyan-500/30 hover:border-cyan-500/60 shadow-[0_0_30px_rgba(6,182,212,0.08)] transition-all space-y-6 flex flex-col justify-between group">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-bold font-mono uppercase">
+                  <Tv className="w-4 h-4" />
+                  <span>🔥 STREAMER OVERLAY (OBS / TWITCH)</span>
+                </div>
+                <span className="text-[10px] text-slate-400 font-mono bg-[#131b2c] px-2.5 py-1 rounded-lg border border-[#222e44]">
+                  HUD TRANSPARENTE
+                </span>
+              </div>
+
+              <h3 className="text-2xl font-black text-slate-100">
+                Transmissões Cinematográficas no OBS Studio
+              </h3>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                Transmita suas mesas na Twitch e YouTube como um show profissional. Um link transparente dedicado exibe <strong className="text-cyan-400">barras de HP ao vivo, rolagens de dados 3D na tela e ordem de iniciativa</strong> sem expor as anotações secretas do Mestre.
+              </p>
+
+              {/* Stream Overlay Preview Box */}
+              <div className="p-4 rounded-2xl bg-[#060910] border border-[#1b253b] space-y-3 relative overflow-hidden">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span className="font-mono text-cyan-400 font-bold">FONTE DO NAVEGADOR OBS (TRANSPARENTE):</span>
+                  <span className="text-[10px] font-mono bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded border border-rose-500/30 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping" /> LIVE ON AIR
+                  </span>
+                </div>
+
+                {/* Simulated Stream HUD */}
+                <div className="p-3 rounded-xl bg-slate-950/60 border border-cyan-500/20 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                      <span className="text-xs font-bold text-slate-200">Torin Quebra-Rochedo (Guerreiro)</span>
+                    </div>
+                    <span className="text-xs font-mono text-cyan-300 font-bold">54 / 68 HP</span>
+                  </div>
+                  {/* Health Bar */}
+                  <div className="w-full h-2.5 rounded-full bg-slate-900 overflow-hidden border border-slate-700">
+                    <div className="h-full bg-gradient-to-r from-emerald-500 via-cyan-400 to-cyan-500 rounded-full w-[80%]" />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1">
+                    <span>TURNO ATUAL: Torin (Inic 19)</span>
+                    <span className="text-amber-400">Última rolagem: D20 + 7 = 24 (Acerto)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-slate-400 pt-2 border-t border-[#1a2336]">
+              <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
+              <span>Basta colar a URL no Browser Source do OBS Studio ou Streamlabs.</span>
+            </div>
+          </div>
+
+          {/* KILLER 4: D&D Beyond Importer */}
+          <div className="p-7 sm:p-8 rounded-3xl bg-gradient-to-br from-[#0c1220] via-[#090e18] to-[#0d1424] border-2 border-amber-500/30 hover:border-amber-500/60 shadow-[0_0_30px_rgba(245,158,11,0.08)] transition-all space-y-6 flex flex-col justify-between group">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold font-mono uppercase">
+                  <Download className="w-4 h-4" />
+                  <span>🔥 IMPORTADOR D&D BEYOND EM 1-CLIQUE</span>
+                </div>
+                <span className="text-[10px] text-slate-400 font-mono bg-[#131b2c] px-2.5 py-1 rounded-lg border border-[#222e44]">
+                  URL SYNC / JSON
+                </span>
+              </div>
+
+              <h3 className="text-2xl font-black text-slate-100">
+                Traga Suas Fichas do D&D Beyond em Segundos
+              </h3>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                Zero tempo perdido digitando bônus de atributos ou magias. Cole a URL do seu personagem do D&D Beyond e nossa IA converte <strong className="text-amber-300">atributos, talentos, magias preparadas e equipamentos</strong> para a ficha nativa com 1 clique.
+              </p>
+
+              {/* D&D Beyond Importer Simulation */}
+              <div className="p-4 rounded-2xl bg-[#060910] border border-[#1b253b] space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={beyondInputUrl}
+                    onChange={(e) => setBeyondInputUrl(e.target.value)}
+                    className="flex-1 bg-[#101626] border border-[#25324b] rounded-xl px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-amber-400"
+                    placeholder="URL do personagem D&D Beyond..."
+                  />
+                  <button
+                    onClick={handleImportBeyondDemo}
+                    disabled={beyondImporting}
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs cursor-pointer transition-all flex items-center gap-1.5 shrink-0 shadow"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${beyondImporting ? 'animate-spin' : ''}`} />
+                    <span>{beyondImporting ? 'Importando...' : 'Importar'}</span>
+                  </button>
+                </div>
+
+                {/* Imported Result Card */}
+                {beyondImportedCharacter && (
+                  <div className="p-3 rounded-xl bg-[#0f1627] border border-amber-500/30 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-100">{beyondImportedCharacter.name}</span>
+                      <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                        SINCRONIZADO
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-300 font-medium">{beyondImportedCharacter.class}</p>
+                    <div className="text-[10px] font-mono text-slate-300 bg-[#080b13] p-1.5 rounded border border-[#1b2438]">
+                      {beyondImportedCharacter.stats}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-slate-400 pt-2 border-t border-[#1a2336]">
+              <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>Suporta personagens multiclasse, magias personalizadas e itens mágicos.</span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ========================================================= */}
+      {/* 4. 🎲 INTERACTIVE 1D20 PLAYGROUND WIDGET                 */}
+      {/* ========================================================= */}
+      <section id="dice-playground" className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto relative z-10">
         <div className="rounded-3xl p-6 sm:p-8 bg-gradient-to-r from-[#121827] via-[#0e1320] to-[#151c2d] border border-amber-500/30 shadow-[0_0_40px_rgba(245,158,11,0.1)] flex flex-col lg:flex-row items-center justify-between gap-8">
           
           <div className="space-y-3 text-center lg:text-left max-w-xl">
@@ -681,209 +1124,381 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ========================================================= */}
-      {/* 4. MATRIZ COMPARATIVA COM FILTROS GAMIFICADOS             */}
+      {/* 5. 🏛️ ARSENAL COMPLETO DE FERRAMENTAS (TIER 2 & TIER 3)  */}
       {/* ========================================================= */}
-      <section id="comparativo" className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-[#1a2336] relative z-10 space-y-10">
+      <section id="arsenal" className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-[#1a2336] relative z-10 space-y-10">
         <div className="text-center max-w-3xl mx-auto space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
-            <Award className="w-4 h-4" />
-            <span>Análise Competitiva de Mercado</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-bold uppercase tracking-wider font-mono">
+            <Layers className="w-4 h-4" />
+            <span>Módulos de Alta Performance</span>
           </div>
           <h2 className="text-3xl sm:text-5xl font-black text-slate-100">
-            Por Que o Masters Codex Supera a Concorrência?
+            Arsenal Completo Para Mestres & Jogadores
           </h2>
           <p className="text-slate-400 text-base sm:text-lg">
-            Compare o Masters Codex com as principais plataformas mundiais e descubra por que centenas de mestres estão migrando.
+            Explore cada pilar da ferramenta forjada para dar suporte total à sua campanha do nível 1 ao 20.
           </p>
         </div>
 
-        {/* Filter Tabs */}
-        <div className="flex flex-wrap items-center justify-center gap-2">
+        {/* Tab Switcher for the 6 Major Modules */}
+        <div className="flex flex-wrap items-center justify-center gap-2 max-w-4xl mx-auto">
           <button
-            onClick={() => setComparisonFilter('all')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              comparisonFilter === 'all'
-                ? 'bg-amber-500 text-slate-950 shadow-md'
+            onClick={() => setActiveArsenalTab('ai_scenes')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeArsenalTab === 'ai_scenes'
+                ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
                 : 'bg-[#101624] text-slate-400 hover:text-slate-200 border border-[#1e283d]'
             }`}
           >
-            Todos os Concorrentes
+            <Wand2 className="w-4 h-4 text-rose-300" />
+            <span>Arte & Árvores Genealógicas IA</span>
           </button>
+
           <button
-            onClick={() => setComparisonFilter('roll20')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              comparisonFilter === 'roll20'
-                ? 'bg-amber-500 text-slate-950 shadow-md'
+            onClick={() => setActiveArsenalTab('battle_3d')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeArsenalTab === 'battle_3d'
+                ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20'
                 : 'bg-[#101624] text-slate-400 hover:text-slate-200 border border-[#1e283d]'
             }`}
           >
-            Vs Roll20
+            <Box className="w-4 h-4 text-cyan-300" />
+            <span>3D Building Blocks & Props</span>
           </button>
+
           <button
-            onClick={() => setComparisonFilter('foundry')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              comparisonFilter === 'foundry'
-                ? 'bg-amber-500 text-slate-950 shadow-md'
+            onClick={() => setActiveArsenalTab('calendar')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeArsenalTab === 'calendar'
+                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
                 : 'bg-[#101624] text-slate-400 hover:text-slate-200 border border-[#1e283d]'
             }`}
           >
-            Vs Foundry VTT
+            <Calendar className="w-4 h-4 text-amber-300" />
+            <span>Calendário de Fantasia & Luas</span>
           </button>
+
           <button
-            onClick={() => setComparisonFilter('beyond')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              comparisonFilter === 'beyond'
-                ? 'bg-amber-500 text-slate-950 shadow-md'
+            onClick={() => setActiveArsenalTab('party_loot')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeArsenalTab === 'party_loot'
+                ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
                 : 'bg-[#101624] text-slate-400 hover:text-slate-200 border border-[#1e283d]'
             }`}
           >
-            Vs D&D Beyond
+            <Coins className="w-4 h-4 text-emerald-300" />
+            <span>Party Loot Coletivo Realtime</span>
+          </button>
+
+          <button
+            onClick={() => setActiveArsenalTab('reactive_traps')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeArsenalTab === 'reactive_traps'
+                ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
+                : 'bg-[#101624] text-slate-400 hover:text-slate-200 border border-[#1e283d]'
+            }`}
+          >
+            <Flame className="w-4 h-4 text-rose-300" />
+            <span>Reactive Trap & Container Loot</span>
+          </button>
+
+          <button
+            onClick={() => setActiveArsenalTab('cockpit')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeArsenalTab === 'cockpit'
+                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
+                : 'bg-[#101624] text-slate-400 hover:text-slate-200 border border-[#1e283d]'
+            }`}
+          >
+            <Crown className="w-4 h-4 text-amber-300" />
+            <span>Live Cockpit & Teleprompter</span>
           </button>
         </div>
 
-        {/* Comparison Table Card */}
-        <div className="rounded-3xl bg-[#0b0f19] border border-[#1f2a40] overflow-hidden shadow-2xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-[#1f2a40] bg-[#0e1422]">
-                  <th className="p-4 sm:p-5 text-sm font-bold text-slate-300 min-w-[220px]">
-                    Funcionalidade / Vantagem
-                  </th>
-                  <th className="p-4 sm:p-5 text-sm font-extrabold text-amber-400 bg-amber-500/10 border-x border-amber-500/30 min-w-[170px] text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <Crown className="w-4 h-4 text-amber-400" />
-                      <span>Masters Codex</span>
-                    </div>
-                  </th>
-                  {(comparisonFilter === 'all' || comparisonFilter === 'roll20') && (
-                    <th className="p-4 sm:p-5 text-xs sm:text-sm font-semibold text-slate-400 text-center min-w-[130px]">
-                      Roll20
-                    </th>
-                  )}
-                  {(comparisonFilter === 'all' || comparisonFilter === 'foundry') && (
-                    <th className="p-4 sm:p-5 text-xs sm:text-sm font-semibold text-slate-400 text-center min-w-[130px]">
-                      Foundry VTT
-                    </th>
-                  )}
-                  {(comparisonFilter === 'all' || comparisonFilter === 'beyond') && (
-                    <th className="p-4 sm:p-5 text-xs sm:text-sm font-semibold text-slate-400 text-center min-w-[130px]">
-                      D&D Beyond
-                    </th>
-                  )}
-                  {comparisonFilter === 'all' && (
-                    <th className="p-4 sm:p-5 text-xs sm:text-sm font-semibold text-slate-400 text-center min-w-[130px]">
-                      Alchemy RPG
-                    </th>
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#172033] text-xs sm:text-sm">
-                
-                <tr className="hover:bg-[#111726]/50 transition-colors">
-                  <td className="p-4 sm:p-5 font-semibold text-slate-200">
-                    IA Co-Pilot Nativa para Mestres (NPCs, Lore, Quests)
-                  </td>
-                  <td className="p-4 sm:p-5 text-center font-bold text-amber-300 bg-amber-500/5 border-x border-amber-500/20">
-                    <div className="inline-flex items-center gap-1 text-emerald-400 font-bold">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Nativo</span>
-                    </div>
-                  </td>
-                  {(comparisonFilter === 'all' || comparisonFilter === 'roll20') && (
-                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
-                  )}
-                  {(comparisonFilter === 'all' || comparisonFilter === 'foundry') && (
-                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
-                  )}
-                  {(comparisonFilter === 'all' || comparisonFilter === 'beyond') && (
-                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
-                  )}
-                  {comparisonFilter === 'all' && (
-                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
-                  )}
-                </tr>
+        {/* Dynamic Arsenal Showcase Card */}
+        <div className="p-8 sm:p-10 rounded-3xl bg-[#0c101c] border border-[#222d44] shadow-2xl relative overflow-hidden">
+          
+          {activeArsenalTab === 'ai_scenes' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+              <div className="space-y-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30 text-xs font-bold font-mono uppercase">
+                  <Wand2 className="w-4 h-4" />
+                  <span>IA Generativa Visual & Dinástica</span>
+                </div>
+                <h3 className="text-3xl font-black text-slate-100">
+                  Gere Cenas Épicas e Árvores Genealógicas de Facções
+                </h3>
+                <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+                  Descreva o momento épico do combate ou o palácio imperial e deixe nossa IA gerar retratos com iluminação cinematográfica para projetar aos jogadores. Conecte dinastias nobres, bastardos e sucessões reais em um <strong className="text-rose-400">Grafo Genealógico Interativo</strong> integrado ao Loregraph da campanha.
+                </p>
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Retratos consistentes de NPCs com estilo estilizado medieval.</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Conexão visual de árvores genealógicas com segredos e intrigas.</span>
+                  </div>
+                </div>
+              </div>
 
-                <tr className="hover:bg-[#111726]/50 transition-colors">
-                  <td className="p-4 sm:p-5 font-semibold text-slate-200">
-                    Grid Tático 3D Nativo Web (Sem Instalação)
-                  </td>
-                  <td className="p-4 sm:p-5 text-center font-bold text-amber-300 bg-amber-500/5 border-x border-amber-500/20">
-                    <div className="inline-flex items-center gap-1 text-emerald-400 font-bold">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Nativo 3D Web</span>
-                    </div>
-                  </td>
-                  {(comparisonFilter === 'all' || comparisonFilter === 'roll20') && (
-                    <td className="p-4 sm:p-5 text-center text-slate-500">2D Apenas</td>
-                  )}
-                  {(comparisonFilter === 'all' || comparisonFilter === 'foundry') && (
-                    <td className="p-4 sm:p-5 text-center text-slate-500">2D (Módulos pesados)</td>
-                  )}
-                  {(comparisonFilter === 'all' || comparisonFilter === 'beyond') && (
-                    <td className="p-4 sm:p-5 text-center text-slate-500">2D Maps Básico</td>
-                  )}
-                  {comparisonFilter === 'all' && (
-                    <td className="p-4 sm:p-5 text-center text-slate-500">Teatro da Mente</td>
-                  )}
-                </tr>
+              <div className="p-5 rounded-2xl bg-[#060910] border border-[#1f2a40] space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-[#182236]">
+                  <span className="font-mono text-rose-400 font-bold">LOREGRAPH DINÁSTICO • CASA DE VALEN</span>
+                  <span className="text-[10px] font-mono text-slate-500">6 Gerações</span>
+                </div>
+                <div className="p-3 rounded-xl bg-[#111728] border border-[#23314d] space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-100">👑 Rei Alistair III (Falecido)</span>
+                    <span className="text-[10px] text-amber-400">Casado com Lady Morwen</span>
+                  </div>
+                  <div className="pl-4 border-l-2 border-rose-500/40 space-y-1 text-[11px] text-slate-300">
+                    <p>├── ⚔️ Príncipe Herdeiro Derek (Desaparecido nas Catacumbas)</p>
+                    <p>└── 🔮 Princesa Vivienne (Maga da Corte • Segredo: Pacto com Dragão)</p>
+                  </div>
+                </div>
+                <div className="text-[11px] text-slate-400 italic">
+                  💡 A IA sugere ganchos de herança, conspirações e rivalidades entre ramos familiares automaticamente.
+                </div>
+              </div>
+            </div>
+          )}
 
-                <tr className="hover:bg-[#111726]/50 transition-colors">
-                  <td className="p-4 sm:p-5 font-semibold text-slate-200">
-                    Iluminação Dinâmica & Fog of War com LoS
-                  </td>
-                  <td className="p-4 sm:p-5 text-center font-bold text-amber-300 bg-amber-500/5 border-x border-amber-500/20">
-                    <div className="inline-flex items-center gap-1 text-emerald-400 font-bold">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Incluso & Rápido</span>
-                    </div>
-                  </td>
-                  {(comparisonFilter === 'all' || comparisonFilter === 'roll20') && (
-                    <td className="p-4 sm:p-5 text-center text-amber-400/90 text-xs">Pago (Assinatura)</td>
-                  )}
-                  {(comparisonFilter === 'all' || comparisonFilter === 'foundry') && (
-                    <td className="p-4 sm:p-5 text-center text-emerald-400">Excelente</td>
-                  )}
-                  {(comparisonFilter === 'all' || comparisonFilter === 'beyond') && (
-                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
-                  )}
-                  {comparisonFilter === 'all' && (
-                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
-                  )}
-                </tr>
+          {activeArsenalTab === 'battle_3d' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+              <div className="space-y-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-xs font-bold font-mono uppercase">
+                  <Box className="w-4 h-4" />
+                  <span>WebGL 3D Tactical Engine</span>
+                </div>
+                <h3 className="text-3xl font-black text-slate-100">
+                  3D Building Blocks, Props Medievais e Raycasting 360°
+                </h3>
+                <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+                  Construa masmorras modulares em tempo real: posicione paredes de pedra, tochas que iluminam sombras em 360°, estátuas, baús e altares com física realista. Projete áreas de magia tridimensionais (cones de sopro, esferas de fogo e cilindros) com cálculos automáticos de cobertura e elevação.
+                </p>
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Cálculo automático de Cobertura (Meia / Três Quartos / Total).</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Transição de andares múltiplos com escadas interativas.</span>
+                  </div>
+                </div>
+              </div>
 
-                <tr className="hover:bg-[#111726]/50 transition-colors">
-                  <td className="p-4 sm:p-5 font-semibold text-slate-200">
-                    Worldbuilding com LoreGraph de Relacionamentos
-                  </td>
-                  <td className="p-4 sm:p-5 text-center font-bold text-amber-300 bg-amber-500/5 border-x border-amber-500/20">
-                    <div className="inline-flex items-center gap-1 text-emerald-400 font-bold">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Grafo Interativo</span>
-                    </div>
-                  </td>
-                  {(comparisonFilter === 'all' || comparisonFilter === 'roll20') && (
-                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
-                  )}
-                  {(comparisonFilter === 'all' || comparisonFilter === 'foundry') && (
-                    <td className="p-4 sm:p-5 text-center text-slate-500">Módulos externos</td>
-                  )}
-                  {(comparisonFilter === 'all' || comparisonFilter === 'beyond') && (
-                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
-                  )}
-                  {comparisonFilter === 'all' && (
-                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
-                  )}
-                </tr>
+              <div className="p-5 rounded-2xl bg-[#060910] border border-[#1f2a40] space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-[#182236]">
+                  <span className="font-mono text-cyan-400 font-bold">GRID TÁTICO 3D • MASMORRA NÍVEL 2</span>
+                  <span className="text-[10px] font-mono text-emerald-400">60 FPS ESTÁVEL</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-3 rounded-xl bg-[#111728] border border-[#23314d]">
+                    <span className="text-[10px] text-cyan-400 font-mono block">ILUMINAÇÃO DINÂMICA</span>
+                    <span className="font-bold text-slate-100 block mt-1">Tochas com Flicker Real</span>
+                    <span className="text-[11px] text-slate-400">Raio de 6m luz plena + 6m penumbra</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#111728] border border-[#23314d]">
+                    <span className="text-[10px] text-amber-400 font-mono block">ÁREAS DE MAGIA (AoE)</span>
+                    <span className="font-bold text-slate-100 block mt-1">Cone de Fogo 15ft</span>
+                    <span className="text-[11px] text-slate-400">Detecção de 3 alvos na área</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
-              </tbody>
-            </table>
-          </div>
+          {activeArsenalTab === 'calendar' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+              <div className="space-y-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-bold font-mono uppercase">
+                  <Calendar className="w-4 h-4" />
+                  <span>Chronos & World Timeline</span>
+                </div>
+                <h3 className="text-3xl font-black text-slate-100">
+                  Campaign Calendar Studio & Fases Lunares
+                </h3>
+                <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+                  Acompanhe a passagem de dias, semanas e eras do seu mundo. Suporte de fábrica para os calendários mais famosos do RPG (<strong className="text-amber-300">Calendário de Harptos dos Reinos Esquecidos, Golarion, ou crie o seu com semanas e meses customizados</strong>). Calcule eclipses, fases da lua para licantropos e eventos mundiais programados.
+                </p>
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Avanço de tempo automático por Descanso Curto (1h) e Longo (8h).</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Rastreamento de rações, suprimentos e viagens por hexágonos.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-[#060910] border border-[#1f2a40] space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-[#182236]">
+                  <span className="font-mono text-amber-400 font-bold">CALENDÁRIO DE HARPTOS • ANO 1492 CV</span>
+                  <span className="text-[10px] font-mono text-cyan-400">🌕 LUA CHEIA DE SELÛNE</span>
+                </div>
+                <div className="p-3 rounded-xl bg-[#111728] border border-[#23314d] space-y-2 text-xs">
+                  <div className="flex items-center justify-between font-bold text-slate-100">
+                    <span>14 de Eleint (Outono) • Dia 258</span>
+                    <span className="text-amber-400 text-[11px]">Festival da Colheita</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300">
+                    ⚔️ <strong>Evento Ativo:</strong> O culto de Myrkul planeja o ritual no ápice da meia-noite da lua cheia. Faltam 6 horas no relógio da campanha.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeArsenalTab === 'party_loot' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+              <div className="space-y-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-bold font-mono uppercase">
+                  <Coins className="w-4 h-4" />
+                  <span>Sincronização em Tempo Real</span>
+                </div>
+                <h3 className="text-3xl font-black text-slate-100">
+                  Party Loot Coletivo & Divisão Automática de Moedas
+                </h3>
+                <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+                  Nunca mais perca tempo calculando divisão de moedas no final da sessão. O Party Loot do Master's Codex reúne tesouros, gemas e itens mágicos em um baú compartilhado. Com um clique no botão <strong className="text-emerald-400">"Dividir Moedas Igualmente"</strong>, o sistema calcula PO, PP e PC para cada jogador e atualiza o inventário instantaneamente via Supabase Realtime.
+                </p>
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Distribuição de itens mágicos por reivindicação e aprovação do Mestre.</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Identificação de itens e cálculo automático de peso de carga.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-[#060910] border border-[#1f2a40] space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-[#182236]">
+                  <span className="font-mono text-emerald-400 font-bold">BAÚ DO GRUPO (PARTY LOOT)</span>
+                  <span className="text-[10px] font-mono text-amber-400">1.240 PO • 850 PP • 3 Gemas</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-[#111728] border border-[#23314d]">
+                    <span className="font-bold text-slate-200">⚔️ Espada Longa Flamejante +1</span>
+                    <span className="text-[10px] text-amber-400 block">Reivindicado por: Torin</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-[#111728] border border-[#23314d]">
+                    <span className="font-bold text-slate-200">🧪 4x Poção de Cura Maior</span>
+                    <span className="text-[10px] text-emerald-400 block">1 frasco por jogador</span>
+                  </div>
+                </div>
+                <div className="text-[11px] text-emerald-400 font-mono text-center bg-emerald-500/10 py-1.5 rounded-lg border border-emerald-500/20">
+                  ✓ Divisão de 310 PO e 212 PP creditada a cada personagem.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeArsenalTab === 'reactive_traps' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+              <div className="space-y-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30 text-xs font-bold font-mono uppercase">
+                  <Flame className="w-4 h-4" />
+                  <span>Dungeon Hazard Engine</span>
+                </div>
+                <h3 className="text-3xl font-black text-slate-100">
+                  Reactive Trap Engine & Container Loot Interativo
+                </h3>
+                <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+                  Transforme exploração em tensão pura. Posicione armadilhas invisíveis no mapa com gatilhos dinâmicos: quando o token do jogador pisa na placa de pressão, o sistema dispara testes de resistência de Destreza, rola o dano em 3D e aplica condições (Envenenado, Preso, etc.) automaticamente. Baús trancados exigem testes de Ferramentas de Ladrão com CDs ajustáveis.
+                </p>
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Presets: Dardos Venenosos, Fosso com Lanças, Runa Explosiva e Gás Sonífero.</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Loot tables com gerador automático de tesouro por ND (1-4, 5-10, 11-16).</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-[#060910] border border-[#1f2a40] space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-[#182236]">
+                  <span className="font-mono text-rose-400 font-bold">DISPARO DE ARMADILHA • RUNA DE FOGO</span>
+                  <span className="text-[10px] font-mono text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded">GATILHO ATIVADO</span>
+                </div>
+                <div className="p-3 rounded-xl bg-[#111728] border border-rose-500/30 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-100">💥 Explosão de Fogo em Raio de 3m</span>
+                    <span className="text-amber-400 font-mono">Salvaguarda DEX CD 15</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300">
+                    Varis falhou no teste de resistência (Resultado 11). Sofreu <strong>4d6 = 16 de dano de fogo</strong>.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeArsenalTab === 'cockpit' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+              <div className="space-y-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-bold font-mono uppercase">
+                  <Crown className="w-4 h-4" />
+                  <span>Centro de Comando Supremo</span>
+                </div>
+                <h3 className="text-3xl font-black text-slate-100">
+                  Live Cockpit Studio & Teleprompter do Mestre
+                </h3>
+                <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+                  Conduza sessões sem se perder em 20 abas abertas. O Cockpit reúne fila de iniciativa com contadores de rodada, monitor de HP em tempo real de monstros e jogadores, teleprompter com rolagem suave de texto descritivo para ler aos jogadores e safety tools com X-Card integrado.
+                </p>
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Ajuste rápido de dano, cura e condições com 1 clique.</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Bloco de notas secreto com integração direta ao Loregraph.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-[#060910] border border-[#1f2a40] space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-[#182236]">
+                  <span className="font-mono text-amber-400 font-bold">PAINEL LIVE COCKPIT • RODADA 3</span>
+                  <span className="text-[10px] font-mono text-emerald-400">SINCRONIZADO REALTIME</span>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-[#111728] border border-amber-500/40 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black text-[10px] flex items-center justify-center">1</span>
+                      <span className="font-bold text-slate-100">Torin (Inic 19)</span>
+                    </div>
+                    <span className="text-emerald-400 font-mono font-bold">54/68 HP</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-[#0c101a] border border-[#202c42] flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 font-bold text-[10px] flex items-center justify-center">2</span>
+                      <span className="text-slate-300">Dragão Jovem Vermelho (Inic 14)</span>
+                    </div>
+                    <span className="text-rose-400 font-mono font-bold">112/178 HP</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       </section>
 
       {/* ========================================================= */}
-      {/* 5. 🤖 MINI AI SIMULATOR & 🎵 AUDIO MAESTRO SHOWCASE       */}
+      {/* 6. 🤖 MINI AI SIMULATOR & 🎵 AUDIO MAESTRO SHOWCASE       */}
       {/* ========================================================= */}
       <section className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1054,11 +1669,292 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ========================================================= */}
-      {/* 6. OS 6 GRANDES PILARES DE RECURSOS                       */}
+      {/* 7. MATRIZ COMPARATIVA EXPANDIDA DE MERCADO                */}
+      {/* ========================================================= */}
+      <section id="comparativo" className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-[#1a2336] relative z-10 space-y-10">
+        <div className="text-center max-w-3xl mx-auto space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider font-mono">
+            <Award className="w-4 h-4" />
+            <span>Análise Competitiva de Mercado</span>
+          </div>
+          <h2 className="text-3xl sm:text-5xl font-black text-slate-100">
+            Por Que o Masters Codex Supera a Concorrência?
+          </h2>
+          <p className="text-slate-400 text-base sm:text-lg">
+            Compare o Masters Codex com as principais plataformas mundiais e descubra por que mestres e jogadores estão migrando.
+          </p>
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <button
+            onClick={() => setComparisonFilter('all')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              comparisonFilter === 'all'
+                ? 'bg-amber-500 text-slate-950 shadow-md'
+                : 'bg-[#101624] text-slate-400 hover:text-slate-200 border border-[#1e283d]'
+            }`}
+          >
+            Todos os Concorrentes
+          </button>
+          <button
+            onClick={() => setComparisonFilter('roll20')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              comparisonFilter === 'roll20'
+                ? 'bg-amber-500 text-slate-950 shadow-md'
+                : 'bg-[#101624] text-slate-400 hover:text-slate-200 border border-[#1e283d]'
+            }`}
+          >
+            Vs Roll20
+          </button>
+          <button
+            onClick={() => setComparisonFilter('foundry')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              comparisonFilter === 'foundry'
+                ? 'bg-amber-500 text-slate-950 shadow-md'
+                : 'bg-[#101624] text-slate-400 hover:text-slate-200 border border-[#1e283d]'
+            }`}
+          >
+            Vs Foundry VTT
+          </button>
+          <button
+            onClick={() => setComparisonFilter('beyond')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              comparisonFilter === 'beyond'
+                ? 'bg-amber-500 text-slate-950 shadow-md'
+                : 'bg-[#101624] text-slate-400 hover:text-slate-200 border border-[#1e283d]'
+            }`}
+          >
+            Vs D&D Beyond
+          </button>
+        </div>
+
+        {/* Comparison Table Card */}
+        <div className="rounded-3xl bg-[#0b0f19] border border-[#1f2a40] overflow-hidden shadow-2xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-[#1f2a40] bg-[#0e1422]">
+                  <th className="p-4 sm:p-5 text-sm font-bold text-slate-300 min-w-[220px]">
+                    Funcionalidade / Vantagem
+                  </th>
+                  <th className="p-4 sm:p-5 text-sm font-extrabold text-amber-400 bg-amber-500/10 border-x border-amber-500/30 min-w-[170px] text-center">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <Crown className="w-4 h-4 text-amber-400" />
+                      <span>Masters Codex</span>
+                    </div>
+                  </th>
+                  {(comparisonFilter === 'all' || comparisonFilter === 'roll20') && (
+                    <th className="p-4 sm:p-5 text-xs sm:text-sm font-semibold text-slate-400 text-center min-w-[130px]">
+                      Roll20
+                    </th>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'foundry') && (
+                    <th className="p-4 sm:p-5 text-xs sm:text-sm font-semibold text-slate-400 text-center min-w-[130px]">
+                      Foundry VTT
+                    </th>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'beyond') && (
+                    <th className="p-4 sm:p-5 text-xs sm:text-sm font-semibold text-slate-400 text-center min-w-[130px]">
+                      D&D Beyond
+                    </th>
+                  )}
+                  {comparisonFilter === 'all' && (
+                    <th className="p-4 sm:p-5 text-xs sm:text-sm font-semibold text-slate-400 text-center min-w-[130px]">
+                      Alchemy RPG
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#172033] text-xs sm:text-sm">
+                
+                {/* 1. Call de Voz e Vídeo */}
+                <tr className="hover:bg-[#111726]/50 transition-colors">
+                  <td className="p-4 sm:p-5 font-semibold text-slate-200">
+                    🎙️ Call de Voz & Vídeo Nativa WebRTC (Sem Discord)
+                  </td>
+                  <td className="p-4 sm:p-5 text-center font-bold text-amber-300 bg-amber-500/5 border-x border-amber-500/20">
+                    <div className="inline-flex items-center gap-1 text-emerald-400 font-bold">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Nativo P2P</span>
+                    </div>
+                  </td>
+                  {(comparisonFilter === 'all' || comparisonFilter === 'roll20') && (
+                    <td className="p-4 sm:p-5 text-center text-slate-500">Instável / Legado</td>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'foundry') && (
+                    <td className="p-4 sm:p-5 text-center text-slate-500">Exige Servidor LiveKit</td>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'beyond') && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                  {comparisonFilter === 'all' && (
+                    <td className="p-4 sm:p-5 text-center text-slate-500">Apenas Áudio</td>
+                  )}
+                </tr>
+
+                {/* 2. Web Push Notifications */}
+                <tr className="hover:bg-[#111726]/50 transition-colors">
+                  <td className="p-4 sm:p-5 font-semibold text-slate-200">
+                    📱 Notificações Web Push (Alerta de Turno no Celular)
+                  </td>
+                  <td className="p-4 sm:p-5 text-center font-bold text-amber-300 bg-amber-500/5 border-x border-amber-500/20">
+                    <div className="inline-flex items-center gap-1 text-emerald-400 font-bold">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>VAPID Nativo</span>
+                    </div>
+                  </td>
+                  {(comparisonFilter === 'all' || comparisonFilter === 'roll20') && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'foundry') && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'beyond') && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                  {comparisonFilter === 'all' && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                </tr>
+
+                {/* 3. Streamer Overlay OBS */}
+                <tr className="hover:bg-[#111726]/50 transition-colors">
+                  <td className="p-4 sm:p-5 font-semibold text-slate-200">
+                    📺 Streamer Overlay Transparente para OBS / Twitch
+                  </td>
+                  <td className="p-4 sm:p-5 text-center font-bold text-amber-300 bg-amber-500/5 border-x border-amber-500/20">
+                    <div className="inline-flex items-center gap-1 text-emerald-400 font-bold">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>URL HUD Pronta</span>
+                    </div>
+                  </td>
+                  {(comparisonFilter === 'all' || comparisonFilter === 'roll20') && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'foundry') && (
+                    <td className="p-4 sm:p-5 text-center text-slate-500">Módulos complexos</td>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'beyond') && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                  {comparisonFilter === 'all' && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                </tr>
+
+                {/* 4. D&D Beyond Importer */}
+                <tr className="hover:bg-[#111726]/50 transition-colors">
+                  <td className="p-4 sm:p-5 font-semibold text-slate-200">
+                    ⚡ Importador Instantâneo do D&D Beyond (URL/JSON)
+                  </td>
+                  <td className="p-4 sm:p-5 text-center font-bold text-amber-300 bg-amber-500/5 border-x border-amber-500/20">
+                    <div className="inline-flex items-center gap-1 text-emerald-400 font-bold">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>1-Clique</span>
+                    </div>
+                  </td>
+                  {(comparisonFilter === 'all' || comparisonFilter === 'roll20') && (
+                    <td className="p-4 sm:p-5 text-center text-slate-500">Extensão Chrome paga</td>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'foundry') && (
+                    <td className="p-4 sm:p-5 text-center text-slate-500">DDB Importer (Patreon)</td>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'beyond') && (
+                    <td className="p-4 sm:p-5 text-center text-emerald-400">Próprio</td>
+                  )}
+                  {comparisonFilter === 'all' && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                </tr>
+
+                {/* 5. IA Co-Pilot & Árvores Genealógicas */}
+                <tr className="hover:bg-[#111726]/50 transition-colors">
+                  <td className="p-4 sm:p-5 font-semibold text-slate-200">
+                    🤖 IA Co-Pilot, Geração de Cenas & Árvores Genealógicas
+                  </td>
+                  <td className="p-4 sm:p-5 text-center font-bold text-amber-300 bg-amber-500/5 border-x border-amber-500/20">
+                    <div className="inline-flex items-center gap-1 text-emerald-400 font-bold">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Nativo RAG</span>
+                    </div>
+                  </td>
+                  {(comparisonFilter === 'all' || comparisonFilter === 'roll20') && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'foundry') && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'beyond') && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                  {comparisonFilter === 'all' && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                </tr>
+
+                {/* 6. Grid Tático 3D */}
+                <tr className="hover:bg-[#111726]/50 transition-colors">
+                  <td className="p-4 sm:p-5 font-semibold text-slate-200">
+                    ⚔️ Grid Tático 3D WebGL (Miniaturas, Props & Magias AoE)
+                  </td>
+                  <td className="p-4 sm:p-5 text-center font-bold text-amber-300 bg-amber-500/5 border-x border-amber-500/20">
+                    <div className="inline-flex items-center gap-1 text-emerald-400 font-bold">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Nativo 3D Web</span>
+                    </div>
+                  </td>
+                  {(comparisonFilter === 'all' || comparisonFilter === 'roll20') && (
+                    <td className="p-4 sm:p-5 text-center text-slate-500">2D Apenas</td>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'foundry') && (
+                    <td className="p-4 sm:p-5 text-center text-slate-500">2D (Módulos 3D pesados)</td>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'beyond') && (
+                    <td className="p-4 sm:p-5 text-center text-slate-500">2D Maps Básico</td>
+                  )}
+                  {comparisonFilter === 'all' && (
+                    <td className="p-4 sm:p-5 text-center text-slate-500">Teatro da Mente</td>
+                  )}
+                </tr>
+
+                {/* 7. Party Loot e Calendário */}
+                <tr className="hover:bg-[#111726]/50 transition-colors">
+                  <td className="p-4 sm:p-5 font-semibold text-slate-200">
+                    💰 Party Loot Realtime & Calendário de Campanha Fantástico
+                  </td>
+                  <td className="p-4 sm:p-5 text-center font-bold text-amber-300 bg-amber-500/5 border-x border-amber-500/20">
+                    <div className="inline-flex items-center gap-1 text-emerald-400 font-bold">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Integrado</span>
+                    </div>
+                  </td>
+                  {(comparisonFilter === 'all' || comparisonFilter === 'roll20') && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'foundry') && (
+                    <td className="p-4 sm:p-5 text-center text-slate-500">Módulos Simple Calendar</td>
+                  )}
+                  {(comparisonFilter === 'all' || comparisonFilter === 'beyond') && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                  {comparisonFilter === 'all' && (
+                    <td className="p-4 sm:p-5 text-center text-rose-400/80"><XCircle className="w-4 h-4 mx-auto" /></td>
+                  )}
+                </tr>
+
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* ========================================================= */}
+      {/* 8. OS 6 GRANDES PILARES DE RECURSOS                       */}
       {/* ========================================================= */}
       <section id="recursos" className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-[#1a2336] relative z-10 space-y-12">
         <div className="text-center max-w-3xl mx-auto space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-wider font-mono">
             <Sparkles className="w-4 h-4" />
             <span>Ecossistema Completo</span>
           </div>
@@ -1120,7 +2016,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
             <h3 className="text-xl font-bold text-slate-100">Worldbuilder & LoreGraph</h3>
             <p className="text-sm text-slate-400 leading-relaxed">
-              Organize continentes, cidades, facções, NPCs e quests em um grafo interativo que revela conexões secretas e alianças de poder.
+              Organize continentes, cidades, facções, dinastias e quests em um grafo interativo que revela conexões secretas e alianças de poder.
             </p>
             <div className="text-xs text-emerald-400/90 font-medium flex items-center gap-1.5 pt-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -1160,7 +2056,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ========================================================= */}
-      {/* 7. PORTAL DE CONVERSÃO FINAL                              */}
+      {/* 9. PORTAL DE CONVERSÃO FINAL                              */}
       {/* ========================================================= */}
       <section id="cta-final" className="py-24 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto text-center relative z-10">
         <div className="rounded-3xl p-8 sm:p-14 bg-gradient-to-b from-[#151e33] via-[#0d1424] to-[#070a12] border-2 border-amber-500/40 shadow-[0_0_60px_rgba(245,158,11,0.2)] space-y-6 relative overflow-hidden">
@@ -1199,7 +2095,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ========================================================= */}
-      {/* 8. FOOTER                                                 */}
+      {/* 10. FOOTER                                                */}
       {/* ========================================================= */}
       <footer className="border-t border-[#161e30] py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-slate-400 text-xs flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
         <div className="flex items-center gap-3">
