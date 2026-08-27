@@ -1143,14 +1143,26 @@ export const CampaignSettingsStudio: React.FC = () => {
                           <div 
                             className="text-xs font-bold text-slate-100 cursor-pointer hover:text-amber-400 hover:underline transition-colors"
                             onClick={() => {
-                              const pName = mem.characterName || mem.displayName || 'Aventureiro';
+                              const pName = (mem.characterName && mem.characterName !== 'undefined' ? mem.characterName : '') ||
+                                            (mem.displayName && mem.displayName !== 'undefined' ? mem.displayName : '') ||
+                                            'Aventureiro';
                               openSheet(mem.id, 'pc', pName, mem);
                             }}
                           >
-                            {mem.characterName ? `${mem.characterName} (${mem.displayName})` : mem.displayName}
+                            {(() => {
+                              const cName = mem.characterName && mem.characterName !== 'undefined' && mem.characterName.trim();
+                              const dName = mem.displayName && mem.displayName !== 'undefined' && mem.displayName.trim();
+                              if (cName) {
+                                if (dName && dName.toLowerCase() !== cName.toLowerCase()) {
+                                  return `${cName} (${dName})`;
+                                }
+                                return cName;
+                              }
+                              return dName || 'Jogador';
+                            })()}
                           </div>
                           <div className={`text-[10px] ${isDM ? 'text-amber-400 font-semibold' : 'text-cyan-400 font-semibold'}`}>
-                            {isDM ? 'Dungeon Master (Organizador)' : `Personagem de RPG: ${mem.characterName || 'Aventureiro'}`}
+                            {isDM ? 'Dungeon Master (Organizador)' : `Personagem de RPG: ${mem.characterName && mem.characterName !== 'undefined' ? mem.characterName : 'Aventureiro'}`}
                           </div>
                         </div>
                       </div>

@@ -2,28 +2,36 @@ export interface VoiceParticipant {
   userId: string;
   isMuted: boolean;
   isSpeaking: boolean;
+  isVideoEnabled?: boolean;
   volume: number; // 0 to 2 (1 = 100%)
   stream?: MediaStream;
 }
 
 export class WebRTCVoiceManager {
-  private localStream: MediaStream | null = null;
+  private localAudioStream: MediaStream | null = null;
+  private localVideoStream: MediaStream | null = null;
   private peerConnections: Map<string, RTCPeerConnection> = new Map();
   private remoteGainNodes: Map<string, GainNode> = new Map();
   private remoteAnalysers: Map<string, AnalyserNode> = new Map();
   private remoteAudioElements: Map<string, HTMLAudioElement> = new Map();
+  private remoteStreams: Map<string, MediaStream> = new Map();
   private peerVolumes: Map<string, number> = new Map();
 
   private isMuted: boolean = false;
   private isDeafened: boolean = false;
+  private isVideoEnabled: boolean = false;
   private inputMode: 'vad' | 'ptt' = 'vad';
   private vadThreshold: number = 25; // Sensibilidade de fala (0 - 100)
   private currentInputDeviceId: string | null = null;
+  private currentVideoDeviceId: string | null = null;
 
   private audioContext: AudioContext | null = null;
   private localAnalyser: AnalyserNode | null = null;
   private onSpeakingChange?: (isSpeaking: boolean, level: number) => void;
   private onPeerSpeakingChange?: (peerId: string, isSpeaking: boolean, level: number) => void;
+  private onLocalVideoStreamChange?: (stream: MediaStream | null) => void;
+  private onRemoteStreamChange?: (peerId: string, stream: MediaStream) => void;
+  private onRenegotiationNeeded?: (peerId: string) => void;
   private isCheckingVolume: boolean = false;
 
   private iceServers = [
@@ -36,8 +44,8 @@ export class WebRTCVoiceManager {
     if (typeof window === 'undefined' || !navigator.mediaDevices) return null;
 
     try {
-      if (this.localStream) {
-        this.localStream.getTracks().forEach((t) => t.stop());
+      if (this.localAudioStream) {
+        this.localAudioStream.getTracks().forEach((t) => t.stop());
       }
 
       const constraints: MediaStreamConstraints = {
@@ -49,18 +57,142 @@ export class WebRTCVoiceManager {
         },
       };
 
-      this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+      this.localAudioStream = await navigator.mediaDevices.getUserMedia(constraints);
       if (deviceId) this.currentInputDeviceId = deviceId;
 
       // Se estiver em modo PTT ou mutado, começa com áudio desabilitado
       this.applyMuteState();
 
       this.setupAudioAnalysis();
-      return this.localStream;
+      return this.localAudioStream;
     } catch (e) {
       console.warn('Não foi possível obter acesso ao microfone:', e);
       return null;
     }
+  }
+
+  /**
+   * Ativa a transmissão de vídeo (webcam)
+   */
+  async startVideo(deviceId?: string): Promise<MediaStream | null> {
+    if (typeof window === 'undefined' || !navigator.mediaDevices) return null;
+
+    try {
+      if (this.localVideoStream) {
+        this.localVideoStream.getTracks().forEach((t) => t.stop());
+      }
+
+      const videoConstraints: MediaTrackConstraints = {
+        deviceId: deviceId ? { exact: deviceId } : undefined,
+        width: { ideal: 640, max: 1280 },
+        height: { ideal: 480, max: 720 },
+        frameRate: { ideal: 24, max: 30 },
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: videoConstraints,
+      });
+
+      this.localVideoStream = stream;
+      this.isVideoEnabled = true;
+      if (deviceId) this.currentVideoDeviceId = deviceId;
+
+      const videoTrack = stream.getVideoTracks()[0];
+
+      // Adicionar ou substituir track de vídeo em todas as conexões peer ativas
+      this.peerConnections.forEach((pc, peerId) => {
+        const senders = pc.getSenders();
+        const videoSender = senders.find((s) => s.track?.kind === 'video' || (s as any).kind === 'video');
+
+        if (videoSender) {
+          videoSender.replaceTrack(videoTrack).catch((err) => {
+            console.warn(`Erro ao substituir track de vídeo para ${peerId}:`, err);
+          });
+        } else {
+          try {
+            pc.addTrack(videoTrack, stream);
+            if (this.onRenegotiationNeeded) {
+              this.onRenegotiationNeeded(peerId);
+            }
+          } catch (e) {
+            console.warn(`Erro ao adicionar track de vídeo ao peer ${peerId}:`, e);
+          }
+        }
+      });
+
+      if (this.onLocalVideoStreamChange) {
+        this.onLocalVideoStreamChange(this.localVideoStream);
+      }
+
+      return this.localVideoStream;
+    } catch (err: any) {
+      console.error('Erro ao iniciar câmera de vídeo:', err);
+      this.isVideoEnabled = false;
+      throw err;
+    }
+  }
+
+  /**
+   * Desativa a transmissão de vídeo e desliga as tracks de hardware da webcam
+   */
+  stopVideo(): void {
+    this.isVideoEnabled = false;
+
+    if (this.localVideoStream) {
+      this.localVideoStream.getTracks().forEach((track) => {
+        track.stop();
+      });
+      this.localVideoStream = null;
+    }
+
+    // Limpar/substituir para null nos senders WebRTC
+    this.peerConnections.forEach((pc, peerId) => {
+      const senders = pc.getSenders();
+      const videoSender = senders.find((s) => s.track?.kind === 'video');
+      if (videoSender) {
+        videoSender.replaceTrack(null).catch((err) => {
+          console.warn(`Erro ao zerar track de vídeo para ${peerId}:`, err);
+        });
+      }
+    });
+
+    if (this.onLocalVideoStreamChange) {
+      this.onLocalVideoStreamChange(null);
+    }
+  }
+
+  async toggleVideo(deviceId?: string): Promise<boolean> {
+    if (this.isVideoEnabled) {
+      this.stopVideo();
+      return false;
+    } else {
+      const stream = await this.startVideo(deviceId || this.currentVideoDeviceId || undefined);
+      return !!stream;
+    }
+  }
+
+  getLocalVideoStream(): MediaStream | null {
+    return this.localVideoStream;
+  }
+
+  getIsVideoEnabled(): boolean {
+    return this.isVideoEnabled;
+  }
+
+  getRemoteStreams(): Map<string, MediaStream> {
+    return this.remoteStreams;
+  }
+
+  setOnLocalVideoStreamChange(cb: (stream: MediaStream | null) => void) {
+    this.onLocalVideoStreamChange = cb;
+  }
+
+  setOnRemoteStreamChange(cb: (peerId: string, stream: MediaStream) => void) {
+    this.onRemoteStreamChange = cb;
+  }
+
+  setOnRenegotiationNeeded(cb: (peerId: string) => void) {
+    this.onRenegotiationNeeded = cb;
   }
 
   private getOrCreateAudioContext(): AudioContext | null {
@@ -78,13 +210,13 @@ export class WebRTCVoiceManager {
   }
 
   private setupAudioAnalysis() {
-    if (!this.localStream) return;
+    if (!this.localAudioStream) return;
 
     try {
       const ctx = this.getOrCreateAudioContext();
       if (!ctx) return;
 
-      const source = ctx.createMediaStreamSource(this.localStream);
+      const source = ctx.createMediaStreamSource(this.localAudioStream);
       this.localAnalyser = ctx.createAnalyser();
       this.localAnalyser.fftSize = 256;
       source.connect(this.localAnalyser);
@@ -103,7 +235,7 @@ export class WebRTCVoiceManager {
     const dataArray = new Uint8Array(bufferLength);
 
     const check = () => {
-      if (!this.localStream) {
+      if (!this.localAudioStream) {
         this.isCheckingVolume = false;
         return;
       }
@@ -149,10 +281,12 @@ export class WebRTCVoiceManager {
   }
 
   /**
-   * Conecta um stream de áudio remoto recebido do peer a um elemento de reprodução e GainNode
+   * Conecta um stream remoto (áudio e vídeo) recebido do peer
    */
   attachRemoteStream(peerId: string, stream: MediaStream) {
     if (typeof window === 'undefined') return;
+
+    this.remoteStreams.set(peerId, stream);
 
     let audioEl = this.remoteAudioElements.get(peerId);
     if (!audioEl) {
@@ -170,31 +304,36 @@ export class WebRTCVoiceManager {
     audioEl.srcObject = stream;
     audioEl.muted = this.isDeafened;
 
-    // Configurar GainNode e AnalyserNode no AudioContext
-    try {
-      const ctx = this.getOrCreateAudioContext();
-      if (ctx) {
-        const source = ctx.createMediaStreamSource(stream);
-        const gainNode = ctx.createGain();
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 256;
+    // Configurar GainNode e AnalyserNode no AudioContext apenas se houver áudio
+    if (stream.getAudioTracks().length > 0) {
+      try {
+        const ctx = this.getOrCreateAudioContext();
+        if (ctx) {
+          const source = ctx.createMediaStreamSource(stream);
+          const gainNode = ctx.createGain();
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 256;
 
-        const initialVol = this.peerVolumes.get(peerId) ?? 1.0;
-        gainNode.gain.value = this.isDeafened ? 0 : initialVol;
+          const initialVol = this.peerVolumes.get(peerId) ?? 1.0;
+          gainNode.gain.value = this.isDeafened ? 0 : initialVol;
 
-        source.connect(gainNode);
-        gainNode.connect(analyser);
-        // O áudio é reproduzido pelo elemento audioEl; o analyser serve para VU meter
-        this.remoteGainNodes.set(peerId, gainNode);
-        this.remoteAnalysers.set(peerId, analyser);
+          source.connect(gainNode);
+          gainNode.connect(analyser);
+          this.remoteGainNodes.set(peerId, gainNode);
+          this.remoteAnalysers.set(peerId, analyser);
+        }
+      } catch (err) {
+        console.warn(`Não foi possível criar GainNode para o peer ${peerId}:`, err);
       }
-    } catch (err) {
-      console.warn(`Não foi possível criar GainNode para o peer ${peerId}:`, err);
+
+      audioEl.play().catch((err) => {
+        console.warn(`Autoplay bloqueado para o peer ${peerId}, aguardando interação:`, err);
+      });
     }
 
-    audioEl.play().catch((err) => {
-      console.warn(`Autoplay bloqueado para o peer ${peerId}, aguardando interação:`, err);
-    });
+    if (this.onRemoteStreamChange) {
+      this.onRemoteStreamChange(peerId, stream);
+    }
   }
 
   detachRemoteStream(peerId: string) {
@@ -206,14 +345,13 @@ export class WebRTCVoiceManager {
     }
     this.remoteGainNodes.delete(peerId);
     this.remoteAnalysers.delete(peerId);
+    this.remoteStreams.delete(peerId);
   }
 
   setPeerVolume(peerId: string, volume: number) {
-    // volume varia de 0 (0%) a 2 (200%)
     this.peerVolumes.set(peerId, volume);
     const audioEl = this.remoteAudioElements.get(peerId);
     if (audioEl) {
-      // Elementos de áudio suportam volume de 0 a 1
       audioEl.volume = Math.min(1.0, Math.max(0, volume));
     }
     const gainNode = this.remoteGainNodes.get(peerId);
@@ -254,8 +392,8 @@ export class WebRTCVoiceManager {
   }
 
   private applyMuteState() {
-    if (this.localStream) {
-      const audioTracks = this.localStream.getAudioTracks();
+    if (this.localAudioStream) {
+      const audioTracks = this.localAudioStream.getAudioTracks();
       audioTracks.forEach((track) => {
         track.enabled = !this.isMuted;
       });
@@ -269,7 +407,6 @@ export class WebRTCVoiceManager {
   setInputMode(mode: 'vad' | 'ptt') {
     this.inputMode = mode;
     if (mode === 'ptt') {
-      // Em PTT o microfone fica fechado até a tecla ser pressionada
       this.setMuted(true);
     }
   }
@@ -303,9 +440,17 @@ export class WebRTCVoiceManager {
   createPeerConnection(peerId: string, onIceCandidate?: (candidate: RTCIceCandidate) => void): RTCPeerConnection {
     const pc = new RTCPeerConnection({ iceServers: this.iceServers });
 
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, this.localStream!);
+    // Adicionar faixa de áudio local
+    if (this.localAudioStream) {
+      this.localAudioStream.getTracks().forEach((track) => {
+        pc.addTrack(track, this.localAudioStream!);
+      });
+    }
+
+    // Adicionar faixa de vídeo local se estiver ativo
+    if (this.localVideoStream && this.isVideoEnabled) {
+      this.localVideoStream.getTracks().forEach((track) => {
+        pc.addTrack(track, this.localVideoStream!);
       });
     }
 
@@ -334,11 +479,18 @@ export class WebRTCVoiceManager {
     this.remoteAudioElements.clear();
     this.remoteGainNodes.clear();
     this.remoteAnalysers.clear();
+    this.remoteStreams.clear();
 
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => track.stop());
-      this.localStream = null;
+    if (this.localAudioStream) {
+      this.localAudioStream.getTracks().forEach((track) => track.stop());
+      this.localAudioStream = null;
     }
+
+    if (this.localVideoStream) {
+      this.localVideoStream.getTracks().forEach((track) => track.stop());
+      this.localVideoStream = null;
+    }
+    this.isVideoEnabled = false;
 
     if (this.audioContext) {
       this.audioContext.close().catch(() => {});

@@ -149,7 +149,83 @@ export function useCharacterSync({ userId, campaignId, onRemoteSheetChange }: Us
     [userId, campaignId]
   );
 
-  // 3. Realtime Subscription (Escuta mudanças em tempo real feitas pelo Mestre ou Jogador)
+  // 3. Listeners de eventos em tempo real (CustomEvents e Storage)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleSheetsStorageUpdate = () => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed: CharacterSheet[] = JSON.parse(saved);
+          if (parsed && parsed.length > 0) {
+            setCharacterSheets(parsed);
+          }
+        }
+      } catch (e) {}
+    };
+
+    const handleLootOrSheetEvent = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { characterName, userId: targetUserId, item, currency } = customEvent.detail || {};
+
+      setCharacterSheets((prev) => {
+        const targetLower = (characterName || '').toLowerCase().trim();
+        let changed = false;
+        const next = prev.map((s) => {
+          const isMatch =
+            (characterName && s.characterName.toLowerCase().trim() === targetLower) ||
+            (targetUserId && s.userId === targetUserId);
+
+          if (isMatch) {
+            changed = true;
+            const updated = { ...s };
+            if (currency) {
+              const cur = updated.currency || { po: 0, pp: 0, pc: 0, pe: 0, pl: 0 };
+              updated.currency = {
+                po: (cur.po || 0) + (currency.po || 0),
+                pp: (cur.pp || 0) + (currency.pp || 0),
+                pc: (cur.pc || 0) + (currency.pc || 0),
+                pe: (cur.pe || 0) + (currency.pe || 0),
+                pl: (cur.pl || 0) + (currency.pl || 0),
+              };
+            }
+            if (item) {
+              const currentEq = updated.equipment || [];
+              const safeId = item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+              updated.equipment = [...currentEq, { ...item, id: safeId }];
+            }
+            updated.updatedAt = new Date().toISOString();
+            if (onRemoteSheetChange) {
+              onRemoteSheetChange(updated);
+            }
+            return updated;
+          }
+          return s;
+        });
+
+        if (changed) {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+          } catch (err) {}
+          return next;
+        }
+        return prev;
+      });
+    };
+
+    window.addEventListener('storage', handleSheetsStorageUpdate);
+    window.addEventListener('masters_codex_sheets_updated', handleLootOrSheetEvent);
+    window.addEventListener('masters_codex_loot_received', handleLootOrSheetEvent);
+
+    return () => {
+      window.removeEventListener('storage', handleSheetsStorageUpdate);
+      window.removeEventListener('masters_codex_sheets_updated', handleLootOrSheetEvent);
+      window.removeEventListener('masters_codex_loot_received', handleLootOrSheetEvent);
+    };
+  }, [onRemoteSheetChange]);
+
+  // 4. Realtime Subscription (Escuta mudanças no Supabase feitas pelo Mestre ou Jogador)
   useEffect(() => {
     if (!isSupabaseConfigured() || !campaignId) return;
 
@@ -162,23 +238,37 @@ export function useCharacterSync({ userId, campaignId, onRemoteSheetChange }: Us
           event: '*',
           schema: 'public',
           table: 'character_sheets',
-          filter: `campaign_id=eq.${campaignId}`,
         },
         (payload) => {
           if (payload.new && (payload.new as Record<string, unknown>).data) {
-            const remoteData = (payload.new as Record<string, unknown>).data as CharacterSheet;
+            const row = payload.new as any;
+            const remoteData = row.data as CharacterSheet;
             if (remoteData) {
-              setCharacterSheets((prev) => {
-                const idx = prev.findIndex((s) => s.id === remoteData.id);
-                if (idx >= 0) {
-                  const updatedList = [...prev];
-                  updatedList[idx] = remoteData;
-                  return updatedList;
+              const isRelevant =
+                !campaignId ||
+                row.campaign_id === campaignId ||
+                remoteData.campaignId === campaignId ||
+                (userId && (row.user_id === userId || remoteData.userId === userId));
+
+              if (isRelevant) {
+                setCharacterSheets((prev) => {
+                  const idx = prev.findIndex(
+                    (s) =>
+                      s.id === remoteData.id ||
+                      (s.characterName &&
+                        remoteData.characterName &&
+                        s.characterName.toLowerCase() === remoteData.characterName.toLowerCase())
+                  );
+                  if (idx >= 0) {
+                    const updatedList = [...prev];
+                    updatedList[idx] = { ...prev[idx], ...remoteData };
+                    return updatedList;
+                  }
+                  return [remoteData, ...prev];
+                });
+                if (onRemoteSheetChange) {
+                  onRemoteSheetChange(remoteData);
                 }
-                return [remoteData, ...prev];
-              });
-              if (onRemoteSheetChange) {
-                onRemoteSheetChange(remoteData);
               }
             }
           }

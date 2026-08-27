@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut, Gift, Mic, MicOff, PhoneCall, Radio, Headphones } from 'lucide-react';
+import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut, Gift, Mic, MicOff, Video, VideoOff, PhoneCall, Radio, Headphones } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -39,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
   const { activeWorld } = useWorld();
   const { playDiceSound } = useAudio();
   const { setIsDmLootModalOpen, setIsPartyLootModalOpen, activeLootSession } = usePartyLoot();
-  const { isInCall, isConnecting, isMuted, isSpeaking, joinCall, toggleMute, setIsWidgetOpen, participants } = useVoiceCall();
+  const { isInCall, isConnecting, isMuted, isSpeaking, isVideoEnabled, toggleVideo, joinCall, toggleMute, setIsWidgetOpen, participants, activeCallPeersCount } = useVoiceCall();
   const [diceResult, setDiceResult] = useState<number | null>(null);
   const [lastDiceType, setLastDiceType] = useState<string>('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -186,13 +186,13 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </button>
 
-        {/* Chamada de Voz (Voice Call) Button */}
+        {/* Chamada de Voz e Vídeo (Voice & Video Call) Button */}
         {isInCall ? (
           <div className="flex items-center gap-1 bg-[#121824] border border-emerald-500/40 rounded-xl p-1 shadow-sm">
             <button
               onClick={() => setIsWidgetOpen((prev: boolean) => !prev)}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-300 hover:bg-emerald-500/10 transition-all cursor-pointer"
-              title="Abrir Painel da Chamada de Voz"
+              title="Abrir Painel da Chamada de Voz e Vídeo"
             >
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -205,7 +205,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
             <button
               onClick={toggleMute}
-              className={`p-1.5 rounded-lg text-xs transition-all ${
+              className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
                 isMuted
                   ? 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30'
                   : isSpeaking
@@ -216,16 +216,33 @@ export const Header: React.FC<HeaderProps> = ({
             >
               {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
             </button>
+            <button
+              onClick={() => toggleVideo()}
+              className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                isVideoEnabled
+                  ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
+                  : 'text-slate-400 hover:text-white hover:bg-[#1f2738]'
+              }`}
+              title={isVideoEnabled ? 'Desligar Câmera / Webcam' : 'Ligar Câmera / Webcam'}
+            >
+              {isVideoEnabled ? <Video className="w-3.5 h-3.5 text-emerald-400" /> : <VideoOff className="w-3.5 h-3.5" />}
+            </button>
           </div>
         ) : (
           <button
             onClick={() => joinCall()}
             disabled={isConnecting}
             className="flex items-center gap-1.5 bg-[#161c28] hover:bg-[#1f2738] text-slate-300 hover:text-emerald-400 border border-[#2a3449] hover:border-emerald-500/50 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
-            title="Conectar à Chamada de Voz da Mesa"
+            title={activeCallPeersCount > 0 ? `Entrar na Chamada Ativa (${activeCallPeersCount} participantes)` : "Iniciar Chamada de Voz e Vídeo da Mesa"}
           >
             <PhoneCall className={`w-3.5 h-3.5 text-emerald-400 ${isConnecting ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">{isConnecting ? 'Conectando...' : 'Conectar à Voz'}</span>
+            <span className="hidden sm:inline">
+              {isConnecting
+                ? 'Conectando...'
+                : activeCallPeersCount > 0
+                ? `Entrar na Chamada (${activeCallPeersCount})`
+                : 'Iniciar Chamada'}
+            </span>
           </button>
         )}
 

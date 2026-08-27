@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
+import { createEmptyCharacterSheet } from '@/lib/dnd5e-data';
 import {
   PartyLootSession,
   PartyLootItem,
@@ -257,5 +258,291 @@ export const partyLootService = {
     };
 
     return { share, remainder };
+  },
+
+  /**
+   * Concede moedas ou itens diretamente à ficha do personagem, persistindo
+   * no Supabase e no LocalStorage (fallback/offline) e registrando histórico de transação.
+   */
+  async grantLootToCharacter(params: {
+    campaignId?: string;
+    characterName?: string;
+    userId?: string;
+    currency?: Partial<CharacterCurrency> | CharacterCurrency;
+    item?: any;
+    sourceName?: string;
+  }): Promise<void> {
+    const { campaignId, characterName, userId, currency, item, sourceName = 'Recompensa de Loot (Mestre)' } = params;
+    if (!characterName && !userId) return;
+
+    const normalize = (s?: string) =>
+      (s || '')
+        .toLowerCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+    const targetNameNorm = normalize(characterName);
+
+    // 1. Atualizar LocalStorage imediatamente
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('masters_codex_character_sheets_v1');
+        if (saved) {
+          const sheets: any[] = JSON.parse(saved);
+          let matched = false;
+          const updatedSheets = sheets.map((sheet) => {
+            const sheetNameNorm = normalize(sheet.characterName || sheet.data?.characterName);
+            const isMatch =
+              (userId && sheet.userId === userId) ||
+              (targetNameNorm && sheetNameNorm === targetNameNorm) ||
+              (targetNameNorm && sheetNameNorm && (sheetNameNorm.includes(targetNameNorm) || targetNameNorm.includes(sheetNameNorm)));
+
+            if (isMatch) {
+              matched = true;
+              const updated = { ...sheet };
+
+              // Atualiza Moedas
+              if (currency) {
+                const cur = updated.currency || { po: 0, pp: 0, pc: 0, pe: 0, pl: 0 };
+                updated.currency = {
+                  po: (cur.po || 0) + (currency.po || 0),
+                  pp: (cur.pp || 0) + (currency.pp || 0),
+                  pc: (cur.pc || 0) + (currency.pc || 0),
+                  pe: (cur.pe || 0) + (currency.pe || 0),
+                  pl: (cur.pl || 0) + (currency.pl || 0),
+                };
+
+                const newEntries: any[] = [];
+                const nowStr = new Date().toLocaleString('pt-BR');
+                (['po', 'pp', 'pc', 'pe', 'pl'] as const).forEach((type) => {
+                  const amount = currency[type];
+                  if (amount && amount > 0) {
+                    newEntries.push({
+                      id: `${Date.now()}-${type}-${Math.random().toString(36).substr(2, 4)}`,
+                      type: 'loot',
+                      amount,
+                      coinType: type,
+                      reason: sourceName,
+                      date: nowStr,
+                    });
+                  }
+                });
+                if (newEntries.length > 0) {
+                  updated.transactionHistory = [...newEntries, ...(updated.transactionHistory || [])];
+                }
+              }
+
+              // Atualiza Itens
+              if (item) {
+                const currentEq = updated.equipment || [];
+                const safeId = item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+                const itemWithUniqueId = { ...item, id: safeId };
+                updated.equipment = [...currentEq, itemWithUniqueId];
+              }
+
+              updated.updatedAt = new Date().toISOString();
+              return updated;
+            }
+            return sheet;
+          });
+
+          if (matched) {
+            localStorage.setItem('masters_codex_character_sheets_v1', JSON.stringify(updatedSheets));
+          } else {
+            // Se ainda não existia ficha salva localmente com esse nome, cria uma ficha vazia já com o loot recebido
+            const newSheet = createEmptyCharacterSheet(userId || 'player-1', campaignId);
+            newSheet.characterName = characterName || 'Aventureiro';
+            if (currency) {
+              newSheet.currency = {
+                po: currency.po || 0,
+                pp: currency.pp || 0,
+                pc: currency.pc || 0,
+                pe: currency.pe || 0,
+                pl: currency.pl || 0,
+              };
+              const newEntries: any[] = [];
+              const nowStr = new Date().toLocaleString('pt-BR');
+              (['po', 'pp', 'pc', 'pe', 'pl'] as const).forEach((type) => {
+                const amount = currency[type];
+                if (amount && amount > 0) {
+                  newEntries.push({
+                    id: `${Date.now()}-${type}-${Math.random().toString(36).substr(2, 4)}`,
+                    type: 'loot',
+                    amount,
+                    coinType: type,
+                    reason: sourceName,
+                    date: nowStr,
+                  });
+                }
+              });
+              newSheet.transactionHistory = newEntries;
+            }
+            if (item) {
+              const safeId = item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+              newSheet.equipment = [{ ...item, id: safeId }];
+            }
+            newSheet.updatedAt = new Date().toISOString();
+            sheets.push(newSheet);
+            localStorage.setItem('masters_codex_character_sheets_v1', JSON.stringify(sheets));
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao atualizar localStorage para ficha do jogador:', e);
+      }
+    }
+
+    // 2. Atualizar no Supabase
+    if (isSupabaseConfigured()) {
+      try {
+        let query = supabase.from('character_sheets').select('*');
+        if (campaignId && isValidUuid(campaignId)) {
+          if (userId && isValidUuid(userId)) {
+            query = query.or(`campaign_id.eq.${campaignId},user_id.eq.${userId}`);
+          } else {
+            query = query.or(`campaign_id.eq.${campaignId},campaign_id.is.null`);
+          }
+        } else if (userId && isValidUuid(userId)) {
+          query = query.eq('user_id', userId);
+        }
+
+        const { data, error } = await query;
+        let dbMatched = false;
+        if (!error && data && data.length > 0) {
+          for (const row of data) {
+            const rowCharName = normalize(row.character_name || row.data?.characterName);
+            const isMatch =
+              (userId && row.user_id === userId) ||
+              (targetNameNorm && rowCharName === targetNameNorm) ||
+              (targetNameNorm && rowCharName && (rowCharName.includes(targetNameNorm) || targetNameNorm.includes(rowCharName)));
+
+            if (isMatch) {
+              dbMatched = true;
+              const currentData = row.data || {};
+              const updatedData = { ...currentData };
+
+              // Atualiza Moedas
+              if (currency) {
+                const cur = updatedData.currency || { po: 0, pp: 0, pc: 0, pe: 0, pl: 0 };
+                updatedData.currency = {
+                  po: (cur.po || 0) + (currency.po || 0),
+                  pp: (cur.pp || 0) + (currency.pp || 0),
+                  pc: (cur.pc || 0) + (currency.pc || 0),
+                  pe: (cur.pe || 0) + (currency.pe || 0),
+                  pl: (cur.pl || 0) + (currency.pl || 0),
+                };
+
+                const newEntries: any[] = [];
+                const nowStr = new Date().toLocaleString('pt-BR');
+                (['po', 'pp', 'pc', 'pe', 'pl'] as const).forEach((type) => {
+                  const amount = currency[type];
+                  if (amount && amount > 0) {
+                    newEntries.push({
+                      id: `${Date.now()}-${type}-${Math.random().toString(36).substr(2, 4)}`,
+                      type: 'loot',
+                      amount,
+                      coinType: type,
+                      reason: sourceName,
+                      date: nowStr,
+                    });
+                  }
+                });
+                if (newEntries.length > 0) {
+                  updatedData.transactionHistory = [...newEntries, ...(updatedData.transactionHistory || [])];
+                }
+              }
+
+              // Atualiza Itens
+              if (item) {
+                const currentEq = updatedData.equipment || [];
+                const safeId = item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+                const itemWithUniqueId = { ...item, id: safeId };
+                updatedData.equipment = [...currentEq, itemWithUniqueId];
+              }
+
+              const updatedAt = new Date().toISOString();
+              updatedData.updatedAt = updatedAt;
+
+              await supabase
+                .from('character_sheets')
+                .update({
+                  data: updatedData,
+                  updated_at: updatedAt,
+                })
+                .eq('id', row.id);
+            }
+          }
+        }
+
+        // Se não encontrou nenhuma ficha no banco de dados para atualizar, cria uma nova
+        if (!dbMatched && characterName) {
+          const newSheetData = createEmptyCharacterSheet(userId || 'player-1', campaignId);
+          newSheetData.characterName = characterName;
+          if (currency) {
+            newSheetData.currency = {
+              po: currency.po || 0,
+              pp: currency.pp || 0,
+              pc: currency.pc || 0,
+              pe: currency.pe || 0,
+              pl: currency.pl || 0,
+            };
+            const newEntries: any[] = [];
+            const nowStr = new Date().toLocaleString('pt-BR');
+            (['po', 'pp', 'pc', 'pe', 'pl'] as const).forEach((type) => {
+              const amount = currency[type];
+              if (amount && amount > 0) {
+                newEntries.push({
+                  id: `${Date.now()}-${type}-${Math.random().toString(36).substr(2, 4)}`,
+                  type: 'loot',
+                  amount,
+                  coinType: type,
+                  reason: sourceName,
+                  date: nowStr,
+                });
+              }
+            });
+            newSheetData.transactionHistory = newEntries;
+          }
+          if (item) {
+            const safeId = item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+            newSheetData.equipment = [{ ...item, id: safeId }];
+          }
+          newSheetData.updatedAt = new Date().toISOString();
+
+          await supabase.from('character_sheets').insert({
+            campaign_id: campaignId && isValidUuid(campaignId) ? campaignId : null,
+            user_id: userId && isValidUuid(userId) ? userId : null,
+            character_name: characterName,
+            data: newSheetData,
+            updated_at: new Date().toISOString(),
+          });
+        }
+      } catch (err) {
+        console.error('Erro ao salvar atualização de ficha diretamente no Supabase:', err);
+      }
+    }
+
+    // 3. Notificar todos os componentes do app em tempo real
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('masters_codex_loot_received', {
+          detail: { characterName, userId, currency, item, sourceName },
+        })
+      );
+      window.dispatchEvent(
+        new CustomEvent('masters_codex_sheets_updated', {
+          detail: { characterName, userId, currency, item, sourceName },
+        })
+      );
+      try {
+        const saved = localStorage.getItem('masters_codex_character_sheets_v1');
+        window.dispatchEvent(
+          new StorageEvent('storage', {
+            key: 'masters_codex_character_sheets_v1',
+            newValue: saved,
+          })
+        );
+      } catch (e) {}
+    }
   },
 };

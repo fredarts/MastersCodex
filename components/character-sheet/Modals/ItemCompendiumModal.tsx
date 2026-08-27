@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { CharacterSheet, CharacterEquipmentItem, ItemType } from '@/lib/types';
 import { SRD_EQUIPMENT, SRDItem } from '@/lib/srd-compendium';
+import { INITIAL_ITEMS } from '@/lib/srd-data';
 import {
   Search,
   Package,
@@ -14,7 +15,9 @@ import {
   Weight,
   Trash2,
   ShoppingCart,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Sparkles,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { recalculateSheetDerivedStats } from '@/lib/dnd5e-calculator';
@@ -27,10 +30,31 @@ interface ItemCompendiumModalProps {
   onAddItem?: (item: CharacterEquipmentItem) => void;
 }
 
+export interface UnifiedCompendiumItem {
+  id?: string;
+  name: string;
+  category: string;
+  weight: number;
+  cost: string;
+  description: string;
+  rarity?: string;
+  isMagic?: boolean;
+  attunement?: string | boolean;
+}
+
 interface CartItem {
-  srdItem: SRDItem;
+  srdItem: UnifiedCompendiumItem;
   quantity: number;
 }
+
+const RARITY_BADGES: Record<string, string> = {
+  Comum: 'border-slate-700 bg-slate-800 text-slate-300',
+  Incomum: 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300',
+  Raro: 'border-sky-500/40 bg-sky-950/40 text-sky-300',
+  'Muito Raro': 'border-purple-500/40 bg-purple-950/40 text-purple-300',
+  Lendário: 'border-amber-500/50 bg-amber-950/50 text-amber-300',
+  Artefato: 'border-rose-500/50 bg-rose-950/50 text-rose-300',
+};
 
 export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
   sheet,
@@ -58,9 +82,52 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
     };
   }, [sheet?.currency, isBrowseOnly]);
 
+  // Unifica equipamentos normais + itens mágicos do SRD sem duplicatas
+  const allAvailableItems = useMemo<UnifiedCompendiumItem[]>(() => {
+    const seenNames = new Set<string>();
+    const unified: UnifiedCompendiumItem[] = [];
+
+    // 1. Itens mundanos do SRD
+    SRD_EQUIPMENT.forEach((eq, index) => {
+      const lower = eq.name.toLowerCase().trim();
+      seenNames.add(lower);
+      unified.push({
+        id: `srd_eq_${index}_${eq.name}`,
+        name: eq.name,
+        category: eq.category,
+        weight: eq.weight,
+        cost: eq.cost,
+        description: eq.description,
+        rarity: 'Comum',
+        isMagic: false,
+      });
+    });
+
+    // 2. Itens mágicos do SRD (adiciona apenas se não duplicado ou atualiza atributos se for mágico)
+    (INITIAL_ITEMS || []).forEach((item, index) => {
+      const lower = item.name.toLowerCase().trim();
+      if (!seenNames.has(lower)) {
+        seenNames.add(lower);
+        unified.push({
+          id: item.id || `magic_item_${index}_${item.name}`,
+          name: item.name,
+          category: 'Itens Mágicos',
+          weight: item.weight || 0.5,
+          cost: item.value || (item.rarity === 'Incomum' ? '250 po' : item.rarity === 'Raro' ? '2.500 po' : item.rarity === 'Muito Raro' ? '25.000 po' : item.rarity === 'Lendário' ? '100.000 po' : '500 po'),
+          description: item.description,
+          rarity: item.rarity || 'Raro',
+          isMagic: true,
+          attunement: item.attunement,
+        });
+      }
+    });
+
+    return unified;
+  }, []);
+
   if (!isOpen) return null;
 
-  const categories = ['all', 'Arma', 'Armadura', 'Equipamento', 'Poção', 'Ferramenta', 'Tesouro'];
+  const categories = ['all', 'Arma', 'Armadura', 'Equipamento', 'Poção', 'Ferramenta', 'Tesouro', 'Itens Mágicos'];
 
   // --- PARSE E FORMATAÇÃO DE CUSTO ---
   const parseCostInCopper = (costStr: string): number => {
@@ -103,7 +170,7 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
   };
 
   // --- FILTRAGEM ---
-  const filteredBuyItems = SRD_EQUIPMENT.filter((item) => {
+  const filteredBuyItems = allAvailableItems.filter((item) => {
     const matchesSearch =
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -120,16 +187,17 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
   });
 
   // --- OPERAÇÕES DO CARRINHO E IMPORTAÇÃO ---
-  const handleAddToCart = (srdItem: SRDItem) => {
+  const handleAddToCart = (srdItem: UnifiedCompendiumItem) => {
+    const nameLower = srdItem.name.toLowerCase();
     const itemType: ItemType =
-      srdItem.category === 'Poção' ? 'potion' :
-      srdItem.category === 'Arma' ? 'weapon' :
-      srdItem.category === 'Armadura' ? 'armor' : 'equipment';
+      srdItem.category === 'Poção' || (srdItem.isMagic && nameLower.includes('poção')) ? 'potion' :
+      srdItem.category === 'Arma' || (srdItem.isMagic && (nameLower.includes('espada') || nameLower.includes('adaga') || nameLower.includes('arco') || nameLower.includes('machado') || nameLower.includes('lança'))) ? 'weapon' :
+      srdItem.category === 'Armadura' || (srdItem.isMagic && (nameLower.includes('armadura') || nameLower.includes('escudo') || nameLower.includes('cota') || nameLower.includes('elmo'))) ? 'armor' :
+      (srdItem.isMagic && (nameLower.includes('pergaminho') || nameLower.includes('livro') || nameLower.includes('tomo') || nameLower.includes('carta'))) ? 'scroll' : 'equipment';
 
     let potionProps;
     if (itemType === 'potion') {
       let healingDice = '2d4+2';
-      const nameLower = srdItem.name.toLowerCase();
       if (nameLower.includes('maior')) {
         healingDice = '4d4+4';
       } else if (nameLower.includes('superior')) {
@@ -148,8 +216,9 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
       name: srdItem.name,
       quantity: 1,
       weight: `${srdItem.weight} kg`,
-      notes: `${srdItem.description} (Custo: ${srdItem.cost})`,
+      notes: `${srdItem.description} ${srdItem.cost ? `(Custo: ${srdItem.cost})` : ''} ${srdItem.attunement ? `[Sintonização: ${typeof srdItem.attunement === 'string' ? srdItem.attunement : 'Requer Sintonização'}]` : ''}`.trim(),
       itemType,
+      rarity: srdItem.rarity as any || (srdItem.isMagic ? 'Raro' : 'Comum'),
       potionProps,
     };
 
@@ -518,22 +587,32 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
             <div className="flex-1 p-4 overflow-y-auto space-y-2.5 custom-scrollbar">
               {activeTab === 'buy' ? (
                 filteredBuyItems.length > 0 ? (
-                  filteredBuyItems.map((item) => {
+                  filteredBuyItems.map((item, idx) => {
                     const isAdded = isBrowseOnly && addedItemNames.has(item.name);
                     return (
                       <div
-                        key={item.name}
+                        key={item.id || `${item.name}_${idx}`}
                         className="bg-[#161c28]/60 border border-[#2a3449]/60 hover:border-amber-500/40 rounded-xl p-3 flex items-center justify-between gap-3 transition-all"
                       >
                         <div className="space-y-1 flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="text-xs font-bold text-white">{item.name}</span>
-                            <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 font-bold shrink-0">
+                            {item.rarity && item.rarity !== 'Comum' && (
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded border font-semibold ${RARITY_BADGES[item.rarity] || 'border-amber-500/40 text-amber-300'}`}>
+                                {item.rarity}
+                              </span>
+                            )}
+                            {item.attunement && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-950/40 text-amber-300 flex items-center gap-0.5">
+                                <Zap className="w-2.5 h-2.5" /> Sintonização
+                              </span>
+                            )}
+                            <span className="text-[10px] font-mono text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 font-bold shrink-0">
                               {item.weight} kg
                             </span>
                             <span className="text-[10px] text-amber-300 font-mono font-bold">({item.cost})</span>
                           </div>
-                          <p className="text-[11px] text-slate-400 leading-relaxed font-sans">{item.description}</p>
+                          <p className="text-[11px] text-slate-400 leading-relaxed font-sans line-clamp-2">{item.description}</p>
                         </div>
 
                         <button

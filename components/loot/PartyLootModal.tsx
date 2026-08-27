@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { usePartyLoot } from '@/context/PartyLootContext';
 import { useCampaign } from '@/context/CampaignContext';
+import { useAuth } from '@/context/AuthContext';
 import { PartyLootItem, ReadableContent } from '@/lib/types';
 import { isItemReadable, getOrCreateReadableContent } from '@/lib/utils/readableLoreUtils';
 import { BG3ReadableModal } from '@/components/loot/BG3ReadableModal';
@@ -22,6 +23,7 @@ import {
   Package,
   Clock,
   History,
+  Plus,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -33,10 +35,13 @@ export const PartyLootModal: React.FC<{ currentCharacterName?: string; currentUs
   const [itemToDiscard, setItemToDiscard] = useState<PartyLootItem | null>(null);
   const [activeTab, setActiveTab] = useState<'available' | 'history'>('available');
 
+  const { roleMode } = useAuth();
+
   const {
     activeLootSession,
     isPartyLootModalOpen,
     setIsPartyLootModalOpen,
+    setIsDmLootModalOpen,
     claimItem,
     distributeItem,
     deleteItemFromPartyLoot,
@@ -87,6 +92,68 @@ export const PartyLootModal: React.FC<{ currentCharacterName?: string; currentUs
 
   const isChestEmpty = !activeLootSession || (totalItemsCount === 0 && totalCurrencySum === 0);
 
+  const splitTargets = React.useMemo(() => {
+    const list: { characterName: string; userId?: string }[] = [];
+    const seenNames = new Set<string>();
+
+    const normalize = (s?: string) =>
+      (s || '')
+        .toLowerCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+    const realPlayers = campaignMembers.filter((m) => m.role === 'player');
+
+    if (realPlayers.length > 0) {
+      // 1. Prioridade máxima: Jogadores reais conectados no elenco da campanha
+      realPlayers.forEach((m) => {
+        const charName =
+          m.characterName && m.characterName !== 'Novo Aventureiro' && m.characterName !== 'undefined'
+            ? m.characterName
+            : m.displayName && m.displayName !== 'undefined'
+            ? m.displayName
+            : 'Jogador';
+
+        const norm = normalize(charName);
+        if (norm && !seenNames.has(norm)) {
+          seenNames.add(norm);
+          list.push({ characterName: charName, userId: m.userId });
+        }
+      });
+    } else if (activeCampaign?.partyMembers && activeCampaign.partyMembers.length > 0) {
+      // 2. Fallback: Membros da Party registrados no roster estático
+      activeCampaign.partyMembers.forEach((pm) => {
+        const charName = pm.name;
+        const norm = normalize(charName);
+        if (norm && !seenNames.has(norm)) {
+          seenNames.add(norm);
+          list.push({ characterName: charName, userId: pm.userId });
+        }
+      });
+    } else if (typeof window !== 'undefined') {
+      // 3. Fallback: Fichas locais salvas no navegador para esta campanha
+      try {
+        const saved = localStorage.getItem('masters_codex_character_sheets_v1');
+        if (saved) {
+          const sheets: any[] = JSON.parse(saved);
+          sheets.forEach((s) => {
+            if (activeCampaign?.id && s.campaignId === activeCampaign.id && s.characterName && s.characterName !== 'Novo Aventureiro') {
+              const norm = normalize(s.characterName);
+              if (norm && !seenNames.has(norm)) {
+                seenNames.add(norm);
+                list.push({ characterName: s.characterName, userId: s.userId });
+              }
+            }
+          });
+        }
+      } catch (e) {}
+    }
+
+    if (list.length > 0) return list;
+    return [{ characterName: activeCharName, userId: currentUserId }];
+  }, [campaignMembers, activeCampaign, activeCharName, currentUserId]);
+
   const handleClaim = async (itemId: string) => {
     await claimItem(itemId, activeCharName, currentUserId);
   };
@@ -99,10 +166,7 @@ export const PartyLootModal: React.FC<{ currentCharacterName?: string; currentUs
   };
 
   const handleSplitMoney = async () => {
-    const names = partyMembers.length > 0
-      ? partyMembers.map((pm) => pm.name)
-      : playerMembers.map((m) => m.characterName || m.displayName || 'Jogador');
-    await splitCurrencyEqually(names.length > 0 ? names : [activeCharName]);
+    await splitCurrencyEqually(splitTargets);
   };
 
   const rarityColors: Record<string, string> = {
@@ -125,19 +189,20 @@ export const PartyLootModal: React.FC<{ currentCharacterName?: string; currentUs
             className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-6 text-slate-100 flex flex-col gap-5"
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400">
+            <div className="flex items-start justify-between border-b border-slate-800 pb-4 gap-3">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 shrink-0 mt-0.5">
                   <Gift className="w-6 h-6 animate-pulse" />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-bold tracking-wide text-amber-200">
-                      {activeLootSession?.title || 'Baú da Party'}
-                    </h2>
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <h2 className="text-lg sm:text-xl font-bold tracking-wide text-amber-200 leading-tight">
+                    {activeLootSession?.title || 'Baú da Party'}
+                  </h2>
+                  
+                  <div className="flex flex-wrap items-center gap-2">
                     {activeLootSession && (
                       <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold flex items-center gap-1 ${
+                        className={`text-[10px] px-2.5 py-0.5 rounded-full border font-semibold inline-flex items-center gap-1 whitespace-nowrap shrink-0 ${
                           activeLootSession.distributionMode === 'leader_assigned'
                             ? 'border-amber-500/50 text-amber-300 bg-amber-950/50'
                             : 'border-cyan-500/50 text-cyan-300 bg-cyan-950/50'
@@ -154,19 +219,36 @@ export const PartyLootModal: React.FC<{ currentCharacterName?: string; currentUs
                         )}
                       </span>
                     )}
+                    <p className="text-xs text-slate-400 truncate">
+                      {activeLootSession?.description || 'Cofre e tesouros compartilhados do grupo de aventureiros'}
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {activeLootSession?.description || 'Cofre e tesouros compartilhados do grupo de aventureiros'}
-                  </p>
                 </div>
               </div>
 
-              <button
-                onClick={() => setIsPartyLootModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2 shrink-0 ml-2">
+                {roleMode === 'dm' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPartyLootModalOpen(false);
+                      setIsDmLootModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold rounded-xl text-xs shadow-md shadow-amber-500/20 transition cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
+                    title="Criar e enviar novos itens, livros, cartas ou moedas para o Baú da Party"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span className="whitespace-nowrap">Enviar Loot</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setIsPartyLootModalOpen(false)}
+                  className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition cursor-pointer shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Abas: Itens Disponíveis vs Histórico de Resgates */}
@@ -252,6 +334,21 @@ export const PartyLootModal: React.FC<{ currentCharacterName?: string; currentUs
                     <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
                       Nenhum item ou moeda restante para resgate no momento. Novos saques enviados pelo mestre ou encontrados em baús aparecerão aqui.
                     </p>
+                    {roleMode === 'dm' && (
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsPartyLootModalOpen(false);
+                            setIsDmLootModalOpen(true);
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-amber-500/25 transition cursor-pointer active:scale-95"
+                        >
+                          <Gift className="w-4 h-4" />
+                          <span>Enviar Itens, Livros, Cartas ou Moedas para a Party</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -268,7 +365,7 @@ export const PartyLootModal: React.FC<{ currentCharacterName?: string; currentUs
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold transition cursor-pointer"
                           >
                             <Sparkles className="w-3.5 h-3.5" />
-                            Dividir Dinheiro Igualmente ({partyMembers.length || playerMembers.length || 1} Membros)
+                            Dividir Dinheiro Igualmente ({splitTargets.length} Membros)
                           </button>
                         </div>
 
@@ -296,9 +393,23 @@ export const PartyLootModal: React.FC<{ currentCharacterName?: string; currentUs
                     <div className="space-y-3">
                       <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
                         <span>Itens Disponíveis para Resgate</span>
-                        <span className="text-slate-400 text-[11px]">
-                          {availableItems.length} {availableItems.length === 1 ? 'item restante' : 'itens restantes'}
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-slate-400 text-[11px]">
+                            {availableItems.length} {availableItems.length === 1 ? 'item restante' : 'itens restantes'}
+                          </span>
+                          {roleMode === 'dm' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsPartyLootModalOpen(false);
+                                setIsDmLootModalOpen(true);
+                              }}
+                              className="flex items-center gap-1 text-amber-400 hover:text-amber-300 text-[11px] font-bold underline cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3" /> Adicionar mais itens
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">

@@ -43,7 +43,7 @@ interface PartyLootContextType {
   claimItem: (itemId: string, characterName: string, userId?: string) => Promise<void>;
   distributeItem: (itemId: string, targetCharacterName: string, targetUserId?: string) => Promise<void>;
   deleteItemFromPartyLoot: (itemId: string) => Promise<void>;
-  splitCurrencyEqually: (characterNames: string[]) => Promise<void>;
+  splitCurrencyEqually: (targets: (string | { characterName: string; userId?: string })[]) => Promise<void>;
   closeLootSession: () => Promise<void>;
   sendDirectTransfer: (payload: Omit<DirectTransferPayload, 'id' | 'sentAt'>) => Promise<void>;
 }
@@ -63,86 +63,73 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Flag: true quando o jogador está na view de campanha (feed) do modo jogador
   const [isOnPlayerCampaignView, setIsOnPlayerCampaignView] = useState<boolean>(false);
 
-  // Abre o modal de loot quando o jogador entra na tela de campanha e há loot ativo (apenas modo jogador)
-  useEffect(() => {
-    if (roleMode !== 'dm' && isOnPlayerCampaignView && activeLootSession?.status === 'active') {
-      // Checagem defensiva: só abrir o modal se realmente houver algum recurso a ser coletado
-      const allItemsClaimed = activeLootSession.items.length === 0 || activeLootSession.items.every((i) => i.claimedBy !== null);
-      const isCurrencyZero =
-        (activeLootSession.currency.po || 0) <= 0 &&
-        (activeLootSession.currency.pl || 0) <= 0 &&
-        (activeLootSession.currency.pp || 0) <= 0 &&
-        (activeLootSession.currency.pc || 0) <= 0 &&
-        (activeLootSession.currency.pe || 0) <= 0;
-
-      if (!allItemsClaimed || !isCurrencyZero) {
-        setIsPartyLootModalOpen(true);
-      }
-    }
-  }, [roleMode, isOnPlayerCampaignView, activeLootSession]);
-
   // Escutar eventos em tempo real
   const handleRealtimeLootUpdate = useCallback(({ 
     session, 
     splitDetails 
   }: { 
     session: PartyLootSession; 
-    splitDetails?: { characterNames: string[]; share: CharacterCurrency } 
+    splitDetails?: { characterNames: string[]; userIds?: string[]; share: CharacterCurrency } 
   }) => {
-    // Apenas armazena a sessão — o modal só abre quando o jogador entrar na view de campanha.
-    // Isso evita que o modal apareça para quem está na tela de mestre ou em outra tela.
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('masters_codex_character_sheets_v1');
-        if (saved) {
-          const sheets = JSON.parse(saved);
-          const localCharNames: string[] = sheets.map((s: any) => s.characterName.toLowerCase());
+    // 1. Processar itens reivindicados/distribuídos
+    session.items.forEach((item) => {
+      if (item.claimedBy) {
+        // Verifica se já estava marcado como pego por este personagem no estado anterior
+        const prevItem = activeLootSession?.items.find((i) => i.id === item.id);
+        const wasAlreadyClaimed = prevItem && prevItem.claimedBy && 
+          prevItem.claimedBy.characterName.toLowerCase() === item.claimedBy.characterName.toLowerCase();
 
-          // 1. Processar itens reivindicados/distribuídos
-          session.items.forEach((item) => {
-            if (item.claimedBy) {
-              const isLocalChar = localCharNames.includes(item.claimedBy.characterName.toLowerCase());
-              if (isLocalChar) {
-                // Verifica se já estava marcado como pego por este personagem no estado anterior
-                const prevItem = activeLootSession?.items.find((i) => i.id === item.id);
-                const wasAlreadyClaimedByLocal = prevItem && prevItem.claimedBy && 
-                  prevItem.claimedBy.characterName.toLowerCase() === item.claimedBy.characterName.toLowerCase();
-
-                if (!wasAlreadyClaimedByLocal) {
-                  window.dispatchEvent(
-                    new CustomEvent('masters_codex_loot_received', {
-                      detail: { characterName: item.claimedBy.characterName, item },
-                    })
-                  );
-                }
-              }
-            }
+        if (!wasAlreadyClaimed) {
+          partyLootService.grantLootToCharacter({
+            campaignId,
+            characterName: item.claimedBy.characterName,
+            userId: item.claimedBy.userId,
+            item,
+            sourceName: 'Item do Baú da Party',
           });
 
-          // 2. Processar divisão de moedas (se houver splitDetails e este cliente for participante)
-          if (splitDetails) {
-            splitDetails.characterNames.forEach((charName) => {
-              if (localCharNames.includes(charName.toLowerCase())) {
-                window.dispatchEvent(
-                  new CustomEvent('masters_codex_loot_received', {
-                    detail: { characterName: charName, currency: splitDetails.share },
-                  })
-                );
-              }
-            });
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('masters_codex_loot_received', {
+                detail: { characterName: item.claimedBy.characterName, item },
+              })
+            );
           }
         }
-      } catch (e) {
-        console.error('Erro ao processar atualização de loot em tempo real:', e);
       }
+    });
+
+    // 2. Processar divisão de moedas (persiste para cada personagem da divisão)
+    if (splitDetails) {
+      splitDetails.characterNames.forEach((charName, idx) => {
+        const uId = splitDetails.userIds && splitDetails.userIds[idx];
+        partyLootService.grantLootToCharacter({
+          campaignId,
+          characterName: charName,
+          userId: uId,
+          currency: splitDetails.share,
+          sourceName: 'Divisão de Moedas do Baú da Party',
+        });
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('masters_codex_loot_received', {
+              detail: { characterName: charName, userId: uId, currency: splitDetails.share },
+            })
+          );
+        }
+      });
     }
 
     setActiveLootSession(session);
-    if (session.status !== 'active') {
+    if (session.status === 'active') {
+      // Abre o modal de loot em tempo real apenas quando o Mestre acabou de enviar/atualizar o loot
+      setIsPartyLootModalOpen(true);
+    } else {
       toast.success('🎉 Recompensas totalmente distribuídas! Baú de Loot encerrado.');
       setIsPartyLootModalOpen(false);
     }
-  }, [activeLootSession]);
+  }, [activeLootSession, campaignId]);
 
   const handleRealtimeLootClose = useCallback(({ sessionId }: { sessionId: string }) => {
     setActiveLootSession((prev) => {
@@ -156,6 +143,15 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const handleRealtimeDirectTransfer = useCallback(
     ({ transfer }: { transfer: DirectTransferPayload }) => {
+      partyLootService.grantLootToCharacter({
+        campaignId: transfer.campaignId,
+        characterName: transfer.toCharacterName,
+        userId: transfer.toUserId,
+        currency: transfer.currency,
+        item: transfer.item,
+        sourceName: `Transferência de ${transfer.fromCharacterName}`,
+      });
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('masters_codex_loot_received', {
@@ -210,11 +206,6 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     currency: CharacterCurrency;
     items: Omit<PartyLootItem, 'claimedBy'>[];
   }) => {
-    if (!campaignId) {
-      toast.error('Nenhuma campanha ativa selecionada.');
-      return;
-    }
-
     const res = await partyLootService.createLootSession({
       campaignId,
       ...params,
@@ -222,13 +213,10 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     if (res.ok) {
       setActiveLootSession(res.value);
-      setIsDmLootModalOpen(false);
-      // Não abre na tela do Mestre ao enviar loot
-      if (roleMode !== 'dm') {
-        setIsPartyLootModalOpen(true);
-      }
       broadcastPartyLootUpdate({ session: res.value });
-      toast.success('🎁 Baú da Party atualizado!');
+      setIsDmLootModalOpen(false);
+      setIsPartyLootModalOpen(true);
+      toast.success(`🎁 Baú de Loot "${res.value.title}" forjado e disponibilizado para a party!`);
     } else {
       toast.error(res.error.message);
     }
@@ -262,6 +250,16 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       broadcastPartyLootUpdate({ session: res.value });
 
       const claimedItem = activeLootSession.items.find((i) => i.id === itemId);
+      if (claimedItem) {
+        await partyLootService.grantLootToCharacter({
+          campaignId,
+          characterName,
+          userId,
+          item: claimedItem,
+          sourceName: 'Item Resgatado do Baú da Party',
+        });
+      }
+
       if (typeof window !== 'undefined' && claimedItem) {
         window.dispatchEvent(
           new CustomEvent('masters_codex_loot_received', {
@@ -306,6 +304,14 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setActiveLootSession(res.value);
       broadcastPartyLootUpdate({ session: res.value });
 
+      await partyLootService.grantLootToCharacter({
+        campaignId,
+        characterName: targetCharacterName,
+        userId: targetUserId,
+        item: targetItem,
+        sourceName: 'Item Distribuído pelo Líder/Mestre',
+      });
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('masters_codex_loot_received', {
@@ -342,10 +348,15 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
-  const splitCurrencyEqually = async (characterNames: string[]) => {
+  const splitCurrencyEqually = async (targets: (string | { characterName: string; userId?: string })[]) => {
     if (!activeLootSession) return;
 
-    const playerCount = characterNames.length;
+    const normalizedTargets: { characterName: string; userId?: string }[] = targets.map((t) => {
+      if (typeof t === 'string') return { characterName: t };
+      return t;
+    });
+
+    const playerCount = normalizedTargets.length;
     if (playerCount <= 0) {
       toast.error('Nenhum personagem ativo para dividir o dinheiro.');
       return;
@@ -361,19 +372,34 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const res = await partyLootService.updateLootSession(updatedSession);
     if (res.ok) {
       setActiveLootSession(res.value);
+      const characterNames = normalizedTargets.map((t) => t.characterName);
+      const userIds = normalizedTargets.map((t) => t.userId).filter(Boolean) as string[];
+
       broadcastPartyLootUpdate({ 
         session: res.value,
         splitDetails: {
           characterNames,
+          userIds,
           share,
         }
       });
 
+      // Persiste as moedas diretamente na ficha de cada personagem no Supabase e LocalStorage
+      for (const target of normalizedTargets) {
+        await partyLootService.grantLootToCharacter({
+          campaignId,
+          characterName: target.characterName,
+          userId: target.userId,
+          currency: share,
+          sourceName: 'Divisão de Moedas do Baú da Party',
+        });
+      }
+
       if (typeof window !== 'undefined') {
-        characterNames.forEach((charName) => {
+        normalizedTargets.forEach((target) => {
           window.dispatchEvent(
             new CustomEvent('masters_codex_loot_received', {
-              detail: { characterName: charName, currency: share },
+              detail: { characterName: target.characterName, userId: target.userId, currency: share },
             })
           );
         });
@@ -411,10 +437,19 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     const transfer: DirectTransferPayload = {
       ...payload,
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `tr_${Date.now()}`,
       campaignId,
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `tr_${Date.now()}`,
       sentAt: new Date().toISOString(),
     };
+
+    await partyLootService.grantLootToCharacter({
+      campaignId,
+      characterName: transfer.toCharacterName,
+      userId: transfer.toUserId,
+      currency: transfer.currency,
+      item: transfer.item,
+      sourceName: `Transferência Direta (${transfer.fromCharacterName})`,
+    });
 
     broadcastDirectTransfer({ transfer });
     toast.success(`Envio de item/moedas para ${transfer.toCharacterName} realizado!`);

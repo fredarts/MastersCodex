@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AdvantageMode, CharacterSheet, DiceRollEvent, PlayerRollEvent } from '@/lib/types';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { GeneralSection } from './Sections/GeneralSection';
 import { CombatSection } from './Sections/CombatSection';
 import { SkillsSection } from './Sections/SkillsSection';
@@ -93,6 +94,136 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
     }
   }, [initialSheet, isOpen]);
 
+  // Sincroniza em tempo real se o personagem receber itens ou moedas enquanto a ficha estiver aberta
+  useEffect(() => {
+    if (!isOpen || typeof window === 'undefined') return;
+
+    const handleLootReceived = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { characterName, userId: targetUserId, item, currency, sourceName } = customEvent.detail || {};
+
+      const normalize = (s?: string) =>
+        (s || '')
+          .toLowerCase()
+          .trim()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '');
+
+      const targetNorm = normalize(characterName);
+      const currentNorm = normalize(sheet.characterName);
+
+      const isForMe =
+        (targetUserId && (targetUserId === sheet.userId)) ||
+        (targetNorm && (targetNorm === currentNorm || currentNorm.includes(targetNorm) || targetNorm.includes(currentNorm))) ||
+        (!characterName && !targetUserId && currency);
+
+      if (isForMe) {
+        setSheet((prev) => {
+          const updated = { ...prev };
+          if (currency) {
+            const cur = updated.currency || { po: 0, pp: 0, pc: 0, pe: 0, pl: 0 };
+            updated.currency = {
+              po: (cur.po || 0) + (currency.po || 0),
+              pp: (cur.pp || 0) + (currency.pp || 0),
+              pc: (cur.pc || 0) + (currency.pc || 0),
+              pe: (cur.pe || 0) + (currency.pe || 0),
+              pl: (cur.pl || 0) + (currency.pl || 0),
+            };
+
+            const newEntries: any[] = [];
+            const nowStr = new Date().toLocaleString('pt-BR');
+            (['po', 'pp', 'pc', 'pe', 'pl'] as const).forEach((type) => {
+              const amount = currency[type];
+              if (amount && amount > 0) {
+                newEntries.push({
+                  id: `${Date.now()}-${type}`,
+                  type: 'loot',
+                  amount,
+                  coinType: type,
+                  reason: sourceName || 'Recompensa de Loot (Mestre)',
+                  date: nowStr,
+                });
+              }
+            });
+            if (newEntries.length > 0) {
+              updated.transactionHistory = [...newEntries, ...(updated.transactionHistory || [])];
+            }
+          }
+
+          if (item) {
+            const currentEq = updated.equipment || [];
+            const safeId = item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+            updated.equipment = [...currentEq, { ...item, id: safeId }];
+          }
+
+          updated.updatedAt = new Date().toISOString();
+          onSave(updated);
+          return updated;
+        });
+      }
+    };
+
+    window.addEventListener('masters_codex_loot_received', handleLootReceived);
+    window.addEventListener('masters_codex_sheets_updated', handleLootReceived);
+    return () => {
+      window.removeEventListener('masters_codex_loot_received', handleLootReceived);
+      window.removeEventListener('masters_codex_sheets_updated', handleLootReceived);
+    };
+  }, [isOpen, sheet.characterName, onSave]);
+
+  // Sincronização direta com Supabase Realtime: Escuta alterações na tabela character_sheets
+  useEffect(() => {
+    if (!isOpen || !isSupabaseConfigured()) return;
+
+    const normalize = (s?: string) =>
+      (s || '')
+        .toLowerCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+    const channelId = `sheet_live_${sheet.id || sheet.characterName}_${Math.random().toString(36).substring(2, 7)}`;
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'character_sheets',
+        },
+        (payload) => {
+          if (payload.new && (payload.new as any).data) {
+            const row = payload.new as any;
+            const remoteData = row.data as CharacterSheet;
+            const rowCharName = normalize(row.character_name || remoteData.characterName);
+            const myCharName = normalize(sheet.characterName);
+
+            const isMySheet =
+              (row.id && sheet.id && row.id === sheet.id) ||
+              (row.user_id && sheet.userId && row.user_id === sheet.userId) ||
+              (rowCharName && myCharName && (rowCharName === myCharName || rowCharName.includes(myCharName) || myCharName.includes(rowCharName)));
+
+            if (isMySheet && remoteData) {
+              setSheet((prev) => ({
+                ...prev,
+                ...remoteData,
+                currency: remoteData.currency || prev.currency,
+                equipment: remoteData.equipment || prev.equipment,
+                transactionHistory: remoteData.transactionHistory || prev.transactionHistory,
+                attributes: remoteData.attributes || prev.attributes,
+              }));
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isOpen, sheet.id, sheet.characterName, sheet.userId]);
+
   // Reseta a aba para a inicial apenas quando o modal for recém-aberto
   useEffect(() => {
     if (isOpen) {
@@ -112,7 +243,6 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
   };
 
   const handleClose = () => {
-    if (!readOnly) onSave(sheet);
     onClose();
   };
 

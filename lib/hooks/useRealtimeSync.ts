@@ -44,6 +44,7 @@ export interface RealtimeSyncPayloads {
     session: PartyLootSession; 
     splitDetails?: { 
       characterNames: string[]; 
+      userIds?: string[];
       share: CharacterCurrency 
     } 
   };

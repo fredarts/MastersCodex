@@ -422,19 +422,50 @@ function MainApp() {
           {activeSheets
             .filter((s) => (s.type === 'pc' || (s.type as string) === 'player') && s.state === 'open')
             .map((sheetState) => {
-              const matchingSheet = characterSheets.find((cs) => {
-                if (cs.id === sheetState.id) return true;
-                const cClean = sheetState.characterName.split('(')[0].trim().toLowerCase();
-                const sheetClean = cs.characterName.split('(')[0].trim().toLowerCase();
-                return sheetClean === cClean || sheetClean.includes(cClean) || cClean.includes(sheetClean);
-              });
-              // Se não encontrou a ficha no array sincronizado, usa um fallback inteligente com o nome do personagem para NUNCA falhar silenciosamente
-              const sheetToRender = matchingSheet || (sheetState.data && sheetState.data.attributes ? sheetState.data : (() => {
-                const fallback = createEmptyCharacterSheet('player-1', activeCampaign?.id);
-                fallback.id = sheetState.id;
-                fallback.characterName = sheetState.characterName.split('(')[0].trim() || 'Aventureiro';
-                return fallback;
-              })());
+              const normalize = (str?: string) =>
+                (str || '')
+                  .split('(')[0]
+                  .trim()
+                  .toLowerCase()
+                  .normalize('NFD')
+                  .replace(/[\u0300-\u036f]/g, '');
+
+              const cClean = normalize(sheetState.characterName);
+
+              const matchingSheet =
+                characterSheets.find((cs) => {
+                  if (cs.id === sheetState.id) return true;
+                  const sheetClean = normalize(cs.characterName);
+                  return sheetClean === cClean || sheetClean.includes(cClean) || cClean.includes(sheetClean);
+                }) ||
+                (() => {
+                  if (typeof window !== 'undefined') {
+                    try {
+                      const saved = localStorage.getItem('masters_codex_character_sheets_v1');
+                      if (saved) {
+                        const parsed: CharacterSheet[] = JSON.parse(saved);
+                        return parsed.find((cs) => {
+                          if (cs.id === sheetState.id) return true;
+                          const sheetClean = normalize(cs.characterName);
+                          return sheetClean === cClean || sheetClean.includes(cClean) || cClean.includes(sheetClean);
+                        });
+                      }
+                    } catch (e) {}
+                  }
+                  return null;
+                })();
+
+              // Se não encontrou a ficha no array sincronizado ou local, usa fallback inteligente com o nome
+              const sheetToRender =
+                matchingSheet ||
+                (sheetState.data && sheetState.data.attributes
+                  ? sheetState.data
+                  : (() => {
+                      const fallback = createEmptyCharacterSheet('player-1', activeCampaign?.id);
+                      fallback.id = sheetState.id;
+                      fallback.characterName = sheetState.characterName.split('(')[0].trim() || 'Aventureiro';
+                      return fallback;
+                    })());
 
               return (
                 <CharacterSheetModal

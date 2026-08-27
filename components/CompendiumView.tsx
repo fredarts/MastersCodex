@@ -153,11 +153,35 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
             name: item.name,
             quantity: 1,
             weight: `${item.weight} kg`,
+            rarity: 'Comum',
             notes: `${item.description} (Custo: ${item.cost})`,
             itemType:
               item.category === 'Poção' ? 'potion' :
               item.category === 'Arma' ? 'weapon' :
               item.category === 'Armadura' ? 'armor' : 'equipment',
+          },
+        })
+      );
+    }, 200);
+  };
+
+  const handleSendMagicItemLoot = (item: SRDItem) => {
+    setIsDmLootModalOpen(true);
+    setTimeout(() => {
+      const nameLower = item.name.toLowerCase();
+      window.dispatchEvent(
+        new CustomEvent('masters_codex_add_loot_item', {
+          detail: {
+            name: item.name,
+            quantity: 1,
+            weight: item.weight ? `${item.weight} kg` : '0.5 kg',
+            rarity: item.rarity || 'Raro',
+            notes: `${item.description} ${item.value ? `(Valor: ${item.value})` : ''} ${item.attunement ? `[Sintonização: ${typeof item.attunement === 'string' ? item.attunement : 'Requer Sintonização'}]` : ''}`.trim(),
+            itemType:
+              item.type?.toLowerCase().includes('potion') || nameLower.includes('poção') ? 'potion' :
+              item.type?.toLowerCase().includes('weapon') || nameLower.includes('espada') || nameLower.includes('arco') || nameLower.includes('adaga') || nameLower.includes('machado') ? 'weapon' :
+              item.type?.toLowerCase().includes('armor') || nameLower.includes('armadura') || nameLower.includes('escudo') ? 'armor' :
+              nameLower.includes('pergaminho') || nameLower.includes('livro') || nameLower.includes('tomo') ? 'scroll' : 'equipment',
           },
         })
       );
@@ -1598,15 +1622,26 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      toast.success(`Item "${selectedItem.name}" adicionado ao inventário do grupo!`);
-                    }}
-                    className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
-                  >
-                    <Package className="w-4 h-4 text-slate-950" />
-                    <span>Adicionar ao Inventário</span>
-                  </button>
+                  {roleMode === 'dm' ? (
+                    <button
+                      onClick={() => handleSendMagicItemLoot(selectedItem)}
+                      className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+                      title="Enviar este item mágico para o Baú da Party em tempo real"
+                    >
+                      <Gift className="w-4 h-4 text-slate-950" />
+                      <span>Enviar ao Baú da Party</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        toast.info(`Item "${selectedItem.name}" visualizado.`);
+                      }}
+                      className="px-3.5 py-2 bg-slate-800 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-2"
+                    >
+                      <Package className="w-4 h-4 text-amber-400" />
+                      <span>Item do Compêndio</span>
+                    </button>
+                  )}
                 </div>
               </div>
 

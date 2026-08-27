@@ -49,6 +49,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
     }
 
+    // Limpa tokens expirados ou hashes de callback OAuth da URL após carregamento
+    if (typeof window !== 'undefined' && window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('error='))) {
+      setTimeout(() => {
+        try {
+          if (window.location.hash.includes('access_token=') || window.location.hash.includes('error=')) {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          }
+        } catch (e) {}
+      }, 500);
+    }
+
     if (isSupabaseConfigured()) {
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
@@ -58,7 +69,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             displayName: session.user.user_metadata?.full_name || session.user.email || 'Mestre',
             avatarUrl: session.user.user_metadata?.avatar_url,
           });
+          if (typeof window !== 'undefined' && window.location.hash.includes('access_token=')) {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          }
         }
+      }).catch((err) => {
+        console.warn('Sessão expirada ou inválida, mantendo sessão local/demo:', err);
       });
 
       const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -69,6 +85,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             displayName: session.user.user_metadata?.full_name || session.user.email || 'Mestre',
             avatarUrl: session.user.user_metadata?.avatar_url,
           });
+          if (typeof window !== 'undefined' && window.location.hash.includes('access_token=')) {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          }
         } else {
           setUser(DEMO_USER);
         }

@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/context/CampaignContext';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { VoiceSignalingManager } from '@/lib/voice/VoiceSignalingManager';
+import { CameraErrorModal, CameraErrorInfo } from '@/components/voice/CameraErrorModal';
 import { toast } from 'sonner';
 
 export interface VoiceParticipantState {
@@ -17,6 +18,8 @@ export interface VoiceParticipantState {
   volume: number; // 0.0 a 2.0 (1.0 = 100%)
   isMuted?: boolean;
   isConnected: boolean;
+  isVideoEnabled?: boolean;
+  stream?: MediaStream | null;
 }
 
 interface VoiceCallContextType {
@@ -32,8 +35,18 @@ interface VoiceCallContextType {
   vadSensitivity: number;
   audioDevices: MediaDeviceInfo[];
   selectedAudioDeviceId: string | null;
+  isVideoEnabled: boolean;
+  localVideoStream: MediaStream | null;
+  videoDevices: MediaDeviceInfo[];
+  selectedVideoDeviceId: string | null;
+  videoLayout: 'compact' | 'grid';
+  setVideoLayout: (layout: 'compact' | 'grid') => void;
+  cameraError: CameraErrorInfo | null;
+  setCameraError: (err: CameraErrorInfo | null) => void;
+  clearCameraError: () => void;
   participants: VoiceParticipantState[];
   connectedPeersCount: number;
+  activeCallPeersCount: number;
   isWidgetOpen: boolean;
   setIsWidgetOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   isSettingsModalOpen: boolean;
@@ -43,17 +56,64 @@ interface VoiceCallContextType {
   toggleMute: () => void;
   setMuted: (muted: boolean) => void;
   toggleDeafen: () => void;
+  toggleVideo: () => Promise<boolean>;
+  setVideoEnabled: (enabled: boolean) => Promise<boolean>;
   setParticipantVolume: (userId: string, volume: number) => void;
   setInputMode: (mode: 'vad' | 'ptt') => void;
   setPttKey: (key: string) => void;
   setVadSensitivity: (val: number) => void;
   setSelectedAudioDeviceId: (deviceId: string) => Promise<void>;
+  setSelectedVideoDeviceId: (deviceId: string) => Promise<void>;
   refreshAudioDevices: () => Promise<void>;
+  refreshVideoDevices: () => Promise<void>;
 }
 
 const VoiceCallContext = createContext<VoiceCallContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'masters_codex_voice_preferences_v1';
+
+export const parseCameraError = (err: any): CameraErrorInfo => {
+  const errName = err?.name || '';
+  const errMsg = err?.message || String(err || '');
+
+  if (errName === 'NotReadableError' || errMsg.includes('Could not start video source') || errMsg.includes('not readable')) {
+    return {
+      title: 'Câmera em Uso por Outro Aplicativo',
+      message: 'Não foi possível iniciar a webcam (NotReadableError). O dispositivo pode estar em uso exclusivo por outro programa (como Discord, OBS Studio, Zoom, Teams ou outra aba do navegador) ou com driver travado.',
+      type: 'NotReadableError',
+    };
+  }
+
+  if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError' || errMsg.includes('Permission denied')) {
+    return {
+      title: 'Permissão de Câmera Negada',
+      message: 'O navegador não tem permissão para acessar sua webcam. Verifique as configurações de permissão do site na barra de endereços.',
+      type: 'NotAllowedError',
+    };
+  }
+
+  if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+    return {
+      title: 'Webcam Não Encontrada',
+      message: 'Nenhum dispositivo de câmera foi detectado no seu computador. Verifique se a webcam está conectada corretamente.',
+      type: 'NotFoundError',
+    };
+  }
+
+  if (errName === 'OverconstrainedError') {
+    return {
+      title: 'Resolução Não Suportada',
+      message: 'As configurações de resolução ou taxa de quadros solicitadas não são suportadas por esta webcam.',
+      type: 'OverconstrainedError',
+    };
+  }
+
+  return {
+    title: 'Falha ao Iniciar Câmera',
+    message: errMsg || 'Ocorreu um erro desconhecido ao tentar acessar a câmera de vídeo.',
+    type: 'Unknown',
+  };
+};
 
 export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
@@ -73,6 +133,16 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedAudioDeviceId, setSelectedAudioDeviceIdState] = useState<string | null>(null);
 
+  // Video States
+  const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(false);
+  const [localVideoStream, setLocalVideoStream] = useState<MediaStream | null>(null);
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedVideoDeviceId, setSelectedVideoDeviceIdState] = useState<string | null>(null);
+  const [videoLayout, setVideoLayoutState] = useState<'compact' | 'grid'>('compact');
+
+  // Error States
+  const [cameraError, setCameraError] = useState<CameraErrorInfo | null>(null);
+
   // UI States
   const [isWidgetOpen, setIsWidgetOpen] = useState<boolean>(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
@@ -81,11 +151,19 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [peerVolumes, setPeerVolumes] = useState<Record<string, number>>({});
   // Estados de fala por peer: Record<peerId, { isSpeaking: boolean; level: number }>
   const [peerSpeakingStates, setPeerSpeakingStates] = useState<Record<string, { isSpeaking: boolean; level: number }>>({});
-  // Peers conectados via WebRTC
+  // Peers que anunciaram estar na chamada de voz/vídeo
+  const [inCallPeerIds, setInCallPeerIds] = useState<Set<string>>(new Set());
+  // Peers conectados via WebRTC ativo
   const [connectedPeerIds, setConnectedPeerIds] = useState<Set<string>>(new Set());
+  // Streams remotos completos (áudio + vídeo) por peer
+  const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
 
   const signalingManagerRef = useRef<VoiceSignalingManager | null>(null);
   const currentUserId = user?.id || (activeCampaign?.role === 'dm' ? 'dm-host' : 'player-local');
+
+  const clearCameraError = useCallback(() => {
+    setCameraError(null);
+  }, []);
 
   // 1. Carregar preferências salvas no localStorage
   useEffect(() => {
@@ -98,10 +176,12 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         if (parsed.pttKey) setPttKeyState(parsed.pttKey);
         if (parsed.vadSensitivity) setVadSensitivityState(parsed.vadSensitivity);
         if (parsed.selectedAudioDeviceId) setSelectedAudioDeviceIdState(parsed.selectedAudioDeviceId);
+        if (parsed.selectedVideoDeviceId) setSelectedVideoDeviceIdState(parsed.selectedVideoDeviceId);
+        if (parsed.videoLayout) setVideoLayoutState(parsed.videoLayout);
         if (parsed.peerVolumes) setPeerVolumes(parsed.peerVolumes);
       }
     } catch (e) {
-      console.warn('Erro ao carregar preferências de voz:', e);
+      console.warn('Erro ao carregar preferências de voz e vídeo:', e);
     }
   }, []);
 
@@ -113,11 +193,11 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const next = { ...current, ...updates };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch (e) {
-      console.warn('Erro ao salvar preferências de voz:', e);
+      console.warn('Erro ao salvar preferências de voz e vídeo:', e);
     }
   }, []);
 
-  // 2. Enumerar microfones disponíveis
+  // 2. Enumerar microfones e câmeras disponíveis
   const refreshAudioDevices = useCallback(async () => {
     if (typeof window === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return;
     try {
@@ -128,6 +208,22 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       console.warn('Erro ao listar dispositivos de áudio:', err);
     }
   }, []);
+
+  const refreshVideoDevices = useCallback(async () => {
+    if (typeof window === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+      setVideoDevices(videoInputs);
+    } catch (err) {
+      console.warn('Erro ao listar dispositivos de vídeo:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshAudioDevices();
+    refreshVideoDevices();
+  }, [refreshAudioDevices, refreshVideoDevices]);
 
   // 3. Inicializar e entrar na chamada
   const joinCall = useCallback(async (): Promise<boolean> => {
@@ -140,6 +236,8 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         sendSignal: (payload) => broadcastVoiceSignal(payload),
         onRemoteStream: (peerId, stream) => {
           setConnectedPeerIds((prev) => new Set([...prev, peerId]));
+          setInCallPeerIds((prev) => new Set([...prev, peerId]));
+          setRemoteStreams((prev) => ({ ...prev, [peerId]: stream }));
         },
         onPeerDisconnect: (peerId) => {
           setConnectedPeerIds((prev) => {
@@ -147,9 +245,34 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             next.delete(peerId);
             return next;
           });
+          setInCallPeerIds((prev) => {
+            const next = new Set(prev);
+            next.delete(peerId);
+            return next;
+          });
           setPeerSpeakingStates((prev) => {
             const next = { ...prev };
             delete next[peerId];
+            return next;
+          });
+          setRemoteStreams((prev) => {
+            const next = { ...prev };
+            delete next[peerId];
+            return next;
+          });
+        },
+        onPeerJoinAnnouncement: (peerId) => {
+          setInCallPeerIds((prev) => new Set([...prev, peerId]));
+        },
+        onPeerLeaveAnnouncement: (peerId) => {
+          setInCallPeerIds((prev) => {
+            const next = new Set(prev);
+            next.delete(peerId);
+            return next;
+          });
+          setConnectedPeerIds((prev) => {
+            const next = new Set(prev);
+            next.delete(peerId);
             return next;
           });
         },
@@ -164,7 +287,7 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         voiceManager.setPeerVolume(peerId, vol);
       });
 
-      // Callbacks de fala
+      // Callbacks de fala e vídeo local/remoto
       voiceManager.setOnSpeakingChange((speaking, level) => {
         setIsSpeaking(speaking);
         setLocalSpeakingLevel(level);
@@ -175,6 +298,15 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           ...prev,
           [peerId]: { isSpeaking: speaking, level },
         }));
+      });
+
+      voiceManager.setOnLocalVideoStreamChange((stream) => {
+        setLocalVideoStream(stream);
+        setIsVideoEnabled(!!stream);
+      });
+
+      voiceManager.setOnRemoteStreamChange((peerId, stream) => {
+        setRemoteStreams((prev) => ({ ...prev, [peerId]: stream }));
       });
 
       const stream = await manager.initialize(selectedAudioDeviceId || undefined);
@@ -189,8 +321,9 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setIsConnecting(false);
       setIsWidgetOpen(true);
       refreshAudioDevices();
+      refreshVideoDevices();
 
-      toast.success('Conectado à chamada de voz da campanha!');
+      toast.success('Conectado à chamada da campanha!');
       return true;
     } catch (err) {
       console.error('Erro ao conectar na chamada de voz:', err);
@@ -198,9 +331,9 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setIsConnecting(false);
       return false;
     }
-  }, [isInCall, currentUserId, broadcastVoiceSignal, inputMode, vadSensitivity, peerVolumes, selectedAudioDeviceId, refreshAudioDevices]);
+  }, [isInCall, currentUserId, broadcastVoiceSignal, inputMode, vadSensitivity, peerVolumes, selectedAudioDeviceId, refreshAudioDevices, refreshVideoDevices]);
 
-  // 4. Sair da chamada de voz
+  // 4. Sair da chamada
   const leaveCall = useCallback(() => {
     if (signalingManagerRef.current) {
       signalingManagerRef.current.destroy();
@@ -210,9 +343,14 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setIsConnecting(false);
     setIsSpeaking(false);
     setLocalSpeakingLevel(0);
+    setIsVideoEnabled(false);
+    setLocalVideoStream(null);
     setConnectedPeerIds(new Set());
+    setInCallPeerIds(new Set());
     setPeerSpeakingStates({});
-    toast.info('Você saiu da chamada de voz.');
+    setRemoteStreams({});
+    setCameraError(null);
+    toast.info('Você saiu da chamada.');
   }, []);
 
   // 5. Encerrar chamada quando a campanha ativa for desfeita ou o usuário fizer logout
@@ -227,28 +365,33 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // 6. Processar sinais WebRTC recebidos pelo Supabase Broadcast
   useEffect(() => {
-    if (!isInCall || !voiceSignal || !signalingManagerRef.current) return;
-    if (voiceSignal.toUserId === currentUserId) {
+    if (!voiceSignal || voiceSignal.fromUserId === currentUserId) return;
+
+    // Se recebermos anúncio de entrada/saída, rastreamos quem está na call mesmo antes de entrar
+    if (voiceSignal.type === 'join-announcement') {
+      setInCallPeerIds((prev) => new Set([...prev, voiceSignal.fromUserId]));
+    } else if (voiceSignal.type === 'leave-announcement') {
+      setInCallPeerIds((prev) => {
+        const next = new Set(prev);
+        next.delete(voiceSignal.fromUserId);
+        return next;
+      });
+      setConnectedPeerIds((prev) => {
+        const next = new Set(prev);
+        next.delete(voiceSignal.fromUserId);
+        return next;
+      });
+    }
+
+    if (!isInCall || !signalingManagerRef.current) return;
+    if (voiceSignal.toUserId === currentUserId || voiceSignal.toUserId === 'all') {
       signalingManagerRef.current.handleSignal(voiceSignal).catch((err) => {
         console.warn('Erro ao processar sinal de voz:', err);
       });
     }
   }, [isInCall, voiceSignal, currentUserId]);
 
-  // 7. Conexão Mesh automática com peers online que estejam na campanha
-  useEffect(() => {
-    if (!isInCall || !signalingManagerRef.current) return;
-
-    for (const peer of onlineUsers) {
-      if (peer.userId !== currentUserId && currentUserId < peer.userId) {
-        signalingManagerRef.current.connectToPeer(peer.userId).catch((err) => {
-          console.warn(`Erro ao conectar com o peer ${peer.userId}:`, err);
-        });
-      }
-    }
-  }, [isInCall, onlineUsers, currentUserId]);
-
-  // 8. Controles de Mute / Deafen
+  // 7. Controles de Mute / Deafen
   const toggleMute = useCallback(() => {
     if (signalingManagerRef.current) {
       const muted = signalingManagerRef.current.toggleMute();
@@ -270,7 +413,6 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const deafened = signalingManagerRef.current.setDeafened(!isDeafened);
       setIsDeafenedState(deafened);
       if (deafened) {
-        // Ensurdecer também muta o microfone por padrão (estilo Discord)
         signalingManagerRef.current.setMuted(true);
         setIsMutedState(true);
       }
@@ -278,6 +420,89 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setIsDeafenedState((prev) => !prev);
     }
   }, [isDeafened]);
+
+  // 8. Controles de Vídeo / Webcam com Tratamento de Erro Robusto
+  const toggleVideo = useCallback(async (): Promise<boolean> => {
+    if (!signalingManagerRef.current) {
+      toast.info('Conecte-se à chamada antes de ativar a câmera.');
+      return false;
+    }
+
+    try {
+      const active = await signalingManagerRef.current.toggleVideo(selectedVideoDeviceId || undefined);
+      setIsVideoEnabled(active);
+      const currentLocalStream = signalingManagerRef.current.getLocalVideoStream();
+      setLocalVideoStream(currentLocalStream);
+      setCameraError(null);
+
+      if (active) {
+        setVideoLayoutState('grid');
+        toast.success('Webcam ativada!');
+      } else {
+        toast.info('Webcam desativada.');
+      }
+      return active;
+    } catch (e: any) {
+      console.error('Erro ao alternar webcam:', e);
+      const errorDetails = parseCameraError(e);
+      setCameraError(errorDetails);
+      toast.error(errorDetails.title);
+      return false;
+    }
+  }, [selectedVideoDeviceId]);
+
+  const setVideoEnabled = useCallback(async (enabled: boolean): Promise<boolean> => {
+    if (!signalingManagerRef.current) return false;
+
+    if (enabled) {
+      try {
+        const stream = await signalingManagerRef.current.startVideo(selectedVideoDeviceId || undefined);
+        const active = !!stream;
+        setIsVideoEnabled(active);
+        setLocalVideoStream(stream);
+        setCameraError(null);
+        if (active) {
+          setVideoLayoutState('grid');
+          toast.success('Webcam ativada!');
+        }
+        return active;
+      } catch (e: any) {
+        console.error('Erro ao iniciar webcam:', e);
+        const errorDetails = parseCameraError(e);
+        setCameraError(errorDetails);
+        toast.error(errorDetails.title);
+        return false;
+      }
+    } else {
+      signalingManagerRef.current.stopVideo();
+      setIsVideoEnabled(false);
+      setLocalVideoStream(null);
+      setCameraError(null);
+      toast.info('Webcam desativada.');
+      return false;
+    }
+  }, [selectedVideoDeviceId]);
+
+  const setSelectedVideoDeviceId = useCallback(async (deviceId: string) => {
+    setSelectedVideoDeviceIdState(deviceId);
+    savePreferences({ selectedVideoDeviceId: deviceId });
+    if (isInCall && isVideoEnabled && signalingManagerRef.current) {
+      try {
+        await signalingManagerRef.current.startVideo(deviceId);
+        setCameraError(null);
+      } catch (e: any) {
+        console.error('Erro ao trocar dispositivo de vídeo:', e);
+        const errorDetails = parseCameraError(e);
+        setCameraError(errorDetails);
+        toast.error(errorDetails.title);
+      }
+    }
+  }, [isInCall, isVideoEnabled, savePreferences]);
+
+  const setVideoLayout = useCallback((layout: 'compact' | 'grid') => {
+    setVideoLayoutState(layout);
+    savePreferences({ videoLayout: layout });
+  }, [savePreferences]);
 
   // 9. Volume por participante
   const setParticipantVolume = useCallback((userId: string, volume: number) => {
@@ -328,7 +553,6 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (!isInCall || inputMode !== 'ptt') return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignorar se o usuário estiver digitando em campos de texto
       const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) {
         return;
@@ -360,7 +584,7 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, [isInCall, inputMode, pttKey, isPttPressed]);
 
-  // 12. Lista consolidada de participantes da chamada
+  // 12. Lista consolidada de participantes da chamada (apenas quem realmente está na call)
   const participants = useMemo<VoiceParticipantState[]>(() => {
     const list: VoiceParticipantState[] = [];
 
@@ -375,14 +599,18 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       volume: 1.0,
       isMuted,
       isConnected: isInCall,
+      isVideoEnabled,
+      stream: localVideoStream,
     });
 
-    // Participantes remotos (vindos do presence onlineUsers)
+    // Participantes remotos (apenas aqueles que entraram na chamada de voz/vídeo)
     onlineUsers.forEach((peer) => {
-      if (peer.userId !== currentUserId) {
+      if (peer.userId !== currentUserId && (inCallPeerIds.has(peer.userId) || connectedPeerIds.has(peer.userId))) {
         const speakingState = peerSpeakingStates[peer.userId];
         const isPeerConnected = connectedPeerIds.has(peer.userId);
         const volume = peerVolumes[peer.userId] ?? 1.0;
+        const remoteStream = remoteStreams[peer.userId] || null;
+        const hasVideoTrack = !!remoteStream && remoteStream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
 
         list.push({
           userId: peer.userId,
@@ -394,12 +622,30 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           volume,
           isMuted: false,
           isConnected: isPeerConnected,
+          isVideoEnabled: hasVideoTrack,
+          stream: remoteStream,
         });
       }
     });
 
     return list;
-  }, [currentUserId, user, activeCampaign, isSpeaking, localSpeakingLevel, isMuted, isInCall, onlineUsers, peerSpeakingStates, connectedPeerIds, peerVolumes]);
+  }, [
+    currentUserId,
+    user,
+    activeCampaign,
+    isSpeaking,
+    localSpeakingLevel,
+    isMuted,
+    isInCall,
+    isVideoEnabled,
+    localVideoStream,
+    onlineUsers,
+    inCallPeerIds,
+    peerSpeakingStates,
+    connectedPeerIds,
+    peerVolumes,
+    remoteStreams,
+  ]);
 
   const value = {
     isInCall,
@@ -414,8 +660,18 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     vadSensitivity,
     audioDevices,
     selectedAudioDeviceId,
+    isVideoEnabled,
+    localVideoStream,
+    videoDevices,
+    selectedVideoDeviceId,
+    videoLayout,
+    setVideoLayout,
+    cameraError,
+    setCameraError,
+    clearCameraError,
     participants,
     connectedPeersCount: connectedPeerIds.size,
+    activeCallPeersCount: inCallPeerIds.size,
     isWidgetOpen,
     setIsWidgetOpen,
     isSettingsModalOpen,
@@ -425,15 +681,29 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     toggleMute,
     setMuted,
     toggleDeafen,
+    toggleVideo,
+    setVideoEnabled,
     setParticipantVolume,
     setInputMode,
     setPttKey,
     setVadSensitivity,
     setSelectedAudioDeviceId,
+    setSelectedVideoDeviceId,
     refreshAudioDevices,
+    refreshVideoDevices,
   };
 
-  return <VoiceCallContext.Provider value={value}>{children}</VoiceCallContext.Provider>;
+  return (
+    <VoiceCallContext.Provider value={value}>
+      {children}
+      {/* Modal Popup Global de Erro de Câmera */}
+      <CameraErrorModal
+        error={cameraError}
+        onClose={clearCameraError}
+        onRetry={isInCall ? () => toggleVideo() : undefined}
+      />
+    </VoiceCallContext.Provider>
+  );
 };
 
 export const useVoiceCall = () => {

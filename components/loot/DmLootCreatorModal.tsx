@@ -68,13 +68,14 @@ export const DmLootCreatorModal: React.FC = () => {
         name: equipItem.name,
         quantity: equipItem.quantity > 0 ? equipItem.quantity : 1,
         weight: equipItem.weight,
-        rarity: 'Comum',
+        rarity: equipItem.rarity || 'Comum',
         notes: equipItem.notes || '',
         itemType: equipItem.itemType,
         potionProps: equipItem.potionProps,
         weaponProps: equipItem.weaponProps,
         armorProps: equipItem.armorProps,
         scrollProps: equipItem.scrollProps,
+        readableContent: equipItem.readableContent,
       };
 
       setItems((prev) => [...prev, item]);
@@ -85,7 +86,6 @@ export const DmLootCreatorModal: React.FC = () => {
       window.removeEventListener('masters_codex_add_loot_item', handlePreloadItem);
     };
   }, []);
-
 
   const handleAddItem = (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,13 +115,14 @@ export const DmLootCreatorModal: React.FC = () => {
       name: equipItem.name,
       quantity: equipItem.quantity > 0 ? equipItem.quantity : 1,
       weight: equipItem.weight,
-      rarity: 'Comum',
+      rarity: equipItem.rarity || 'Comum',
       notes: equipItem.notes || '',
       itemType: equipItem.itemType,
       potionProps: equipItem.potionProps,
       weaponProps: equipItem.weaponProps,
       armorProps: equipItem.armorProps,
       scrollProps: equipItem.scrollProps,
+      readableContent: equipItem.readableContent,
     };
     setItems((prev) => [...prev, item]);
     toast.success(`"${item.name}" adicionado ao baú!`);
@@ -431,7 +432,28 @@ export const DmLootCreatorModal: React.FC = () => {
               </div>
             </div>
 
-            {/* Form de Adição */}
+            {/* Atalhos Rápidos para Compêndio e Documentos */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setIsCompendiumOpen(true)}
+                className="flex items-center justify-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-amber-500/15 to-amber-600/15 hover:from-amber-500/25 hover:to-amber-600/25 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+              >
+                <BookOpen className="w-4 h-4 text-amber-400" />
+                <span>📖 Compêndio (Armas, Itens Mágicos & Poções)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsCampaignDocsOpen(true)}
+                className="flex items-center justify-center gap-2 px-3.5 py-2.5 bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 border border-purple-500/40 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+              >
+                <Scroll className="w-4 h-4 text-purple-400" />
+                <span>📜 Documentos (Livros, Cartas, Diários & Notas)</span>
+              </button>
+            </div>
+
+            {/* Form de Adição Customizada */}
             <form onSubmit={handleAddItem} className="grid grid-cols-1 md:grid-cols-12 gap-2 bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
               <input
                 type="text"

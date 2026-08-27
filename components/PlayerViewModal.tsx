@@ -8,6 +8,8 @@ import { useCampaign } from '@/context/CampaignContext';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { useVoiceCall } from '@/context/VoiceCallContext';
 import { useAuth } from '@/context/AuthContext';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { toast } from 'sonner';
 import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl } from '@/lib/imageUtils';
 import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
@@ -156,6 +158,149 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
       } catch (err) {}
     }
   };
+
+  // Escuta atualizações de loot recebido em tempo real (moedas, itens, baú)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleLootReceived = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { characterName, userId: targetUserId, item, currency, sourceName } = customEvent.detail || {};
+
+      const normalize = (s?: string) =>
+        (s || '')
+          .toLowerCase()
+          .trim()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '');
+
+      const targetNorm = normalize(characterName);
+      const currentNorm = normalize(playerCharName);
+      const activeSheetNorm = normalize(activeSheet.characterName);
+
+      const isForMe =
+        (targetUserId && (targetUserId === user?.id || targetUserId === activeSheet.userId)) ||
+        (targetNorm && (targetNorm === currentNorm || targetNorm === activeSheetNorm || currentNorm.includes(targetNorm) || targetNorm.includes(currentNorm))) ||
+        (!characterName && !targetUserId && currency);
+
+      if (isForMe) {
+        setActiveSheet((prev) => {
+          const updated = { ...prev };
+          if (currency) {
+            const cur = updated.currency || { po: 0, pp: 0, pc: 0, pe: 0, pl: 0 };
+            updated.currency = {
+              po: (cur.po || 0) + (currency.po || 0),
+              pp: (cur.pp || 0) + (currency.pp || 0),
+              pc: (cur.pc || 0) + (currency.pc || 0),
+              pe: (cur.pe || 0) + (currency.pe || 0),
+              pl: (cur.pl || 0) + (currency.pl || 0),
+            };
+
+            const newEntries: any[] = [];
+            const nowStr = new Date().toLocaleString('pt-BR');
+            (['po', 'pp', 'pc', 'pe', 'pl'] as const).forEach((type) => {
+              const amount = currency[type];
+              if (amount && amount > 0) {
+                newEntries.push({
+                  id: `${Date.now()}-${type}`,
+                  type: 'loot',
+                  amount,
+                  coinType: type,
+                  reason: sourceName || 'Recompensa de Loot (Mestre)',
+                  date: nowStr,
+                });
+              }
+            });
+            if (newEntries.length > 0) {
+              updated.transactionHistory = [...newEntries, ...(updated.transactionHistory || [])];
+            }
+          }
+
+          if (item) {
+            const currentEq = updated.equipment || [];
+            const safeId = item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+            updated.equipment = [...currentEq, { ...item, id: safeId }];
+          }
+
+          updated.updatedAt = new Date().toISOString();
+          handleSaveSheet(updated);
+          return updated;
+        });
+
+        if (currency) {
+          const coinsArr = (['po', 'pp', 'pc', 'pe', 'pl'] as const)
+            .filter((c) => currency[c] && currency[c] > 0)
+            .map((c) => `${currency[c]} ${c.toUpperCase()}`);
+          if (coinsArr.length > 0) {
+            toast.success(`💰 Você recebeu ${coinsArr.join(', ')} do Baú da Party!`);
+          }
+        }
+        if (item) {
+          toast.success(`🎁 Você recebeu "${item.name}" do Baú da Party!`);
+        }
+      }
+    };
+
+    window.addEventListener('masters_codex_loot_received', handleLootReceived);
+    window.addEventListener('masters_codex_sheets_updated', handleLootReceived);
+    return () => {
+      window.removeEventListener('masters_codex_loot_received', handleLootReceived);
+      window.removeEventListener('masters_codex_sheets_updated', handleLootReceived);
+    };
+  }, [playerCharName, activeSheet.characterName]);
+
+  // Sincronização direta com Supabase Realtime para activeSheet no PlayerViewModal
+  useEffect(() => {
+    if (!isOpen || !isSupabaseConfigured()) return;
+
+    const normalize = (s?: string) =>
+      (s || '')
+        .toLowerCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+    const channelId = `player_view_sheet_${activeSheet.id || activeSheet.characterName}_${Math.random().toString(36).substring(2, 7)}`;
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'character_sheets',
+        },
+        (payload) => {
+          if (payload.new && (payload.new as any).data) {
+            const row = payload.new as any;
+            const remoteData = row.data as CharacterSheet;
+            const rowCharName = normalize(row.character_name || remoteData.characterName);
+            const myCharName = normalize(activeSheet.characterName || playerCharName);
+
+            const isMySheet =
+              (row.id && activeSheet.id && row.id === activeSheet.id) ||
+              (row.user_id && user?.id && row.user_id === user.id) ||
+              (rowCharName && myCharName && (rowCharName === myCharName || rowCharName.includes(myCharName) || myCharName.includes(rowCharName)));
+
+            if (isMySheet && remoteData) {
+              setActiveSheet((prev) => ({
+                ...prev,
+                ...remoteData,
+                currency: remoteData.currency || prev.currency,
+                equipment: remoteData.equipment || prev.equipment,
+                transactionHistory: remoteData.transactionHistory || prev.transactionHistory,
+                attributes: remoteData.attributes || prev.attributes,
+              }));
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isOpen, activeSheet.id, activeSheet.characterName, playerCharName, user?.id]);
 
   // Auto-fetch scene map from Supabase when in 'map' mode if mapData is missing or scene/map changed
   useEffect(() => {

@@ -1211,10 +1211,10 @@ export interface PingLocationPayload {
 }
 
 export interface VoiceSignalPayload {
-  type: 'offer' | 'answer' | 'ice-candidate';
+  type: 'offer' | 'answer' | 'ice-candidate' | 'join-announcement' | 'leave-announcement' | 'ping-call';
   fromUserId: string;
   toUserId: string;
-  data: any;
+  data?: any;
 }
 
 export interface PresencePayload {

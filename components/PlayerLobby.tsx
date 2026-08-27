@@ -883,6 +883,69 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     window.addEventListener('masters_codex_loot_received', handleLootReceived);
     return () => window.removeEventListener('masters_codex_loot_received', handleLootReceived);
   }, []);
+
+  // Sincronização direta com Supabase Realtime para manter as fichas atualizadas ao vivo quando o Mestre ou outro jogador alterar dados no banco
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+
+    const channelId = `player_lobby_sheets_${user?.id || 'anon'}_${Math.random().toString(36).substring(2, 7)}`;
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'character_sheets',
+        },
+        (payload) => {
+          if (payload.new && (payload.new as any).data) {
+            const row = payload.new as any;
+            const remoteData = row.data as CharacterSheet;
+            if (remoteData) {
+              setCharacterSheets((prev) => {
+                const idx = prev.findIndex(
+                  (s) =>
+                    s.id === remoteData.id ||
+                    (s.characterName &&
+                      remoteData.characterName &&
+                      s.characterName.toLowerCase() === remoteData.characterName.toLowerCase())
+                );
+                let next;
+                if (idx >= 0) {
+                  next = [...prev];
+                  next[idx] = { ...prev[idx], ...remoteData };
+                } else {
+                  next = [remoteData, ...prev];
+                }
+                try {
+                  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+                } catch (e) {}
+                return next;
+              });
+
+              setActiveSheet((prev) => {
+                if (
+                  prev &&
+                  (prev.id === remoteData.id ||
+                    (prev.characterName &&
+                      remoteData.characterName &&
+                      prev.characterName.toLowerCase() === remoteData.characterName.toLowerCase()))
+                ) {
+                  return { ...prev, ...remoteData };
+                }
+                return prev;
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
   
   // Form States
   const [inviteCodeInput, setInviteCodeInput] = useState('');

@@ -80,8 +80,33 @@ describe('WebRTCVoiceManager', () => {
     expect(peerCb).not.toHaveBeenCalled();
   });
 
+  it('deve gerenciar estado inicial e parada de transmissão de vídeo', () => {
+    expect(voiceManager.getIsVideoEnabled()).toBe(false);
+    expect(voiceManager.getLocalVideoStream()).toBeNull();
+    expect(voiceManager.getRemoteStreams().size).toBe(0);
+
+    voiceManager.stopVideo();
+    expect(voiceManager.getIsVideoEnabled()).toBe(false);
+  });
+
+  it('deve registrar callbacks de alteração de vídeo local e remoto', () => {
+    const localVideoCb = vi.fn();
+    const remoteStreamCb = vi.fn();
+    const renegotiateCb = vi.fn();
+
+    voiceManager.setOnLocalVideoStreamChange(localVideoCb);
+    voiceManager.setOnRemoteStreamChange(remoteStreamCb);
+    voiceManager.setOnRenegotiationNeeded(renegotiateCb);
+
+    voiceManager.stopVideo();
+    expect(localVideoCb).toHaveBeenCalledWith(null);
+  });
+
   it('deve fechar todas as conexões e limpar recursos ao chamar closeAllConnections', () => {
     voiceManager.closeAllConnections();
     expect(voiceManager.getPeerConnections().size).toBe(0);
+    expect(voiceManager.getIsVideoEnabled()).toBe(false);
+    expect(voiceManager.getLocalVideoStream()).toBeNull();
+    expect(voiceManager.getRemoteStreams().size).toBe(0);
   });
 });
