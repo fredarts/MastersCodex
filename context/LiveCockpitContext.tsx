@@ -9,6 +9,7 @@ import { useSession } from '@/context/SessionContext';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { setGlobalBroadcaster } from '@/lib/dnd5e-dice';
 import { CRDTSolver } from '@/lib/sync/CRDTSolver';
+import { toast } from 'sonner';
 
 import { useBattleGridStore } from '@/lib/stores/useBattleGridStore';
 import { rollHistoryService } from '@/lib/services/rollHistoryService';
@@ -49,6 +50,15 @@ interface LiveCockpitContextType {
   setCasterTokenKey: (key: string | null) => void;
   spellTargetPosition: { x: number; z: number } | null;
   setSpellTargetPosition: (pos: { x: number; z: number } | null) => void;
+  aoeRotation: number;
+  setAoeRotation: React.Dispatch<React.SetStateAction<number>>;
+  detectedAoETargets: string[];
+  setDetectedAoETargets: React.Dispatch<React.SetStateAction<string[]>>;
+  isAoESaveModalOpen: boolean;
+  setIsAoESaveModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  activeConcentrationPrompt: { combatant: Combatant; damageTaken: number; dc: number } | null;
+  setActiveConcentrationPrompt: (prompt: { combatant: Combatant; damageTaken: number; dc: number } | null) => void;
+  triggerDamageWithConcentrationCheck: (combatantId: string, damageAmount: number, damageType?: string) => void;
   activeSheets: ActiveSheetState[];
   openSheet: (id: string, type: 'pc' | 'player' | 'monster' | 'npc', name: string, data?: any) => void;
   minimizeSheet: (id: string) => void;
@@ -100,6 +110,10 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [activeSpellTargeting, setActiveSpellTargetingState] = useState<any>(null);
   const [casterTokenKey, setCasterTokenKeyState] = useState<string | null>(null);
   const [spellTargetPosition, setSpellTargetPositionState] = useState<{ x: number; z: number } | null>(null);
+  const [aoeRotation, setAoeRotation] = useState<number>(0);
+  const [detectedAoETargets, setDetectedAoETargets] = useState<string[]>([]);
+  const [isAoESaveModalOpen, setIsAoESaveModalOpen] = useState<boolean>(false);
+  const [activeConcentrationPrompt, setActiveConcentrationPrompt] = useState<{ combatant: Combatant; damageTaken: number; dc: number } | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [activeSheets, setActiveSheets] = useState<ActiveSheetState[]>([]);
   const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>([]);
@@ -739,6 +753,32 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     broadcastToPlayerView({ spellTargetPosition: pos });
   }, [broadcastToPlayerView]);
 
+  const triggerDamageWithConcentrationCheck = useCallback((combatantId: string, damageAmount: number, damageType?: string) => {
+    setCombatants((prev) => {
+      const target = prev.find((c) => c.id === combatantId);
+      if (!target) return prev;
+
+      const newHp = Math.max(0, target.hp - damageAmount);
+      const isDead = newHp === 0;
+
+      // Se o combatente sofreu dano > 0 e possui concentração ativa:
+      if (damageAmount > 0 && target.isConcentrating && !isDead) {
+        const dc = Math.max(10, Math.floor(damageAmount / 2));
+        setActiveConcentrationPrompt({
+          combatant: { ...target, hp: newHp },
+          damageTaken: damageAmount,
+          dc,
+        });
+      } else if (isDead && target.isConcentrating) {
+        // Morte / Inconsciência quebra concentração imediatamente
+        toast.error(`Concentração de ${target.name} foi quebrada ao cair a 0 PV!`);
+        return prev.map((c) => c.id === combatantId ? { ...c, hp: newHp, isConcentrating: false, concentrationSpell: undefined } : c);
+      }
+
+      return prev.map((c) => (c.id === combatantId ? { ...c, hp: newHp } : c));
+    });
+  }, []);
+
   const removePing = useCallback((id: string) => {
     setPings((prev) => prev.filter((p: any) => p.id !== id));
     syncBroadcastPingLocation({ action: 'remove', id } as any);
@@ -921,6 +961,15 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setCasterTokenKey,
         spellTargetPosition,
         setSpellTargetPosition,
+        aoeRotation,
+        setAoeRotation,
+        detectedAoETargets,
+        setDetectedAoETargets,
+        isAoESaveModalOpen,
+        setIsAoESaveModalOpen,
+        activeConcentrationPrompt,
+        setActiveConcentrationPrompt,
+        triggerDamageWithConcentrationCheck,
         activeSheets,
         openSheet,
         minimizeSheet,

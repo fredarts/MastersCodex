@@ -407,3 +407,35 @@ export function executeSneakAttackRoll({
   broadcastDiceRoll(damageRoll, secretMode);
   return damageRoll;
 }
+
+/**
+ * Rola uma fórmula arbitrária de dados D&D (ex: "8d6", "3d8+4", "1d10-1")
+ */
+export function rollDiceFormula(formula: string): { total: number; rolls: number[]; formula: string } {
+  if (!formula || !formula.trim()) {
+    return { total: 0, rolls: [], formula: '0' };
+  }
+  const clean = formula.replace(/\s+/g, '');
+  const diceMatch = clean.match(/^(\d+)d(\d+)([\+\-]\d+)?$/i);
+  if (diceMatch) {
+    const count = parseInt(diceMatch[1], 10) || 1;
+    const sides = parseInt(diceMatch[2], 10) || 6;
+    const modifier = diceMatch[3] ? parseInt(diceMatch[3], 10) : 0;
+    const rolls: number[] = [];
+    let sum = 0;
+    for (let i = 0; i < count; i++) {
+      const r = Math.floor(Math.random() * sides) + 1;
+      rolls.push(r);
+      sum += r;
+    }
+    return { total: Math.max(0, sum + modifier), rolls, formula };
+  }
+
+  const num = parseInt(clean, 10);
+  if (!isNaN(num)) {
+    return { total: num, rolls: [num], formula };
+  }
+
+  return { total: 0, rolls: [], formula };
+}
+

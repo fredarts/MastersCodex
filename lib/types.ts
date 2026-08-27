@@ -381,6 +381,9 @@ export interface Combatant {
   damageImmunities?: string[];
   damageVulnerabilities?: string[];
   conditionImmunities?: string[];
+  isConcentrating?: boolean;
+  concentrationSpell?: string;
+  savingThrowBonuses?: Partial<Record<'STR' | 'DEX' | 'CON' | 'INT' | 'WIS' | 'CHA', number>>;
   characterSheet?: CharacterSheet;
 }
 

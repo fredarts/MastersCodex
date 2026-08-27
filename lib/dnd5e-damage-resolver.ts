@@ -214,3 +214,24 @@ export function calculateEffectiveDamage({
     explanation: `Dano integral de ${rawDamage} (${displayType}) aplicado.`,
   };
 }
+
+/**
+ * Retorna o multiplicador de dano (0 = imune, 0.5 = resistência, 1 = normal, 2 = vulnerabilidade)
+ */
+export function calculateDamageModifier(
+  damageType: string,
+  resistances?: string[],
+  immunities?: string[],
+  vulnerabilities?: string[]
+): number {
+  const res = calculateEffectiveDamage({
+    rawDamage: 100,
+    damageType,
+    target: {
+      damageResistances: resistances,
+      damageImmunities: immunities,
+      damageVulnerabilities: vulnerabilities,
+    },
+  });
+  return res.multiplier;
+}

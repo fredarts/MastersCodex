@@ -236,6 +236,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     setCasterTokenKey,
     spellTargetPosition,
     setSpellTargetPosition,
+    aoeRotation,
+    setDetectedAoETargets,
     pings,
     broadcastPingLocation,
     removePing,
@@ -973,13 +975,22 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       return distToTarget <= sizeUnits;
     }
 
-    const dirX = target.x - caster.x;
-    const dirZ = target.z - caster.z;
-    const distCasterToTarget = Math.sqrt(dirX * dirX + dirZ * dirZ);
-    if (distCasterToTarget === 0) return false;
+    let ndx = 0;
+    let ndz = 1;
 
-    const ndx = dirX / distCasterToTarget;
-    const ndz = dirZ / distCasterToTarget;
+    if (aoeRotation !== undefined && aoeRotation !== 0) {
+      const rotRad = (aoeRotation * Math.PI) / 180;
+      ndx = Math.sin(rotRad);
+      ndz = Math.cos(rotRad);
+    } else {
+      const dirX = target.x - caster.x;
+      const dirZ = target.z - caster.z;
+      const distCasterToTarget = Math.sqrt(dirX * dirX + dirZ * dirZ);
+      if (distCasterToTarget > 0) {
+        ndx = dirX / distCasterToTarget;
+        ndz = dirZ / distCasterToTarget;
+      }
+    }
 
     const tcx = cPos.x - caster.x;
     const tcz = cPos.z - caster.z;
@@ -1005,7 +1016,26 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     }
 
     return false;
-  }, [activeSpellTargeting, casterTokenKey, spellTargetPosition, getCombatantPos]);
+  }, [activeSpellTargeting, casterTokenKey, spellTargetPosition, aoeRotation, getCombatantPos]);
+
+  // Sincronizar alvos detectados de AoE com o LiveCockpitContext
+  useEffect(() => {
+    if (!activeSpellTargeting || !casterTokenKey || !spellTargetPosition) {
+      setDetectedAoETargets([]);
+      return;
+    }
+
+    const targets: string[] = [];
+    combatants.forEach((c, idx) => {
+      const key = c.id ? c.id : `${c.name}__${idx}`;
+      const pos = localPositions[key] || localPositions[c.id || c.name] || (c.x !== undefined && c.z !== undefined ? { x: c.x, z: c.z } : getStableDefaultPos(key));
+      if (isCombatantInSpellArea(c, pos)) {
+        targets.push(c.id);
+      }
+    });
+
+    setDetectedAoETargets(targets);
+  }, [activeSpellTargeting, casterTokenKey, spellTargetPosition, aoeRotation, combatants, localPositions, isCombatantInSpellArea, setDetectedAoETargets, getStableDefaultPos]);
 
   // Instanced Token Manager Ref
   const instancedTokenManagerRef = useRef<any>(null);

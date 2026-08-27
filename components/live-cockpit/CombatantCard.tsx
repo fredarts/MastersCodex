@@ -434,6 +434,33 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                 Reação
               </button>
 
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onUpdateCombatants((prev) => {
+                    const next = prev.map((x) => (x.id === c.id ? { ...x, isConcentrating: !x.isConcentrating, concentrationSpell: !x.isConcentrating ? (x.concentrationSpell || 'Magia') : undefined } : x));
+                    if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
+                    return next;
+                  });
+                  if (!c.isConcentrating) {
+                    toast.info(`✨ ${c.name} agora está concentrando em uma magia!`);
+                  } else {
+                    toast.info(`🌑 ${c.name} encerrou a concentração.`);
+                  }
+                }}
+                className={`px-2 py-0.5 text-[9px] font-extrabold rounded border transition-all flex items-center gap-1 ${
+                  c.isConcentrating
+                    ? 'bg-purple-600/30 text-purple-300 border-purple-500/60 shadow-[0_0_10px_rgba(168,85,247,0.3)] animate-pulse'
+                    : 'bg-slate-900/60 text-slate-500 border-slate-800 hover:text-slate-300 hover:border-slate-700'
+                }`}
+                title={c.isConcentrating ? `Concentrando em ${c.concentrationSpell || 'Magia'} (Clique para alternar)` : 'Alternar Concentração'}
+              >
+                <span>Conc</span>
+                {c.isConcentrating && <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>}
+              </button>
+
               {isTurn && (
                 <button
                   type="button"

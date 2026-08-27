@@ -11,6 +11,8 @@ import { BattleSetupModal } from '@/components/live-cockpit/BattleSetupModal';
 import { Combatant } from '@/lib/types';
 import { toast } from 'sonner';
 import { validateMeleeAttackRange } from '@/lib/utils/combat-range';
+import { AoESaveResolverModal } from '@/components/live-cockpit/AoESaveResolverModal';
+import { ConcentrationCheckModal } from '@/components/live-cockpit/ConcentrationCheckModal';
 
 interface LiveCockpitModalManagerProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -333,6 +335,10 @@ export const LiveCockpitModalManager: React.FC<LiveCockpitModalManagerProps> = (
           </div>
         </div>
       )}
+
+      {/* Modais de Resolução AoE e Teste de Concentração */}
+      <AoESaveResolverModal />
+      <ConcentrationCheckModal />
     </>
   );
 };

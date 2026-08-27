@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Combatant } from '@/lib/types';
 import { Swords, Heart } from 'lucide-react';
+import { useLiveCockpit } from '@/context/LiveCockpitContext';
 
 interface CombatantHpManagerProps {
   combatant: Combatant;
@@ -17,10 +18,16 @@ export const CombatantHpManager: React.FC<CombatantHpManagerProps> = ({
 
   const hpPercent = Math.max(0, Math.min(100, (combatant.hp / combatant.maxHp) * 100));
 
+  const { triggerDamageWithConcentrationCheck } = useLiveCockpit();
+
   const handlePreciseHp = (isDamage: boolean) => {
     const val = parseInt(inputValue, 10);
     if (isNaN(val) || val <= 0) return;
-    onHpChange(combatant.id, isDamage ? -val : val);
+    if (isDamage && triggerDamageWithConcentrationCheck) {
+      triggerDamageWithConcentrationCheck(combatant.id, val);
+    } else {
+      onHpChange(combatant.id, isDamage ? -val : val);
+    }
     setInputValue('');
   };
 
