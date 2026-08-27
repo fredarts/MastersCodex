@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CharacterSheet, CharacterEquipmentItem, TransactionEntry, ReadableContent } from '@/lib/types';
-import { Coins, Package, Plus, Trash2, Gem, Weight, Scale, Sparkles, ShoppingCart, Lock, Unlock, History, Dices, ArrowDownRight } from 'lucide-react';
+import { Coins, Package, Plus, Trash2, Gem, Weight, Scale, Sparkles, ShoppingCart, Lock, Unlock, History, Dices, ArrowDownRight, Receipt, Check, Minus } from 'lucide-react';
 import { ItemCompendiumModal } from '../Modals/ItemCompendiumModal';
 import { toast } from 'sonner';
 import { getEffectiveAttributeScore, recalculateSheetDerivedStats, WEAPON_TABLE } from '@/lib/dnd5e-calculator';
@@ -8,6 +8,17 @@ import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/context/CampaignContext';
 import { isItemReadable, getOrCreateReadableContent } from '@/lib/utils/readableLoreUtils';
 import { BG3ReadableModal } from '@/components/loot/BG3ReadableModal';
+
+const QUICK_EXPENSES = [
+  { label: '🛏️ Estalagem (5 PP)', name: 'Estalagem (Pernoite)', amount: 5, coinType: 'pp' as const },
+  { label: '🏨 Estalagem Confortável (8 PP)', name: 'Estalagem Confortável', amount: 8, coinType: 'pp' as const },
+  { label: '🍺 Cerveja / Hidromel (4 PC)', name: 'Caneca de Cerveja / Hidromel', amount: 4, coinType: 'pc' as const },
+  { label: '🍲 Refeição (3 PC)', name: 'Refeição na Taverna', amount: 3, coinType: 'pc' as const },
+  { label: '🥩 Ração de Viagem (5 PP)', name: 'Ração de Viagem (1 dia)', amount: 5, coinType: 'pp' as const },
+  { label: '🐎 Montaria / Carroça (5 PP)', name: 'Aluguel de Montaria / Charrete', amount: 5, coinType: 'pp' as const },
+  { label: '💰 Gorjeta / Suborno (1 PO)', name: 'Gorjeta / Suborno', amount: 1, coinType: 'po' as const },
+  { label: '👑 Banquete Nobre (10 PO)', name: 'Banquete Nobre', amount: 10, coinType: 'po' as const },
+];
 
 interface EquipmentSectionProps {
   sheet: CharacterSheet;
@@ -168,12 +179,13 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
       toast.error('Informe um valor válido para gastar.');
       return;
     }
-    
+
+    const trimmedReason = spendReason.trim() || 'Despesa / Pagamento';
     const currentCoins = sheet.currency || { po: 0, pp: 0, pc: 0, pe: 0, pl: 0 };
     const available = currentCoins[spendCoinType] || 0;
 
     if (available < spendAmount) {
-      toast.error(`Você não possui ${spendAmount} ${spendCoinType.toUpperCase()} disponíveis. (Saldo: ${available})`);
+      toast.error(`Saldo insuficiente! Você possui ${available} ${spendCoinType.toUpperCase()} e a despesa é de ${spendAmount} ${spendCoinType.toUpperCase()}.`);
       return;
     }
 
@@ -183,11 +195,11 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
     };
 
     const newTransaction: TransactionEntry = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       type: 'spend',
       amount: spendAmount,
       coinType: spendCoinType,
-      reason: spendReason.trim() || 'Gasto Geral',
+      reason: trimmedReason,
       date: new Date().toLocaleString('pt-BR'),
     };
 
@@ -197,7 +209,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
       transactionHistory: [newTransaction, ...(sheet.transactionHistory || [])],
     });
 
-    toast.success(`💸 Gastou ${spendAmount} ${spendCoinType.toUpperCase()}!`);
+    toast.success(`💸 Pagamento realizado com sucesso: -${spendAmount} ${spendCoinType.toUpperCase()} ("${trimmedReason}")!`);
     
     if (sheet.campaignId || activeCampaign?.id) {
       try {
@@ -205,8 +217,8 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
           createFeedEvent({
             campaignId: sheet.campaignId || activeCampaign?.id || '',
             eventType: 'chat_message',
-            title: 'Gasto de Moedas',
-            summary: `💸 ${sheet.characterName} gastou ${spendAmount} ${spendCoinType.toUpperCase()}${spendReason ? ` com: "${spendReason}"` : ''}.`,
+            title: 'Pagamento de Despesa',
+            summary: `💸 ${sheet.characterName} pagou ${spendAmount} ${spendCoinType.toUpperCase()} com: "${trimmedReason}".`,
             isPublic: true,
           });
         }
@@ -766,93 +778,149 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
             </div>
           )}
 
-          {/* Opção de Registrar Gasto (Permite apenas redução de moedas) */}
-          {sheet.startingWealthRolled && (
-            <div className="border-t border-amber-500/10 pt-2 mt-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[8px] text-slate-500 font-mono">
-                  {roleMode === 'dm' ? '🔓 Acesso de Mestre' : '🔒 Edição Direta Bloqueada'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setIsSpendingFormOpen(!isSpendingFormOpen)}
-                  className="text-[9px] font-bold text-amber-500 hover:text-amber-400 flex items-center gap-1 transition-colors uppercase font-serif"
-                >
-                  <ArrowDownRight className="w-3 h-3 text-amber-500" />
-                  {isSpendingFormOpen ? 'Fechar Gasto' : '💸 Registrar Gasto'}
-                </button>
-              </div>
+          {/* Opção de Registrar Pagamento / Despesa */}
+          <div className="border-t border-amber-500/15 pt-2.5 mt-2.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[8px] text-slate-400 font-mono">
+                {roleMode === 'dm' ? '🔓 Acesso de Mestre' : '💰 Gestão Financeira'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsSpendingFormOpen(!isSpendingFormOpen)}
+                className="text-[9.5px] font-bold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-all uppercase font-serif active:scale-95 shadow-sm"
+              >
+                <Receipt className="w-3.5 h-3.5 text-amber-400" />
+                {isSpendingFormOpen ? 'Fechar Pagamento' : '💸 Efetuar Pagamento'}
+              </button>
+            </div>
 
-              {isSpendingFormOpen && (
-                <form onSubmit={handleSpendCoins} className="bg-[#05070a] border border-amber-950/40 rounded-xl p-2.5 mt-2.5 space-y-2 animate-slideDown">
-                  <div className="grid grid-cols-3 gap-1">
-                    <div>
-                      <label className="text-[8px] font-bold text-slate-400 block mb-0.5">Valor</label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={spendAmount || ''}
-                        onChange={(e) => setSpendAmount(parseInt(e.target.value, 10) || 0)}
-                        placeholder="Qtd"
-                        className="w-full bg-[#0b0f19] border border-slate-800 rounded px-1.5 py-0.5 text-center text-[10px] font-bold text-slate-200 focus:outline-none"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[8px] font-bold text-slate-400 block mb-0.5">Moeda</label>
-                      <select
-                        value={spendCoinType}
-                        onChange={(e) => setSpendCoinType(e.target.value as any)}
-                        className="w-full bg-[#0b0f19] border border-slate-800 rounded px-1 py-0.5 text-[10px] text-slate-200 focus:outline-none"
-                      >
-                        <option value="pc">PC</option>
-                        <option value="pp">PP</option>
-                        <option value="pe">PE</option>
-                        <option value="po">PO</option>
-                        <option value="pl">PL</option>
-                      </select>
-                    </div>
-                    <div className="flex items-end">
+            {isSpendingFormOpen && (
+              <form onSubmit={handleSpendCoins} className="bg-[#05070a] border border-amber-500/30 rounded-xl p-3 space-y-3 animate-slideDown shadow-xl">
+                {/* Sugestões Rápidas de Despesas D&D 5e */}
+                <div className="space-y-1">
+                  <label className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                    Sugestões Rápidas (D&D 5e):
+                  </label>
+                  <div className="flex flex-wrap gap-1">
+                    {QUICK_EXPENSES.map((q, idx) => (
                       <button
-                        type="submit"
-                        className="w-full bg-rose-950/80 hover:bg-rose-900 text-rose-350 border border-rose-800/40 font-bold font-serif py-1 rounded text-[9px] transition-all cursor-pointer uppercase active:scale-95"
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setSpendReason(q.name);
+                          setSpendAmount(q.amount);
+                          setSpendCoinType(q.coinType);
+                        }}
+                        className="text-[8px] font-medium bg-[#0b0f19] hover:bg-amber-950/50 text-slate-300 hover:text-amber-200 border border-slate-800 hover:border-amber-500/40 px-2 py-0.5 rounded transition-all cursor-pointer"
                       >
-                        Confirmar
+                        {q.label}
                       </button>
-                    </div>
+                    ))}
                   </div>
+                </div>
+
+                {/* Nome da Despesa */}
+                <div>
+                  <label className="text-[8px] font-bold text-slate-400 block mb-0.5 font-mono">
+                    Nome da Despesa / Estalagem / Serviço:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={spendReason}
+                    onChange={(e) => setSpendReason(e.target.value)}
+                    placeholder="Ex: Pernoite na Estalagem do Dragão Verde, 3 Canecas de Cerveja..."
+                    className="w-full bg-[#0b0f19] border border-slate-700/80 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-[9.5px] text-slate-100 placeholder:text-slate-600 focus:outline-none font-serif transition-colors"
+                  />
+                </div>
+
+                {/* Valor e Moeda */}
+                <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[8px] font-bold text-slate-400 block mb-0.5">Motivo do Gasto</label>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <label className="text-[8px] font-bold text-slate-400 font-mono">Valor:</label>
+                      <div className="flex items-center gap-1">
+                        {[1, 5, 10].map((num) => (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => setSpendAmount((prev) => (prev || 0) + num)}
+                            className="text-[7.5px] font-bold bg-[#121826] hover:bg-amber-950/60 text-amber-300 border border-amber-500/20 px-1 py-0.2 rounded"
+                          >
+                            +{num}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <input
-                      type="text"
-                      value={spendReason}
-                      onChange={(e) => setSpendReason(e.target.value)}
-                      placeholder="Ex: Estalagem, Ração, etc."
-                      className="w-full bg-[#0b0f19] border border-slate-800 rounded px-2 py-1 text-[9px] text-slate-350 focus:outline-none font-serif"
+                      type="number"
+                      min={1}
+                      required
+                      value={spendAmount || ''}
+                      onChange={(e) => setSpendAmount(parseInt(e.target.value, 10) || 0)}
+                      placeholder="Qtd"
+                      className="w-full bg-[#0b0f19] border border-slate-700/80 focus:border-amber-500 rounded-lg px-2 py-1 text-center text-[11px] font-bold text-amber-300 focus:outline-none"
                     />
                   </div>
-                </form>
-              )}
-            </div>
-          )}
+                  <div>
+                    <label className="text-[8px] font-bold text-slate-400 block mb-0.5 font-mono">
+                      Moeda (Saldo: {coins[spendCoinType]}):
+                    </label>
+                    <select
+                      value={spendCoinType}
+                      onChange={(e) => setSpendCoinType(e.target.value as any)}
+                      className="w-full bg-[#0b0f19] border border-slate-700/80 focus:border-amber-500 rounded-lg px-2 py-1 text-[10px] font-bold text-slate-100 focus:outline-none"
+                    >
+                      <option value="po">PO - Ouro (Saldo: {coins.po})</option>
+                      <option value="pp">PP - Prata (Saldo: {coins.pp})</option>
+                      <option value="pc">PC - Cobre (Saldo: {coins.pc})</option>
+                      <option value="pe">PE - Electrum (Saldo: {coins.pe})</option>
+                      <option value="pl">PL - Platina (Saldo: {coins.pl})</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Aviso se saldo for insuficiente */}
+                {spendAmount > 0 && coins[spendCoinType] < spendAmount && (
+                  <p className="text-[8.5px] font-bold text-rose-400 bg-rose-950/30 border border-rose-800/30 p-1.5 rounded-lg flex items-center gap-1">
+                    ⚠️ Saldo insuficiente em {spendCoinType.toUpperCase()} (Você possui {coins[spendCoinType]}, faltam {spendAmount - coins[spendCoinType]}).
+                  </p>
+                )}
+
+                {/* Botão de Confirmação */}
+                <button
+                  type="submit"
+                  disabled={spendAmount <= 0 || coins[spendCoinType] < spendAmount || !spendReason.trim()}
+                  className="w-full bg-gradient-to-r from-rose-900 to-rose-950 hover:from-rose-800 hover:to-rose-900 disabled:opacity-50 disabled:cursor-not-allowed text-rose-200 border border-rose-700/50 font-bold font-serif py-1.5 rounded-lg text-[9.5px] transition-all cursor-pointer uppercase active:scale-95 shadow-md flex items-center justify-center gap-1.5"
+                >
+                  <Receipt className="w-3.5 h-3.5" />
+                  Efetuar Pagamento de {spendAmount || 0} {spendCoinType.toUpperCase()}
+                </button>
+              </form>
+            )}
+          </div>
         </div>
 
-        {/* LOG DE TRANSAÇÕES */}
-        {sheet.startingWealthRolled && sheet.transactionHistory && sheet.transactionHistory.length > 0 && (
-          <div className="bg3-panel rounded-2xl p-3 space-y-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif border-b border-amber-500/15 pb-1">
-              <History className="w-3.5 h-3.5 text-amber-400" />
-              Histórico de Moedas
-            </span>
-            <div className="max-h-[100px] overflow-y-auto space-y-1.5 pr-1 bg3-scrollbar text-[9px] font-mono leading-tight">
+        {/* LOG DE TRANSAÇÕES (SEMPRE ACESSÍVEL QUANDO HOUVER TRANSAÇÕES) */}
+        {sheet.transactionHistory && sheet.transactionHistory.length > 0 && (
+          <div className="bg3-panel rounded-2xl p-3 space-y-1.5 shadow-lg border border-amber-500/20">
+            <div className="flex items-center justify-between border-b border-amber-500/15 pb-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif">
+                <History className="w-3.5 h-3.5 text-amber-400" />
+                Histórico de Moedas ({sheet.transactionHistory.length})
+              </span>
+            </div>
+            <div className="max-h-[140px] overflow-y-auto space-y-1.5 pr-1 bg3-scrollbar text-[9px] font-mono leading-tight">
               {sheet.transactionHistory.map((t) => (
-                <div key={t.id} className="flex justify-between items-start border-b border-slate-850/60 pb-1 last:border-0">
-                  <div className="space-y-0.5">
-                    <span className="text-slate-300 block font-serif leading-none">{t.reason}</span>
+                <div key={t.id} className="flex justify-between items-start border-b border-slate-850/60 pb-1.5 last:border-0 hover:bg-slate-900/40 p-1 rounded transition-colors">
+                  <div className="space-y-0.5 max-w-[75%]">
+                    <span className="text-slate-200 block font-serif leading-none truncate" title={t.reason}>
+                      {t.reason}
+                    </span>
                     <span className="text-slate-500 text-[8px] block">{t.date}</span>
                   </div>
-                  <span className={`font-black whitespace-nowrap ${
-                    t.type === 'spend' ? 'text-rose-400' : t.type === 'loot' ? 'text-emerald-400' : 'text-amber-450'
+                  <span className={`font-black whitespace-nowrap text-[10px] ${
+                    t.type === 'spend' ? 'text-rose-400' : t.type === 'loot' ? 'text-emerald-400' : 'text-amber-400'
                   }`}>
                     {t.type === 'spend' ? '-' : '+'}{t.amount} {t.coinType.toUpperCase()}
                   </span>

@@ -961,31 +961,50 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     setIsJoinModalOpen(true);
   };
 
-  // Filtra estritamente apenas as campanhas onde o personagem/usuário ingressou como jogador
+  // Filtra as campanhas do jogador (e inclui campanhas onde o usuário é DM para permitir teste/jogo de fichas no Modo Jogador)
   const playerCampaigns = useMemo(() => {
-    return userCampaigns.filter((c) => c.role === 'player');
+    const directPlayerCamps = userCampaigns.filter((c) => c.role === 'player');
+    const dmCampsAsPlayer = userCampaigns
+      .filter((c) => c.role === 'dm' && !directPlayerCamps.some((p) => p.id === c.id))
+      .map((c) => ({ ...c, role: 'player' as const }));
+
+    return [...directPlayerCamps, ...dmCampsAsPlayer];
   }, [userCampaigns]);
 
   // Find currently selected campaign (only among player campaigns)
   const currentCampaign =
     playerCampaigns.find((c) => c.id === selectedCampaignId) ||
-    (activeCampaign?.role === 'player' ? activeCampaign : playerCampaigns[0]) ||
+    playerCampaigns.find((c) => c.id === activeCampaign?.id) ||
+    playerCampaigns[0] ||
     null;
 
-  // Resolve character name from multiple sources (campaign → sheets → members → fallback)
+  // Resolve character name from multiple sources (campaign → sheets → members → party → fallback)
   const resolveCharName = (camp?: UserCampaign | null): string => {
     if (camp?.characterName) return camp.characterName;
-    // Try to find a character sheet linked to this campaign
+    // 1. Procura ficha vinculada à campanha
     const linkedSheet = camp?.id
       ? characterSheets.find((s) => s.campaignId === camp.id)
       : null;
     if (linkedSheet?.characterName && linkedSheet.characterName !== 'Novo Aventureiro') {
       return linkedSheet.characterName;
     }
-    // Try to find the name from campaign members (the user's own entry)
+    // 2. Procura membro registrado no Supabase / codex_members
     if (camp?.id) {
       const myMember = campaignMembers.find((m) => m.userId === user?.id && m.characterName);
       if (myMember?.characterName) return myMember.characterName;
+    }
+    // 3. Procura correspondência entre as fichas salvas e os membros da party da campanha
+    if (camp?.partyMembers && camp.partyMembers.length > 0) {
+      const pmNames = camp.partyMembers.map((p) => p.name?.toLowerCase());
+      const match = characterSheets.find((s) => s.characterName && pmNames.includes(s.characterName.toLowerCase()));
+      if (match?.characterName) return match.characterName;
+      // Se não achou ficha correspondente, retorna o nome do membro da party se houver
+      if (camp.partyMembers[0]?.name) return camp.partyMembers[0].name;
+    }
+    // 4. Se tiver apenas uma ficha criada pelo usuário, usa o nome dela
+    if (characterSheets.length > 0) {
+      const validSheet = characterSheets.find((s) => s.characterName && s.characterName !== 'Novo Aventureiro' && !s.characterName.startsWith('Aventureiro '));
+      if (validSheet?.characterName) return validSheet.characterName;
     }
     return 'Aventureiro';
   };

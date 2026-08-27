@@ -54,8 +54,9 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
       if (res.ok) {
         const seen = new Set<string>();
         const uniqueCampaigns = res.value.filter((c) => {
-          if (!c.id || seen.has(c.id)) return false;
-          seen.add(c.id);
+          const key = `${c.id}_${c.role}`;
+          if (!c.id || seen.has(key)) return false;
+          seen.add(key);
           return true;
         });
         setUserCampaigns(uniqueCampaigns);
@@ -212,9 +213,15 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
       return;
     }
 
-    setUserCampaigns((prev) => prev.map((c) => (c.id === updatedCampaign.id ? updatedCampaign : c)));
+    setUserCampaigns((prev) =>
+      prev.map((c) =>
+        c.id === updatedCampaign.id
+          ? { ...c, ...updatedCampaign, role: c.role, characterName: c.characterName || updatedCampaign.characterName }
+          : c
+      )
+    );
     if (activeCampaign?.id === updatedCampaign.id) {
-      setActiveCampaignState(updatedCampaign);
+      setActiveCampaignState((prev) => (prev ? { ...prev, ...updatedCampaign, role: prev.role, characterName: prev.characterName } : updatedCampaign));
     }
   };
 
@@ -252,8 +259,8 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
       return;
     }
 
-    setUserCampaigns((prev) => prev.filter((c) => c.id !== campaignId));
-    if (activeCampaign?.id === campaignId) {
+    setUserCampaigns((prev) => prev.filter((c) => !(c.id === campaignId && c.role === 'player')));
+    if (activeCampaign?.id === campaignId && activeCampaign?.role === 'player') {
       setActiveCampaign(null);
     }
   };
