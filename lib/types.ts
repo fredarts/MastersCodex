@@ -409,6 +409,8 @@ export interface Combatant {
   isConcentrating?: boolean;
   concentrationSpell?: string;
   savingThrowBonuses?: Partial<Record<'STR' | 'DEX' | 'CON' | 'INT' | 'WIS' | 'CHA', number>>;
+  auras?: import('./auras/auraTypes').TokenAura[];
+  activeAuraBuffs?: import('./auras/auraTypes').ActiveAuraBuff[];
   characterSheet?: CharacterSheet;
 }
 
@@ -1355,4 +1357,7 @@ export interface DungeonTransitionConfig {
   lockpickDC?: number;
   description?: string;
 }
+
+export * from './auras/auraTypes';
+
 

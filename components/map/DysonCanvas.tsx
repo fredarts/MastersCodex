@@ -1318,6 +1318,35 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
           const isBeingDragged = Boolean(draggingToken && draggingToken.name === cell.tokenName && r === draggingToken.startR && c === draggingToken.startC);
 
+          // 4.A.0. Render Dynamic 2D Token Auras Underneath
+          if (tokenCombatant?.auras && tokenCombatant.auras.length > 0) {
+            tokenCombatant.auras.forEach((aura) => {
+              if (!aura.enabled) return;
+              const auraGridRadius = (aura.radiusFt / 5) * CELL_SIZE;
+              const auraColor = aura.visual.colorHex || '#facc15';
+
+              ctx.save();
+              ctx.beginPath();
+              ctx.arc(tx, ty, auraGridRadius, 0, Math.PI * 2);
+              ctx.fillStyle = hexToRgba(auraColor, aura.visual.opacity || 0.2);
+              ctx.fill();
+
+              ctx.strokeStyle = auraColor;
+              ctx.lineWidth = aura.visual.borderStyle === 'dashed' ? 2 : 1.5;
+              if (aura.visual.borderStyle === 'dashed') {
+                ctx.setLineDash([6, 4]);
+              }
+              ctx.stroke();
+
+              // Label on edge
+              ctx.font = 'bold 9px Inter, sans-serif';
+              ctx.fillStyle = auraColor;
+              ctx.textAlign = 'center';
+              ctx.fillText(`${aura.name}`, tx, ty - auraGridRadius - 3);
+              ctx.restore();
+            });
+          }
+
           // Token border & base fill
           ctx.save();
           if (isBeingDragged) {

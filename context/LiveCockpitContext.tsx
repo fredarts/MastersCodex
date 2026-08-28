@@ -13,6 +13,8 @@ import { toast } from 'sonner';
 
 import { useBattleGridStore } from '@/lib/stores/useBattleGridStore';
 import { rollHistoryService } from '@/lib/services/rollHistoryService';
+import { TokenAura, AuraTriggerEvent } from '@/lib/auras/auraTypes';
+import { evaluateAuraTriggersOnMove } from '@/lib/auras/auraEngine';
 
 export interface ActiveSheetState {
   id: string;
@@ -88,6 +90,11 @@ interface LiveCockpitContextType {
   activeXCardAlert: XCardAlertPayload | null;
   setActiveXCardAlert: React.Dispatch<React.SetStateAction<XCardAlertPayload | null>>;
   broadcastXCardAlert: (payload: { alert: XCardAlertPayload }) => void;
+  activeAuraPrompt: AuraTriggerEvent | null;
+  setActiveAuraPrompt: React.Dispatch<React.SetStateAction<AuraTriggerEvent | null>>;
+  addTokenAura: (combatantId: string, aura: TokenAura) => void;
+  removeTokenAura: (combatantId: string, auraId: string) => void;
+  toggleTokenAura: (combatantId: string, auraId: string, enabled?: boolean) => void;
 }
 
 const LiveCockpitContext = createContext<LiveCockpitContextType | undefined>(undefined);
@@ -124,6 +131,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [voiceSignal, setVoiceSignal] = useState<VoiceSignalPayload | null>(null);
   const [drawings, setDrawings] = useState<any[]>([]);
   const [activeXCardAlert, setActiveXCardAlert] = useState<XCardAlertPayload | null>(null);
+  const [activeAuraPrompt, setActiveAuraPrompt] = useState<AuraTriggerEvent | null>(null);
 
   // Ref to track the last synchronized combat state to avoid feedback loops
   const lastSyncStateRef = useRef<{
@@ -832,6 +840,9 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     newX?: number,
     newZ?: number
   ) => {
+    const movedCombatant = combatants.find((c) => c.id === idOrName || c.name === idOrName);
+    const prevPos = tokenPositions3D[idOrName] || { x: movedCombatant?.x ?? 0, z: movedCombatant?.z ?? 0 };
+
     storeUpdateTokenPosition3D(idOrName, deltaX, deltaZ, newX, newZ, (id, x, z) => {
       const now = Date.now();
       lastTokenMoveTimesRef.current[id] = now;
@@ -842,8 +853,66 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         newZ: z,
         timestamp: now,
       });
+
+      // Avaliação de Colisão Espacial de Auras
+      if (movedCombatant) {
+        const nextPos = { x, z };
+        const triggers = evaluateAuraTriggersOnMove({
+          movedCombatant,
+          previousPos: prevPos,
+          newPos: nextPos,
+          allCombatants: combatants,
+          tokenPositions: {
+            ...tokenPositions3D,
+            [idOrName]: nextPos,
+          },
+        });
+
+        if (triggers.length > 0) {
+          setActiveAuraPrompt(triggers[0]);
+        }
+      }
     });
   };
+
+  const addTokenAura = useCallback((combatantId: string, aura: TokenAura) => {
+    setCombatants((prev) =>
+      prev.map((c) => {
+        if (c.id !== combatantId) return c;
+        const currentAuras = c.auras || [];
+        return {
+          ...c,
+          auras: [...currentAuras.filter((a) => a.id !== aura.id), aura],
+        };
+      })
+    );
+  }, []);
+
+  const removeTokenAura = useCallback((combatantId: string, auraId: string) => {
+    setCombatants((prev) =>
+      prev.map((c) => {
+        if (c.id !== combatantId) return c;
+        return {
+          ...c,
+          auras: (c.auras || []).filter((a) => a.id !== auraId),
+        };
+      })
+    );
+  }, []);
+
+  const toggleTokenAura = useCallback((combatantId: string, auraId: string, enabled?: boolean) => {
+    setCombatants((prev) =>
+      prev.map((c) => {
+        if (c.id !== combatantId) return c;
+        return {
+          ...c,
+          auras: (c.auras || []).map((a) =>
+            a.id === auraId ? { ...a, enabled: enabled !== undefined ? enabled : !a.enabled } : a
+          ),
+        };
+      })
+    );
+  }, []);
 
   const updateTokenRotation3D = (idOrName: string, angleInDegrees: number) => {
     storeUpdateTokenRotation3D(idOrName, angleInDegrees, (id, angle) => {
@@ -1005,6 +1074,11 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         activeXCardAlert,
         setActiveXCardAlert,
         broadcastXCardAlert,
+        activeAuraPrompt,
+        setActiveAuraPrompt,
+        addTokenAura,
+        removeTokenAura,
+        toggleTokenAura,
       }}
     >
       {children}

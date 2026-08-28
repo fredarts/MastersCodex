@@ -24,6 +24,7 @@ import { HelpCircle, X, RotateCw, Settings, Trash2 } from 'lucide-react';
 import { patchWebGLContext } from '@/lib/webgl-utils';
 import { toast } from 'sonner';
 import { RangedAttackSplineSystem, RangedDistanceBadge } from './battle-3d/RangedAttackSplineMesh';
+import { AuraSystem3D } from './battle-3d/AuraMesh3D';
 import { calculateGridDistanceFeet, evaluateRangeStatus, parseRangeString, RangeStatus } from '@/lib/utils/dndRangeUtils';
 import {
   GridConfig3D,
@@ -291,6 +292,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   );
 
   const [targetIdState, setTargetIdState] = useState<string | undefined>(propSelectedTargetId);
+  const localPositionsRef = useRef(localPositions);
+  useEffect(() => { localPositionsRef.current = localPositions; }, [localPositions]);
   const [hoveredTargetId, setHoveredTargetId] = useState<string | undefined>(undefined);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [hoveredCombatantId, setHoveredCombatantId] = useState<string | undefined>(undefined);
@@ -554,6 +557,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const floorMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
   const floorTextureUrlRef = useRef<string | undefined>(floorTextureUrl);
   const pingGroupRef = useRef<THREE.Group | null>(null);
+  const auraSysRef = useRef<AuraSystem3D | null>(null);
 
   useEffect(() => {
     floorTextureUrlRef.current = floorTextureUrl;
@@ -1498,6 +1502,9 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     const tokenGroup = new THREE.Group();
     scene.add(tokenGroup);
     tokenGroupRef.current = tokenGroup;
+
+    // Token Auras 3D System
+    auraSysRef.current = new AuraSystem3D(scene);
 
     // Attack Targeting Hover Ring (hidden by default)
     const hoverRingGeo = new THREE.RingGeometry(1.1, 1.4, 48);
@@ -2680,6 +2687,10 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         splineSystemRef.current.clear();
       }
 
+      if (auraSysRef.current) {
+        auraSysRef.current.update(callbacksRef.current.combatants, localPositionsRef.current || {});
+      }
+
       renderer.render(scene, camera);
     };
     animate();
@@ -2736,6 +2747,10 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       if (splineSystemRef.current) {
         splineSystemRef.current.destroy(scene);
         splineSystemRef.current = null;
+      }
+      if (auraSysRef.current) {
+        auraSysRef.current.dispose();
+        auraSysRef.current = null;
       }
       renderer.dispose();
       disposeHierarchy(scene);

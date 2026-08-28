@@ -1,5 +1,6 @@
 'use client';
 
+import React, { useState } from 'react';
 import { GripVertical, Dices, X, Swords, Sparkles, Check, Zap, Flame, Eye } from 'lucide-react';
 import { Combatant, ConditionType, CharacterSheet, CharacterSpell } from '@/lib/types';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
@@ -7,6 +8,7 @@ import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { CombatantHpManager } from '@/components/live-cockpit/CombatantHpManager';
 import { getAttributeModifier, getJackOfAllTradesBonus } from '@/lib/dnd5e-calculator';
 import { CONDITIONS } from '@/lib/srd-data';
+import { TokenAuraManagerModal } from '@/components/combat/TokenAuraManagerModal';
 import { toast } from 'sonner';
 
 interface CombatantCardProps {
@@ -66,6 +68,7 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
   const isExpanded = expandedId === c.id;
   const isStatusOpen = statusMenuOpen === c.id;
   const isAttackDisabled = !isBattleStarted || c.actionUsed;
+  const [isAuraModalOpen, setIsAuraModalOpen] = useState(false);
 
   // Find matching Character Sheet
   const matchingSheet = characterSheets.find((s) => {
@@ -312,6 +315,32 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                   {effect.name} ({effect.remainingRounds === 99 ? '∞' : `${effect.remainingRounds}r`}) ×
                 </span>
               ))}
+
+              {/* Aura Badges */}
+              {c.auras && c.auras.length > 0 && (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsAuraModalOpen(true);
+                  }}
+                  className="text-[8px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-full cursor-pointer hover:bg-amber-500/40 flex items-center gap-1"
+                  title="Gerenciar Auras do Token"
+                >
+                  <Sparkles className="w-2.5 h-2.5" />
+                  <span>{c.auras.filter((a) => a.enabled).length} Auras</span>
+                </span>
+              )}
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsAuraModalOpen(true);
+                }}
+                className="text-[8px] font-bold text-amber-400/90 bg-[#0f141d] hover:bg-amber-950/30 border border-amber-500/30 hover:border-amber-500/60 px-1.5 py-0.5 rounded-full transition-colors flex items-center gap-1"
+                title="Abrir Gerenciador de Auras"
+              >
+                + Aura
+              </button>
 
               <button
                 onClick={(e) => {
@@ -983,6 +1012,13 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal de Gerenciamento de Auras */}
+      <TokenAuraManagerModal
+        combatant={c}
+        isOpen={isAuraModalOpen}
+        onClose={() => setIsAuraModalOpen(false)}
+      />
     </div>
   );
 };

@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { validateMeleeAttackRange } from '@/lib/utils/combat-range';
 import { AoESaveResolverModal } from '@/components/live-cockpit/AoESaveResolverModal';
 import { ConcentrationCheckModal } from '@/components/live-cockpit/ConcentrationCheckModal';
+import { AuraTriggerModal } from '@/components/live-cockpit/AuraTriggerModal';
 
 interface LiveCockpitModalManagerProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,6 +36,11 @@ export const LiveCockpitModalManager: React.FC<LiveCockpitModalManagerProps> = (
     currentTurnIndex,
     broadcastToPlayerView,
     setCurrentTurnIndex,
+    activeAuraPrompt,
+    setActiveAuraPrompt,
+    setActiveSpellTargeting,
+    setDetectedAoETargets,
+    setIsAoESaveModalOpen,
   } = useLiveCockpit();
 
   const { activeScene, updateScene } = useSession();
@@ -339,6 +345,18 @@ export const LiveCockpitModalManager: React.FC<LiveCockpitModalManagerProps> = (
       {/* Modais de Resolução AoE e Teste de Concentração */}
       <AoESaveResolverModal />
       <ConcentrationCheckModal />
+
+      {/* Modal Reativo de Disparo de Aura */}
+      <AuraTriggerModal
+        event={activeAuraPrompt}
+        onClose={() => setActiveAuraPrompt(null)}
+        onResolveWithAoEModal={(event) => {
+          setActiveAuraPrompt(null);
+          setActiveSpellTargeting({ name: event.aura.spellName || event.aura.name });
+          setDetectedAoETargets([event.targetCombatantId]);
+          setIsAoESaveModalOpen(true);
+        }}
+      />
     </>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CharacterSheet, CharacterEquipmentItem, TransactionEntry, ReadableContent } from '@/lib/types';
-import { Coins, Package, Plus, Trash2, Gem, Weight, Scale, Sparkles, ShoppingCart, Lock, Unlock, History, Dices, ArrowDownRight, Receipt, Check, Minus } from 'lucide-react';
+import { Coins, Package, Plus, Trash2, Gem, Weight, Scale, Sparkles, ShoppingCart, Lock, Unlock, History, Dices, ArrowDownRight, Receipt, Check, Minus, Store } from 'lucide-react';
 import { ItemCompendiumModal } from '../Modals/ItemCompendiumModal';
 import { toast } from 'sonner';
 import { getEffectiveAttributeScore, recalculateSheetDerivedStats, WEAPON_TABLE } from '@/lib/dnd5e-calculator';
@@ -8,6 +8,10 @@ import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/context/CampaignContext';
 import { isItemReadable, getOrCreateReadableContent } from '@/lib/utils/readableLoreUtils';
 import { BG3ReadableModal } from '@/components/loot/BG3ReadableModal';
+import { BG3MerchantModal } from '@/components/merchant/BG3MerchantModal';
+import { MerchantShop } from '@/lib/merchant/merchantTypes';
+import { merchantService } from '@/lib/merchant/merchantService';
+import { generateShopPreset } from '@/lib/merchant/merchantPresets';
 
 const QUICK_EXPENSES = [
   { label: '🛏️ Estalagem (5 PP)', name: 'Estalagem (Pernoite)', amount: 5, coinType: 'pp' as const },
@@ -55,6 +59,29 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
 
   const [isItemCompendiumOpen, setIsItemCompendiumOpen] = useState(false);
   const [readingItem, setReadingItem] = useState<{ title: string; readableContent: ReadableContent } | null>(null);
+  
+  // BG3 Merchant State
+  const [isBG3MerchantOpen, setIsBG3MerchantOpen] = useState(false);
+  const [activeShop, setActiveShop] = useState<MerchantShop | null>(null);
+
+  const handleOpenMerchantShop = async () => {
+    const campaignId = activeCampaign?.id || 'default-campaign';
+    const shops = await merchantService.fetchShops(campaignId);
+    const openShop = shops.find(s => s.isOpenToPlayers) || shops[0];
+    if (openShop) {
+      setActiveShop(openShop);
+      setIsBG3MerchantOpen(true);
+    } else {
+      const defaultShop = generateShopPreset({
+        type: 'blacksmith',
+        wealthTier: 'modest',
+        campaignId,
+      });
+      await merchantService.saveShop(defaultShop);
+      setActiveShop(defaultShop);
+      setIsBG3MerchantOpen(true);
+    }
+  };
   
   // Starting Wealth State
   const [selectedClassRoll, setSelectedClassRoll] = useState<string>('');
@@ -558,6 +585,16 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
         onChange={onChange}
       />
 
+      {/* BG3 MERCHANT & BARTER MODAL */}
+      <BG3MerchantModal
+        shop={activeShop}
+        characterSheet={sheet}
+        isOpen={isBG3MerchantOpen}
+        onClose={() => setIsBG3MerchantOpen(false)}
+        onUpdateCharacterSheet={onChange}
+        onUpdateShop={setActiveShop}
+      />
+
       {/* BARRA DE AÇÕES DO INVENTÁRIO (Top toolbar spanning 4 columns on desktop) */}
       <div className="bg3-panel rounded-2xl p-3 flex items-center justify-between gap-3 lg:col-span-4 shrink-0 lg:flex-row flex-col">
         <div className="flex items-center gap-2">
@@ -567,11 +604,20 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={handleOpenMerchantShop}
+            className="flex items-center gap-1.5 text-[10px] font-black bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 px-3 py-1.5 rounded-xl shadow-md active:scale-95 transition-all cursor-pointer uppercase tracking-wider font-serif"
+            title="Abrir Loja Interativa estilo Baldur's Gate 3"
+          >
+            <Store className="w-3.5 h-3.5" />
+            Loja & Barter (BG3)
+          </button>
+          <button
+            type="button"
             onClick={() => setIsItemCompendiumOpen(true)}
-            className="flex items-center gap-1.5 text-[10px] font-black bg-amber-500 text-slate-950 px-3 py-1.5 rounded-xl shadow-md hover:bg-amber-400 active:scale-95 transition-all cursor-pointer uppercase tracking-wider font-serif"
+            className="flex items-center gap-1.5 text-[10px] font-black bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-3 py-1.5 rounded-xl shadow-md active:scale-95 transition-all cursor-pointer uppercase tracking-wider font-serif"
           >
             <ShoppingCart className="w-3.5 h-3.5" />
-            Loja do Compêndio
+            Compêndio
           </button>
           <button
             type="button"
@@ -579,7 +625,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
             className="flex items-center gap-1.5 text-[10px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 px-3 py-1.5 rounded-xl border border-amber-500/30 transition-all active:scale-95 cursor-pointer uppercase tracking-wider font-serif"
           >
             <Plus className="w-3.5 h-3.5" />
-            Adicionar Item Manual
+            Item Manual
           </button>
         </div>
       </div>

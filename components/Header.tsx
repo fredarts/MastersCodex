@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut, Gift, Mic, MicOff, Video, VideoOff, PhoneCall, Radio, Headphones } from 'lucide-react';
+import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut, Gift, Mic, MicOff, Video, VideoOff, PhoneCall, Radio, Headphones, Store } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -10,6 +10,7 @@ import { useAudio } from '@/context/AudioContext';
 import { usePartyLoot } from '@/context/PartyLootContext';
 import { useVoiceCall } from '@/context/VoiceCallContext';
 import { PWAInstallButton } from '@/components/ui/PWAInstallButton';
+import { MerchantForgeModal } from '@/components/merchant/MerchantForgeModal';
 
 interface HeaderProps {
   onOpenSearch: () => void;
@@ -43,6 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [diceResult, setDiceResult] = useState<number | null>(null);
   const [lastDiceType, setLastDiceType] = useState<string>('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isMerchantForgeOpen, setIsMerchantForgeOpen] = useState(false);
 
   const rollDice = (sides: number) => {
     const res = Math.floor(Math.random() * sides) + 1;
@@ -186,6 +188,18 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </button>
 
+        {/* Merchant Forge Button (Lojas & Economia) */}
+        {roleMode === 'dm' && (
+          <button
+            onClick={() => setIsMerchantForgeOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold transition-all cursor-pointer"
+            title="Merchant Forge: Criar e Gerenciar Lojas da Campanha"
+          >
+            <Store className="w-4 h-4 text-amber-400" />
+            <span className="hidden sm:inline">Lojas & Barter</span>
+          </button>
+        )}
+
         {/* Chamada de Voz e Vídeo (Voice & Video Call) Button */}
         {isInCall ? (
           <div className="flex items-center gap-1 bg-[#121824] border border-emerald-500/40 rounded-xl p-1 shadow-sm">
@@ -321,6 +335,12 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
       </div>
+
+      {/* Merchant Forge Modal */}
+      <MerchantForgeModal
+        isOpen={isMerchantForgeOpen}
+        onClose={() => setIsMerchantForgeOpen(false)}
+      />
     </header>
   );
 };
