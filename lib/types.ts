@@ -149,6 +149,9 @@ export interface WorldEntity {
   attributes?: Record<string, any>;
   connections?: EntityConnection[]; // IDs de outras entidades conectadas e tipo da relação
   tags?: string[]; // Custom tags/etiquetas de organização e busca livre
+  isSecret?: boolean;
+  revealedToPlayerIds?: string[];
+  secretClue?: string;
   statSheet?: EntityStatSheet;
   characterSheet?: CharacterSheet;
   statSheetMode?: 'statblock' | 'full';
@@ -304,7 +307,29 @@ export interface CampaignDocumentItem {
   notes?: string;
   readableContent: ReadableContent;
   tags?: string[];
+  isSecret?: boolean;
+  revealedToPlayerIds?: string[];
+  secretClue?: string;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export type ClockSegmentCount = 4 | 6 | 8 | 12;
+export type ClockCategory = 'faction' | 'danger' | 'quest' | 'stealth' | 'ritual' | 'general';
+
+export interface ProgressClock {
+  id: string;
+  campaignId: string;
+  title: string;
+  description?: string;
+  totalSegments: ClockSegmentCount;
+  filledSegments: number;
+  category: ClockCategory;
+  factionId?: string;
+  colorHex?: string;
+  isPublic: boolean;
+  completedMessage?: string;
+  createdAt?: string;
   updatedAt?: string;
 }
 
@@ -389,6 +414,9 @@ export interface Combatant {
 
 export type WallType = 'wall' | 'door' | 'secret_door' | 'window' | 'terrain' | 'illusion';
 export type WallSense = 'both' | 'left' | 'right';
+export type DoorStateType = 'closed' | 'open' | 'locked' | 'stuck' | 'broken';
+export type BarrierMaterialType = 'wood' | 'iron' | 'stone' | 'bars' | 'cloth';
+export type BarrierCoverType = 'none' | 'half' | 'three_quarters' | 'total';
 
 export interface WallSegment {
   id: string;
@@ -397,12 +425,17 @@ export interface WallSegment {
   x2: number;
   y2: number;
   type: WallType;
-  doorState?: 'closed' | 'open' | 'locked';
+  doorState?: DoorStateType;
   blocksLight: boolean;
   blocksVision: boolean;
   blocksMovement: boolean;
   sense?: WallSense;
   height?: number;
+  lockDC?: number; // CD para arrombar (Ladinagem) ou forçar (Atletismo)
+  materialType?: BarrierMaterialType;
+  coverType?: BarrierCoverType;
+  secretFoundBy?: string[]; // IDs de combatentes que detectaram a porta secreta
+  label?: string;
 }
 
 export type LightAnimationType = 'none' | 'torch' | 'pulse' | 'chroma' | 'candle';

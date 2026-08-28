@@ -640,4 +640,289 @@ export function drawLightSourceIcon(
   ctx.restore();
 }
 
+/**
+ * Desenha um ícone vetorial bico de pena para Esconderijos Secretos (Stash / Gem)
+ */
+export function drawStashIcon(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  isLooted = false,
+  zoom = 1
+) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  const scale = Math.max(0.6, Math.min(1.4, 1 / Math.sqrt(zoom)));
+  ctx.scale(scale, scale);
+
+  // Fundo circular sutil estilo pergaminho
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 2.0;
+
+  ctx.beginPath();
+  ctx.arc(0, 0, 14, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Borda dupla hand-drawn
+  ctx.lineWidth = 1.0;
+  ctx.beginPath();
+  ctx.arc(0, 0, 16, 0, Math.PI * 2);
+  ctx.stroke();
+
+  if (isLooted) {
+    // Esconderijo saqueado: Brilho sutil de faíscas vazias
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-6, 0);
+    ctx.lineTo(6, 0);
+    ctx.moveTo(0, -6);
+    ctx.lineTo(0, 6);
+    ctx.moveTo(-4, -4);
+    ctx.lineTo(4, 4);
+    ctx.moveTo(-4, 4);
+    ctx.lineTo(4, -4);
+    ctx.stroke();
+  } else {
+    // Cristal lapidado estilo Dyson Logos
+    ctx.fillStyle = '#000000';
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1.8;
+
+    // Facetas superiores e inferiores do diamante
+    ctx.beginPath();
+    ctx.moveTo(0, -9);
+    ctx.lineTo(8, -3);
+    ctx.lineTo(0, 9);
+    ctx.lineTo(-8, -3);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Mesa e facetas internas
+    ctx.beginPath();
+    ctx.moveTo(-5, -3);
+    ctx.lineTo(5, -3);
+    ctx.lineTo(0, 9);
+    ctx.closePath();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-5, -3);
+    ctx.lineTo(0, -9);
+    ctx.lineTo(5, -3);
+    ctx.stroke();
+
+    // Hachura fina na faceta esquerda
+    ctx.lineWidth = 1.0;
+    ctx.beginPath();
+    ctx.moveTo(-4, -1);
+    ctx.lineTo(-1, 5);
+    ctx.moveTo(-6, -2);
+    ctx.lineTo(-3, 4);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Desenha um ícone vetorial bico de pena para Transições de Andar / Escadas / Portais
+ */
+export function drawTransitionIcon(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  type: 'stairs_down' | 'stairs_up' | 'portal' | 'ladder' | 'doorway' = 'stairs_down',
+  targetLevelName?: string,
+  zoom = 1
+) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  const scale = Math.max(0.65, Math.min(1.4, 1 / Math.sqrt(zoom)));
+  ctx.scale(scale, scale);
+
+  const isPortal = type === 'portal';
+  const bgColor = isPortal ? '#f3e8ff' : '#fef3c7';
+  const strokeColor = isPortal ? '#6b21a8' : '#78350f';
+
+  // Fundo circular
+  ctx.fillStyle = bgColor;
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 2.2;
+
+  ctx.beginPath();
+  ctx.arc(0, 0, 16, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Borda dupla pontilhada / estilizada
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash(isPortal ? [3, 2] : [4, 3]);
+  ctx.beginPath();
+  ctx.arc(0, 0, 18.5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Desenhos vetoriais específicos
+  ctx.strokeStyle = strokeColor;
+  ctx.fillStyle = strokeColor;
+  ctx.lineWidth = 1.8;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if (type === 'portal') {
+    // Vórtice arcano em espiral com runas
+    ctx.beginPath();
+    for (let a = 0; a < Math.PI * 4; a += 0.2) {
+      const r = 2 + a * 2.2;
+      const px = Math.cos(a) * r;
+      const py = Math.sin(a) * r;
+      if (a === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // 4 Pontos de energia arcana
+    for (let i = 0; i < 4; i++) {
+      const ang = (i * Math.PI) / 2;
+      ctx.beginPath();
+      ctx.arc(Math.cos(ang) * 9, Math.sin(ang) * 9, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (type === 'ladder') {
+    // Escada de mão (duas hastes verticais com 4 travessas)
+    ctx.beginPath();
+    ctx.moveTo(-6, -10);
+    ctx.lineTo(-6, 10);
+    ctx.moveTo(6, -10);
+    ctx.lineTo(6, 10);
+    ctx.stroke();
+
+    for (let step = -6; step <= 6; step += 4) {
+      ctx.beginPath();
+      ctx.moveTo(-6, step);
+      ctx.lineTo(6, step);
+      ctx.stroke();
+    }
+  } else if (type === 'doorway') {
+    // Arco de pedra com portal
+    ctx.beginPath();
+    ctx.moveTo(-8, 9);
+    ctx.lineTo(-8, -2);
+    ctx.bezierCurveTo(-8, -9, 8, -9, 8, -2);
+    ctx.lineTo(8, 9);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Maçaneta e linha central
+    ctx.beginPath();
+    ctx.moveTo(0, -6);
+    ctx.lineTo(0, 9);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(3, 2, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    // Escadas normais (stairs_down / stairs_up) com degraus em perspectiva
+    const isDown = type === 'stairs_down';
+
+    // 4 Degraus escalonados
+    for (let i = 0; i < 4; i++) {
+      const stepY = -7 + i * 4.5;
+      const stepW = 14 - i * 2;
+      ctx.beginPath();
+      ctx.rect(-stepW / 2, stepY, stepW, 3.5);
+      ctx.stroke();
+    }
+
+    // Seta direcional central
+    ctx.fillStyle = strokeColor;
+    ctx.beginPath();
+    if (isDown) {
+      ctx.moveTo(-3, 6);
+      ctx.lineTo(3, 6);
+      ctx.lineTo(0, 10);
+    } else {
+      ctx.moveTo(-3, -6);
+      ctx.lineTo(3, -6);
+      ctx.lineTo(0, -10);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Se houver nome do andar alvo, desenha um mini badge abaixo
+  if (targetLevelName) {
+    ctx.font = 'bold 9px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#0f172a';
+    ctx.fillText(targetLevelName.slice(0, 12), 0, 20);
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Desenha o ícone vetorial de qualquer POI (para canvas ou previews de drag & drop)
+ */
+export function drawPOIIcon(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  type: string,
+  zoom = 1
+) {
+  if (type === 'stash') {
+    drawStashIcon(ctx, x, y, false, zoom);
+  } else if (type === 'transition') {
+    drawTransitionIcon(ctx, x, y, 'stairs_down', undefined, zoom);
+  } else if (type === 'chest') {
+    ctx.save();
+    ctx.translate(x - 12, y - 12);
+    drawChestHachure(ctx, 0, 0, 24, 'closed');
+    ctx.restore();
+  } else if (type === 'trap') {
+    ctx.save();
+    ctx.translate(x - 12, y - 12);
+    drawTrapHachure(ctx, 0, 0, 24);
+    ctx.restore();
+  } else if (type === 'portcullis') {
+    ctx.save();
+    ctx.translate(x - 12, y - 12);
+    drawPortcullisHachure(ctx, 0, 0, 24, 'closed');
+    ctx.restore();
+  } else if (type === 'trigger') {
+    ctx.save();
+    ctx.translate(x - 12, y - 12);
+    drawTriggerHachure(ctx, 0, 0, 24, 'lever', 'inactive');
+    ctx.restore();
+  } else if (type === 'illusion_wall') {
+    ctx.save();
+    ctx.translate(x - 12, y - 12);
+    drawIllusionWallHachure(ctx, 0, 0, 24, false, true);
+    ctx.restore();
+  } else {
+    // Porta / Genérico
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = '#f59e0b';
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.rect(-8, -12, 16, 24);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(3, 1, 2, 0, Math.PI * 2);
+    ctx.fillStyle = '#000000';
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
 

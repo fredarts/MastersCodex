@@ -43,20 +43,44 @@ export function useBattleGridState(
   // Sync token positions from LiveCockpitContext
   useEffect(() => {
     if (tokenPositions3D && Object.keys(tokenPositions3D).length > 0) {
-      setLocalPositions((prev) => ({
-        ...prev,
-        ...tokenPositions3D,
-      }));
+      setLocalPositions((prev) => {
+        let changed = false;
+        for (const k in tokenPositions3D) {
+          if (!prev[k] || prev[k].x !== tokenPositions3D[k].x || prev[k].z !== tokenPositions3D[k].z) {
+            changed = true;
+            break;
+          }
+        }
+        if (!changed && Object.keys(prev).length === Object.keys(tokenPositions3D).length) {
+          return prev;
+        }
+        return {
+          ...prev,
+          ...tokenPositions3D,
+        };
+      });
     }
   }, [tokenPositions3D]);
 
   // Sync token rotations from LiveCockpitContext
   useEffect(() => {
     if (tokenRotations3D && Object.keys(tokenRotations3D).length > 0) {
-      setLocalRotations((prev) => ({
-        ...prev,
-        ...tokenRotations3D,
-      }));
+      setLocalRotations((prev) => {
+        let changed = false;
+        for (const k in tokenRotations3D) {
+          if (prev[k] !== tokenRotations3D[k]) {
+            changed = true;
+            break;
+          }
+        }
+        if (!changed && Object.keys(prev).length === Object.keys(tokenRotations3D).length) {
+          return prev;
+        }
+        return {
+          ...prev,
+          ...tokenRotations3D,
+        };
+      });
     }
   }, [tokenRotations3D]);
 

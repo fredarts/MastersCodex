@@ -1,5 +1,5 @@
 import { Cell } from '../MapMaker';
-import { Combatant, WallSegment, LightSource, VisionType } from '@/lib/types';
+import { Combatant, WallSegment, LightSource, VisionType, BarrierMaterialType, BarrierCoverType, DoorStateType } from '@/lib/types';
 
 /**
  * Checks if a cell blocks light and vision (walls, closed doors, locked doors, or out of bounds)
@@ -16,12 +16,67 @@ export function isCellBlockingVision(cell: Cell | undefined): boolean {
 }
 
 /**
- * Checks if a WallSegment blocks vision (taking into account doorState)
+ * Checks if a WallSegment blocks vision (taking into account doorState, windows, illusions, and secret doors)
  */
-export function isWallSegmentBlockingVision(wall: WallSegment): boolean {
-  if (!wall.blocksVision) return false;
+export function isWallSegmentBlockingVision(
+  wall: WallSegment,
+  viewerId?: string,
+  isPlayer?: boolean
+): boolean {
+  if (wall.blocksVision === false) return false;
+
+  // Janelas e grades permitem passagem de visão e luz por padrão
+  if (wall.type === 'window') {
+    return !!wall.blocksVision;
+  }
+
+  // Portas secretas fechadas bloqueiam visão
+  if (wall.type === 'secret_door') {
+    if (wall.doorState === 'open' || wall.doorState === 'broken') return false;
+    return true;
+  }
+
+  // Portas interativas normais
+  if (wall.type === 'door') {
+    return wall.doorState !== 'open' && wall.doorState !== 'broken';
+  }
+
+  // Paredes ilusórias
+  if (wall.type === 'illusion') {
+    return !viewerId || !wall.secretFoundBy?.includes(viewerId);
+  }
+
+  return true;
+}
+
+/**
+ * Checks if a WallSegment blocks physical movement of tokens
+ */
+export function isWallSegmentBlockingMovement(wall: WallSegment): boolean {
+  if (wall.blocksMovement === false) return false;
+
+  // Ilusões e cortinas nunca bloqueiam movimento físico
+  if (wall.type === 'illusion') return false;
+
+  // Janelas e grades bloqueiam movimento mesmo sendo transparentes
+  if (wall.type === 'window') return true;
+
+  // Portas abertas ou quebradas permitem passagem
   if (wall.type === 'door' || wall.type === 'secret_door') {
-    return wall.doorState !== 'open';
+    return wall.doorState !== 'open' && wall.doorState !== 'broken';
+  }
+
+  return true;
+}
+
+/**
+ * Checks if a WallSegment blocks light propagation
+ */
+export function isWallSegmentBlockingLight(wall: WallSegment): boolean {
+  if (wall.blocksLight === false) return false;
+  if (wall.type === 'window') return false;
+  if (wall.type === 'door' || wall.type === 'secret_door') {
+    return wall.doorState !== 'open' && wall.doorState !== 'broken';
   }
   return true;
 }
@@ -415,4 +470,156 @@ export function isLightVisibleToPlayer(
   }
 
   return false;
+}
+
+/**
+ * Encontra a porta ou segmento interativo mais próximo de um ponto (grid ou pixel)
+ */
+export function findDoorNearPoint(
+  clickX: number,
+  clickY: number,
+  vectorWalls: WallSegment[],
+  thresholdUnits: number = 0.6
+): { wall: WallSegment; centerX: number; centerY: number; dist: number } | null {
+  if (!vectorWalls || vectorWalls.length === 0) return null;
+
+  let bestMatch: { wall: WallSegment; centerX: number; centerY: number; dist: number } | null = null;
+  let minDist = thresholdUnits;
+
+  for (const wall of vectorWalls) {
+    if (wall.type !== 'door' && wall.type !== 'secret_door') continue;
+
+    const mx = (wall.x1 + wall.x2) / 2;
+    const my = (wall.y1 + wall.y2) / 2;
+
+    const dx = clickX - mx;
+    const dy = clickY - my;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist <= minDist) {
+      minDist = dist;
+      bestMatch = { wall, centerX: mx, centerY: my, dist };
+    }
+  }
+
+  return bestMatch;
+}
+
+export type DoorToggleResult = {
+  updatedWall: WallSegment;
+  action: 'opened' | 'closed' | 'locked' | 'unlocked' | 'failed_distance' | 'failed_locked';
+  soundPreset: string;
+  message: string;
+};
+
+/**
+ * Alterna o estado da porta com validação de alcance e permissão de Mestre vs Jogador
+ */
+export function toggleDoorState(
+  wall: WallSegment,
+  options: {
+    isDm?: boolean;
+    playerId?: string;
+    playerPosition?: { x: number; y: number };
+    maxInteractionDistance?: number;
+    forceLockToggle?: boolean;
+  } = {}
+): DoorToggleResult {
+  const { isDm = false, playerPosition, maxInteractionDistance = 1.6, forceLockToggle = false } = options;
+
+  const currentStatus = wall.doorState || 'closed';
+  const mx = (wall.x1 + wall.x2) / 2;
+  const my = (wall.y1 + wall.y2) / 2;
+
+  // Validação de proximidade para jogadores (máx 1.5m / 1 quadrado adjacente)
+  if (!isDm && playerPosition) {
+    const dx = playerPosition.x - mx;
+    const dy = playerPosition.y - my;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > maxInteractionDistance) {
+      return {
+        updatedWall: wall,
+        action: 'failed_distance',
+        soundPreset: 'none',
+        message: 'Você está muito longe para alcançar esta porta (máx 1.5m).',
+      };
+    }
+  }
+
+  // Jogador tentando abrir porta trancada
+  if (!isDm && currentStatus === 'locked' && !forceLockToggle) {
+    return {
+      updatedWall: wall,
+      action: 'failed_locked',
+      soundPreset: getDoorSoundPreset(wall.materialType, 'rattle'),
+      message: 'A porta está trancada! Necessita de chave ou teste de Ladinagem.',
+    };
+  }
+
+  let nextStatus: 'closed' | 'open' | 'locked' = 'closed';
+  let action: DoorToggleResult['action'] = 'opened';
+
+  if (isDm && forceLockToggle) {
+    // Alternar Trancado / Destrancado
+    if (currentStatus === 'locked') {
+      nextStatus = 'closed';
+      action = 'unlocked';
+    } else {
+      nextStatus = 'locked';
+      action = 'locked';
+    }
+  } else {
+    // Alternar Aberta / Fechada
+    if (currentStatus === 'open') {
+      nextStatus = 'closed';
+      action = 'closed';
+    } else if (currentStatus === 'closed') {
+      nextStatus = 'open';
+      action = 'opened';
+    } else if (currentStatus === 'locked' && isDm) {
+      nextStatus = 'open';
+      action = 'opened';
+    }
+  }
+
+  const updatedWall: WallSegment = {
+    ...wall,
+    doorState: nextStatus,
+  };
+
+  const soundAction = action === 'opened' ? 'open' : action === 'closed' ? 'close' : action === 'locked' ? 'lock' : 'unlock';
+  const soundPreset = getDoorSoundPreset(wall.materialType, soundAction);
+
+  return {
+    updatedWall,
+    action,
+    soundPreset,
+    message: action === 'opened' ? 'Porta aberta.' : action === 'closed' ? 'Porta fechada.' : action === 'locked' ? 'Porta trancada.' : 'Porta destrancada.',
+  };
+}
+
+/**
+ * Retorna o preset de áudio apropriado para a porta com base no material
+ */
+export function getDoorSoundPreset(
+  material: BarrierMaterialType = 'wood',
+  action: 'open' | 'close' | 'lock' | 'unlock' | 'rattle' = 'open'
+): string {
+  switch (material) {
+    case 'iron':
+    case 'bars':
+      if (action === 'open') return 'iron_door_open';
+      if (action === 'close') return 'iron_door_close';
+      return 'iron_door_lock';
+    case 'stone':
+      return 'stone_slide_heavy';
+    case 'cloth':
+      return 'curtain_swish';
+    case 'wood':
+    default:
+      if (action === 'open') return 'wood_door_creak';
+      if (action === 'close') return 'wood_door_slam';
+      if (action === 'rattle') return 'door_handle_rattle';
+      return 'door_lock_click';
+  }
 }

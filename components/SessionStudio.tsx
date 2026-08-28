@@ -32,7 +32,9 @@ import {
   Zap,
   Maximize2,
   Minimize2,
+  Scroll
 } from 'lucide-react';
+import { SessionChronicleModal } from '@/components/session/SessionChronicleModal';
 import { toast } from 'sonner';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
@@ -120,6 +122,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
   const [worldFilterCat, setWorldFilterCat] = useState('all');
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
   const [showImageAiModal, setShowImageAiModal] = useState(false);
+  const [showChronicleModal, setShowChronicleModal] = useState(false);
   const [showNewSessionInput, setShowNewSessionInput] = useState(false);
   const [newSessionTitle, setNewSessionTitle] = useState('');
 
@@ -804,6 +807,13 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
               )}
               
               <div className={`flex items-center gap-1 ${isScenesSidebarCollapsed ? 'flex-col' : ''}`}>
+                <button
+                  onClick={() => setShowChronicleModal(true)}
+                  className="p-1 text-amber-400 hover:text-amber-300 hover:bg-[#161c28] rounded-lg transition-colors"
+                  title="Gerar Crônica da Sessão (Session Scribe)"
+                >
+                  <Scroll className="w-3.5 h-3.5" />
+                </button>
                 <button
                   onClick={() => setShowCreateSceneModal(true)}
                   className="p-1 text-amber-400 hover:bg-[#161c28] rounded-lg transition-colors"
@@ -2390,6 +2400,15 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
           if (!imageUrl) setImageUrl(generatedUrl);
         }}
       />
+      {/* Modal de Crônica da Sessão (Session Scribe) */}
+      {showChronicleModal && activeSession && (
+        <SessionChronicleModal
+          session={activeSession}
+          scenes={scenes}
+          partyMembers={campaignMembers.filter((m) => m.role !== 'dm').map((m) => m.characterName || m.displayName || 'Herói')}
+          onClose={() => setShowChronicleModal(false)}
+        />
+      )}
     </div>
   );
 };

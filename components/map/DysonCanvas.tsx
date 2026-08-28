@@ -25,7 +25,14 @@ import {
   Heart,
   Navigation,
   Plus,
-  Trash2
+  Trash2,
+  DoorClosed,
+  SlidersHorizontal,
+  Grid,
+  EyeOff,
+  Hammer,
+  Key,
+  Wrench
 } from 'lucide-react';
 import { 
   drawDysonCrosshatch, 
@@ -38,7 +45,10 @@ import {
   drawPortcullisHachure,
   drawTriggerHachure,
   drawIllusionWallHachure,
-  drawLightSourceIcon
+  drawLightSourceIcon,
+  drawStashIcon,
+  drawTransitionIcon,
+  drawPOIIcon
 } from './dysonCore';
 import { DungeonTransitionModal } from './DungeonTransitionModal';
 import { MapLevel, DungeonTransitionConfig } from '@/lib/types';
@@ -50,7 +60,10 @@ import {
   computeVisibilityPolygon, 
   getTokenVisionRadius,
   getCombatantVisionType,
-  isLightVisibleToPlayer
+  isLightVisibleToPlayer,
+  findDoorNearPoint,
+  toggleDoorState,
+  getDoorSoundPreset
 } from './visionCore';
 import { Combatant, VisionType } from '@/lib/types';
 import { Cell, TileType, ChestConfig, ContainerType, ContainerStatus, ChestLoot } from '../MapMaker';
@@ -130,6 +143,7 @@ interface DysonCanvasProps {
   renderVision?: boolean;
   renderFog?: boolean;
   onUpdateLightSource?: (light: import('@/lib/types').LightSource) => void;
+  onUpdateVectorWalls?: (walls: import('@/lib/types').WallSegment[]) => void;
 }
 
 export interface DraggingItem {
@@ -187,6 +201,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   renderLighting = true,
   renderVision = true,
   renderFog = true,
+  onUpdateVectorWalls,
 }) => {
 
 
@@ -968,7 +983,6 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           if (cell.type === 'door') {
             const config = cell.doorConfig;
             const isSecret = config?.doorType === 'secret';
-            
             if (isPlayerView && isSecret && !config?.secretRevealed) {
               continue;
             }
@@ -976,24 +990,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
             const x = c * CELL_SIZE + CELL_SIZE / 2;
             const y = r * CELL_SIZE + CELL_SIZE / 2;
 
-            ctx.font = `bold ${Math.floor(CELL_SIZE * 0.65)}px "Courier New", monospace`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-
-            let label = '🚪';
-            if (config?.status === 'open') {
-              label = '🔓';
-            }
-            if (isSecret && !isPlayerView) {
-              label = '🚪(S)';
-            }
-
-            ctx.lineWidth = 4;
-            ctx.strokeStyle = isSecret ? '#ffb74d' : '#ffffff';
-            ctx.strokeText(label, x, y);
-            
-            ctx.fillStyle = isSecret ? '#e65100' : '#1a1a1a';
-            ctx.fillText(label, x, y);
+            drawPOIIcon(ctx, x, y, 'door', zoom);
           } else if (cell.type === 'trap') {
             const config = cell.trapConfig;
             const isHidden = !config?.revealedToPlayers;
@@ -1005,53 +1002,13 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
             const x = c * CELL_SIZE + CELL_SIZE / 2;
             const y = r * CELL_SIZE + CELL_SIZE / 2;
 
-            ctx.font = `bold ${Math.floor(CELL_SIZE * 0.65)}px "Courier New", monospace`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-
-            let label = '💥';
-            if (!isPlayerView && isHidden) {
-              label = '⚠️';
-            }
-
-            ctx.lineWidth = 4;
-            ctx.strokeStyle = isHidden ? '#ef5350' : '#ffffff';
-            ctx.strokeText(label, x, y);
-            
-            ctx.fillStyle = isHidden ? '#c62828' : '#1a1a1a';
-            ctx.fillText(label, x, y);
+            drawPOIIcon(ctx, x, y, 'trap', zoom);
           } else if (cell.type === 'chest') {
             const config = cell.chestConfig;
-            const isMimic = config?.containerType === 'mimic';
-            const status = config?.status || 'locked';
-
             const x = c * CELL_SIZE + CELL_SIZE / 2;
             const y = r * CELL_SIZE + CELL_SIZE / 2;
 
-            ctx.font = `bold ${Math.floor(CELL_SIZE * 0.58)}px "Courier New", monospace`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-
-            let label = '🧰';
-            if (isPlayerView) {
-              if (status === 'open') label = '📦';
-              else if (status === 'looted') label = '✨';
-              else if (status === 'unlocked') label = '🔓';
-              else label = '🔒';
-            } else {
-              if (isMimic) label = '🦷';
-              else if (status === 'open') label = '📦';
-              else if (status === 'looted') label = '✨';
-              else if (status === 'unlocked') label = '🔓';
-              else label = '🔒';
-            }
-
-            ctx.lineWidth = 4;
-            ctx.strokeStyle = (!isPlayerView && isMimic) ? '#ef4444' : (status === 'looted' ? '#10b981' : '#ffffff');
-            ctx.strokeText(label, x, y);
-            
-            ctx.fillStyle = (!isPlayerView && isMimic) ? '#b91c1c' : '#1a1a1a';
-            ctx.fillText(label, x, y);
+            drawPOIIcon(ctx, x, y, 'chest', zoom);
           } else if (cell.type === 'stash') {
             const config = cell.chestConfig;
             const isHidden = !config?.revealedToPlayers;
@@ -1063,45 +1020,14 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
             const x = c * CELL_SIZE + CELL_SIZE / 2;
             const y = r * CELL_SIZE + CELL_SIZE / 2;
 
-            ctx.font = `${Math.floor(CELL_SIZE * 0.65)}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-
-            const label = config?.status === 'looted' ? '✨' : '💎';
-            ctx.fillText(label, x, y);
+            drawStashIcon(ctx, x, y, config?.status === 'looted', zoom);
           } else if (cell.type === 'transition') {
             const config = cell.transitionConfig;
             const x = c * CELL_SIZE + CELL_SIZE / 2;
             const y = r * CELL_SIZE + CELL_SIZE / 2;
 
-            ctx.font = `bold ${Math.floor(CELL_SIZE * 0.58)}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", monospace`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-
-            let label = '🪜';
-            if (config?.type === 'stairs_down') label = '🪜';
-            else if (config?.type === 'stairs_up') label = '🪜';
-            else if (config?.type === 'portal') label = '🌀';
-            else if (config?.type === 'ladder') label = '🪜';
-            else if (config?.type === 'doorway') label = '🚪';
-
-            ctx.lineWidth = 4;
-            ctx.strokeStyle = config?.type === 'portal' ? '#c084fc' : '#f59e0b';
-            ctx.strokeText(label, x, y);
-
-            ctx.fillStyle = config?.type === 'portal' ? '#7e22ce' : '#78350f';
-            ctx.fillText(label, x, y);
-
-            // Subtitle indicator (e.g. ↓ or ↑ or Level name)
-            if (config?.type === 'stairs_down' || config?.type === 'stairs_up') {
-              ctx.save();
-              ctx.font = `bold ${Math.max(9, Math.floor(CELL_SIZE * 0.28))}px Inter, sans-serif`;
-              ctx.fillStyle = config?.type === 'stairs_down' ? '#f43f5e' : '#38bdf8';
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'bottom';
-              ctx.fillText(config?.type === 'stairs_down' ? '▼' : '▲', x + CELL_SIZE * 0.28, y + CELL_SIZE * 0.38);
-              ctx.restore();
-            }
+            const tType = config?.type || 'stairs_down';
+            drawTransitionIcon(ctx, x, y, tType, config?.name, zoom);
           }
         }
       }
@@ -1575,15 +1501,11 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         }
         ctx.restore();
       } else if (draggingItem.kind === 'poi' && draggingItem.poiCell) {
-        // Draw POI Icon preview floating over destination cell
+        // Draw POI Vector Icon preview floating over destination cell
         ctx.save();
-        const emoji = getPOIEmoji(draggingItem.poiCell);
-        ctx.font = `bold ${Math.floor(CELL_SIZE * 0.65)}px "Courier New", "Segoe UI Emoji", monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
         ctx.shadowColor = '#f59e0b';
         ctx.shadowBlur = 12 / zoom;
-        ctx.fillText(emoji, targetX, targetY);
+        drawPOIIcon(ctx, targetX, targetY, draggingItem.poiCell.type, zoom);
         ctx.restore();
       } else if (draggingItem.kind === 'light' && draggingItem.light) {
         // Draw Light Source preview
@@ -1622,22 +1544,34 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
         if (wall.type === 'door' || wall.type === 'secret_door') {
           const isOpen = wall.doorState === 'open';
-          ctx.strokeStyle = isOpen ? '#22c55e' : '#f59e0b';
+          const isLocked = wall.doorState === 'locked';
+          const isBroken = wall.doorState === 'broken';
+
+          ctx.strokeStyle = isBroken ? '#94a3b8' : isLocked ? '#ef4444' : isOpen ? '#22c55e' : '#f59e0b';
           ctx.lineWidth = 4;
-          ctx.setLineDash([6, 4]);
+          ctx.setLineDash(isOpen ? [4, 6] : [6, 3]);
 
           // Draw door icon / handle in center
           const mx = (x1 + x2) / 2;
           const my = (y1 + y2) / 2;
-          ctx.fillStyle = isOpen ? '#22c55e' : '#f59e0b';
-          ctx.fillRect(mx - 4, my - 4, 8, 8);
+          ctx.fillStyle = isBroken ? '#94a3b8' : isLocked ? '#ef4444' : isOpen ? '#22c55e' : '#f59e0b';
+          ctx.fillRect(mx - 5, my - 5, 10, 10);
+
+          // Mini center badge border
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(mx - 5, my - 5, 10, 10);
         } else if (wall.type === 'window') {
           ctx.strokeStyle = '#38bdf8';
-          ctx.lineWidth = 3;
-          ctx.setLineDash([3, 3]);
+          ctx.lineWidth = 3.5;
+          ctx.setLineDash([4, 4]);
+        } else if (wall.type === 'illusion') {
+          ctx.strokeStyle = isPlayerView ? 'transparent' : '#a855f7';
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([2, 4]);
         } else {
-          // Wall
-          ctx.strokeStyle = isPlayerView ? 'transparent' : '#ef4444'; // Red in DM view, invisible overlay in player view
+          // Solid Wall
+          ctx.strokeStyle = isPlayerView ? 'transparent' : '#ef4444';
           ctx.lineWidth = 3;
         }
 
@@ -2501,6 +2435,33 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       });
 
       onAddLightSource?.(newLight);
+      return;
+    }
+
+    // 2.B. Check Vector Door Interactivity (1-Click Door Toggle)
+    const mapCoordX = (x - (bgImage ? gridOffsetX : 0)) / CELL_SIZE;
+    const mapCoordY = (y - (bgImage ? gridOffsetY : 0)) / CELL_SIZE;
+    const doorHit = findDoorNearPoint(mapCoordX, mapCoordY, vectorWalls, 0.45);
+
+    if (doorHit && !isSpacePressed) {
+      const isShift = e.shiftKey || e.button === 2;
+      const res = toggleDoorState(doorHit.wall, {
+        isDm: !isPlayerView,
+        forceLockToggle: isShift,
+      });
+
+      if (res.action.startsWith('failed')) {
+        toast.error(res.message);
+      } else {
+        toast.success(res.message);
+        if (onUpdateVectorWalls) {
+          const updatedList = vectorWalls.map((w) => (w.id === res.updatedWall.id ? res.updatedWall : w));
+          onUpdateVectorWalls(updatedList);
+        }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('masters_codex_door_toggle', { detail: res }));
+        }
+      }
       return;
     }
 
@@ -3463,14 +3424,14 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[#2a3449]/60 pb-3 mb-4">
-              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-1.5 uppercase tracking-wide">
-                {editingCell.cell.type === 'door' && '🚪 Configurar Porta'}
-                {editingCell.cell.type === 'trap' && '⚠️ Configurar Armadilha'}
-                {editingCell.cell.type === 'chest' && '🧰 Configurar Baú & Tesouro'}
-                {editingCell.cell.type === 'stash' && '💎 Configurar Esconderijo Oculto'}
-                {editingCell.cell.type === 'trigger' && '🕹️ Configurar Mecanismo'}
-                {editingCell.cell.type === 'portcullis' && '⛓️ Configurar Grade de Ferro'}
-                {editingCell.cell.type === 'illusion_wall' && '🌫️ Configurar Parede Falsa'}
+              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2 uppercase tracking-wide">
+                {editingCell.cell.type === 'door' && <><DoorClosed className="w-4 h-4 text-amber-400" /> Configurar Porta</>}
+                {editingCell.cell.type === 'trap' && <><ShieldAlert className="w-4 h-4 text-rose-400" /> Configurar Armadilha</>}
+                {editingCell.cell.type === 'chest' && <><Package className="w-4 h-4 text-amber-300" /> Configurar Baú & Tesouro</>}
+                {editingCell.cell.type === 'stash' && <><Gem className="w-4 h-4 text-emerald-300" /> Configurar Esconderijo Oculto</>}
+                {editingCell.cell.type === 'trigger' && <><SlidersHorizontal className="w-4 h-4 text-cyan-400" /> Configurar Mecanismo</>}
+                {editingCell.cell.type === 'portcullis' && <><Grid className="w-4 h-4 text-slate-300" /> Configurar Grade de Ferro</>}
+                {editingCell.cell.type === 'illusion_wall' && <><EyeOff className="w-4 h-4 text-purple-400" /> Configurar Parede Falsa</>}
               </h3>
               <button 
                 type="button"
@@ -3562,7 +3523,9 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">🔨 CD Arrombar</label>
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1">
+                      <Hammer className="w-3 h-3 text-amber-400" /> CD Arrombar
+                    </label>
                     <input
                       type="number"
                       value={editingCell.cell.doorConfig?.breakDC ?? 15}
@@ -3583,7 +3546,9 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">🔑 CD Lockpick</label>
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1">
+                      <Key className="w-3 h-3 text-amber-400" /> CD Lockpick
+                    </label>
                     <input
                       type="number"
                       value={editingCell.cell.doorConfig?.lockpickDC ?? 15}
@@ -3792,11 +3757,11 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
                       }}
                       className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
                     >
-                      <option value="wooden_chest">📦 Baú de Madeira</option>
-                      <option value="iron_chest">🛡️ Baú de Ferro</option>
-                      <option value="ornate_chest">✨ Baú Nobre / Rúnico</option>
-                      <option value="hidden_stash">💎 Esconderijo (Fundo Falso)</option>
-                      <option value="mimic">🦷 Mímico Camuflado!</option>
+                      <option value="wooden_chest">Baú de Madeira</option>
+                      <option value="iron_chest">Baú de Ferro Reforçado</option>
+                      <option value="ornate_chest">Baú Nobre / Rúnico</option>
+                      <option value="hidden_stash">Esconderijo (Fundo Falso)</option>
+                      <option value="mimic">Mímico Camuflado (Ameaça)</option>
                     </select>
                   </div>
                 </div>
@@ -3806,10 +3771,10 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
                   <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Estado</label>
                   <div className="grid grid-cols-4 gap-1.5">
                     {[
-                      { id: 'locked', label: '🔒 Trancado', activeClass: 'bg-amber-600 border-amber-500 text-white' },
-                      { id: 'unlocked', label: '🔓 Destrancado', activeClass: 'bg-sky-600 border-sky-500 text-white' },
-                      { id: 'open', label: '📦 Aberto', activeClass: 'bg-indigo-600 border-indigo-500 text-white' },
-                      { id: 'looted', label: '✨ Saqueado', activeClass: 'bg-emerald-600 border-emerald-500 text-white' },
+                      { id: 'locked', label: 'Trancado', activeClass: 'bg-amber-600 border-amber-500 text-white' },
+                      { id: 'unlocked', label: 'Destrancado', activeClass: 'bg-sky-600 border-sky-500 text-white' },
+                      { id: 'open', label: 'Aberto', activeClass: 'bg-indigo-600 border-indigo-500 text-white' },
+                      { id: 'looted', label: 'Saqueado', activeClass: 'bg-emerald-600 border-emerald-500 text-white' },
                     ].map((s) => {
                       const isCurrent = (editingCell.cell.chestConfig?.status || 'locked') === s.id;
                       return (

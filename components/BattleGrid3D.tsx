@@ -364,35 +364,43 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
 
   // Sync when parent changes active scene props
   useEffect(() => {
-    if (initialBuildingBlocks) {
-      setBuildingBlocksState(Array.isArray(initialBuildingBlocks) ? initialBuildingBlocks : []);
-    } else {
-      setBuildingBlocksState([]);
-    }
+    const next = Array.isArray(initialBuildingBlocks) ? initialBuildingBlocks : [];
+    setBuildingBlocksState((prev) => {
+      if (prev.length === next.length && JSON.stringify(prev) === JSON.stringify(next)) {
+        return prev;
+      }
+      return next;
+    });
   }, [initialBuildingBlocks]);
 
   useEffect(() => {
-    if (initialTerrainSurfaces) {
-      setTerrainSurfacesState(Array.isArray(initialTerrainSurfaces) ? initialTerrainSurfaces : []);
-    } else {
-      setTerrainSurfacesState([]);
-    }
+    const next = Array.isArray(initialTerrainSurfaces) ? initialTerrainSurfaces : [];
+    setTerrainSurfacesState((prev) => {
+      if (prev.length === next.length && JSON.stringify(prev) === JSON.stringify(next)) {
+        return prev;
+      }
+      return next;
+    });
   }, [initialTerrainSurfaces]);
 
   useEffect(() => {
-    if (initialGridConfig) {
-      setGridConfigState({ ...DEFAULT_GRID_CONFIG_3D, ...initialGridConfig });
-    } else {
-      setGridConfigState(DEFAULT_GRID_CONFIG_3D);
-    }
+    const next = initialGridConfig ? { ...DEFAULT_GRID_CONFIG_3D, ...initialGridConfig } : DEFAULT_GRID_CONFIG_3D;
+    setGridConfigState((prev) => {
+      if (JSON.stringify(prev) === JSON.stringify(next)) {
+        return prev;
+      }
+      return next;
+    });
   }, [initialGridConfig]);
 
   useEffect(() => {
-    if (initialTokenElevations && typeof initialTokenElevations === 'object') {
-      setTokenElevationsState(initialTokenElevations);
-    } else {
-      setTokenElevationsState({});
-    }
+    const next = initialTokenElevations && typeof initialTokenElevations === 'object' ? initialTokenElevations : {};
+    setTokenElevationsState((prev) => {
+      if (JSON.stringify(prev) === JSON.stringify(next)) {
+        return prev;
+      }
+      return next;
+    });
   }, [initialTokenElevations]);
 
   const activeBlockDragRef = useRef<{
@@ -509,9 +517,9 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   }, [combatants, onUpdateCombatants]);
 
   useEffect(() => {
-    setTargetIdState(propSelectedTargetId);
+    setTargetIdState((prev) => (prev === propSelectedTargetId ? prev : propSelectedTargetId));
     if (!propSelectedTargetId) {
-      setSelectedCombatantId(null);
+      setSelectedCombatantId((prev) => (prev === null ? prev : null));
     }
   }, [propSelectedTargetId, setSelectedCombatantId]);
 
@@ -582,16 +590,28 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   });
 
   useEffect(() => {
-    setInternalEnv(prev => ({
-      ...prev,
-      // Only sync props that parent components actually manage
-      timeOfDayHour: propTimeOfDayHour,
-      timeOfDayPreset: propTimeOfDayPreset,
-      isIndoor: propIsIndoor,
-      hasFog: propHasFog,
-      hasRain: propHasRain,
-      cloudDensity: propCloudDensity,
-    }));
+    setInternalEnv((prev) => {
+      if (
+        prev.timeOfDayHour === propTimeOfDayHour &&
+        prev.timeOfDayPreset === propTimeOfDayPreset &&
+        prev.isIndoor === propIsIndoor &&
+        prev.hasFog === propHasFog &&
+        prev.hasRain === propHasRain &&
+        prev.cloudDensity === propCloudDensity
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        // Only sync props that parent components actually manage
+        timeOfDayHour: propTimeOfDayHour,
+        timeOfDayPreset: propTimeOfDayPreset,
+        isIndoor: propIsIndoor,
+        hasFog: propHasFog,
+        hasRain: propHasRain,
+        cloudDensity: propCloudDensity,
+      };
+    });
   }, [
     propTimeOfDayHour,
     propTimeOfDayPreset,
@@ -904,7 +924,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     const spriteMat = new THREE.SpriteMaterial({
       map: texture,
       transparent: true,
-      depthTest: false
+    depthTest: false
     });
     const distanceSprite = new THREE.Sprite(spriteMat);
     distanceSprite.scale.set(2.6, 1.3, 1);
@@ -934,79 +954,61 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     setSplineBadgeInfo,
   });
 
-  useEffect(() => {
-    callbacksRef.current = {
-      combatants,
-      currentTurnIndex,
-      isBattleStarted,
-      setSelectedCombatantId,
-      onSelectCombatant,
-      onSelectTarget,
-      canUserControlCombatant,
-      updateTokenPosition3D,
-      onUpdateCombatants,
-      setLocalPositions,
-      renderMovementHighlights,
-      renderDragTrail,
-      getCombatantPos,
-      pendingAttack,
-      setPendingAttack,
-      targetIdState,
-      propOnAttackTarget,
-      setHoveredTargetId,
-      setSplineBadgeInfo,
-    };
-  });
+  callbacksRef.current = {
+    combatants,
+    currentTurnIndex,
+    isBattleStarted,
+    setSelectedCombatantId,
+    onSelectCombatant,
+    onSelectTarget,
+    canUserControlCombatant,
+    updateTokenPosition3D,
+    onUpdateCombatants,
+    setLocalPositions,
+    renderMovementHighlights,
+    renderDragTrail,
+    getCombatantPos,
+    pendingAttack,
+    setPendingAttack,
+    targetIdState,
+    propOnAttackTarget,
+    setHoveredTargetId,
+    setSplineBadgeInfo,
+  };
 
-  const isCombatantInSpellArea = useCallback((c: Combatant, cPos: { x: number; z: number }): boolean => {
+  // 1. Raycast helper to detect combatant in 3D spell shape area
+  const isCombatantInSpellArea = useCallback((c: Combatant, tokenPos: { x: number; z: number }) => {
     if (!activeSpellTargeting || !casterTokenKey || !spellTargetPosition) return false;
-    if (c.id === casterTokenKey || c.name === casterTokenKey) return false; // Conjurador não se atinge
-
+    const casterPos = getCombatantPos(casterTokenKey);
     const unitsPerMeter = 2 / 1.5;
-    const sizeUnits = activeSpellTargeting.size * unitsPerMeter;
-    const caster = getCombatantPos(casterTokenKey);
-    const target = spellTargetPosition;
+    const sizeUnits = activeSpellTargeting.sizeMeters * unitsPerMeter;
 
-    const dx = cPos.x - target.x;
-    const dz = cPos.z - target.z;
-    const distToTarget = Math.sqrt(dx * dx + dz * dz);
+    const dx = tokenPos.x - spellTargetPosition.x;
+    const dz = tokenPos.z - spellTargetPosition.z;
+    const distTargetToCombatant = Math.sqrt(dx * dx + dz * dz);
 
     if (activeSpellTargeting.shape === 'circle') {
-      return distToTarget <= sizeUnits;
+      return distTargetToCombatant <= sizeUnits;
     }
 
-    let ndx = 0;
-    let ndz = 1;
-
-    if (aoeRotation !== undefined && aoeRotation !== 0) {
-      const rotRad = (aoeRotation * Math.PI) / 180;
-      ndx = Math.sin(rotRad);
-      ndz = Math.cos(rotRad);
-    } else {
-      const dirX = target.x - caster.x;
-      const dirZ = target.z - caster.z;
-      const distCasterToTarget = Math.sqrt(dirX * dirX + dirZ * dirZ);
-      if (distCasterToTarget > 0) {
-        ndx = dirX / distCasterToTarget;
-        ndz = dirZ / distCasterToTarget;
-      }
+    if (activeSpellTargeting.shape === 'cube') {
+      const half = sizeUnits / 2;
+      return Math.abs(dx) <= half && Math.abs(dz) <= half;
     }
 
-    const tcx = cPos.x - caster.x;
-    const tcz = cPos.z - caster.z;
+    const tcx = tokenPos.x - casterPos.x;
+    const tcz = tokenPos.z - casterPos.z;
     const distCasterToCombatant = Math.sqrt(tcx * tcx + tcz * tcz);
+    if (distCasterToCombatant === 0) return false;
 
-    if (distCasterToCombatant > sizeUnits) return false;
-    if (distCasterToCombatant === 0) return true;
-
-    const dot = (tcx * ndx + tcz * ndz) / distCasterToCombatant;
-    const angleRad = Math.acos(Math.max(-1, Math.min(1, dot)));
+    const rad = (aoeRotation * Math.PI) / 180;
+    const ndx = Math.sin(rad);
+    const ndz = Math.cos(rad);
 
     if (activeSpellTargeting.shape === 'cone') {
-      return angleRad <= Math.PI / 6; // Cone de 60 graus
-    }
-    if (activeSpellTargeting.shape === 'fan') {
-      return angleRad <= Math.PI / 4; // Leque de 90 graus
+      if (distCasterToCombatant > sizeUnits) return false;
+      const dot = (tcx * ndx + tcz * ndz) / distCasterToCombatant;
+      return dot >= Math.cos(Math.PI / 6); // 60 graus
     }
     if (activeSpellTargeting.shape === 'line') {
       const projection = tcx * ndx + tcz * ndz;
@@ -1021,7 +1023,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
   // Sincronizar alvos detectados de AoE com o LiveCockpitContext
   useEffect(() => {
     if (!activeSpellTargeting || !casterTokenKey || !spellTargetPosition) {
-      setDetectedAoETargets([]);
+      setDetectedAoETargets((prev) => (prev.length === 0 ? prev : []));
       return;
     }
 
@@ -1034,7 +1036,12 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       }
     });
 
-    setDetectedAoETargets(targets);
+    setDetectedAoETargets((prev) => {
+      if (prev.length === targets.length && prev.every((t, i) => t === targets[i])) {
+        return prev;
+      }
+      return targets;
+    });
   }, [activeSpellTargeting, casterTokenKey, spellTargetPosition, aoeRotation, combatants, localPositions, isCombatantInSpellArea, setDetectedAoETargets, getStableDefaultPos]);
 
   // Instanced Token Manager Ref
@@ -2144,7 +2151,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         }
       }
 
-      setHoveredCombatantId(hoveredTokenId);
+      setHoveredCombatantId((prev) => (prev === hoveredTokenId ? prev : hoveredTokenId));
 
       // Mira de Magia: atualiza posição da mira com o cursor
       if (activeSpellTargetingRef.current && casterTokenKeyRef.current) {
@@ -2186,7 +2193,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
             ring.position.x = pos.x;
             ring.position.z = pos.z;
             (ring.material as THREE.MeshBasicMaterial).opacity = 0.75;
-            callbacksRef.current.setHoveredTargetId(hCombatant.id);
+            callbacksRef.current.setHoveredTargetId((prev: any) => (prev === hCombatant.id ? prev : hCombatant.id));
 
             // Trajetória Spline Curva (BG3 Style)
             const attackerPos2D = callbacksRef.current.getCombatantPos(activeId || activeCombatant.name);
@@ -2206,31 +2213,34 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
               });
             }
 
-            callbacksRef.current.setSplineBadgeInfo({
-              distanceFt: distFt,
-              status: rStatus,
-              normalRangeM: rInfo.normalRangeM,
-              maxRangeM: rInfo.maxRangeM,
-              isWeaponWithLongRange: rInfo.isWeaponWithLongRange,
-              isRanged: rInfo.isRanged,
+            callbacksRef.current.setSplineBadgeInfo((prev: any) => {
+              if (prev && prev.distanceFt === distFt && prev.status === rStatus) return prev;
+              return {
+                distanceFt: distFt,
+                status: rStatus,
+                normalRangeM: rInfo.normalRangeM,
+                maxRangeM: rInfo.maxRangeM,
+                isWeaponWithLongRange: rInfo.isWeaponWithLongRange,
+                isRanged: rInfo.isRanged,
+              };
             });
           } else {
             (ring.material as THREE.MeshBasicMaterial).opacity = 0.0;
-            callbacksRef.current.setHoveredTargetId(undefined);
+            callbacksRef.current.setHoveredTargetId((prev: any) => (prev === undefined ? prev : undefined));
             if (splineSystemRef.current) splineSystemRef.current.clear();
-            callbacksRef.current.setSplineBadgeInfo(null);
+            callbacksRef.current.setSplineBadgeInfo((prev: any) => (prev === null ? prev : null));
           }
         } else {
           (ring.material as THREE.MeshBasicMaterial).opacity = 0.0;
-          callbacksRef.current.setHoveredTargetId(undefined);
+          callbacksRef.current.setHoveredTargetId((prev: any) => (prev === undefined ? prev : undefined));
           if (splineSystemRef.current) splineSystemRef.current.clear();
-          callbacksRef.current.setSplineBadgeInfo(null);
+          callbacksRef.current.setSplineBadgeInfo((prev: any) => (prev === null ? prev : null));
         }
       } else if (hoverRingRef.current) {
         // Not in attack mode: ensure ring is hidden
         (hoverRingRef.current.material as THREE.MeshBasicMaterial).opacity = 0.0;
         if (splineSystemRef.current) splineSystemRef.current.clear();
-        callbacksRef.current.setSplineBadgeInfo(null);
+        callbacksRef.current.setSplineBadgeInfo((prev: any) => (prev === null ? prev : null));
       }
 
       // Pintura arrastada contínua de terreno
@@ -2653,10 +2663,21 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       if (fireSysRef.current) fireSysRef.current.update(delta);
 
       // Animar e projetar o Badge de Distância da Trajetória Spline Curva
-      if (splineSystemRef.current) {
+      if (splineSystemRef.current && callbacksRef.current.pendingAttack) {
         splineSystemRef.current.animate(delta);
         const screenPos = splineSystemRef.current.getMidpointScreenPos(camera, container.clientWidth, container.clientHeight);
-        setBadgeScreenPos(screenPos);
+        if (screenPos) {
+          setBadgeScreenPos((prev) => {
+            if (!prev) return screenPos;
+            const dx = Math.abs(prev.x - screenPos.x);
+            const dy = Math.abs(prev.y - screenPos.y);
+            return dx > 4 || dy > 4 ? screenPos : prev;
+          });
+        } else {
+          setBadgeScreenPos((prev) => (prev !== null ? null : prev));
+        }
+      } else if (splineSystemRef.current) {
+        splineSystemRef.current.clear();
       }
 
       renderer.render(scene, camera);

@@ -9,7 +9,19 @@ import {
   Sparkles, 
   X, 
   Search,
-  Check
+  Check,
+  DoorClosed,
+  ShieldAlert,
+  Package,
+  Gem,
+  SlidersHorizontal,
+  Grid,
+  EyeOff,
+  Milestone,
+  Waves,
+  TreePine,
+  Square,
+  Box
 } from 'lucide-react';
 import { TileType } from '../MapMaker';
 import { Combatant } from '@/lib/types';
@@ -68,19 +80,19 @@ export const ToolSubBar: React.FC<ToolSubBarProps> = ({
 }) => {
   // 1. Paint tool sub-bar
   if (selectedTool === 'paint') {
-    const terrains: { id: TileType; label: string; iconEmoji?: string }[] = [
-      { id: 'floor', label: 'Piso' },
-      { id: 'wall', label: 'Parede' },
-      { id: 'grass', label: 'Grama' },
-      { id: 'water', label: 'Água' },
-      { id: 'door', label: '🚪 Porta' },
-      { id: 'trap', label: '⚠️ Armadilha' },
-      { id: 'chest', label: '🧰 Baú' },
-      { id: 'stash', label: '💎 Stash' },
-      { id: 'trigger', label: '🕹️ Mecanismo' },
-      { id: 'portcullis', label: '⛓️ Grade' },
-      { id: 'illusion_wall', label: '🌫️ Parede Falsa' },
-      { id: 'transition', label: '🪜 Escadas' },
+    const terrains: { id: TileType; label: string; icon: React.ReactNode }[] = [
+      { id: 'floor', label: 'Piso', icon: <Square className="w-3.5 h-3.5" /> },
+      { id: 'wall', label: 'Parede', icon: <Box className="w-3.5 h-3.5" /> },
+      { id: 'grass', label: 'Grama', icon: <TreePine className="w-3.5 h-3.5 text-emerald-400" /> },
+      { id: 'water', label: 'Água', icon: <Waves className="w-3.5 h-3.5 text-sky-400" /> },
+      { id: 'door', label: 'Porta', icon: <DoorClosed className="w-3.5 h-3.5 text-amber-400" /> },
+      { id: 'trap', label: 'Armadilha', icon: <ShieldAlert className="w-3.5 h-3.5 text-rose-400" /> },
+      { id: 'chest', label: 'Baú', icon: <Package className="w-3.5 h-3.5 text-amber-300" /> },
+      { id: 'stash', label: 'Stash', icon: <Gem className="w-3.5 h-3.5 text-emerald-300" /> },
+      { id: 'trigger', label: 'Mecanismo', icon: <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" /> },
+      { id: 'portcullis', label: 'Grade', icon: <Grid className="w-3.5 h-3.5 text-slate-300" /> },
+      { id: 'illusion_wall', label: 'Parede Falsa', icon: <EyeOff className="w-3.5 h-3.5 text-purple-400" /> },
+      { id: 'transition', label: 'Escadas', icon: <Milestone className="w-3.5 h-3.5 text-orange-400" /> },
     ];
 
     return (
@@ -92,13 +104,14 @@ export const ToolSubBar: React.FC<ToolSubBarProps> = ({
           <button
             key={t.id}
             onClick={() => onSelectTileType(t.id)}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
               selectedTileType === t.id
                 ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
                 : 'bg-[#141a26] text-slate-300 border border-[#222c3d] hover:bg-[#1c2638] hover:text-white'
             }`}
           >
-            {t.label}
+            {t.icon}
+            <span>{t.label}</span>
           </button>
         ))}
       </div>
@@ -269,7 +282,9 @@ export const ToolSubBar: React.FC<ToolSubBarProps> = ({
   if (selectedTool === 'calibrate') {
     return (
       <div className="absolute top-2.5 left-16 z-30 px-4 py-2 bg-rose-950/90 backdrop-blur-md border border-rose-500/40 rounded-xl flex flex-wrap items-center gap-3 text-xs text-rose-200 font-mono shadow-2xl animate-in fade-in slide-in-from-top-1 duration-150">
-        <span className="font-bold text-rose-300">📏 Calibração de Fundo:</span>
+        <span className="font-bold text-rose-300 flex items-center gap-1.5">
+          <Square className="w-3.5 h-3.5 text-rose-400" /> Calibração de Fundo:
+        </span>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
             <span>Célula: {gridScale}px</span>

@@ -180,6 +180,117 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
     toast.info('Batalha resetada para as configurações iniciais.');
   };
 
+  const handleSelectTarget = useCallback((target: any) => {
+    setSelectedTargetId(target?.id);
+    broadcastToPlayerView({ targetId: target?.id });
+  }, [broadcastToPlayerView, setSelectedTargetId]);
+
+  const handleBuildingBlocksChange = useCallback((blocks: any) => {
+    const newSettings = { ...(liveEnvironmentSettings || {}), building_blocks_3d: blocks };
+    setLiveEnvironmentSettings(newSettings);
+    if (activeScene && updateScene) {
+      updateScene({
+        ...activeScene,
+        buildingBlocks: blocks,
+        environmentSettings: newSettings,
+      });
+    }
+    broadcastToPlayerView({
+      building_blocks_3d: blocks,
+      environmentSettings: newSettings,
+    });
+  }, [activeScene, broadcastToPlayerView, liveEnvironmentSettings, setLiveEnvironmentSettings, updateScene]);
+
+  const handleTerrainSurfacesChange = useCallback((surfaces: any) => {
+    const newSettings = { ...(liveEnvironmentSettings || {}), terrain_surfaces_3d: surfaces };
+    setLiveEnvironmentSettings(newSettings);
+    if (activeScene && updateScene) {
+      updateScene({
+        ...activeScene,
+        terrainSurfaces: surfaces,
+        environmentSettings: newSettings,
+      });
+    }
+    broadcastToPlayerView({
+      terrain_surfaces_3d: surfaces,
+      environmentSettings: newSettings,
+    });
+  }, [activeScene, broadcastToPlayerView, liveEnvironmentSettings, setLiveEnvironmentSettings, updateScene]);
+
+  const handleGridConfigChange = useCallback((gridCfg: any) => {
+    const newSettings = { ...(liveEnvironmentSettings || {}), grid_config_3d: gridCfg };
+    setLiveEnvironmentSettings(newSettings);
+    if (activeScene && updateScene) {
+      updateScene({
+        ...activeScene,
+        gridConfig3D: gridCfg,
+        environmentSettings: newSettings,
+      });
+    }
+    broadcastToPlayerView({
+      grid_config_3d: gridCfg,
+      environmentSettings: newSettings,
+    });
+  }, [activeScene, broadcastToPlayerView, liveEnvironmentSettings, setLiveEnvironmentSettings, updateScene]);
+
+  const handleTokenElevationsChange = useCallback((elevs: any) => {
+    const newSettings = { ...(liveEnvironmentSettings || {}), token_elevations: elevs };
+    setLiveEnvironmentSettings(newSettings);
+    if (activeScene && updateScene) {
+      updateScene({
+        ...activeScene,
+        tokenElevations: elevs,
+        environmentSettings: newSettings,
+      });
+    }
+    broadcastToPlayerView({
+      token_elevations: elevs,
+      environmentSettings: newSettings,
+    });
+  }, [activeScene, broadcastToPlayerView, liveEnvironmentSettings, setLiveEnvironmentSettings, updateScene]);
+
+  const handleTimeOfDayChange = useCallback((preset: any) => {
+    setSelectedTimeOfDay(preset);
+    broadcastToPlayerView({
+      timeOfDay: preset,
+    });
+  }, [broadcastToPlayerView, setSelectedTimeOfDay]);
+
+  const handleEnvironmentChange = useCallback((env: any) => {
+    if (env.timeOfDayPreset) {
+      setSelectedTimeOfDay(env.timeOfDayPreset);
+    }
+    setLiveTimeOfDayHour(env.timeOfDayHour);
+    setLiveHasFog(env.hasFog);
+    setLiveHasRain(env.hasRain);
+    
+    const newSettings = { ...(liveEnvironmentSettings || {}), ...env };
+    setLiveEnvironmentSettings(newSettings);
+
+    broadcastToPlayerView({
+      timeOfDay: env.timeOfDayPreset || selectedTimeOfDay,
+      timeOfDayHour: env.timeOfDayHour,
+      hasFog: env.hasFog,
+      hasRain: env.hasRain,
+      environmentSettings: newSettings
+    });
+  }, [broadcastToPlayerView, liveEnvironmentSettings, selectedTimeOfDay, setLiveEnvironmentSettings, setLiveHasFog, setLiveHasRain, setLiveTimeOfDayHour, setSelectedTimeOfDay]);
+
+  const handleFloorTextureChange = useCallback((url: string) => {
+    setLiveFloorTextureUrl(url);
+    broadcastToPlayerView({ floorTextureUrl: url });
+  }, [broadcastToPlayerView, setLiveFloorTextureUrl]);
+
+  const handleConfirmPlacement = useCallback(() => {
+    setIsPlacementPhase(false);
+    broadcastToPlayerView({ isPlacementPhase: false });
+  }, [broadcastToPlayerView, setIsPlacementPhase]);
+
+  const sceneBlocks = activeScene?.buildingBlocks || liveEnvironmentSettings?.building_blocks_3d;
+  const sceneTerrains = activeScene?.terrainSurfaces || liveEnvironmentSettings?.terrain_surfaces_3d;
+  const sceneGridConfig = activeScene?.gridConfig3D || liveEnvironmentSettings?.grid_config_3d;
+  const sceneElevations = activeScene?.tokenElevations || liveEnvironmentSettings?.token_elevations;
+
   return (
     <div className="flex-1 bg-[#0a0d14] flex flex-col overflow-hidden border-r border-[#2a3449]">
       <div className="bg-[#121824]/80 p-3 border-b border-[#2a3449] flex items-center justify-between">
@@ -239,10 +350,7 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                   currentTurnIndex={currentTurnIndex}
                   selectedTargetId={selectedTargetId}
                   isBattleStarted={isBattleStarted}
-                  onSelectTarget={(target) => {
-                    setSelectedTargetId(target?.id);
-                    broadcastToPlayerView({ targetId: target?.id });
-                  }}
+                  onSelectTarget={handleSelectTarget}
                   onAttackTarget={onAttackFromWidget}
                   interactive={true}
                   isPlacementPhase={isPlacementPhase}
@@ -253,104 +361,19 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                   isIndoor={selectedTimeOfDay === 'indoors'}
                   hasFog={liveHasFog}
                   hasRain={liveHasRain}
-                  initialBuildingBlocks={activeScene?.buildingBlocks || liveEnvironmentSettings?.building_blocks_3d || []}
-                  onBuildingBlocksChange={(blocks) => {
-                    const newSettings = { ...(liveEnvironmentSettings || {}), building_blocks_3d: blocks };
-                    setLiveEnvironmentSettings(newSettings);
-                    if (activeScene && updateScene) {
-                      updateScene({
-                        ...activeScene,
-                        buildingBlocks: blocks,
-                        environmentSettings: newSettings,
-                      });
-                    }
-                    broadcastToPlayerView({
-                      building_blocks_3d: blocks,
-                      environmentSettings: newSettings,
-                    });
-                  }}
-                  initialTerrainSurfaces={activeScene?.terrainSurfaces || liveEnvironmentSettings?.terrain_surfaces_3d || []}
-                  onTerrainSurfacesChange={(surfaces) => {
-                    const newSettings = { ...(liveEnvironmentSettings || {}), terrain_surfaces_3d: surfaces };
-                    setLiveEnvironmentSettings(newSettings);
-                    if (activeScene && updateScene) {
-                      updateScene({
-                        ...activeScene,
-                        terrainSurfaces: surfaces,
-                        environmentSettings: newSettings,
-                      });
-                    }
-                    broadcastToPlayerView({
-                      terrain_surfaces_3d: surfaces,
-                      environmentSettings: newSettings,
-                    });
-                  }}
-                  initialGridConfig={activeScene?.gridConfig3D || liveEnvironmentSettings?.grid_config_3d}
-                  onGridConfigChange={(gridCfg) => {
-                    const newSettings = { ...(liveEnvironmentSettings || {}), grid_config_3d: gridCfg };
-                    setLiveEnvironmentSettings(newSettings);
-                    if (activeScene && updateScene) {
-                      updateScene({
-                        ...activeScene,
-                        gridConfig3D: gridCfg,
-                        environmentSettings: newSettings,
-                      });
-                    }
-                    broadcastToPlayerView({
-                      grid_config_3d: gridCfg,
-                      environmentSettings: newSettings,
-                    });
-                  }}
-                  initialTokenElevations={activeScene?.tokenElevations || liveEnvironmentSettings?.token_elevations}
-                  onTokenElevationsChange={(elevs) => {
-                    const newSettings = { ...(liveEnvironmentSettings || {}), token_elevations: elevs };
-                    setLiveEnvironmentSettings(newSettings);
-                    if (activeScene && updateScene) {
-                      updateScene({
-                        ...activeScene,
-                        tokenElevations: elevs,
-                        environmentSettings: newSettings,
-                      });
-                    }
-                    broadcastToPlayerView({
-                      token_elevations: elevs,
-                      environmentSettings: newSettings,
-                    });
-                  }}
-                  onTimeOfDayChange={(preset) => {
-                    setSelectedTimeOfDay(preset);
-                    broadcastToPlayerView({
-                      timeOfDay: preset,
-                    });
-                  }}
-                  onEnvironmentChange={(env) => {
-                    if (env.timeOfDayPreset) {
-                      setSelectedTimeOfDay(env.timeOfDayPreset);
-                    }
-                    setLiveTimeOfDayHour(env.timeOfDayHour);
-                    setLiveHasFog(env.hasFog);
-                    setLiveHasRain(env.hasRain);
-                    
-                    const newSettings = { ...(liveEnvironmentSettings || {}), ...env };
-                    setLiveEnvironmentSettings(newSettings);
-
-                    broadcastToPlayerView({
-                      timeOfDay: env.timeOfDayPreset || selectedTimeOfDay,
-                      timeOfDayHour: env.timeOfDayHour,
-                      hasFog: env.hasFog,
-                      hasRain: env.hasRain,
-                      environmentSettings: newSettings
-                    });
-                  }}
+                  initialBuildingBlocks={sceneBlocks}
+                  onBuildingBlocksChange={handleBuildingBlocksChange}
+                  initialTerrainSurfaces={sceneTerrains}
+                  onTerrainSurfacesChange={handleTerrainSurfacesChange}
+                  initialGridConfig={sceneGridConfig}
+                  onGridConfigChange={handleGridConfigChange}
+                  initialTokenElevations={sceneElevations}
+                  onTokenElevationsChange={handleTokenElevationsChange}
+                  onTimeOfDayChange={handleTimeOfDayChange}
+                  onEnvironmentChange={handleEnvironmentChange}
                   floorTextureUrl={liveFloorTextureUrl}
-                  onFloorTextureChange={(url) => {
-                    setLiveFloorTextureUrl(url);
-                    broadcastToPlayerView({ floorTextureUrl: url });
-                  }}
-                  onConfirmPlacement={() => {
-                    setIsPlacementPhase(false);
-                    broadcastToPlayerView({ isPlacementPhase: false });
-                  }}
+                  onFloorTextureChange={handleFloorTextureChange}
+                  onConfirmPlacement={handleConfirmPlacement}
                   userRole="dm"
                 />
               </ThreeErrorBoundary>

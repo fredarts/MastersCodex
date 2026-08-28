@@ -932,6 +932,12 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     syncBroadcastDrawingAction(payload);
   }, [syncBroadcastDrawingAction]);
 
+  const updateCombatantState = useCallback((id: string, update: Partial<Combatant>) => {
+    setCombatants((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...update } : c))
+    );
+  }, []);
+
   return (
     <LiveCockpitContext.Provider
       value={{
@@ -993,11 +999,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         broadcastStateRequest,
         drawings,
         broadcastDrawingAction: handleDrawingAction,
-        updateCombatantState: (id: string, update: Partial<Combatant>) => {
-          setCombatants((prev) =>
-            prev.map((c) => (c.id === id ? { ...c, ...update } : c))
-          );
-        },
+        updateCombatantState,
         selectedTargetId,
         setSelectedTargetId,
         activeXCardAlert,

@@ -18,8 +18,10 @@ import {
   Settings2,
   ChevronDown,
   ChevronUp,
-  Activity
+  Activity,
+  Brain
 } from 'lucide-react';
+import { MonsterTacticsModal } from '@/components/combat/MonsterTacticsModal';
 import { Combatant, ConditionType } from '@/lib/types';
 import { CONDITIONS, INITIAL_MONSTERS } from '@/lib/srd-data';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -65,6 +67,7 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
   const [diceResult, setDiceResult] = useState<{title: string; roll: number; total: number; isCrit: boolean; isFail: boolean} | null>(null);
+  const [tacticsMonster, setTacticsMonster] = useState<Combatant | null>(null);
 
   useEffect(() => {
     if (diceResult) {
@@ -339,6 +342,16 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {combatants[currentTurnIndex] && combatants[currentTurnIndex].type !== 'player' && (
+            <button
+              onClick={() => setTacticsMonster(combatants[currentTurnIndex])}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-900/70 to-purple-800/70 hover:from-purple-800 hover:to-purple-700 text-purple-200 border border-purple-500/40 font-bold rounded-lg text-xs shadow-md transition-all active:scale-95 cursor-pointer animate-in fade-in"
+              title="Consultar recomendação tática da IA para o monstro do turno atual"
+            >
+              <Brain className="w-3.5 h-3.5 text-purple-400" />
+              <span>IA Tática</span>
+            </button>
+          )}
           <button onClick={() => setShowAddModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold rounded-lg text-xs shadow transition-all active:scale-95">
             <UserPlus className="w-3.5 h-3.5" />
             <span>+ Combatente</span>
@@ -674,6 +687,16 @@ export const CombatTracker: React.FC<CombatTrackerProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Modal de IA Tática para Monstros */}
+      {tacticsMonster && (
+        <MonsterTacticsModal
+          monster={tacticsMonster}
+          opponents={combatants.filter((c) => c.id !== tacticsMonster.id)}
+          roundCount={roundCount}
+          onClose={() => setTacticsMonster(null)}
+        />
       )}
     </div>
   );

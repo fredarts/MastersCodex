@@ -21,7 +21,8 @@ import {
   Skull,
   Sparkles,
   ArrowRightLeft,
-  X
+  X,
+  Pencil
 } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
@@ -1591,7 +1592,7 @@ export const CockpitDungeonMap: React.FC = () => {
             className="p-2.5 bg-slate-950/90 hover:bg-slate-900 border border-slate-800 text-amber-400 rounded-xl shadow-xl backdrop-blur-md flex flex-col items-center gap-1 transition-all active:scale-95 cursor-pointer"
             title="Expandir Ferramentas de Desenho / Anotação"
           >
-            <span className="text-base">✏️</span>
+            <Pencil className="w-4 h-4 text-amber-400" />
             <ChevronRight className="w-3 h-3 text-slate-400" />
           </button>
         )}
@@ -1624,6 +1625,10 @@ export const CockpitDungeonMap: React.FC = () => {
         currentLevelId={activeLevelId}
         onTransitionAction={handleTransitionAction}
         onSaveTransitionWithTargetLevel={handleSaveTransitionWithTargetLevel}
+        onUpdateVectorWalls={(newWalls) => {
+          setVectorWalls(newWalls);
+          broadcastToPlayerView({ vectorWalls: newWalls });
+        }}
       />
     </div>
   );
