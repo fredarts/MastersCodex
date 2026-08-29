@@ -23,7 +23,9 @@ import {
   CheckSquare,
   Trophy,
   Lightbulb,
+  Network,
 } from 'lucide-react';
+import { DetectivePinboardModal } from '@/components/investigation/DetectivePinboardModal';
 
 interface JournalSectionProps {
   sheet: CharacterSheet;
@@ -32,6 +34,7 @@ interface JournalSectionProps {
 
 export const JournalSection: React.FC<JournalSectionProps> = ({ sheet, onChange }) => {
   const [activeSubTab, setActiveSubTab] = useState<'journal' | 'quests'>('journal');
+  const [isPersonalPinboardOpen, setIsPersonalPinboardOpen] = useState(false);
 
   // Estados do Diário
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
@@ -293,6 +296,16 @@ export const JournalSection: React.FC<JournalSectionProps> = ({ sheet, onChange 
                 </span>
               )}
             </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsPersonalPinboardOpen(true)}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold font-serif transition-all bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/60 text-amber-200 cursor-pointer shadow-sm"
+            title="Abrir Mural de Investigação e Fios Vermelhos"
+          >
+            <span>🕵️</span>
+            <span>Mural de Pistas</span>
           </button>
         </div>
       </div>
@@ -970,6 +983,13 @@ export const JournalSection: React.FC<JournalSectionProps> = ({ sheet, onChange 
         )}
 
       </div>
+
+      {/* Modal do Mural de Investigação Pessoal */}
+      <DetectivePinboardModal
+        isOpen={isPersonalPinboardOpen}
+        onClose={() => setIsPersonalPinboardOpen(false)}
+        initialScope="personal"
+      />
     </div>
   );
 };

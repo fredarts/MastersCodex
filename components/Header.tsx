@@ -11,6 +11,7 @@ import { usePartyLoot } from '@/context/PartyLootContext';
 import { useVoiceCall } from '@/context/VoiceCallContext';
 import { PWAInstallButton } from '@/components/ui/PWAInstallButton';
 import { MerchantForgeModal } from '@/components/merchant/MerchantForgeModal';
+import { DetectivePinboardModal } from '@/components/investigation/DetectivePinboardModal';
 
 interface HeaderProps {
   onOpenSearch: () => void;
@@ -39,12 +40,16 @@ export const Header: React.FC<HeaderProps> = ({
   const { activeCampaign } = useCampaign();
   const { activeWorld } = useWorld();
   const { playDiceSound } = useAudio();
-  const { setIsDmLootModalOpen, setIsPartyLootModalOpen, activeLootSession } = usePartyLoot();
+  const { setIsDmLootModalOpen, setIsPartyLootModalOpen, activeLootSession, isOnPlayerCampaignView } = usePartyLoot();
   const { isInCall, isConnecting, isMuted, isSpeaking, isVideoEnabled, toggleVideo, joinCall, toggleMute, setIsWidgetOpen, participants, activeCallPeersCount } = useVoiceCall();
   const [diceResult, setDiceResult] = useState<number | null>(null);
   const [lastDiceType, setLastDiceType] = useState<string>('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMerchantForgeOpen, setIsMerchantForgeOpen] = useState(false);
+  const [isPinboardOpen, setIsPinboardOpen] = useState(false);
+
+  // O jogador só está dentro de uma campanha quando selecionou uma mesa específica
+  const isInsideCampaign = roleMode === 'dm' ? !!activeCampaign : (!!activeCampaign && isOnPlayerCampaignView);
 
   const rollDice = (sides: number) => {
     const res = Math.floor(Math.random() * sides) + 1;
@@ -168,28 +173,30 @@ export const Header: React.FC<HeaderProps> = ({
         <PWAInstallButton variant="compact" />
 
         {/* Baú da Party Button */}
-        <button
-          onClick={() => {
-            setIsPartyLootModalOpen(true);
-          }}
-          className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
-            activeLootSession && activeLootSession.status === 'active'
-              ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-950/40 animate-pulse'
-              : 'bg-[#161c28] border-[#2a3449] text-slate-300 hover:text-amber-400 hover:border-amber-500/50'
-          }`}
-          title="Ver Baú da Party (Itens e Moedas Compartilhadas)"
-        >
-          <Gift className="w-4 h-4 text-amber-400" />
-          <span className="hidden sm:inline">
-            Baú da Party
-          </span>
-          {activeLootSession && activeLootSession.status === 'active' && (
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-0.5 -right-0.5" />
-          )}
-        </button>
+        {isInsideCampaign && (
+          <button
+            onClick={() => {
+              setIsPartyLootModalOpen(true);
+            }}
+            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+              activeLootSession && activeLootSession.status === 'active'
+                ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-950/40 animate-pulse'
+                : 'bg-[#161c28] border-[#2a3449] text-slate-300 hover:text-amber-400 hover:border-amber-500/50'
+            }`}
+            title="Ver Baú da Party (Itens e Moedas Compartilhadas)"
+          >
+            <Gift className="w-4 h-4 text-amber-400" />
+            <span className="hidden sm:inline">
+              Baú da Party
+            </span>
+            {activeLootSession && activeLootSession.status === 'active' && (
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-0.5 -right-0.5" />
+            )}
+          </button>
+        )}
 
         {/* Merchant Forge Button (Lojas & Economia) */}
-        {roleMode === 'dm' && (
+        {isInsideCampaign && roleMode === 'dm' && (
           <button
             onClick={() => setIsMerchantForgeOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold transition-all cursor-pointer"
@@ -197,6 +204,18 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Store className="w-4 h-4 text-amber-400" />
             <span className="hidden sm:inline">Lojas & Barter</span>
+          </button>
+        )}
+
+        {/* Mural de Investigação & Pistas Button */}
+        {isInsideCampaign && (
+          <button
+            onClick={() => setIsPinboardOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-900/50 bg-stone-900/80 hover:bg-amber-950/40 text-amber-200 text-xs font-bold transition-all cursor-pointer shadow-sm"
+            title="Mural de Investigação: Rastrear Pistas, Suspeitos e Fios Vermelhos"
+          >
+            <span className="text-sm">🕵️</span>
+            <span className="hidden sm:inline">Mural de Pistas</span>
           </button>
         )}
 
@@ -340,6 +359,12 @@ export const Header: React.FC<HeaderProps> = ({
       <MerchantForgeModal
         isOpen={isMerchantForgeOpen}
         onClose={() => setIsMerchantForgeOpen(false)}
+      />
+
+      {/* Detective Pinboard Modal */}
+      <DetectivePinboardModal
+        isOpen={isPinboardOpen}
+        onClose={() => setIsPinboardOpen(false)}
       />
     </header>
   );

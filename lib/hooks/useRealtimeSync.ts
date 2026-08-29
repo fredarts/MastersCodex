@@ -5,8 +5,10 @@ import { offlineQueue } from '@/lib/sync/OfflineQueueManager';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { ChatMessage, CombatLogEntry, PlayerRollEvent, PartyLootSession, DirectTransferPayload, DmCursorPayload, PingLocationPayload, VoiceSignalPayload, PresencePayload, CharacterCurrency, XCardAlertPayload, CampaignSafetySettings } from '@/lib/types';
+import { InvestigationBoard } from '@/lib/investigation/investigationTypes';
 
 export interface RealtimeSyncPayloads {
+  INVESTIGATION_BOARD_UPDATE: { board: InvestigationBoard };
   SAFETY_X_CARD_TRIGGERED: { alert: XCardAlertPayload };
   SAFETY_SETTINGS_UPDATED: { settings: CampaignSafetySettings };
   TOKEN_MOVE_3D: { combatantId: string; characterName?: string; newX: number; newZ: number; timestamp?: number };
@@ -103,6 +105,7 @@ export interface UseRealtimeSyncOptions {
   onDrawingAction?: (payload: RealtimeSyncPayloads['DRAWING_ACTION']) => void;
   onXCardAlert?: (payload: RealtimeSyncPayloads['SAFETY_X_CARD_TRIGGERED']) => void;
   onSafetySettingsUpdated?: (payload: RealtimeSyncPayloads['SAFETY_SETTINGS_UPDATED']) => void;
+  onInvestigationBoardUpdate?: (payload: RealtimeSyncPayloads['INVESTIGATION_BOARD_UPDATE']) => void;
 }
 
 export function useRealtimeSync({
@@ -128,6 +131,7 @@ export function useRealtimeSync({
   onDrawingAction,
   onXCardAlert,
   onSafetySettingsUpdated,
+  onInvestigationBoardUpdate,
 }: UseRealtimeSyncOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const isSubscribedRef = useRef<boolean>(false);
@@ -155,6 +159,7 @@ export function useRealtimeSync({
     onDrawingAction,
     onXCardAlert,
     onSafetySettingsUpdated,
+    onInvestigationBoardUpdate,
   });
 
   useEffect(() => {
@@ -180,6 +185,7 @@ export function useRealtimeSync({
       onDrawingAction,
       onXCardAlert,
       onSafetySettingsUpdated,
+      onInvestigationBoardUpdate,
     };
   }, [
     onTokenMove,
@@ -203,6 +209,7 @@ export function useRealtimeSync({
     onDrawingAction,
     onXCardAlert,
     onSafetySettingsUpdated,
+    onInvestigationBoardUpdate,
   ]);
 
   // Cross-tab BroadcastChannel fallback (Scoped per campaign)
@@ -246,6 +253,16 @@ export function useRealtimeSync({
         if (type === 'DRAWING_ACTION' && cb.onDrawingAction) cb.onDrawingAction(data as any);
         if (type === 'SAFETY_X_CARD_TRIGGERED' && cb.onXCardAlert) cb.onXCardAlert(data as any);
         if (type === 'SAFETY_SETTINGS_UPDATED' && cb.onSafetySettingsUpdated) cb.onSafetySettingsUpdated(data as any);
+        if (type === 'INVESTIGATION_BOARD_UPDATE') {
+          if (cb.onInvestigationBoardUpdate) cb.onInvestigationBoardUpdate(data as any);
+          if (typeof window !== 'undefined' && data?.board) {
+            window.dispatchEvent(
+              new CustomEvent('codex_investigation_board_sync', {
+                detail: { board: data.board }
+              })
+            );
+          }
+        }
       };
     } catch (e) {}
 
@@ -352,6 +369,17 @@ export function useRealtimeSync({
       .on('broadcast', { event: 'SAFETY_SETTINGS_UPDATED' }, ({ payload }) => {
         const cb = callbacksRef.current;
         if (cb.onSafetySettingsUpdated) cb.onSafetySettingsUpdated(payload);
+      })
+      .on('broadcast', { event: 'INVESTIGATION_BOARD_UPDATE' }, ({ payload }) => {
+        const cb = callbacksRef.current;
+        if (cb.onInvestigationBoardUpdate) cb.onInvestigationBoardUpdate(payload);
+        if (typeof window !== 'undefined' && payload?.board) {
+          window.dispatchEvent(
+            new CustomEvent('codex_investigation_board_sync', {
+              detail: { board: payload.board }
+            })
+          );
+        }
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -514,6 +542,10 @@ export function useRealtimeSync({
     sendBroadcast('SAFETY_SETTINGS_UPDATED', payload);
   }, [sendBroadcast]);
 
+  const broadcastInvestigationBoard = useCallback((payload: RealtimeSyncPayloads['INVESTIGATION_BOARD_UPDATE']) => {
+    sendBroadcast('INVESTIGATION_BOARD_UPDATE', payload);
+  }, [sendBroadcast]);
+
   return {
     sendBroadcast,
     broadcastTokenMove,
@@ -537,5 +569,6 @@ export function useRealtimeSync({
     broadcastDrawingAction,
     broadcastXCardAlert,
     broadcastSafetySettingsUpdated,
+    broadcastInvestigationBoard,
   };
 }

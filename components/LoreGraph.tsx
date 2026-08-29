@@ -17,6 +17,9 @@ import {
 } from 'lucide-react';
 import { LoreNode, WorldEntity, ConnectionType } from '@/lib/types';
 import { useWorld } from '@/context/WorldContext';
+import { useCampaign } from '@/context/CampaignContext';
+import { investigationService } from '@/lib/investigation/investigationService';
+import { toast } from 'sonner';
 
 interface NodePosition {
   x: number;
@@ -25,6 +28,7 @@ interface NodePosition {
 
 export const LoreGraph: React.FC = () => {
   const { activeWorld, worldEntities, updateWorldEntity } = useWorld();
+  const { activeCampaign } = useCampaign();
   const [nodes, setNodes] = useState<LoreNode[]>([]);
   const [selectedNode, setSelectedNode] = useState<LoreNode | null>(null);
   const [simulatedConsequence, setSimulatedConsequence] = useState<string | null>(null);
@@ -441,6 +445,28 @@ export const LoreGraph: React.FC = () => {
                     >
                       <GitFork className="w-3.5 h-3.5 text-amber-400" />
                       Ver Árvore Genealógica
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        const campaignId = activeCampaign?.id || 'default-campaign';
+                        const board = await investigationService.getBoard(campaignId, 'party');
+                        await investigationService.addPin(board, {
+                          type: selectedNode.type === 'npc' ? 'suspect' : selectedNode.type === 'location' ? 'location' : 'lore_node',
+                          title: selectedNode.name,
+                          description: selectedNode.description || 'Entidade do mundo',
+                          loreNodeId: selectedNode.id,
+                          position: { x: 320 + Math.random() * 60, y: 220 + Math.random() * 60 },
+                          rotationDeg: Number((Math.random() * 6 - 3).toFixed(1)),
+                          colorTag: 'yellow',
+                          pinnedBy: 'LoreGraph',
+                        });
+                        toast.success(`📌 '${selectedNode.name}' foi afixado no Mural de Investigação!`);
+                      }}
+                      className="w-full py-1.5 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/60 text-amber-200 font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <span>📌</span>
+                      <span>Afixar no Mural de Investigação</span>
                     </button>
                     <p className="text-[9px] text-slate-500 mt-1 text-center">
                       (Para adicionar ou remover, edite a entidade)
