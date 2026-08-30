@@ -160,8 +160,22 @@ export function generateShopPreset(params: {
   campaignId: string;
   customName?: string;
   customMerchantName?: string;
+  merchantAvatarUrl?: string;
+  npcEntityId?: string;
+  locationEntityId?: string;
+  locationName?: string;
 }): MerchantShop {
-  const { type, wealthTier, campaignId, customName, customMerchantName } = params;
+  const { 
+    type, 
+    wealthTier, 
+    campaignId, 
+    customName, 
+    customMerchantName,
+    merchantAvatarUrl,
+    npcEntityId,
+    locationEntityId,
+    locationName
+  } = params;
   const template = MERCHANT_TEMPLATES[type] || MERCHANT_TEMPLATES.general_store;
   const wealth = WEALTH_TIER_CONFIG[wealthTier] || WEALTH_TIER_CONFIG.modest;
 
@@ -205,12 +219,23 @@ export function generateShopPreset(params: {
     Math.random() * (wealth.maxGold - wealth.minGold + 1) + wealth.minGold
   );
 
+  const shopId = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+    ? crypto.randomUUID() 
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+
   return {
-    id: `shop-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    id: shopId,
     campaignId,
     name: customName || template.defaultName,
     merchantName: customMerchantName || template.defaultMerchant,
     merchantType: type,
+    merchantAvatarUrl: merchantAvatarUrl || undefined,
+    npcEntityId: npcEntityId || undefined,
+    locationEntityId: locationEntityId || undefined,
+    locationName: locationName || undefined,
     dialogueGreeting: template.greeting,
     wealthTier,
     goldReserve,

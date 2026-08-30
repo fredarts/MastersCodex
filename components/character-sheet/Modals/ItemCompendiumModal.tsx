@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { CharacterSheet, CharacterEquipmentItem, ItemType } from '@/lib/types';
 import { SRD_EQUIPMENT, SRDItem } from '@/lib/srd-compendium';
 import { INITIAL_ITEMS } from '@/lib/srd-data';
@@ -28,6 +29,7 @@ interface ItemCompendiumModalProps {
   onClose: () => void;
   onChange?: (updatedSheet: CharacterSheet) => void;
   onAddItem?: (item: CharacterEquipmentItem) => void;
+  zIndex?: string;
 }
 
 export interface UnifiedCompendiumItem {
@@ -62,12 +64,18 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
   onClose,
   onChange,
   onAddItem,
+  zIndex,
 }) => {
+  const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [addedItemNames, setAddedItemNames] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const isBrowseOnly = !sheet || !onChange;
 
@@ -479,8 +487,10 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
     );
   };
 
-  return (
-    <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+  if (!isOpen || !mounted) return null;
+
+  return createPortal(
+    <div className={`fixed inset-0 ${zIndex || 'z-[1000000]'} bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in`}>
       <div className={`bg-[#0f141d] border border-amber-500/40 rounded-2xl shadow-2xl w-full ${isBrowseOnly ? 'max-w-3xl' : 'max-w-5xl'} h-[85vh] flex flex-col overflow-hidden`}>
         
         {/* CABEÇALHO */}
@@ -847,6 +857,7 @@ export const ItemCompendiumModal: React.FC<ItemCompendiumModalProps> = ({
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

@@ -41,7 +41,9 @@ import {
   RefreshCw,
   Plus,
   Minus,
-  Check
+  Check,
+  MapPin,
+  Store
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -52,6 +54,8 @@ interface BG3MerchantModalProps {
   onClose: () => void;
   onUpdateCharacterSheet: (updatedSheet: CharacterSheet) => void;
   onUpdateShop?: (updatedShop: MerchantShop) => void;
+  availableShops?: MerchantShop[];
+  onSelectShop?: (shop: MerchantShop) => void;
 }
 
 export const BG3MerchantModal: React.FC<BG3MerchantModalProps> = ({
@@ -61,6 +65,8 @@ export const BG3MerchantModal: React.FC<BG3MerchantModalProps> = ({
   onClose,
   onUpdateCharacterSheet,
   onUpdateShop,
+  availableShops,
+  onSelectShop,
 }) => {
   const [shop, setShop] = useState<MerchantShop | null>(initialShop);
   const [mode, setMode] = useState<'trade' | 'barter'>('barter');
@@ -76,6 +82,17 @@ export const BG3MerchantModal: React.FC<BG3MerchantModalProps> = ({
   const [bargainRolled, setBargainRolled] = useState(false);
 
   const [mounted, setMounted] = useState(false);
+  const [internalAvailableShops, setInternalAvailableShops] = useState<MerchantShop[]>([]);
+
+  const getShopScore = (s: MerchantShop): number => {
+    let score = 0;
+    if (s.npcEntityId) score += 500;
+    if (s.locationEntityId || s.locationName) score += 500;
+    if (s.merchantAvatarUrl) score += 300;
+    if (s.stock && s.stock.length > 2) score += s.stock.length * 10;
+    if (s.name !== 'Forja & Armaria do Martelo Rubro') score += 200;
+    return score;
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -83,8 +100,24 @@ export const BG3MerchantModal: React.FC<BG3MerchantModalProps> = ({
 
   // Sync initial shop
   useEffect(() => {
-    setShop(initialShop);
+    if (initialShop) {
+      setShop(initialShop);
+    }
   }, [initialShop]);
+
+  useEffect(() => {
+    if (isOpen) {
+      merchantService.fetchShops(initialShop?.campaignId).then((loaded) => {
+        if (loaded.length > 0) {
+          setInternalAvailableShops(loaded);
+          const matchCurrent = initialShop?.id ? loaded.find(s => s.id === initialShop.id) : null;
+          setShop(matchCurrent || loaded[0]);
+        }
+      });
+    }
+  }, [isOpen, initialShop?.id]);
+
+  const allShopsList = (internalAvailableShops.length > 0) ? internalAvailableShops : (availableShops || []);
 
   if (!isOpen || !shop || !mounted) return null;
 
@@ -202,6 +235,10 @@ export const BG3MerchantModal: React.FC<BG3MerchantModalProps> = ({
     setMerchantOffer((prev) => {
       const exists = prev.find(s => s.item.id === stockItem.id);
       if (exists) {
+        if (stockItem.quantity !== -1 && exists.quantity >= stockItem.quantity) {
+          toast.warning(`Limite de estoque da loja atingido (${stockItem.quantity} un).`);
+          return prev;
+        }
         return prev.map(s => s.item.id === stockItem.id ? {
           ...s,
           quantity: s.quantity + 1,
@@ -328,19 +365,54 @@ export const BG3MerchantModal: React.FC<BG3MerchantModalProps> = ({
         {/* Header BG3 Style */}
         <div className="px-6 py-3.5 bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-950 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-extrabold shadow-inner">
-              <Coins className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-extrabold shadow-inner overflow-hidden shrink-0">
+              {shop.merchantAvatarUrl ? (
+                <img src={shop.merchantAvatarUrl} alt={shop.merchantName} className="w-full h-full object-cover" />
+              ) : (
+                <Coins className="w-6 h-6" />
+              )}
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base font-black text-slate-100 uppercase tracking-wide">
                   {shop.name}
                 </h2>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 font-mono border border-slate-700">
                   {shop.merchantName}
                 </span>
+                {shop.locationName && (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-sans border border-indigo-500/30 flex items-center gap-1 font-semibold">
+                    <MapPin className="w-3 h-3 text-indigo-400" />
+                    {shop.locationName}
+                  </span>
+                )}
+                {allShopsList.length > 1 && (
+                  <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-xl border border-amber-500/40 shadow-inner">
+                    <Store className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <select
+                      value={shop.id}
+                      onChange={(e) => {
+                        const found = allShopsList.find((s) => s.id === e.target.value);
+                        if (found) {
+                          setShop(found);
+                          setMerchantOffer([]);
+                          setPlayerOffer([]);
+                          if (onSelectShop) onSelectShop(found);
+                        }
+                      }}
+                      className="bg-transparent text-[11px] text-amber-300 font-bold focus:outline-none cursor-pointer pr-1"
+                      title="Alternar para outra loja configurada pelo Mestre"
+                    >
+                      {allShopsList.map((s) => (
+                        <option key={s.id} value={s.id} className="bg-slate-900 text-slate-100 font-sans">
+                          {s.name} ({s.merchantName}) {s.locationName ? `• 📍 ${s.locationName}` : ''} [{s.stock?.length || 0} itens]
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-slate-400 italic">
+              <p className="text-xs text-slate-400 italic mt-0.5">
                 &ldquo;{shop.dialogueGreeting}&rdquo;
               </p>
             </div>
@@ -485,15 +557,28 @@ export const BG3MerchantModal: React.FC<BG3MerchantModalProps> = ({
                         </div>
                       </div>
 
-                      <div className="text-right shrink-0 flex items-center gap-2">
-                        <div className="font-mono text-xs font-black text-amber-300">
-                          {buyPrice} PO
+                      <div className="text-right shrink-0 flex items-center gap-2.5">
+                        <div className="flex flex-col items-end">
+                          <div className="font-mono text-xs font-black text-amber-300">
+                            {buyPrice} PO
+                          </div>
+                          <div className="text-[10px] font-mono font-bold">
+                            {item.quantity === -1 ? (
+                              <span className="text-emerald-400 font-bold" title="Estoque Ilimitado">
+                                ∞ un
+                              </span>
+                            ) : (
+                              <span className={item.quantity <= 2 ? 'text-amber-400 font-bold' : 'text-slate-400'} title={`${item.quantity} unidades disponíveis no estoque`}>
+                                {item.quantity} un
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {mode === 'trade' ? (
                           <button
                             onClick={() => handleQuickBuy(item)}
-                            className="p-1.5 bg-amber-600 hover:bg-amber-500 text-slate-950 rounded-lg font-bold transition-all cursor-pointer"
+                            className="p-1.5 bg-amber-600 hover:bg-amber-500 text-slate-950 rounded-lg font-bold transition-all cursor-pointer shadow"
                             title="Comprar Imediatamente"
                           >
                             <ArrowRight className="w-3.5 h-3.5" />
@@ -501,7 +586,7 @@ export const BG3MerchantModal: React.FC<BG3MerchantModalProps> = ({
                         ) : (
                           <button
                             onClick={() => handleAddToBarterFromShop(item)}
-                            className="p-1.5 bg-slate-800 hover:bg-amber-600 text-slate-200 hover:text-slate-950 rounded-lg font-bold transition-all cursor-pointer"
+                            className="p-1.5 bg-slate-800 hover:bg-amber-600 text-slate-200 hover:text-slate-950 rounded-lg font-bold transition-all cursor-pointer shadow"
                             title="Adicionar à Balança de Troca"
                           >
                             <Plus className="w-3.5 h-3.5" />

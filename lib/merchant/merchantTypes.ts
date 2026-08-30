@@ -56,6 +56,9 @@ export interface MerchantShop {
   merchantType: MerchantType;
   merchantAvatarUrl?: string;
   dialogueGreeting?: string; // Frase de boas-vindas do NPC
+  npcEntityId?: string;      // ID do NPC associado no World Building
+  locationEntityId?: string; // ID da Localização / Cidade associada no World Building
+  locationName?: string;     // Nome da Localização / Cidade
   wealthTier: MerchantWealthTier;
   goldReserve: number;       // Saldo de ouro do mercador para comprar itens dos jogadores
   attitude: number;          // De -100 (Hostil) a +100 (Aliado/Devoto)

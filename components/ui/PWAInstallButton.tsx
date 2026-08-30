@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 
 interface PWAInstallButtonProps {
   className?: string;
-  variant?: 'button' | 'compact' | 'card';
+  variant?: 'button' | 'compact' | 'card' | 'menu-item';
 }
 
 export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
@@ -102,6 +102,20 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
             <span>Instalar no Dispositivo</span>
           </button>
         </div>
+      ) : variant === 'menu-item' ? (
+        <button
+          type="button"
+          onClick={handleInstallClick}
+          className={`w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:text-amber-300 hover:bg-[#1f2738] rounded-xl transition-all flex items-center gap-2.5 cursor-pointer ${className}`}
+        >
+          <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400">
+            <Download className="w-3.5 h-3.5" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-bold text-slate-200">Instalar App</span>
+            <span className="text-[10px] text-slate-400 font-normal">Modo nativo em tela cheia</span>
+          </div>
+        </button>
       ) : (
         <button
           type="button"

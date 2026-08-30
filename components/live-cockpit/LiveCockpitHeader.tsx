@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { Tv, Play, Swords, Map as MapIcon, Image as ImageIcon, Sparkles, Radio, BookOpen, Video } from 'lucide-react';
 import { GameScene } from '@/lib/types';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
@@ -26,6 +27,7 @@ export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
   onToggleNotebook,
 }) => {
   const { onlineUsers } = useLiveCockpit();
+
   return (
     <div className="bg-zinc-900/90 border-b border-zinc-800 p-4 flex flex-wrap items-center justify-between gap-4 backdrop-blur-md sticky top-0 z-30">
       <div className="flex items-center gap-3">
@@ -45,7 +47,7 @@ export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
         </div>
       </div>
 
-      {/* Campaign In-Game Calendar & Time Widget */}
+      {/* Campaign In-Game Calendar & Time Widget (Self-collapsible on moon/sun click) */}
       <LiveCalendarWidget />
 
       {/* Controles de Projeção */}

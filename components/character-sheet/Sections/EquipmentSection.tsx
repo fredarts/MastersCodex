@@ -63,13 +63,29 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
   // BG3 Merchant State
   const [isBG3MerchantOpen, setIsBG3MerchantOpen] = useState(false);
   const [activeShop, setActiveShop] = useState<MerchantShop | null>(null);
+  const [availableShops, setAvailableShops] = useState<MerchantShop[]>([]);
 
   const handleOpenMerchantShop = async () => {
     const campaignId = activeCampaign?.id || 'default-campaign';
     const shops = await merchantService.fetchShops(campaignId);
-    const openShop = shops.find(s => s.isOpenToPlayers) || shops[0];
-    if (openShop) {
-      setActiveShop(openShop);
+    
+    const getShopScore = (s: MerchantShop): number => {
+      let score = 0;
+      if (s.npcEntityId) score += 500;
+      if (s.locationEntityId || s.locationName) score += 500;
+      if (s.merchantAvatarUrl) score += 300;
+      if (s.stock && s.stock.length > 2) score += s.stock.length * 10;
+      if (s.name !== 'Forja & Armaria do Martelo Rubro') score += 200;
+      return score;
+    };
+
+    // Ordena priorizando as lojas personalizadas pelo Mestre
+    const sortedShops = [...shops].sort((a, b) => getShopScore(b) - getShopScore(a));
+
+    setAvailableShops(sortedShops);
+
+    if (sortedShops.length > 0) {
+      setActiveShop(sortedShops[0]);
       setIsBG3MerchantOpen(true);
     } else {
       const defaultShop = generateShopPreset({
@@ -79,6 +95,7 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
       });
       await merchantService.saveShop(defaultShop);
       setActiveShop(defaultShop);
+      setAvailableShops([defaultShop]);
       setIsBG3MerchantOpen(true);
     }
   };
@@ -593,6 +610,8 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
         onClose={() => setIsBG3MerchantOpen(false)}
         onUpdateCharacterSheet={onChange}
         onUpdateShop={setActiveShop}
+        availableShops={availableShops}
+        onSelectShop={setActiveShop}
       />
 
       {/* BARRA DE AÇÕES DO INVENTÁRIO (Top toolbar spanning 4 columns on desktop) */}

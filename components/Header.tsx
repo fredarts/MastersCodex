@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut, Gift, Mic, MicOff, Video, VideoOff, PhoneCall, Radio, Headphones, Store } from 'lucide-react';
+import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut, Gift, Mic, MicOff, Video, VideoOff, PhoneCall, Radio, Headphones, Store, ChevronDown, Layers } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -11,6 +11,9 @@ import { usePartyLoot } from '@/context/PartyLootContext';
 import { useVoiceCall } from '@/context/VoiceCallContext';
 import { PWAInstallButton } from '@/components/ui/PWAInstallButton';
 import { MerchantForgeModal } from '@/components/merchant/MerchantForgeModal';
+import { BG3MerchantModal } from '@/components/merchant/BG3MerchantModal';
+import { MerchantShop } from '@/lib/merchant/merchantTypes';
+import { CharacterSheet } from '@/lib/types';
 import { DetectivePinboardModal } from '@/components/investigation/DetectivePinboardModal';
 
 interface HeaderProps {
@@ -40,13 +43,25 @@ export const Header: React.FC<HeaderProps> = ({
   const { activeCampaign } = useCampaign();
   const { activeWorld } = useWorld();
   const { playDiceSound } = useAudio();
-  const { setIsDmLootModalOpen, setIsPartyLootModalOpen, activeLootSession, isOnPlayerCampaignView } = usePartyLoot();
+  const { setIsPartyLootModalOpen, activeLootSession, isOnPlayerCampaignView } = usePartyLoot();
   const { isInCall, isConnecting, isMuted, isSpeaking, isVideoEnabled, toggleVideo, joinCall, toggleMute, setIsWidgetOpen, participants, activeCallPeersCount } = useVoiceCall();
   const [diceResult, setDiceResult] = useState<number | null>(null);
   const [lastDiceType, setLastDiceType] = useState<string>('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
   const [isMerchantForgeOpen, setIsMerchantForgeOpen] = useState(false);
   const [isPinboardOpen, setIsPinboardOpen] = useState(false);
+  const [activeTradeShop, setActiveTradeShop] = useState<MerchantShop | null>(null);
+  const [isTradeModalOpen, setIsTradeModalOpen] = useState(false);
+
+  const previewSheet: CharacterSheet = {
+    id: 'dm-preview-character',
+    characterName: 'Mestre da Mesa',
+    className: 'Aventureiro',
+    level: 1,
+    currency: { po: 500, pl: 0, pe: 0, pp: 0, pc: 0 },
+    equipment: [],
+  } as any;
 
   // O jogador só está dentro de uma campanha quando selecionou uma mesa específica
   const isInsideCampaign = roleMode === 'dm' ? !!activeCampaign : (!!activeCampaign && isOnPlayerCampaignView);
@@ -59,7 +74,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="h-16 bg-[#0f141d] border-b border-[#2a3449] px-4 flex items-center justify-between shadow-lg relative z-20 select-none">
+    <header className="h-16 bg-[#0f141d] border-b border-[#2a3449] px-4 flex items-center justify-between shadow-lg relative z-50 select-none">
       {/* Brand & Mode Switcher */}
       <div className="flex items-center gap-3 md:gap-4">
         {/* Left Sidebar Toggle Button */}
@@ -134,7 +149,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Quick Search & Actions */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 md:gap-3">
         {/* Dice Roller */}
         <div className="hidden xl:flex items-center gap-1 bg-[#161c28] border border-[#2a3449] rounded-lg p-1">
           <span className="text-xs text-slate-400 px-2 flex items-center gap-1 font-mono">
@@ -169,59 +184,9 @@ export const Header: React.FC<HeaderProps> = ({
           </kbd>
         </button>
 
-        {/* PWA Install Button */}
-        <PWAInstallButton variant="compact" />
-
-        {/* Baú da Party Button */}
-        {isInsideCampaign && (
-          <button
-            onClick={() => {
-              setIsPartyLootModalOpen(true);
-            }}
-            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
-              activeLootSession && activeLootSession.status === 'active'
-                ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-950/40 animate-pulse'
-                : 'bg-[#161c28] border-[#2a3449] text-slate-300 hover:text-amber-400 hover:border-amber-500/50'
-            }`}
-            title="Ver Baú da Party (Itens e Moedas Compartilhadas)"
-          >
-            <Gift className="w-4 h-4 text-amber-400" />
-            <span className="hidden sm:inline">
-              Baú da Party
-            </span>
-            {activeLootSession && activeLootSession.status === 'active' && (
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-0.5 -right-0.5" />
-            )}
-          </button>
-        )}
-
-        {/* Merchant Forge Button (Lojas & Economia) */}
-        {isInsideCampaign && roleMode === 'dm' && (
-          <button
-            onClick={() => setIsMerchantForgeOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold transition-all cursor-pointer"
-            title="Merchant Forge: Criar e Gerenciar Lojas da Campanha"
-          >
-            <Store className="w-4 h-4 text-amber-400" />
-            <span className="hidden sm:inline">Lojas & Barter</span>
-          </button>
-        )}
-
-        {/* Mural de Investigação & Pistas Button */}
-        {isInsideCampaign && (
-          <button
-            onClick={() => setIsPinboardOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-900/50 bg-stone-900/80 hover:bg-amber-950/40 text-amber-200 text-xs font-bold transition-all cursor-pointer shadow-sm"
-            title="Mural de Investigação: Rastrear Pistas, Suspeitos e Fios Vermelhos"
-          >
-            <span className="text-sm">🕵️</span>
-            <span className="hidden sm:inline">Mural de Pistas</span>
-          </button>
-        )}
-
-        {/* Chamada de Voz e Vídeo (Voice & Video Call) Button */}
-        {isInCall ? (
-          <div className="flex items-center gap-1 bg-[#121824] border border-emerald-500/40 rounded-xl p-1 shadow-sm">
+        {/* Live Call Widget Bar (Shown only when in active call) */}
+        {isInCall && (
+          <div className="flex items-center gap-1 bg-[#121824] border border-emerald-500/40 rounded-xl p-1 shadow-sm animate-fade-in">
             <button
               onClick={() => setIsWidgetOpen((prev: boolean) => !prev)}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-300 hover:bg-emerald-500/10 transition-all cursor-pointer"
@@ -247,7 +212,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
               title={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
             >
-              {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+              {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-emerald-400" />}
             </button>
             <button
               onClick={() => toggleVideo()}
@@ -261,68 +226,226 @@ export const Header: React.FC<HeaderProps> = ({
               {isVideoEnabled ? <Video className="w-3.5 h-3.5 text-emerald-400" /> : <VideoOff className="w-3.5 h-3.5" />}
             </button>
           </div>
-        ) : (
-          <button
-            onClick={() => joinCall()}
-            disabled={isConnecting}
-            className="flex items-center gap-1.5 bg-[#161c28] hover:bg-[#1f2738] text-slate-300 hover:text-emerald-400 border border-[#2a3449] hover:border-emerald-500/50 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
-            title={activeCallPeersCount > 0 ? `Entrar na Chamada Ativa (${activeCallPeersCount} participantes)` : "Iniciar Chamada de Voz e Vídeo da Mesa"}
-          >
-            <PhoneCall className={`w-3.5 h-3.5 text-emerald-400 ${isConnecting ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">
-              {isConnecting
-                ? 'Conectando...'
-                : activeCallPeersCount > 0
-                ? `Entrar na Chamada (${activeCallPeersCount})`
-                : 'Iniciar Chamada'}
-            </span>
-          </button>
         )}
+
+        {/* Grouped Tools & Actions Dropdown Menu */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setIsToolsMenuOpen(!isToolsMenuOpen);
+              if (isDropdownOpen) setIsDropdownOpen(false);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+              isToolsMenuOpen || (activeLootSession && activeLootSession.status === 'active')
+                ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-md shadow-amber-950/40'
+                : 'bg-[#161c28] border-[#2a3449] text-slate-300 hover:text-amber-400 hover:border-amber-500/50'
+            }`}
+            title="Abrir Menu de Ferramentas e Recursos da Mesa"
+          >
+            <div className="relative flex items-center justify-center">
+              <Layers className="w-4 h-4 text-amber-400" />
+              {activeLootSession && activeLootSession.status === 'active' && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1" />
+              )}
+            </div>
+            <span className="hidden sm:inline">Recursos</span>
+            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isToolsMenuOpen ? 'rotate-180 text-amber-400' : ''}`} />
+          </button>
+
+          {isToolsMenuOpen && (
+            <>
+              <div 
+                className="fixed inset-0 z-[100]" 
+                onClick={() => setIsToolsMenuOpen(false)}
+              />
+              <div className="absolute right-0 mt-2 w-64 bg-[#121824] border border-[#2a3449] rounded-2xl shadow-2xl z-[110] p-2 space-y-1 animate-fade-in backdrop-blur-md">
+                <div className="px-3 py-1.5 border-b border-[#2a3449]/80 mb-1 flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 font-mono">
+                    Recursos da Mesa
+                  </span>
+                  {activeCampaign && (
+                    <span className="text-[10px] text-amber-400 font-semibold truncate max-w-[120px]">
+                      {activeCampaign.title}
+                    </span>
+                  )}
+                </div>
+
+                {/* Baú da Party */}
+                {isInsideCampaign && (
+                  <button
+                    onClick={() => {
+                      setIsToolsMenuOpen(false);
+                      setIsPartyLootModalOpen(true);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:text-amber-300 hover:bg-[#1f2738] rounded-xl transition-all flex items-center justify-between group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 group-hover:bg-amber-500/20">
+                        <Gift className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-200 group-hover:text-amber-300">Baú da Party</span>
+                        <span className="text-[10px] text-slate-400 font-normal">Itens e moedas compartilhadas</span>
+                      </div>
+                    </div>
+                    {activeLootSession && activeLootSession.status === 'active' && (
+                      <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-500 text-slate-950 animate-pulse font-mono">
+                        ATIVO
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                {/* Merchant Forge (Lojas & Economia) */}
+                {isInsideCampaign && roleMode === 'dm' && (
+                  <button
+                    onClick={() => {
+                      setIsToolsMenuOpen(false);
+                      setIsMerchantForgeOpen(true);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:text-amber-300 hover:bg-[#1f2738] rounded-xl transition-all flex items-center gap-2.5 group cursor-pointer"
+                  >
+                    <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 group-hover:bg-amber-500/20">
+                      <Store className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-slate-200 group-hover:text-amber-300">Lojas & Barter</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Criar e gerenciar economia</span>
+                    </div>
+                  </button>
+                )}
+
+                {/* Mural de Investigação & Pistas */}
+                {isInsideCampaign && (
+                  <button
+                    onClick={() => {
+                      setIsToolsMenuOpen(false);
+                      setIsPinboardOpen(true);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:text-amber-300 hover:bg-[#1f2738] rounded-xl transition-all flex items-center gap-2.5 group cursor-pointer"
+                  >
+                    <div className="p-1.5 rounded-lg bg-amber-900/20 border border-amber-800/40 text-amber-300 group-hover:bg-amber-900/40">
+                      <span className="text-xs">🕵️</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-slate-200 group-hover:text-amber-300">Mural de Pistas</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Pistas, suspeitos & conexões</span>
+                    </div>
+                  </button>
+                )}
+
+                {/* Chamada de Voz e Vídeo (quando não estiver em chamada ativa) */}
+                {!isInCall && (
+                  <button
+                    onClick={() => {
+                      setIsToolsMenuOpen(false);
+                      joinCall();
+                    }}
+                    disabled={isConnecting}
+                    className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:text-emerald-300 hover:bg-emerald-950/20 rounded-xl transition-all flex items-center justify-between group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 group-hover:bg-emerald-500/20">
+                        <PhoneCall className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-200 group-hover:text-emerald-300">
+                          {isConnecting ? 'Conectando...' : 'Chamada de Voz/Vídeo'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-normal">
+                          {activeCallPeersCount > 0 ? `${activeCallPeersCount} participantes ativos` : 'Conectar com a mesa'}
+                        </span>
+                      </div>
+                    </div>
+                    {activeCallPeersCount > 0 && (
+                      <span className="font-mono text-[10px] text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded font-bold">
+                        {activeCallPeersCount} online
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                <div className="border-t border-[#2a3449]/60 my-1" />
+
+                {/* PWA Install Button as menu item */}
+                <PWAInstallButton variant="menu-item" />
+              </div>
+            </>
+          )}
+        </div>
 
         {/* User Account / Auth Button */}
         {user ? (
           <div className="relative">
+            {/* Circular Avatar Trigger Button */}
             <button
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="flex items-center gap-2 bg-[#161c28] hover:bg-[#1f2738] border border-amber-500/40 p-1.5 pr-3 rounded-xl transition-all cursor-pointer"
+              onClick={() => {
+                setIsDropdownOpen(!isDropdownOpen);
+                if (isToolsMenuOpen) setIsToolsMenuOpen(false);
+              }}
+              className="w-9 h-9 rounded-full bg-[#161c28] hover:bg-[#1f2738] border-2 border-amber-500/40 hover:border-amber-400 flex items-center justify-center transition-all cursor-pointer shadow-md overflow-hidden hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+              title={`Conta de ${user.displayName}`}
             >
-              <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-bold text-xs text-amber-400 font-mono overflow-hidden">
-                {user.avatarUrl ? (
-                  <img src={user.avatarUrl} alt={user.displayName} className="w-full h-full object-cover" />
-                ) : (
-                  user.displayName.slice(0, 2).toUpperCase()
-                )}
-              </div>
-              <span className="text-xs font-bold text-slate-200 hidden sm:inline">{user.displayName}</span>
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user.displayName} className="w-full h-full object-cover" />
+              ) : (
+                <span className="font-bold text-xs text-amber-400 font-mono">
+                  {user.displayName ? user.displayName.slice(0, 2).toUpperCase() : 'US'}
+                </span>
+              )}
             </button>
 
             {isDropdownOpen && (
               <>
                 <div 
-                  className="fixed inset-0 z-10" 
+                  className="fixed inset-0 z-[100]" 
                   onClick={() => setIsDropdownOpen(false)}
                 />
-                <div className="absolute right-0 mt-2 w-48 bg-[#161c28] border border-[#2a3449] rounded-xl shadow-2xl z-20 py-1.5 overflow-hidden animate-fade-in">
+                <div className="absolute right-0 mt-2 w-56 bg-[#161c28] border border-[#2a3449] rounded-2xl shadow-2xl z-[110] p-2 overflow-hidden animate-fade-in backdrop-blur-md">
+                  {/* User Profile Card Header */}
+                  <div className="p-2.5 bg-[#0f141d] border border-[#2a3449]/80 rounded-xl mb-2 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-bold text-sm text-amber-400 font-mono overflow-hidden shrink-0">
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt={user.displayName} className="w-full h-full object-cover" />
+                      ) : (
+                        user.displayName ? user.displayName.slice(0, 2).toUpperCase() : 'US'
+                      )}
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-slate-100 truncate">{user.displayName}</span>
+                      {user.email && (
+                        <span className="text-[10px] text-slate-400 truncate font-mono">{user.email}</span>
+                      )}
+                      <span className="text-[9px] font-semibold text-amber-400/90 mt-0.5 flex items-center gap-1">
+                        {roleMode === 'dm' ? '👑 Modo Mestre' : '⚔️ Modo Jogador'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Configurações Option */}
                   <button
                     onClick={() => {
                       setIsDropdownOpen(false);
                       if (onOpenSettings) onOpenSettings();
                     }}
-                    className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-300 hover:text-amber-400 hover:bg-[#1f2738] transition-all flex items-center gap-2 cursor-pointer"
+                    className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:text-amber-400 hover:bg-[#1f2738] rounded-xl transition-all flex items-center gap-2.5 cursor-pointer"
                   >
                     <Settings className="w-4 h-4 text-amber-500" />
                     <span>Configurações</span>
                   </button>
-                  <div className="border-t border-[#2a3449] my-1" />
+
+                  <div className="border-t border-[#2a3449]/60 my-1" />
+
+                  {/* Sair Option */}
                   <button
                     onClick={async () => {
                       setIsDropdownOpen(false);
                       await signOut();
                     }}
-                    className="w-full px-4 py-2 text-left text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 transition-all flex items-center gap-2 cursor-pointer"
+                    className="w-full px-3 py-2 text-left text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 rounded-xl transition-all flex items-center gap-2.5 cursor-pointer"
                   >
                     <LogOut className="w-4 h-4" />
-                    <span>Sair</span>
+                    <span>Sair da Conta</span>
                   </button>
                 </div>
               </>
@@ -337,28 +460,26 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Entrar / Cadastrar</span>
           </button>
         )}
-
-        {/* Right AI Panel Toggle Button */}
-        {onToggleAIPanel && (
-          <button
-            onClick={onToggleAIPanel}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-              !isAIPanelCollapsed
-                ? 'bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-md shadow-purple-950/40'
-                : 'bg-[#161c28] border-[#2a3449] text-slate-400 hover:text-purple-300 hover:border-purple-500/40'
-            }`}
-            title={isAIPanelCollapsed ? "Expandir Widget IA Co-Mestre" : "Retrair Widget IA Co-Mestre"}
-          >
-            <Sparkles className="w-4 h-4 text-purple-400 animate-pulse" />
-            <span className="hidden lg:inline">IA Co-Mestre</span>
-          </button>
-        )}
       </div>
 
       {/* Merchant Forge Modal */}
       <MerchantForgeModal
         isOpen={isMerchantForgeOpen}
         onClose={() => setIsMerchantForgeOpen(false)}
+        onOpenShopToTrade={(shop) => {
+          setActiveTradeShop(shop);
+          setIsTradeModalOpen(true);
+        }}
+      />
+
+      {/* BG3 Trade Preview Modal for DM */}
+      <BG3MerchantModal
+        shop={activeTradeShop}
+        characterSheet={previewSheet}
+        isOpen={isTradeModalOpen}
+        onClose={() => setIsTradeModalOpen(false)}
+        onUpdateCharacterSheet={() => {}}
+        onUpdateShop={setActiveTradeShop}
       />
 
       {/* Detective Pinboard Modal */}
@@ -369,4 +490,5 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+
 

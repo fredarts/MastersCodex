@@ -5,15 +5,22 @@ import { createPortal } from 'react-dom';
 import { 
   MerchantShop, 
   MerchantType, 
-  MerchantWealthTier 
+  MerchantWealthTier,
+  MerchantStockItem
 } from '@/lib/merchant/merchantTypes';
 import { 
   generateShopPreset, 
   MERCHANT_TEMPLATES, 
-  WEALTH_TIER_CONFIG 
+  WEALTH_TIER_CONFIG,
+  convertSrdItemToStockItem,
+  parseGoldValue
 } from '@/lib/merchant/merchantPresets';
+import { ALL_SRD_ITEMS } from '@/lib/srd-items-data';
 import { merchantService } from '@/lib/merchant/merchantService';
 import { useCampaign } from '@/context/CampaignContext';
+import { useWorld } from '@/lib/hooks/useWorld';
+import { ItemCompendiumModal } from '@/components/character-sheet/Modals/ItemCompendiumModal';
+import { CharacterEquipmentItem } from '@/lib/types';
 import { 
   Store, 
   Plus, 
@@ -26,7 +33,16 @@ import {
   Edit3, 
   Check, 
   ShoppingBag,
-  Power
+  Power,
+  BookOpen,
+  User,
+  MapPin,
+  Building2,
+  UserCheck,
+  Link2,
+  ExternalLink,
+  Minus,
+  Infinity
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -43,15 +59,28 @@ export const MerchantForgeModal: React.FC<MerchantForgeModalProps> = ({
 }) => {
   const { activeCampaign } = useCampaign();
   const campaignId = activeCampaign?.id || 'default-campaign';
+  const { worldEntities } = useWorld();
 
   const [shops, setShops] = useState<MerchantShop[]>([]);
   const [selectedShop, setSelectedShop] = useState<MerchantShop | null>(null);
+  const [isCompendiumOpen, setIsCompendiumOpen] = useState<boolean>(false);
+
+  // World Building Entities
+  const npcEntities = React.useMemo(() => {
+    return (worldEntities || []).filter(e => e.category === 'npc');
+  }, [worldEntities]);
+
+  const locationEntities = React.useMemo(() => {
+    return (worldEntities || []).filter(e => e.category === 'location');
+  }, [worldEntities]);
 
   // New Shop Generator Form State
   const [selectedType, setSelectedType] = useState<MerchantType>('blacksmith');
   const [selectedWealth, setSelectedWealth] = useState<MerchantWealthTier>('modest');
   const [customName, setCustomName] = useState<string>('');
   const [customMerchant, setCustomMerchant] = useState<string>('');
+  const [selectedNpcId, setSelectedNpcId] = useState<string>('');
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
   const [isCreatingNew, setIsCreatingNew] = useState<boolean>(false);
 
   const [mounted, setMounted] = useState(false);
@@ -72,13 +101,29 @@ export const MerchantForgeModal: React.FC<MerchantForgeModalProps> = ({
 
   if (!isOpen || !mounted) return null;
 
+  const handleSelectNpcForNew = (npcId: string) => {
+    setSelectedNpcId(npcId);
+    if (!npcId) return;
+    const npc = npcEntities.find(n => n.id === npcId);
+    if (npc) {
+      setCustomMerchant(npc.name);
+    }
+  };
+
   const handleGeneratePreset = () => {
+    const chosenNpc = npcEntities.find(n => n.id === selectedNpcId);
+    const chosenLoc = locationEntities.find(l => l.id === selectedLocationId);
+
     const newShop = generateShopPreset({
       type: selectedType,
       wealthTier: selectedWealth,
       campaignId,
       customName: customName.trim() || undefined,
-      customMerchantName: customMerchant.trim() || undefined,
+      customMerchantName: customMerchant.trim() || chosenNpc?.name || undefined,
+      merchantAvatarUrl: chosenNpc?.images?.[0] || undefined,
+      npcEntityId: chosenNpc?.id || undefined,
+      locationEntityId: chosenLoc?.id || undefined,
+      locationName: chosenLoc?.name || undefined,
     });
 
     merchantService.saveShop(newShop).then(() => {
@@ -88,6 +133,8 @@ export const MerchantForgeModal: React.FC<MerchantForgeModalProps> = ({
       setIsCreatingNew(false);
       setCustomName('');
       setCustomMerchant('');
+      setSelectedNpcId('');
+      setSelectedLocationId('');
       toast.success(`Loja '${newShop.name}' gerada com ${newShop.stock.length} itens do Compêndio!`);
     });
   };
@@ -111,6 +158,152 @@ export const MerchantForgeModal: React.FC<MerchantForgeModalProps> = ({
       } else {
         toast.info(`'${updated.name}' foi fechada.`);
       }
+    });
+  };
+
+  const handleUpdateShopNpc = (npcId: string) => {
+    if (!selectedShop) return;
+    const npc = npcEntities.find(n => n.id === npcId);
+    const updatedShop: MerchantShop = {
+      ...selectedShop,
+      npcEntityId: npcId || undefined,
+      merchantName: npc ? npc.name : selectedShop.merchantName,
+      merchantAvatarUrl: npc?.images?.[0] || undefined,
+    };
+    merchantService.saveShop(updatedShop).then(() => {
+      setSelectedShop(updatedShop);
+      setShops(prev => prev.map(s => s.id === updatedShop.id ? updatedShop : s));
+      toast.success(npc ? `Mercador associado a "${npc.name}"!` : 'Associação de NPC desfeita.');
+    });
+  };
+
+  const handleUpdateShopLocation = (locId: string) => {
+    if (!selectedShop) return;
+    const loc = locationEntities.find(l => l.id === locId);
+    const updatedShop: MerchantShop = {
+      ...selectedShop,
+      locationEntityId: locId || undefined,
+      locationName: loc ? loc.name : undefined,
+    };
+    merchantService.saveShop(updatedShop).then(() => {
+      setSelectedShop(updatedShop);
+      setShops(prev => prev.map(s => s.id === updatedShop.id ? updatedShop : s));
+      toast.success(loc ? `Loja associada ao local "${loc.name}"!` : 'Associação de local desfeita.');
+    });
+  };
+
+  const handleAddItemFromCompendium = (equipItem: CharacterEquipmentItem) => {
+    if (!selectedShop) return;
+
+    const nameLower = equipItem.name.toLowerCase().trim();
+    const matchingSrd = ALL_SRD_ITEMS.find(
+      (s) => s.name.toLowerCase().trim() === nameLower
+    );
+
+    let newStockItem: MerchantStockItem;
+
+    if (matchingSrd) {
+      newStockItem = convertSrdItemToStockItem(matchingSrd, equipItem.quantity > 0 ? equipItem.quantity : 1);
+    } else {
+      let price = 10;
+      if (equipItem.notes) {
+        const match = equipItem.notes.match(/Custo:\s*([0-9.,]+)\s*([a-zA-Z]+)/i);
+        if (match) {
+          price = parseGoldValue(`${match[1]} ${match[2]}`);
+        }
+      }
+      if (price === 10 && equipItem.rarity) {
+        if (equipItem.rarity === 'Incomum') price = 500;
+        else if (equipItem.rarity === 'Raro') price = 5000;
+        else if (equipItem.rarity === 'Muito Raro') price = 50000;
+        else if (equipItem.rarity === 'Lendário') price = 200000;
+      }
+
+      const cat = equipItem.itemType === 'weapon' ? 'weapon'
+        : equipItem.itemType === 'armor' ? 'armor'
+        : equipItem.itemType === 'potion' ? 'potion'
+        : equipItem.itemType === 'scroll' ? 'scroll'
+        : equipItem.rarity && equipItem.rarity !== 'Comum' ? 'magic_item'
+        : 'adventuring_gear';
+
+      newStockItem = {
+        id: `stock-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        name: equipItem.name,
+        category: cat,
+        basePriceGold: price,
+        currentPriceGold: price,
+        quantity: equipItem.quantity > 0 ? equipItem.quantity : 1,
+        rarity: (equipItem.rarity as any) || 'Comum',
+        description: equipItem.notes || '',
+        weightLbs: typeof equipItem.weight === 'number' ? equipItem.weight : parseFloat(String(equipItem.weight || 1)),
+        attunement: Boolean(equipItem.notes?.includes('Sintonização')),
+        isCustom: false,
+      };
+    }
+
+    const updatedShop: MerchantShop = {
+      ...selectedShop,
+      stock: [...selectedShop.stock, newStockItem],
+    };
+
+    merchantService.saveShop(updatedShop).then(() => {
+      setSelectedShop(updatedShop);
+      setShops((prev) => prev.map((s) => (s.id === updatedShop.id ? updatedShop : s)));
+      toast.success(`"${newStockItem.name}" adicionado ao estoque da loja!`);
+    });
+  };
+
+  const handleUpdateItemQuantity = (stockItemId: string, newQty: number) => {
+    if (!selectedShop) return;
+    const qty = Math.max(-1, newQty);
+    const updatedShop: MerchantShop = {
+      ...selectedShop,
+      stock: selectedShop.stock.map(item => 
+        item.id === stockItemId ? { ...item, quantity: qty } : item
+      ),
+    };
+
+    setSelectedShop(updatedShop);
+    setShops(prev => prev.map(s => s.id === updatedShop.id ? updatedShop : s));
+    merchantService.saveShop(updatedShop);
+  };
+
+  const handleUpdateItemPrice = (stockItemId: string, newPrice: number) => {
+    if (!selectedShop) return;
+    const price = Math.max(0, newPrice);
+    const updatedShop: MerchantShop = {
+      ...selectedShop,
+      stock: selectedShop.stock.map(item => 
+        item.id === stockItemId ? { ...item, basePriceGold: price, currentPriceGold: price } : item
+      ),
+    };
+
+    setSelectedShop(updatedShop);
+    setShops(prev => prev.map(s => s.id === updatedShop.id ? updatedShop : s));
+    merchantService.saveShop(updatedShop);
+  };
+
+  const handleToggleItemInfinite = (stockItemId: string) => {
+    if (!selectedShop) return;
+    const currentItem = selectedShop.stock.find(i => i.id === stockItemId);
+    if (!currentItem) return;
+    const newQty = currentItem.quantity === -1 ? 1 : -1;
+    handleUpdateItemQuantity(stockItemId, newQty);
+    toast.success(newQty === -1 ? `Estoque de "${currentItem.name}" definido como Infinito (∞)!` : `Estoque de "${currentItem.name}" definido como 1 unidade.`);
+  };
+
+  const handleRemoveStockItem = (stockItemId: string) => {
+    if (!selectedShop) return;
+
+    const updatedShop: MerchantShop = {
+      ...selectedShop,
+      stock: selectedShop.stock.filter((i) => i.id !== stockItemId),
+    };
+
+    merchantService.saveShop(updatedShop).then(() => {
+      setSelectedShop(updatedShop);
+      setShops((prev) => prev.map((s) => (s.id === updatedShop.id ? updatedShop : s)));
+      toast.info('Item removido do estoque.');
     });
   };
 
@@ -182,9 +375,19 @@ export const MerchantForgeModal: React.FC<MerchantForgeModalProps> = ({
                     <div className="text-xs font-bold text-slate-200 truncate flex items-center gap-1.5">
                       <span>{s.name}</span>
                     </div>
-                    <div className="text-[11px] text-slate-400 font-mono mt-0.5 truncate">
-                      {s.merchantName} • {s.stock.length} itens • {s.goldReserve} PO
+                    <div className="text-[11px] text-slate-400 font-mono mt-0.5 truncate flex items-center gap-1">
+                      <span>{s.merchantName}</span>
+                      <span>•</span>
+                      <span>{s.stock.length} itens</span>
+                      <span>•</span>
+                      <span className="text-amber-400 font-bold">{s.goldReserve} PO</span>
                     </div>
+                    {s.locationName && (
+                      <div className="text-[10px] text-indigo-400 font-sans mt-0.5 truncate flex items-center gap-1">
+                        <MapPin className="w-2.5 h-2.5 shrink-0 text-indigo-400" />
+                        <span className="truncate">{s.locationName}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
@@ -269,6 +472,56 @@ export const MerchantForgeModal: React.FC<MerchantForgeModalProps> = ({
                   </div>
                 </div>
 
+                {/* Vínculos com o World Building (Opcional) */}
+                <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-3">
+                  <div className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                    <Link2 className="w-3.5 h-3.5" />
+                    <span>3. Vínculos com o World Building (Opcional):</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Selecionar NPC */}
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-300 block mb-1 flex items-center gap-1">
+                        <User className="w-3 h-3 text-amber-400" />
+                        <span>Vincular a um NPC:</span>
+                      </label>
+                      <select
+                        value={selectedNpcId}
+                        onChange={(e) => handleSelectNpcForNew(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                      >
+                        <option value="">-- Escolha um NPC ou digite abaixo --</option>
+                        {npcEntities.map((npc) => (
+                          <option key={npc.id} value={npc.id}>
+                            👤 {npc.name} {npc.subType ? `(${npc.subType})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Selecionar Localização */}
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-300 block mb-1 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-indigo-400" />
+                        <span>Vincular a um Local / Cidade:</span>
+                      </label>
+                      <select
+                        value={selectedLocationId}
+                        onChange={(e) => setSelectedLocationId(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                      >
+                        <option value="">-- Sem localização específica --</option>
+                        {locationEntities.map((loc) => (
+                          <option key={loc.id} value={loc.id}>
+                            📍 {loc.name} {loc.subType ? `(${loc.subType})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Nomes Customizados Opcionais */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -315,8 +568,19 @@ export const MerchantForgeModal: React.FC<MerchantForgeModalProps> = ({
                     <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                       <span>{selectedShop.name}</span>
                     </h3>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">
-                      Mercador: <span className="text-amber-300 font-bold">{selectedShop.merchantName}</span> • {selectedShop.stock.length} itens no estoque
+                    <p className="text-xs text-slate-400 font-mono mt-0.5 flex items-center gap-2 flex-wrap">
+                      <span>Mercador: <span className="text-amber-300 font-bold">{selectedShop.merchantName}</span></span>
+                      <span>•</span>
+                      <span>{selectedShop.stock.length} itens no estoque</span>
+                      {selectedShop.locationName && (
+                        <>
+                          <span>•</span>
+                          <span className="text-indigo-300 font-sans flex items-center gap-1 font-semibold">
+                            <MapPin className="w-3 h-3 text-indigo-400" />
+                            {selectedShop.locationName}
+                          </span>
+                        </>
+                      )}
                     </p>
                   </div>
 
@@ -353,6 +617,100 @@ export const MerchantForgeModal: React.FC<MerchantForgeModalProps> = ({
                   </div>
                 </div>
 
+                {/* Vínculos com o World Building (NPC & Local) */}
+                <div className="p-3.5 bg-slate-950/80 border border-amber-500/20 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                      <Link2 className="w-3.5 h-3.5" />
+                      <span>Vínculos com o World Building (NPC & Localização)</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Sincronização em Tempo Real
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Mercador NPC Selector */}
+                    <div className="p-2.5 bg-slate-900/80 border border-slate-800 rounded-xl space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Mercador NPC:</span>
+                        </label>
+                        {selectedShop.npcEntityId && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono flex items-center gap-1">
+                            <UserCheck className="w-2.5 h-2.5" /> Vinculado
+                          </span>
+                        )}
+                      </div>
+                      
+                      <select
+                        value={selectedShop.npcEntityId || ''}
+                        onChange={(e) => handleUpdateShopNpc(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 hover:border-slate-600 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer"
+                      >
+                        <option value="">-- Nome Manual ({selectedShop.merchantName}) --</option>
+                        {npcEntities.map((npc) => (
+                          <option key={npc.id} value={npc.id}>
+                            👤 {npc.name} {npc.subType ? `(${npc.subType})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      
+                      {selectedShop.npcEntityId && (() => {
+                        const linkedNpc = npcEntities.find(n => n.id === selectedShop.npcEntityId);
+                        return linkedNpc ? (
+                          <div className="flex items-center gap-2 pt-1 text-[11px] text-slate-400">
+                            {linkedNpc.images?.[0] ? (
+                              <img src={linkedNpc.images[0]} alt={linkedNpc.name} className="w-6 h-6 rounded-full object-cover border border-amber-500/40 shrink-0" />
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-300 shrink-0">
+                                <User className="w-3 h-3" />
+                              </div>
+                            )}
+                            <span className="truncate text-slate-300">{linkedNpc.shortDesc || linkedNpc.subType || 'NPC do World Building'}</span>
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+
+                    {/* Localização / Estabelecimento Selector */}
+                    <div className="p-2.5 bg-slate-900/80 border border-slate-800 rounded-xl space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Localização / Cidade:</span>
+                        </label>
+                        {selectedShop.locationEntityId && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-mono flex items-center gap-1">
+                            <Building2 className="w-2.5 h-2.5" /> Vinculado
+                          </span>
+                        )}
+                      </div>
+
+                      <select
+                        value={selectedShop.locationEntityId || ''}
+                        onChange={(e) => handleUpdateShopLocation(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 hover:border-slate-600 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer"
+                      >
+                        <option value="">-- Sem Localização Vinculada --</option>
+                        {locationEntities.map((loc) => (
+                          <option key={loc.id} value={loc.id}>
+                            📍 {loc.name} {loc.subType ? `(${loc.subType})` : ''}
+                          </option>
+                        ))}
+                      </select>
+
+                      {selectedShop.locationName && (
+                        <div className="flex items-center gap-1.5 pt-1 text-[11px] text-indigo-300">
+                          <MapPin className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                          <span className="truncate font-semibold">{selectedShop.locationName}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Estatísticas Rápidas */}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-2xl text-center">
@@ -370,26 +728,125 @@ export const MerchantForgeModal: React.FC<MerchantForgeModalProps> = ({
                 </div>
 
                 {/* Amostra do Estoque da Loja */}
-                <div>
-                  <div className="text-xs font-bold text-slate-300 mb-2.5">
-                    Estoque Atual ({selectedShop.stock.length} Itens):
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-bold text-slate-300 flex items-center gap-2">
+                      <span>Estoque Atual ({selectedShop.stock.length} Itens):</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsCompendiumOpen(true)}
+                      className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer hover:scale-105 active:scale-95"
+                      title="Abrir Compêndio Oficial D&D 5e para adicionar itens com 1 clique"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Adicionar Itens do Compêndio</span>
+                    </button>
                   </div>
-                  <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-800">
-                    {selectedShop.stock.map((item, idx) => (
-                      <div key={`stock-preview-${item.id || idx}-${idx}`} className="p-2 bg-slate-950/70 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-200">{item.name}</span>
-                          {item.rarity && item.rarity !== 'Comum' && (
-                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-mono">
-                              {item.rarity}
-                            </span>
-                          )}
-                        </div>
-                        <div className="font-mono text-amber-400 font-bold">
-                          {item.basePriceGold} PO {item.quantity !== -1 && `(${item.quantity} un)`}
-                        </div>
+
+                  <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+                    {selectedShop.stock.length === 0 ? (
+                      <div className="text-center py-8 text-slate-500 text-xs font-mono border border-dashed border-slate-800 rounded-xl p-4">
+                        O estoque desta loja está vazio. Clique em &ldquo;Adicionar Itens do Compêndio&rdquo; acima para incluir armas, armaduras, poções e itens mágicos.
                       </div>
-                    ))}
+                    ) : (
+                      selectedShop.stock.map((item, idx) => (
+                        <div key={`stock-preview-${item.id || idx}-${idx}`} className="p-2.5 bg-slate-950/80 border border-slate-800 hover:border-amber-500/40 rounded-xl flex items-center justify-between gap-2 text-xs transition-all group">
+                          {/* Item Info */}
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="font-bold text-slate-200 truncate">{item.name}</span>
+                            {item.rarity && item.rarity !== 'Comum' && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-mono shrink-0">
+                                {item.rarity}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Controls: Price + Quantity + Delete */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            {/* Preço Unitário (PO) */}
+                            <div className="flex items-center gap-1 bg-slate-900 px-2 py-1 rounded-lg border border-slate-800 focus-within:border-amber-500/60" title="Preço unitário em Peças de Ouro (PO)">
+                              <Coins className="w-3 h-3 text-amber-400 shrink-0" />
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={item.basePriceGold}
+                                onChange={(e) => handleUpdateItemPrice(item.id, parseFloat(e.target.value) || 0)}
+                                className="w-12 bg-transparent text-right font-mono font-bold text-amber-300 text-xs focus:outline-none"
+                              />
+                              <span className="text-[10px] text-amber-400 font-bold">PO</span>
+                            </div>
+
+                            {/* Seletor de Quantidade & Infinito */}
+                            <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (item.quantity === -1) handleUpdateItemQuantity(item.id, 1);
+                                  else if (item.quantity > 1) handleUpdateItemQuantity(item.id, item.quantity - 1);
+                                }}
+                                disabled={item.quantity === 1}
+                                className="w-5 h-5 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                                title="Diminuir quantidade"
+                              >
+                                <Minus className="w-3 h-3" />
+                              </button>
+
+                              {item.quantity === -1 ? (
+                                <span className="w-10 text-center font-mono font-bold text-emerald-400 text-xs" title="Estoque Infinito">
+                                  ∞
+                                </span>
+                              ) : (
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={item.quantity}
+                                  onChange={(e) => handleUpdateItemQuantity(item.id, parseInt(e.target.value) || 1)}
+                                  className="w-10 bg-transparent text-center font-mono font-bold text-slate-100 text-xs focus:outline-none"
+                                  title="Quantidade disponível em estoque"
+                                />
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (item.quantity === -1) handleUpdateItemQuantity(item.id, 2);
+                                  else handleUpdateItemQuantity(item.id, item.quantity + 1);
+                                }}
+                                className="w-5 h-5 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer transition-colors"
+                                title="Aumentar quantidade"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleToggleItemInfinite(item.id)}
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold font-mono transition-all cursor-pointer ${
+                                  item.quantity === -1
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow'
+                                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                                }`}
+                                title={item.quantity === -1 ? 'Estoque Ilimitado Ativo (Clique para definir número fixo)' : 'Tornar Estoque Ilimitado (∞)'}
+                              >
+                                ∞
+                              </button>
+                            </div>
+
+                            {/* Botão Remover */}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveStockItem(item.id)}
+                              className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition-colors cursor-pointer"
+                              title="Remover item do estoque"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
 
@@ -414,6 +871,14 @@ export const MerchantForgeModal: React.FC<MerchantForgeModalProps> = ({
         </div>
 
       </div>
+
+      {/* Compendium Modal for picking shop items */}
+      <ItemCompendiumModal
+        isOpen={isCompendiumOpen}
+        onClose={() => setIsCompendiumOpen(false)}
+        onAddItem={handleAddItemFromCompendium}
+        zIndex="z-[1000001]"
+      />
     </div>,
     document.body
   );

@@ -328,76 +328,218 @@ export const merchantService = {
   /**
    * Busca todas as lojas de uma campanha.
    */
-  async fetchShops(campaignId: string): Promise<MerchantShop[]> {
+  /**
+   * Busca todas as lojas de uma campanha com fallback global.
+   */
+  async fetchShops(campaignId?: string): Promise<MerchantShop[]> {
+    const cid = campaignId || 'default-campaign';
+    const shopMap = new Map<string, MerchantShop>();
+
     try {
-      if (isSupabaseConfigured() && isValidUuid(campaignId)) {
+      // 1. Busca no LocalStorage específico da campanha
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem(`${LOCAL_STORAGE_SHOPS_PREFIX}${cid}`);
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((s: MerchantShop) => {
+                if (s && s.id) shopMap.set(s.id, s);
+              });
+            }
+          } catch {}
+        }
+
+        // 2. Agrega de todas as outras chaves masters_merchant_shops_ do navegador
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith(LOCAL_STORAGE_SHOPS_PREFIX)) {
+            const otherRaw = localStorage.getItem(key);
+            if (otherRaw) {
+              try {
+                const otherParsed = JSON.parse(otherRaw);
+                if (Array.isArray(otherParsed)) {
+                  otherParsed.forEach((s: MerchantShop) => {
+                    if (s && s.id && !shopMap.has(s.id)) {
+                      shopMap.set(s.id, s);
+                    }
+                  });
+                }
+              } catch {}
+            }
+          }
+        }
+      }
+
+      // 3. Supabase se estiver configurado
+      if (isSupabaseConfigured() && isValidUuid(cid)) {
         const { data, error } = await supabase
           .from('campaign_shops')
           .select('*')
-          .eq('campaign_id', campaignId)
-          .order('created_at', { ascending: false });
+          .eq('campaign_id', cid)
+          .order('updated_at', { ascending: false });
 
         if (!error && data && data.length > 0) {
-          return data.map(d => ({
-            id: d.id,
-            campaignId: d.campaign_id,
-            name: d.name,
-            merchantName: d.merchant_name,
-            merchantType: d.merchant_type,
-            dialogueGreeting: d.dialogue_greeting,
-            wealthTier: d.wealth_tier,
-            goldReserve: d.gold_reserve,
-            attitude: d.attitude,
-            persuasionDc: d.persuasion_dc || 14,
-            stock: d.stock || [],
-            isOpenToPlayers: d.is_open_to_players ?? true,
-            createdAt: d.created_at,
-            updatedAt: d.updated_at,
-          }));
-        }
-      }
-
-      // Fallback LocalStorage
-      if (typeof window !== 'undefined') {
-        const raw = localStorage.getItem(`${LOCAL_STORAGE_SHOPS_PREFIX}${campaignId}`);
-        if (raw) {
-          return JSON.parse(raw);
+          data.forEach((d) => {
+            const shopObj: MerchantShop = {
+              id: d.id,
+              campaignId: d.campaign_id,
+              name: d.name,
+              merchantName: d.merchant_name,
+              merchantType: d.merchant_type,
+              merchantAvatarUrl: d.merchant_avatar_url || d.merchantAvatarUrl,
+              npcEntityId: d.npc_entity_id || d.npcEntityId,
+              locationEntityId: d.location_entity_id || d.locationEntityId,
+              locationName: d.location_name || d.locationName,
+              dialogueGreeting: d.dialogue_greeting,
+              wealthTier: d.wealth_tier,
+              goldReserve: d.gold_reserve,
+              attitude: d.attitude,
+              persuasionDc: d.persuasion_dc || 14,
+              stock: d.stock || [],
+              isOpenToPlayers: d.is_open_to_players ?? true,
+              createdAt: d.created_at,
+              updatedAt: d.updated_at,
+            };
+            shopMap.set(shopObj.id, shopObj);
+          });
         }
       }
     } catch (e) {
-      console.warn('Erro ao carregar lojas, retornando vazio:', e);
+      console.warn('Erro ao carregar lojas:', e);
     }
-    return [];
+
+    const allShops = Array.from(shopMap.values());
+    
+    // Se o usuário possui lojas personalizadas (com NPC, Local ou nomes/estoque customizados),
+    // descarta o mockup genérico temporário 'Forja & Armaria do Martelo Rubro'
+    const hasCustomShops = allShops.some(
+      (s) => s.npcEntityId || s.locationEntityId || s.locationName || s.merchantAvatarUrl || (s.name !== 'Forja & Armaria do Martelo Rubro' && (s.stock?.length || 0) > 0)
+    );
+
+    const rawFiltered = hasCustomShops
+      ? allShops.filter((s) => s.npcEntityId || s.locationEntityId || s.locationName || s.name !== 'Forja & Armaria do Martelo Rubro')
+      : allShops;
+
+    // Deduplica lojas pelo par (Nome + NPC/Mercador) mantendo a versão com o maior estoque e mais recente
+    const deduplicatedMap = new Map<string, MerchantShop>();
+    const duplicateIdsToDelete: string[] = [];
+
+    // Ordena para que a loja com mais itens e mais recente venha primeiro
+    const sortedRaw = [...rawFiltered].sort((a, b) => {
+      const stockA = a.stock?.length || 0;
+      const stockB = b.stock?.length || 0;
+      if (stockB !== stockA) return stockB - stockA;
+      return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
+    });
+
+    sortedRaw.forEach((s) => {
+      const dedupeKey = `${(s.name || '').trim().toLowerCase()}_${(s.npcEntityId || s.merchantName || '').trim().toLowerCase()}`;
+      if (!deduplicatedMap.has(dedupeKey)) {
+        deduplicatedMap.set(dedupeKey, s);
+      } else {
+        // Encontrou uma duplicata anterior gerada por falta de UUID
+        duplicateIdsToDelete.push(s.id);
+      }
+    });
+
+    const uniqueShops = Array.from(deduplicatedMap.values());
+
+    // Limpa silenciosamente as duplicatas órfãs no banco e no storage
+    if (duplicateIdsToDelete.length > 0) {
+      if (isSupabaseConfigured() && isValidUuid(cid)) {
+        supabase.from('campaign_shops').delete().in('id', duplicateIdsToDelete).then(() => {});
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`${LOCAL_STORAGE_SHOPS_PREFIX}${cid}`, JSON.stringify(uniqueShops));
+      }
+    }
+
+    const getShopScore = (s: MerchantShop): number => {
+      let score = 0;
+      if (s.npcEntityId) score += 500;
+      if (s.locationEntityId || s.locationName) score += 500;
+      if (s.merchantAvatarUrl) score += 300;
+      if (s.stock && s.stock.length > 2) score += s.stock.length * 10;
+      if (s.name !== 'Forja & Armaria do Martelo Rubro') score += 200;
+      if (s.updatedAt) {
+        const time = new Date(s.updatedAt).getTime();
+        if (!isNaN(time)) score += time / 1000000000;
+      }
+      return score;
+    };
+
+    uniqueShops.sort((a, b) => getShopScore(b) - getShopScore(a));
+    return uniqueShops;
   },
 
   /**
    * Salva ou atualiza uma loja.
    */
   async saveShop(shop: MerchantShop): Promise<void> {
+    const validId = isValidUuid(shop.id)
+      ? shop.id
+      : ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        }));
+
+    const updatedShop: MerchantShop = {
+      ...shop,
+      id: validId,
+      updatedAt: new Date().toISOString(),
+    };
+
     if (typeof window !== 'undefined') {
-      const current = await this.fetchShops(shop.campaignId);
-      const updated = [...current.filter(s => s.id !== shop.id), shop];
-      localStorage.setItem(`${LOCAL_STORAGE_SHOPS_PREFIX}${shop.campaignId}`, JSON.stringify(updated));
+      const cid = updatedShop.campaignId || 'default-campaign';
+      const raw = localStorage.getItem(`${LOCAL_STORAGE_SHOPS_PREFIX}${cid}`);
+      let current: MerchantShop[] = [];
+      if (raw) {
+        try { 
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) current = parsed;
+        } catch {}
+      }
+      const updated = [updatedShop, ...current.filter(s => s.id !== updatedShop.id)];
+      localStorage.setItem(`${LOCAL_STORAGE_SHOPS_PREFIX}${cid}`, JSON.stringify(updated));
+
+      // Sincroniza também com default-campaign caso o campaignId seja diferente
+      if (cid !== 'default-campaign') {
+        const rawDef = localStorage.getItem(`${LOCAL_STORAGE_SHOPS_PREFIX}default-campaign`);
+        let defShops: MerchantShop[] = [];
+        if (rawDef) {
+          try {
+            const parsed = JSON.parse(rawDef);
+            if (Array.isArray(parsed)) defShops = parsed;
+          } catch {}
+        }
+        const updatedDef = [updatedShop, ...defShops.filter(s => s.id !== updatedShop.id)];
+        localStorage.setItem(`${LOCAL_STORAGE_SHOPS_PREFIX}default-campaign`, JSON.stringify(updatedDef));
+      }
     }
 
-    if (isSupabaseConfigured() && isValidUuid(shop.campaignId)) {
+    if (isSupabaseConfigured() && isValidUuid(updatedShop.campaignId)) {
       try {
         await supabase
           .from('campaign_shops')
           .upsert({
-            id: isValidUuid(shop.id) ? shop.id : undefined,
-            campaign_id: shop.campaignId,
-            name: shop.name,
-            merchant_name: shop.merchantName,
-            merchant_type: shop.merchantType,
-            dialogue_greeting: shop.dialogueGreeting,
-            wealth_tier: shop.wealthTier,
-            gold_reserve: shop.goldReserve,
-            attitude: shop.attitude,
-            persuasion_dc: shop.persuasionDc,
-            stock: shop.stock,
-            is_open_to_players: shop.isOpenToPlayers,
-            updated_at: new Date().toISOString(),
+            id: updatedShop.id,
+            campaign_id: updatedShop.campaignId,
+            name: updatedShop.name,
+            merchant_name: updatedShop.merchantName,
+            merchant_type: updatedShop.merchantType,
+            merchant_avatar_url: updatedShop.merchantAvatarUrl || null,
+            npc_entity_id: isValidUuid(updatedShop.npcEntityId) ? updatedShop.npcEntityId : null,
+            location_entity_id: isValidUuid(updatedShop.locationEntityId) ? updatedShop.locationEntityId : null,
+            location_name: updatedShop.locationName || null,
+            dialogue_greeting: updatedShop.dialogueGreeting || null,
+            wealth_tier: updatedShop.wealthTier || 'modest',
+            gold_reserve: updatedShop.goldReserve || 500,
+            attitude: updatedShop.attitude || 0,
+            persuasion_dc: updatedShop.persuasionDc || 14,
+            stock: updatedShop.stock || [],
+            is_open_to_players: updatedShop.isOpenToPlayers ?? true,
+            updated_at: updatedShop.updatedAt,
           });
       } catch (e) {
         console.warn('Erro ao salvar loja no Supabase:', e);
@@ -406,13 +548,25 @@ export const merchantService = {
   },
 
   /**
-   * Deleta uma loja.
+   * Deleta uma loja de todas as chaves.
    */
   async deleteShop(shopId: string, campaignId: string): Promise<void> {
     if (typeof window !== 'undefined') {
-      const current = await this.fetchShops(campaignId);
-      const updated = current.filter(s => s.id !== shopId);
-      localStorage.setItem(`${LOCAL_STORAGE_SHOPS_PREFIX}${campaignId}`, JSON.stringify(updated));
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(LOCAL_STORAGE_SHOPS_PREFIX)) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            try {
+              const list = JSON.parse(raw);
+              if (Array.isArray(list)) {
+                const filtered = list.filter((s: MerchantShop) => s.id !== shopId);
+                localStorage.setItem(key, JSON.stringify(filtered));
+              }
+            } catch {}
+          }
+        }
+      }
     }
 
     if (isSupabaseConfigured() && isValidUuid(campaignId)) {
