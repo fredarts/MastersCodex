@@ -12,7 +12,9 @@ import { merchantService } from '@/lib/merchant/merchantService';
 import { ALL_SRD_ITEMS } from '@/lib/srd-items-data';
 import { parseGoldValue } from '@/lib/merchant/merchantPresets';
 import { getEffectiveAttributeScore, calculateModifier, calculateProficiencyBonus } from '@/lib/dnd5e-calculator';
-import { CharacterSheet, CharacterEquipmentItem } from '@/lib/types';
+import { CharacterSheet, CharacterEquipmentItem, WorldEntity } from '@/lib/types';
+import { useWorld } from '@/lib/hooks/useWorld';
+import { getEntityPortraitUrl } from '@/lib/world/entityHelpers';
 
 function getPlayerItemBasePrice(item: CharacterEquipmentItem): number {
   const match = ALL_SRD_ITEMS.find(s => s.name.toLowerCase() === item.name.toLowerCase());
@@ -83,6 +85,45 @@ export const BG3MerchantModal: React.FC<BG3MerchantModalProps> = ({
 
   const [mounted, setMounted] = useState(false);
   const [internalAvailableShops, setInternalAvailableShops] = useState<MerchantShop[]>([]);
+
+  const { worldEntities } = useWorld();
+
+  const allAvailableEntities: WorldEntity[] = React.useMemo(() => {
+    const list: WorldEntity[] = [...worldEntities];
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('codex_entities');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((e: WorldEntity) => {
+              const existingIdx = list.findIndex((existing) => existing.id === e.id);
+              if (existingIdx !== -1) {
+                // Prioritiza a entidade com mais imagens/recente
+                if ((e.images?.length || 0) > (list[existingIdx].images?.length || 0) || e.attributes?.portraitUrl) {
+                  list[existingIdx] = e;
+                }
+              } else {
+                list.push(e);
+              }
+            });
+          }
+        }
+      } catch {}
+    }
+    return list;
+  }, [worldEntities, isOpen, shop]);
+
+  const linkedNpc = shop ? (
+    (shop.npcEntityId ? allAvailableEntities.find(n => n.id === shop.npcEntityId) : null) ||
+    allAvailableEntities.find(n => n.category === 'npc' && (
+      n.name.toLowerCase().trim() === (shop.merchantName || '').toLowerCase().trim() ||
+      (shop.merchantName || '').toLowerCase().includes(n.name.toLowerCase().trim()) ||
+      n.name.toLowerCase().includes((shop.merchantName || '').toLowerCase().trim())
+    ))
+  ) : null;
+
+  const resolvedAvatar = (linkedNpc ? getEntityPortraitUrl(linkedNpc) : undefined) || shop?.merchantAvatarUrl;
 
   const getShopScore = (s: MerchantShop): number => {
     let score = 0;
@@ -363,21 +404,21 @@ export const BG3MerchantModal: React.FC<BG3MerchantModalProps> = ({
       <div className="bg-[#0b0f17] border border-amber-500/40 rounded-3xl w-full max-w-7xl shadow-2xl overflow-hidden flex flex-col h-[92vh] animate-in zoom-in-95 duration-200">
         
         {/* Header BG3 Style */}
-        <div className="px-6 py-3.5 bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-950 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-extrabold shadow-inner overflow-hidden shrink-0">
-              {shop.merchantAvatarUrl ? (
-                <img src={shop.merchantAvatarUrl} alt={shop.merchantName} className="w-full h-full object-cover" />
+        <div className="px-6 py-4 bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-950 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-4 sm:gap-5">
+            <div className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-2xl bg-slate-950 border-2 border-amber-500/60 flex items-center justify-center text-amber-400 font-extrabold shadow-2xl overflow-hidden shrink-0 ring-2 ring-amber-500/20 relative group">
+              {resolvedAvatar ? (
+                <img src={resolvedAvatar} alt={shop.merchantName} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
               ) : (
-                <Coins className="w-6 h-6" />
+                <Coins className="w-12 h-12 text-amber-400/70" />
               )}
             </div>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-black text-slate-100 uppercase tracking-wide">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-lg sm:text-xl font-black text-slate-100 uppercase tracking-wide font-serif">
                   {shop.name}
                 </h2>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 font-mono border border-slate-700">
+                <span className="text-xs sm:text-sm px-2.5 py-0.5 rounded-full bg-slate-800 text-amber-300 font-mono font-bold border border-slate-700">
                   {shop.merchantName}
                 </span>
                 {shop.locationName && (

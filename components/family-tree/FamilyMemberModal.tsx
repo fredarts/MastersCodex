@@ -24,6 +24,7 @@ import {
   SuccessionStatus, 
   WorldEntity 
 } from '@/lib/types';
+import { getEntityPortraitUrl } from '@/lib/world/entityHelpers';
 import { useWorld } from '@/context/WorldContext';
 import { toast } from 'sonner';
 
@@ -147,8 +148,9 @@ export const FamilyMemberModal: React.FC<FamilyMemberModalProps> = ({
     if (foundNpc) {
       if (!name) setName(foundNpc.name);
       if (!title && foundNpc.subType) setTitle(foundNpc.subType);
-      if (foundNpc.images && foundNpc.images.length > 0) {
-        setAvatarUrl(foundNpc.images[0]);
+      const portrait = getEntityPortraitUrl(foundNpc);
+      if (portrait) {
+        setAvatarUrl(portrait);
       }
       setIsAlive(foundNpc.status === 'active' || foundNpc.status === 'allied');
     }
@@ -402,7 +404,7 @@ export const FamilyMemberModal: React.FC<FamilyMemberModalProps> = ({
                   <div className="w-8 h-8 rounded-full overflow-hidden border border-amber-500/40 bg-slate-800 flex items-center justify-center flex-shrink-0">
                     {(() => {
                       const linked = npcs.find((n) => n.id === selectedWorldEntityId);
-                      const img = (linked?.images && linked.images[0]) || avatarUrl;
+                      const img = (linked ? getEntityPortraitUrl(linked) : undefined) || avatarUrl;
                       return img ? (
                         <img src={img} alt="Avatar" className="w-full h-full object-cover" />
                       ) : (

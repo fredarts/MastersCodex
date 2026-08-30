@@ -39,6 +39,7 @@ import { toast } from 'sonner';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
 import { useWorld } from '@/lib/hooks/useWorld';
+import { getEntityPortraitUrl } from '@/lib/world/entityHelpers';
 import { GameScene, SceneType, Combatant, SceneImage, WorldEntity, CustomMonster } from '@/lib/types';
 import { INITIAL_MONSTERS, SFX_BUTTONS, BGM_TRACKS } from '@/lib/srd-data';
 import { storageService } from '@/lib/services/storageService';
@@ -603,7 +604,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       int: cs ? cs.attributes?.int?.score : npc.statSheet?.int,
       wis: cs ? cs.attributes?.wis?.score : npc.statSheet?.wis,
       cha: cs ? cs.attributes?.cha?.score : npc.statSheet?.cha,
-      avatarUrl: npc.images?.[0] || cs?.avatarUrl,
+      avatarUrl: getEntityPortraitUrl(npc) || cs?.avatarUrl,
       actions: cs?.attacks && cs.attacks.length > 0 ? cs.attacks.map((atk: any) => ({
         name: atk.name,
         desc: `Ataque: ${atk.atkBonus} para acertar. Dano: ${atk.damage} (${atk.type || 'Físico'}).`

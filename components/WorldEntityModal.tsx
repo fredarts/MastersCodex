@@ -2,12 +2,13 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Sparkles, Layers, BookOpen, FileText, Image as ImageIcon, Trash2, Upload, AlertCircle, Wand2, Network, Target, CheckSquare, Award, Coins, MapPin, Users, Check, ZoomIn, RefreshCw, Loader2, Star, Crown, Heart, Skull, Shield, Swords, EyeOff, Lock, User, Palette, Package, Activity, Zap, Play } from 'lucide-react';
+import { X, Plus, Sparkles, Layers, BookOpen, FileText, Image as ImageIcon, Trash2, Upload, AlertCircle, Wand2, Network, Target, CheckSquare, Award, Coins, MapPin, Users, Check, ZoomIn, RefreshCw, Loader2, Star, Crown, Heart, Skull, Shield, Swords, EyeOff, Lock, User, Palette, Package, Activity, Zap, Play, Camera } from 'lucide-react';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { WorldEntityCategory, WorldEntity, EntityConnection, ConnectionType, EntityStatSheet, QuestObjective, QuestReward, QuestStatus, QuestDifficulty, QuestType, CharacterSheet } from '@/lib/types';
+import { getEntityPortraitUrl, getEntityCombatPinUrl } from '@/lib/world/entityHelpers';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
 import { storageService } from '@/lib/services/storageService';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { useUserSettings } from '@/lib/hooks/useUserSettings';
 import { WorldEntityAiGeneratorModal } from '@/components/WorldEntityAiGeneratorModal';
 import { worldService } from '@/lib/services/worldService';
@@ -16,6 +17,7 @@ import { CharacterBuilderWizardModal } from '@/components/character-sheet/Modals
 import { NPC_EQUIPMENT_PRESETS, applyNpcEquipmentPreset } from '@/lib/npc-equipment-presets';
 import { createEmptyCharacterSheet } from '@/lib/dnd5e-data';
 import { recalculateSheetDerivedStats, getEffectiveAttributeScore, getAttributeModifier } from '@/lib/dnd5e-calculator';
+import { merchantService } from '@/lib/merchant/merchantService';
 
 import { MentionTextarea } from '@/components/ui/MentionTextarea';
 import { WikiTextRenderer } from '@/components/ui/WikiTextRenderer';
@@ -171,7 +173,9 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '9:16' | '16:9' | '3:4' | '4:3'>('9:16');
   const [editAspectRatio, setEditAspectRatio] = useState<'1:1' | '9:16' | '16:9' | '3:4' | '4:3'>('9:16');
   const [isCombatPinMode, setIsCombatPinMode] = useState(false);
+  const [isPortraitMode, setIsPortraitMode] = useState(false);
   const [combatPinIndex, setCombatPinIndex] = useState<number | null>(null);
+  const [portraitIndex, setPortraitIndex] = useState<number | null>(null);
   const [useCoverAsReference, setUseCoverAsReference] = useState(true);
   const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null);
   const [aiEditPrompt, setAiEditPrompt] = useState('');
@@ -198,6 +202,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         : (attrs.tags ? (typeof attrs.tags === 'string' ? JSON.parse(attrs.tags) : attrs.tags) : []);
       setTags(Array.isArray(resolvedTags) ? resolvedTags : []);
       setCombatPinIndex(typeof attrs.combatPinIndex === 'number' ? attrs.combatPinIndex : null);
+      setPortraitIndex(typeof attrs.portraitIndex === 'number' ? attrs.portraitIndex : null);
 
       if (editingEntity.category === 'npc') {
         setNpcRace(attrs.npcRace || attrs.race || '');
@@ -280,7 +285,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         initSheet.race = attrs.npcRace || attrs.race || 'Humano';
         initSheet.className = attrs.npcClass || attrs.class || 'Guerreiro';
         initSheet.alignment = attrs.npcAlignment || attrs.alignment || 'Neutro';
-        initSheet.avatarUrl = editingEntity.images?.[0] || '';
+        initSheet.avatarUrl = getEntityPortraitUrl(editingEntity) || '';
         setNpcCharacterSheet(initSheet);
         setNpcSheetMode(editingEntity.statSheetMode || attrs.statSheetMode || 'full');
       } else {
@@ -357,6 +362,12 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       if (prev > index) return prev - 1;
       return prev;
     });
+    setPortraitIndex((prev) => {
+      if (prev === null) return null;
+      if (prev === index) return null;
+      if (prev > index) return prev - 1;
+      return prev;
+    });
   };
 
   const handleSetCoverImage = (index: number) => {
@@ -373,6 +384,21 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       if (prev < index) return prev + 1;
       return prev;
     });
+    setPortraitIndex((prev) => {
+      if (prev === null) return null;
+      if (prev === index) return 0;
+      if (prev === 0) return 1;
+      if (prev < index) return prev + 1;
+      return prev;
+    });
+  };
+
+  const handleSetCombatPinImage = (index: number) => {
+    setCombatPinIndex((prev) => (prev === index ? null : index));
+  };
+
+  const handleSetPortraitImage = (index: number) => {
+    setPortraitIndex((prev) => (prev === index ? null : index));
   };
 
   // IA Image Generator (Gemini/Nano Banana ou modelo selecionado)
@@ -396,8 +422,8 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
 
       const noTextRule = 'No text, no typography, no letters, no words, no watermark, no signatures, no UI borders.';
 
-      // Determine the actual aspect ratio (combat pin always uses 1:1)
-      const effectiveAspectRatio = isCombatPinMode ? '1:1' as const : aspectRatio;
+      // Determine the actual aspect ratio (combat pin and portrait always use 1:1)
+      const effectiveAspectRatio = (isCombatPinMode || isPortraitMode) ? '1:1' as const : aspectRatio;
 
       let promptText: string;
 
@@ -407,6 +433,12 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
           ? `Maintain exact facial features, skin tone, hair style, race, physical identity, armor, clothing and aesthetic style from the provided reference image.`
           : '';
         promptText = `Full body character art of ${name.trim() || categoryName}, facing directly forward toward the viewer, in a dynamic combat ready stance, holding their weapon or preparing a spell. ${pinConsistency} Character details: ${baseDescription}. The character must be centered in the frame with the entire body visible from head to feet. MANDATORY: Pure clean solid white background (#FFFFFF), absolutely no environment, no scenery, no ground, no shadows on background, no props behind the character. The character should look like a tabletop RPG miniature token. ${stylePromptPart} ${extraPrompt.trim() ? `Additional details: ${extraPrompt.trim()}` : ''} High quality, sharp details, clean edges for easy cutout. ${noTextRule}`;
+      } else if (isPortraitMode) {
+        // Portrait / Profile Mode: Close-up facial portrait / head-and-shoulders, expressive eyes, atmospheric lighting
+        const portraitConsistency = referenceCoverImage
+          ? `Maintain exact facial features, skin tone, eye color, facial hair, hairstyle and color, race, scars and visual identity from the provided reference image.`
+          : '';
+        promptText = `High detail close-up head-and-shoulders face portrait of ${name.trim() || categoryName}. Direct frontal eye contact or subtle 3/4 angle, highly detailed expressive eyes, clear and sharp facial features, beautiful framing of face and hair/headwear. ${portraitConsistency} Character details: ${baseDescription}. Genre: ${activeWorld.genre}. ${stylePromptPart} ${extraPrompt.trim() ? `Additional details: ${extraPrompt.trim()}` : 'Cinematic character portrait lighting, dramatic shadows, shallow depth of field, 8k resolution, masterpiece digital art.'} ${noTextRule}`;
       } else if (referenceCoverImage) {
         promptText = `Character visual consistency artwork of ${name.trim() || categoryName}. Maintain exact facial features, skin tone, hair style, race, physical identity and aesthetic style from the provided reference image. Scene, pose or context details: ${baseDescription}. ${stylePromptPart} ${extraPrompt.trim() ? `Additional custom details: ${extraPrompt.trim()}` : ''}. High quality fantasy RPG concept art, cinematic lighting, 8k resolution. ${noTextRule}`;
       } else {
@@ -430,7 +462,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       const base64Data = data.base64;
       let finalUrl = `data:image/jpeg;base64,${base64Data}`;
 
-      const fileSuffix = isCombatPinMode ? '-combat-pin' : '';
+      const fileSuffix = isCombatPinMode ? '-combat-pin' : isPortraitMode ? '-portrait' : '';
       if (isSupabaseConfigured()) {
         try {
           const res = await fetch(finalUrl);
@@ -447,6 +479,8 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
         const newImages = [...prev, finalUrl];
         if (isCombatPinMode) {
           setCombatPinIndex(newImages.length - 1);
+        } else if (isPortraitMode) {
+          setPortraitIndex(newImages.length - 1);
         }
         return newImages;
       });
@@ -533,6 +567,18 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
     const attributes: Record<string, any> = { ...(editingEntity?.attributes || {}) };
     if (combatPinIndex !== null) {
       attributes.combatPinIndex = combatPinIndex;
+    } else {
+      delete attributes.combatPinIndex;
+    }
+
+    if (portraitIndex !== null) {
+      attributes.portraitIndex = portraitIndex;
+      if (images[portraitIndex]) {
+        attributes.portraitUrl = images[portraitIndex];
+      }
+    } else {
+      delete attributes.portraitIndex;
+      delete attributes.portraitUrl;
     }
 
     if (category === 'npc') {
@@ -549,13 +595,17 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       attributes.secrets = npcSecrets.trim();
 
       if (npcCharacterSheet) {
+        const resolvedAvatar = (portraitIndex !== null && images[portraitIndex])
+          ? images[portraitIndex]
+          : (images[0] || npcCharacterSheet.avatarUrl);
+
         const synchedSheet: CharacterSheet = {
           ...npcCharacterSheet,
           characterName: name.trim() || npcCharacterSheet.characterName,
           race: npcRace.trim() || npcCharacterSheet.race,
           className: npcClass.trim() || npcCharacterSheet.className,
           alignment: npcAlignment || npcCharacterSheet.alignment,
-          avatarUrl: images[0] || npcCharacterSheet.avatarUrl,
+          avatarUrl: resolvedAvatar,
           backstory: shortDesc.trim() || npcCharacterSheet.backstory,
         };
         const recalculated = recalculateSheetDerivedStats(synchedSheet);
@@ -680,6 +730,84 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
       const res = await worldService.saveEntityStatSheet(sheet);
       if (!res.ok) {
         console.error('Failed to save entity stat sheet:', res.error);
+      }
+    }
+
+    // Sincronização Automática: Atualiza instantaneamente quaisquer lojas vinculadas a este NPC em todo o sistema
+    if (category === 'npc' && savedEntity) {
+      const currentPortrait = getEntityPortraitUrl(savedEntity);
+      if (currentPortrait) {
+        const entityId = savedEntity.id;
+        const entityName = (savedEntity.name || name).toLowerCase().trim();
+
+        // 1. Atualização direta em todos os registros do LocalStorage
+        if (typeof window !== 'undefined') {
+          try {
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && (key.startsWith('codex_merchant_shops_') || key.startsWith('masters_merchant_shops_'))) {
+                const raw = localStorage.getItem(key);
+                if (raw) {
+                  const shops = JSON.parse(raw);
+                  if (Array.isArray(shops)) {
+                    let changed = false;
+                    const updated = shops.map((sh: any) => {
+                      const matchesId = sh.npcEntityId === entityId;
+                      const sName = (sh.merchantName || '').toLowerCase().trim();
+                      const matchesName = Boolean(sName && (sName === entityName || sName.includes(entityName) || entityName.includes(sName)));
+                      if (matchesId || matchesName) {
+                        changed = true;
+                        return {
+                          ...sh,
+                          npcEntityId: entityId,
+                          merchantAvatarUrl: currentPortrait,
+                          updatedAt: new Date().toISOString(),
+                        };
+                      }
+                      return sh;
+                    });
+                    if (changed) {
+                      localStorage.setItem(key, JSON.stringify(updated));
+                    }
+                  }
+                }
+              }
+            }
+          } catch (lsErr) {
+            console.warn('Erro ao atualizar localStorage de lojas:', lsErr);
+          }
+        }
+
+        // 2. Atualização via Supabase se configurado
+        if (isSupabaseConfigured()) {
+          try {
+            supabase
+              .from('campaign_shops')
+              .select('*')
+              .then(async (res: any) => {
+                const dbShops = res.data;
+                if (dbShops && dbShops.length > 0) {
+                  for (const d of dbShops) {
+                    const matchesId = d.npc_entity_id === entityId;
+                    const sName = (d.merchant_name || '').toLowerCase().trim();
+                    const matchesName = Boolean(sName && (sName === entityName || sName.includes(entityName) || entityName.includes(sName)));
+                    if (matchesId || matchesName) {
+                      await supabase
+                        .from('campaign_shops')
+                        .update({
+                          npc_entity_id: entityId,
+                          merchant_avatar_url: currentPortrait,
+                          updated_at: new Date().toISOString(),
+                        })
+                        .eq('id', d.id);
+                    }
+                  }
+                }
+              });
+          } catch (sbErr) {
+            console.warn('Erro ao atualizar lojas no Supabase:', sbErr);
+          }
+        }
       }
     }
 
@@ -1837,9 +1965,9 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                         <button
                           key={r.id}
                           type="button"
-                          onClick={() => { setAspectRatio(r.id); setIsCombatPinMode(false); }}
+                          onClick={() => { setAspectRatio(r.id); setIsCombatPinMode(false); setIsPortraitMode(false); }}
                           className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold transition-all ${
-                            aspectRatio === r.id && !isCombatPinMode
+                            aspectRatio === r.id && !isCombatPinMode && !isPortraitMode
                               ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30 ring-1 ring-purple-400'
                               : 'bg-[#161c28] hover:bg-[#1f2738] text-slate-300 border border-[#2a3449]'
                           }`}
@@ -1851,15 +1979,28 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                       {/* Combat Pin Button - Special mode */}
                       <button
                         type="button"
-                        onClick={() => { setIsCombatPinMode(true); }}
+                        onClick={() => { setIsCombatPinMode(true); setIsPortraitMode(false); }}
                         className={`px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold transition-all flex items-center gap-1 ${
                           isCombatPinMode
                             ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400 animate-pulse'
                             : 'bg-[#161c28] hover:bg-emerald-950 text-emerald-300 border border-emerald-500/40 hover:border-emerald-400'
                         }`}
-                        title="Gera imagem frontal em posição de combate com fundo branco, ideal para usar como pino/token no mapa 3D de batalha"
+                        title="Gera imagem frontal em posição de combate com fundo branco (1:1), ideal para usar como pino/token no mapa 3D de batalha"
                       >
                         🎯 Pino de Combate
+                      </button>
+                      {/* Portrait / Porta-retrato Button - Special mode */}
+                      <button
+                        type="button"
+                        onClick={() => { setIsPortraitMode(true); setIsCombatPinMode(false); }}
+                        className={`px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold transition-all flex items-center gap-1 ${
+                          isPortraitMode
+                            ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/30 ring-1 ring-cyan-400 animate-pulse'
+                            : 'bg-[#161c28] hover:bg-cyan-950 text-cyan-300 border border-cyan-500/40 hover:border-cyan-400'
+                        }`}
+                        title="Gera close-up do rosto do personagem (1:1), ideal para foto de perfil em lojas, mural de pistas, árvore genealógica e fichas"
+                      >
+                        👤 Porta-retrato
                       </button>
                     </div>
 
@@ -1875,6 +2016,23 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                           </span>
                           <span className="text-[10px] text-slate-400 block">
                             Gera o personagem de frente, em posição de combate, com fundo branco limpo (1:1). Ideal para token/pino no mapa 3D de batalha.
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Portrait Mode Info Banner */}
+                    {isPortraitMode && (
+                      <div className="flex items-center gap-2.5 p-2.5 bg-cyan-950/40 border border-cyan-500/30 rounded-xl animate-fade-in">
+                        <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center flex-shrink-0">
+                          <Camera className="w-4 h-4 text-cyan-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-cyan-200 block">
+                            Modo Porta-retrato / Foto de Rosto Ativo (1:1)
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            Gera um close-up focado no rosto e traços do personagem (1:1). Usado automaticamente em Lojas, Mural de Pistas, Árvore Genealógica e Fichas.
                           </span>
                         </div>
                       </div>
@@ -1971,7 +2129,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                         Imagens da Galeria ({images.length})
                       </span>
                       <span className="text-[10px] text-amber-400/90 font-mono">
-                        ⭐ Capa • 🎯 Pino • 🔍 Zoom • ✨ Edição com IA • 🗑️ Excluir
+                        ⭐ Capa • 🎯 Pino • 👤 Retrato • 🔍 Zoom • ✨ Edição • 🗑️ Excluir
                       </span>
                     </div>
 
@@ -1988,7 +2146,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                           <img src={imgUrl} alt={`Mídia ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                           
                           {/* Hover Actions Overlay */}
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-2 backdrop-blur-[2px]">
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-wrap items-center justify-center gap-1.5 p-1.5 backdrop-blur-[2px]">
                             {/* Set as Cover Button */}
                             <button
                               type="button"
@@ -2003,7 +2161,41 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                               }`}
                               title={idx === 0 ? 'Imagem já é a Capa Principal' : 'Definir como Capa Principal'}
                             >
-                              <Star className={`w-4 h-4 ${idx === 0 ? 'fill-slate-950' : 'fill-amber-400/30'}`} />
+                              <Star className={`w-3.5 h-3.5 ${idx === 0 ? 'fill-slate-950' : 'fill-amber-400/30'}`} />
+                            </button>
+
+                            {/* Set as Combat Pin Button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSetCombatPinImage(idx);
+                              }}
+                              className={`p-1.5 rounded-lg shadow transition-all active:scale-95 ${
+                                combatPinIndex === idx
+                                  ? 'bg-emerald-500 text-slate-950 ring-1 ring-emerald-300'
+                                  : 'bg-emerald-950/90 hover:bg-emerald-600 hover:text-white text-emerald-300 border border-emerald-500/60'
+                              }`}
+                              title={combatPinIndex === idx ? 'Desmarcar como Pino de Combate' : 'Definir como Pino de Combate (Token 3D)'}
+                            >
+                              <Target className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Set as Portrait Button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSetPortraitImage(idx);
+                              }}
+                              className={`p-1.5 rounded-lg shadow transition-all active:scale-95 ${
+                                portraitIndex === idx
+                                  ? 'bg-cyan-500 text-slate-950 ring-1 ring-cyan-300'
+                                  : 'bg-cyan-950/90 hover:bg-cyan-600 hover:text-white text-cyan-300 border border-cyan-500/60'
+                              }`}
+                              title={portraitIndex === idx ? 'Desmarcar como Porta-retrato' : 'Definir como Porta-retrato (Foto de Rosto 1:1)'}
+                            >
+                              <Camera className="w-3.5 h-3.5" />
                             </button>
 
                             {/* Zoom Button */}
@@ -2017,7 +2209,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                               className="p-1.5 bg-slate-800/90 hover:bg-amber-500 hover:text-slate-950 text-slate-200 rounded-lg shadow transition-all active:scale-95"
                               title="Dar Zoom / Tela Cheia"
                             >
-                              <ZoomIn className="w-4 h-4" />
+                              <ZoomIn className="w-3.5 h-3.5" />
                             </button>
 
                             {/* AI Edit / Variation Button */}
@@ -2031,7 +2223,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                               className="p-1.5 bg-purple-950/90 hover:bg-purple-600 text-purple-200 border border-purple-700/60 rounded-lg shadow transition-all active:scale-95"
                               title="Editar / Modificar com IA"
                             >
-                              <Sparkles className="w-4 h-4 text-purple-300" />
+                              <Sparkles className="w-3.5 h-3.5 text-purple-300" />
                             </button>
 
                             {/* Delete Button */}
@@ -2044,18 +2236,23 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                               className="p-1.5 bg-rose-950/90 hover:bg-rose-600 text-rose-200 border border-rose-800/60 rounded-lg shadow transition-all active:scale-95"
                               title="Excluir Imagem"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
 
                           {idx === 0 && (
-                            <span className="absolute top-1 left-1 bg-amber-500 text-slate-950 text-[9px] font-bold px-1.5 py-0.5 rounded shadow font-mono pointer-events-none flex items-center gap-1">
+                            <span className="absolute top-1 left-1 bg-amber-500 text-slate-950 text-[9px] font-bold px-1.5 py-0.5 rounded shadow font-mono pointer-events-none flex items-center gap-1 z-10">
                               <Star className="w-2.5 h-2.5 fill-slate-950" /> CAPA
                             </span>
                           )}
                           {combatPinIndex === idx && (
-                            <span className="absolute top-1 right-1 bg-emerald-500 text-slate-950 text-[9px] font-bold px-1.5 py-0.5 rounded shadow font-mono pointer-events-none flex items-center gap-1">
+                            <span className="absolute top-1 right-1 bg-emerald-500 text-slate-950 text-[9px] font-bold px-1.5 py-0.5 rounded shadow font-mono pointer-events-none flex items-center gap-1 z-10">
                               <Target className="w-2.5 h-2.5" /> PINO
+                            </span>
+                          )}
+                          {portraitIndex === idx && (
+                            <span className="absolute bottom-1 left-1 bg-cyan-500 text-slate-950 text-[9px] font-bold px-1.5 py-0.5 rounded shadow font-mono pointer-events-none flex items-center gap-1 z-10">
+                              <Camera className="w-2.5 h-2.5" /> RETRATO
                             </span>
                           )}
                         </div>
@@ -2140,7 +2337,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                       <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-2xl bg-[#0b0f19] border-2 border-amber-500/40 overflow-hidden shrink-0 flex items-center justify-center shadow-lg relative group">
                           {images.length > 0 ? (
-                            <img src={images[0]} alt={name || 'NPC'} className="w-full h-full object-cover" />
+                            <img src={(portraitIndex !== null && images[portraitIndex]) ? images[portraitIndex] : images[0]} alt={name || 'NPC'} className="w-full h-full object-cover" />
                           ) : (
                             <User className="w-8 h-8 text-amber-400/60" />
                           )}

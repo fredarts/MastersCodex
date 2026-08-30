@@ -15,6 +15,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { FamilyMemberNode, SuccessionStatus, WorldEntity } from '@/lib/types';
+import { getEntityPortraitUrl } from '@/lib/world/entityHelpers';
 
 interface FamilyMemberCardProps {
   member: FamilyMemberNode;
@@ -37,7 +38,7 @@ export const FamilyMemberCard: React.FC<FamilyMemberCardProps> = ({
   onAddRelation,
   onOpenNpcSheet,
 }) => {
-  const displayAvatar = (linkedNpc?.images && linkedNpc.images.length > 0 && linkedNpc.images[0]) || member.avatarUrl;
+  const displayAvatar = (linkedNpc ? getEntityPortraitUrl(linkedNpc) : undefined) || member.avatarUrl;
   const displayName = member.name || linkedNpc?.name || 'Sem Nome';
   const displayTitle = member.title || linkedNpc?.subType;
   const getSuccessionBadge = (status?: SuccessionStatus) => {

@@ -15,6 +15,7 @@ import { useCampaign } from '@/context/CampaignContext';
 import { useWorld } from '@/context/WorldContext';
 import { useAuth } from '@/context/AuthContext';
 import { useRealtimeSync } from '@/lib/hooks/useRealtimeSync';
+import { getEntityPortraitUrl } from '@/lib/world/entityHelpers';
 import { 
   Network, 
   Plus, 
@@ -388,15 +389,17 @@ export const DetectivePinboardModal: React.FC<DetectivePinboardModalProps> = ({
   const handleImportLoreNode = async (entity: typeof worldEntities[0]) => {
     if (!board) return;
 
+    const portrait = getEntityPortraitUrl(entity);
+
     const { board: updated } = await investigationService.addPin(board, {
       type: entity.category === 'npc' ? 'suspect' : entity.category === 'location' ? 'location' : 'lore_node',
       title: entity.name,
       description: entity.shortDesc || entity.subType || 'Entidade do mundo',
       loreNodeId: entity.id,
-      imageUrl: entity.images?.[0],
+      imageUrl: portrait,
       position: { x: 260 + Math.random() * 100, y: 180 + Math.random() * 100 },
       rotationDeg: Number((Math.random() * 6 - 3).toFixed(1)),
-      colorTag: 'yellow',
+      colorTag: entity.category === 'npc' ? 'red' : 'yellow',
       pinnedBy: isDM ? 'Dungeon Master' : user?.displayName || 'Investigador',
     });
 
@@ -1082,21 +1085,33 @@ export const DetectivePinboardModal: React.FC<DetectivePinboardModalProps> = ({
                     Nenhuma entidade criada no Worldbuilder / LoreGraph ainda.
                   </div>
                 ) : (
-                  worldEntities.map((e, idx) => (
-                    <div
-                      key={`lore-import-${e.id || idx}-${idx}`}
-                      onClick={() => handleImportLoreNode(e)}
-                      className="p-3 bg-stone-900/80 hover:bg-stone-800 border border-stone-800 hover:border-amber-700/60 rounded-xl flex items-center justify-between cursor-pointer transition-all"
-                    >
-                      <div>
-                        <div className="text-xs font-bold text-stone-200">{e.name}</div>
-                        <div className="text-[11px] text-stone-400 mt-0.5">{e.category} • {e.subType || 'Entidade'}</div>
+                  worldEntities.map((e, idx) => {
+                    const avatar = getEntityPortraitUrl(e);
+                    return (
+                      <div
+                        key={`lore-import-${e.id || idx}-${idx}`}
+                        onClick={() => handleImportLoreNode(e)}
+                        className="p-3 bg-stone-900/80 hover:bg-stone-800 border border-stone-800 hover:border-amber-700/60 rounded-xl flex items-center justify-between cursor-pointer transition-all gap-2"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {avatar ? (
+                            <img src={avatar} alt={e.name} className="w-8 h-8 rounded-lg object-cover border border-amber-800/60 shrink-0" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-stone-800 flex items-center justify-center text-amber-500/70 border border-stone-700 shrink-0 font-bold text-xs">
+                              {e.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-stone-200 truncate">{e.name}</div>
+                            <div className="text-[11px] text-stone-400 mt-0.5 truncate">{e.category} • {e.subType || 'Entidade'}</div>
+                          </div>
+                        </div>
+                        <button className="px-3 py-1 bg-amber-800 hover:bg-amber-700 text-amber-100 rounded-lg text-xs font-bold shrink-0">
+                          Afixar
+                        </button>
                       </div>
-                      <button className="px-3 py-1 bg-amber-800 hover:bg-amber-700 text-amber-100 rounded-lg text-xs font-bold">
-                        Afixar
-                      </button>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>

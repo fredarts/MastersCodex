@@ -52,6 +52,7 @@ import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useUserSettings } from '@/lib/hooks/useUserSettings';
 import { useAudio } from '@/context/AudioContext';
 import { SceneType, Combatant, WorldEntity, SceneImage, CustomMonster, CampaignMember } from '@/lib/types';
+import { getEntityPortraitUrl } from '@/lib/world/entityHelpers';
 import { MentionTextarea } from '@/components/ui/MentionTextarea';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { storageService } from '@/lib/services/storageService';
@@ -433,7 +434,7 @@ export const CreateSceneModal: React.FC<CreateSceneModalProps> = ({
       int: cs ? cs.attributes?.int?.score : npc.statSheet?.int,
       wis: cs ? cs.attributes?.wis?.score : npc.statSheet?.wis,
       cha: cs ? cs.attributes?.cha?.score : npc.statSheet?.cha,
-      avatarUrl: npc.images?.[0] || cs?.avatarUrl,
+      avatarUrl: getEntityPortraitUrl(npc) || cs?.avatarUrl,
       actions: cs?.attacks && cs.attacks.length > 0 ? cs.attacks.map((atk: any) => ({
         name: atk.name,
         desc: `Ataque: ${atk.atkBonus} para acertar. Dano: ${atk.damage} (${atk.type || 'Físico'}).`

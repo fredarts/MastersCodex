@@ -19,6 +19,7 @@ import { ALL_SRD_ITEMS } from '@/lib/srd-items-data';
 import { merchantService } from '@/lib/merchant/merchantService';
 import { useCampaign } from '@/context/CampaignContext';
 import { useWorld } from '@/lib/hooks/useWorld';
+import { getEntityPortraitUrl } from '@/lib/world/entityHelpers';
 import { ItemCompendiumModal } from '@/components/character-sheet/Modals/ItemCompendiumModal';
 import { CharacterEquipmentItem } from '@/lib/types';
 import { 
@@ -120,7 +121,7 @@ export const MerchantForgeModal: React.FC<MerchantForgeModalProps> = ({
       campaignId,
       customName: customName.trim() || undefined,
       customMerchantName: customMerchant.trim() || chosenNpc?.name || undefined,
-      merchantAvatarUrl: chosenNpc?.images?.[0] || undefined,
+      merchantAvatarUrl: chosenNpc ? getEntityPortraitUrl(chosenNpc) : undefined,
       npcEntityId: chosenNpc?.id || undefined,
       locationEntityId: chosenLoc?.id || undefined,
       locationName: chosenLoc?.name || undefined,
@@ -168,7 +169,7 @@ export const MerchantForgeModal: React.FC<MerchantForgeModalProps> = ({
       ...selectedShop,
       npcEntityId: npcId || undefined,
       merchantName: npc ? npc.name : selectedShop.merchantName,
-      merchantAvatarUrl: npc?.images?.[0] || undefined,
+      merchantAvatarUrl: npc ? getEntityPortraitUrl(npc) : undefined,
     };
     merchantService.saveShop(updatedShop).then(() => {
       setSelectedShop(updatedShop);
@@ -659,10 +660,11 @@ export const MerchantForgeModal: React.FC<MerchantForgeModalProps> = ({
                       
                       {selectedShop.npcEntityId && (() => {
                         const linkedNpc = npcEntities.find(n => n.id === selectedShop.npcEntityId);
+                        const npcAvatar = linkedNpc ? getEntityPortraitUrl(linkedNpc) : undefined;
                         return linkedNpc ? (
                           <div className="flex items-center gap-2 pt-1 text-[11px] text-slate-400">
-                            {linkedNpc.images?.[0] ? (
-                              <img src={linkedNpc.images[0]} alt={linkedNpc.name} className="w-6 h-6 rounded-full object-cover border border-amber-500/40 shrink-0" />
+                            {npcAvatar ? (
+                              <img src={npcAvatar} alt={linkedNpc.name} className="w-6 h-6 rounded-full object-cover border border-amber-500/40 shrink-0" />
                             ) : (
                               <div className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-300 shrink-0">
                                 <User className="w-3 h-3" />

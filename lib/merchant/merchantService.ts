@@ -4,6 +4,7 @@
  */
 
 import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
+import { getEntityPortraitUrl } from '@/lib/world/entityHelpers';
 import { 
   MerchantShop, 
   MerchantStockItem,
@@ -403,6 +404,67 @@ export const merchantService = {
             };
             shopMap.set(shopObj.id, shopObj);
           });
+        }
+      }
+
+      // 4. Sincronização Dinâmica em Tempo Real: Enriquecimento de Avatar a partir de entidades locais e remotas
+      if (shopMap.size > 0) {
+        try {
+          const allNpcEntities: any[] = [];
+
+          // 4.1. Carrega entidades de NPC do LocalStorage
+          if (typeof window !== 'undefined') {
+            const rawEnt = localStorage.getItem('codex_entities');
+            if (rawEnt) {
+              try {
+                const parsedEnt = JSON.parse(rawEnt);
+                if (Array.isArray(parsedEnt)) {
+                  parsedEnt.filter((e) => e.category === 'npc').forEach((e) => allNpcEntities.push(e));
+                }
+              } catch {}
+            }
+          }
+
+          // 4.2. Carrega entidades de NPC do Supabase se configurado
+          if (isSupabaseConfigured()) {
+            const { data: entities } = await supabase
+              .from('world_entities')
+              .select('id, name, images, attributes')
+              .eq('category', 'npc');
+
+            if (entities && entities.length > 0) {
+              entities.forEach((e) => {
+                if (!allNpcEntities.some((ex) => ex.id === e.id)) {
+                  allNpcEntities.push(e);
+                }
+              });
+            }
+          }
+
+          // 4.3. Atualiza os avatares nas lojas
+          if (allNpcEntities.length > 0) {
+            allNpcEntities.forEach((ent) => {
+              const portrait = getEntityPortraitUrl(ent);
+              if (portrait) {
+                shopMap.forEach((sh, shId) => {
+                  const matchesId = sh.npcEntityId === ent.id;
+                  const sName = (sh.merchantName || '').toLowerCase().trim();
+                  const eName = (ent.name || '').toLowerCase().trim();
+                  const matchesName = Boolean(sName && eName && (sName === eName || sName.includes(eName) || eName.includes(sName)));
+
+                  if (matchesId || matchesName) {
+                    shopMap.set(shId, {
+                      ...sh,
+                      npcEntityId: sh.npcEntityId || ent.id,
+                      merchantAvatarUrl: portrait,
+                    });
+                  }
+                });
+              }
+            });
+          }
+        } catch (enrichErr) {
+          console.warn('Erro ao sincronizar portraits de mercadores:', enrichErr);
         }
       }
     } catch (e) {
