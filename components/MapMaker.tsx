@@ -44,11 +44,13 @@ import { MapMakerTopBar } from './map/MapMakerTopBar';
 import { MapMakerToolbar, MapTool } from './map/MapMakerToolbar';
 import { ToolSubBar } from './map/ToolSubBar';
 import { MapManagerModal } from './map/MapManagerModal';
+import { DungeonDossierModal, DungeonDossierData } from './map/DungeonDossierModal';
 import { ParsedDungeonMap } from '@/lib/parsers/dungeonParser';
 import { useCustomDialog } from '@/context/CustomDialogContext';
 
 interface MapMakerProps {
   combatants: Combatant[];
+  selectedMapId?: string;
 }
 
 export type TileType = 
@@ -181,7 +183,7 @@ const NPC_TEMPLATES: Combatant[] = [
   { id: 'npc-knight', name: 'Cavaleiro', type: 'npc', hp: 52, maxHp: 52, ac: 18, initiative: 0, conditions: [] },
 ];
 
-export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
+export const MapMaker: React.FC<MapMakerProps> = ({ combatants, selectedMapId }) => {
 
   const createInitialGrid = (cols = 80, rows = 80): Cell[][] => {
     const grid: Cell[][] = [];
@@ -385,6 +387,8 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
   const [activeMap, setActiveMap] = useState<CampaignMap | null>(null);
   const [mapTitle, setMapTitle] = useState('');
   const [isMapManagerModalOpen, setIsMapManagerModalOpen] = useState(false);
+  const [isDossierModalOpen, setIsDossierModalOpen] = useState(false);
+  const [dossierMetadata, setDossierMetadata] = useState<import('@/lib/types').DungeonMetadata>({});
 
   // Multi-level / Floors state
   const [levels, setLevels] = useState<MapLevel[]>([]);
@@ -392,6 +396,54 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
 
   // AI Dungeon Generator State
   const [isAIDungeonModalOpen, setIsAIDungeonModalOpen] = useState(false);
+
+  const handleSaveDossier = async (dossierData: DungeonDossierData) => {
+    if (!activeMap) return;
+    setMapTitle(dossierData.title);
+
+    const newDossierMeta: import('@/lib/types').DungeonMetadata = {
+      coverImageUrl: dossierData.coverImageUrl,
+      description: dossierData.description,
+      difficultyTier: dossierData.difficultyTier,
+      challengeRating: dossierData.challengeRating,
+    };
+    setDossierMetadata(newDossierMeta);
+
+    const currentLevelSnapshot: MapLevel = {
+      id: activeLevelId || 'lvl-default-0',
+      name: levels.find(l => l.id === activeLevelId)?.name || 'Piso Principal',
+      order: levels.find(l => l.id === activeLevelId)?.order ?? 0,
+      grid,
+      bgImageUrl,
+      vectorWalls,
+      lightSources,
+      gridScale,
+      gridOffsetX,
+      gridOffsetY,
+    };
+
+    const updatedLevels = levels.length > 0
+      ? levels.map(l => l.id === activeLevelId ? currentLevelSnapshot : l)
+      : [currentLevelSnapshot];
+
+    const updatedGridData: MultiLevelGridData = {
+      ...(activeMap.gridData || {}),
+      version: 2,
+      activeLevelId: activeLevelId || levels[0]?.id || 'lvl-default-0',
+      levels: updatedLevels,
+      grid,
+      bgImageUrl,
+      vectorWalls,
+      lightSources,
+      gridScale,
+      gridOffsetX,
+      gridOffsetY,
+      ...newDossierMeta,
+    };
+
+    await updateCampaignMap(activeMap.id, dossierData.title, updatedGridData);
+    setActiveMap((prev) => prev ? { ...prev, title: dossierData.title, gridData: updatedGridData } : null);
+  };
 
   // Handle creating a new map from MapManagerModal
   const handleCreateNewMap = async (title: string) => {
@@ -837,6 +889,14 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     const selectedLvlId = normalized.activeLevelId || normLevels[0]?.id || '';
     setActiveLevelId(selectedLvlId);
 
+    setDossierMetadata({
+      coverImageUrl: map.gridData?.coverImageUrl || normalized.coverImageUrl,
+      description: map.gridData?.description || normalized.description,
+      difficultyTier: map.gridData?.difficultyTier || normalized.difficultyTier,
+      challengeRating: map.gridData?.challengeRating || normalized.challengeRating,
+      environmentTheme: map.gridData?.environmentTheme || normalized.environmentTheme,
+    });
+
     const currLevel = normLevels.find(l => l.id === selectedLvlId) || normLevels[0];
     if (currLevel) {
       setGrid(currLevel.grid || createInitialGrid(80, 80));
@@ -849,13 +909,23 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     }
   };
 
+  // Sync map when selectedMapId prop changes (e.g. navigated from Scene Studio)
+  useEffect(() => {
+    if (selectedMapId && campaignMaps.length > 0) {
+      const target = campaignMaps.find(m => m.id === selectedMapId);
+      if (target && target.id !== activeMap?.id) {
+        selectMap(target);
+      }
+    }
+  }, [selectedMapId, campaignMaps, activeMap?.id]);
+
   // Sync first active map when campaignMaps loads
   useEffect(() => {
     if (campaignMaps.length > 0) {
       if (!activeMap) {
-        const firstMap = campaignMaps[0];
+        const target = selectedMapId ? (campaignMaps.find(m => m.id === selectedMapId) || campaignMaps[0]) : campaignMaps[0];
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        selectMap(firstMap);
+        selectMap(target);
       } else {
         const updated = campaignMaps.find(m => m.id === activeMap.id);
         if (!updated) {
@@ -865,7 +935,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
         }
       }
     }
-  }, [campaignMaps, activeMap]);
+  }, [campaignMaps, activeMap?.id, selectedMapId]);
 
   // Auto-create a default map if campaignMaps is completely empty
   const hasAutoCreated = useRef(false);
@@ -913,6 +983,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
         : [currentLevelSnapshot];
 
       const multiLevelPayload: MultiLevelGridData = {
+        ...(activeMap.gridData || {}),
         version: 2,
         activeLevelId: activeLevelId || currentLevelSnapshot.id,
         levels: updatedLevels,
@@ -924,6 +995,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
         gridScale,
         gridOffsetX,
         gridOffsetY,
+        ...dossierMetadata,
       };
 
       updateCampaignMap(activeMap.id, mapTitle || activeMap.title, multiLevelPayload).then(() => {
@@ -941,7 +1013,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
     }, 1200);
 
     return () => clearTimeout(delayDebounce);
-  }, [grid, bgImageUrl, vectorWalls, lightSources, gridScale, gridOffsetX, gridOffsetY, activeMap, mapTitle, activeLevelId, levels, updateCampaignMap, broadcastToPlayerView, activeScene?.id]);
+  }, [grid, bgImageUrl, vectorWalls, lightSources, gridScale, gridOffsetX, gridOffsetY, activeMap, mapTitle, activeLevelId, levels, dossierMetadata, updateCampaignMap, broadcastToPlayerView, activeScene?.id]);
 
 
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -1055,6 +1127,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
       : [currentLevelSnapshot];
 
     const multiLevelPayload: MultiLevelGridData = {
+      ...(activeMap.gridData || {}),
       version: 2,
       activeLevelId: activeLevelId || currentLevelSnapshot.id,
       levels: updatedLevels,
@@ -1065,6 +1138,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
       gridScale,
       gridOffsetX,
       gridOffsetY,
+      ...dossierMetadata,
     };
 
     try {
@@ -1152,6 +1226,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
         onDeleteLevel={handleDeleteLevel}
         onOpenMapManager={() => setIsMapManagerModalOpen(true)}
         onOpenAIDungeonModal={() => setIsAIDungeonModalOpen(true)}
+        onOpenDossierModal={() => setIsDossierModalOpen(true)}
         onUploadImage={() => fileInputRef.current?.click()}
         onUploadUVTT={() => uvttFileInputRef.current?.click()}
         onRemoveBackground={clearMapBg}
@@ -1262,6 +1337,15 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants }) => {
           onDungeonGenerated={handleAIDungeonGenerated}
           currentLevelName={levels.find((l) => l.id === activeLevelId)?.name}
           hasActiveMap={Boolean(activeMap)}
+        />
+
+        <DungeonDossierModal
+          isOpen={isDossierModalOpen}
+          onClose={() => setIsDossierModalOpen(false)}
+          map={activeMap ? { ...activeMap, gridData: { ...(activeMap.gridData || {}), ...dossierMetadata } } : null}
+          levels={levels}
+          activeLevelBgUrl={bgImageUrl}
+          onSaveDossier={handleSaveDossier}
         />
       </div>
     </div>

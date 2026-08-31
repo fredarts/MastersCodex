@@ -104,6 +104,7 @@ export function normalizeToMultiLevel(
         : rawGridData.levels[0].id;
 
     return {
+      ...rawGridData,
       version: 2,
       activeLevelId,
       levels: [...rawGridData.levels].sort((a: MapLevel, b: MapLevel) => (a.order ?? 0) - (b.order ?? 0)),
@@ -127,6 +128,7 @@ export function normalizeToMultiLevel(
   };
 
   return {
+    ...rawGridData,
     version: 2,
     activeLevelId: singleLevelId,
     levels: [legacyLevel],

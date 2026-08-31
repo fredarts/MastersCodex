@@ -75,6 +75,7 @@ function MainApp() {
   const [isCreateCampaignOpen, setIsCreateCampaignOpen] = useState(false);
   const [selectedWorldForCampaign, setSelectedWorldForCampaign] = useState<World | null>(null);
   const [generatedLootResult, setGeneratedLootResult] = useState<string | null>(null);
+  const [selectedMapIdForMapMaker, setSelectedMapIdForMapMaker] = useState<string | undefined>(undefined);
 
   // Retractable Panels State (Sidebar & AI Drawer)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
@@ -340,6 +341,10 @@ function MainApp() {
                           localStorage.setItem('masters_codex_sidebar_collapsed', String(val));
                         }
                       }}
+                      onEditMapInMapMaker={(mapId) => {
+                        setSelectedMapIdForMapMaker(mapId);
+                        setActiveTab('map');
+                      }}
                     />
                   )}
 
@@ -360,7 +365,12 @@ function MainApp() {
                     />
                   )}
 
-                  {activeTab === 'map' && <MapMaker combatants={combatants} />}
+                  {activeTab === 'map' && (
+                    <MapMaker 
+                      combatants={combatants} 
+                      selectedMapId={selectedMapIdForMapMaker} 
+                    />
+                  )}
 
                   {activeTab === 'ai' && (
                     <AICoPilot

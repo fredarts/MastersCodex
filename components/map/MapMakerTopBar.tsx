@@ -21,6 +21,8 @@ import {
   Sun,
   Zap,
   Check,
+  Compass,
+  BookOpen,
   Activity
 } from 'lucide-react';
 import { MapLevel } from '@/lib/types';
@@ -36,6 +38,7 @@ interface MapMakerTopBarProps {
   onDeleteLevel: (levelId: string) => void;
   onOpenMapManager: () => void;
   onOpenAIDungeonModal: () => void;
+  onOpenDossierModal: () => void;
   onUploadImage: () => void;
   onUploadUVTT: () => void;
   onRemoveBackground: () => void;
@@ -65,6 +68,7 @@ export const MapMakerTopBar: React.FC<MapMakerTopBarProps> = ({
   onDeleteLevel,
   onOpenMapManager,
   onOpenAIDungeonModal,
+  onOpenDossierModal,
   onUploadImage,
   onUploadUVTT,
   onRemoveBackground,
@@ -438,6 +442,18 @@ export const MapMakerTopBar: React.FC<MapMakerTopBarProps> = ({
           <Sparkles className="w-3.5 h-3.5 fill-slate-950 text-slate-950" />
           <span className="hidden md:inline">Gerar Masmorra com IA</span>
           <span className="md:hidden">Masmorra IA</span>
+        </button>
+
+        {/* Dossier & Capa Button */}
+        <button
+          type="button"
+          onClick={onOpenDossierModal}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#141b27] hover:bg-[#1a2333] border border-amber-500/40 hover:border-amber-400 text-amber-300 font-bold rounded-lg text-xs transition-all shadow-md active:scale-95 cursor-pointer shrink-0"
+          title="Configurar Capa, Nível, Lore e Dossier da Masmorra"
+        >
+          <Compass className="w-3.5 h-3.5 text-amber-400" />
+          <span className="hidden md:inline">Dossier & Capa</span>
+          <span className="md:hidden">Dossier</span>
         </button>
       </div>
 

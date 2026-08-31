@@ -76,12 +76,14 @@ interface SessionStudioProps {
   onEquipScene?: (scene: GameScene) => void;
   isMainSidebarCollapsed?: boolean;
   onSetMainSidebarCollapsed?: (collapsed: boolean) => void;
+  onEditMapInMapMaker?: (mapId: string) => void;
 }
 
 export const SessionStudio: React.FC<SessionStudioProps> = ({ 
   onEquipScene,
   isMainSidebarCollapsed,
   onSetMainSidebarCollapsed,
+  onEditMapInMapMaker,
 }) => {
   const { activeCampaign, campaignMembers, createFeedEvent } = useCampaign();
   const { showAlert } = useCustomDialog();
@@ -2041,7 +2043,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                     campaignMaps={campaignMaps}
                     selectedScene={selectedScene}
                     onToggleMapAssociation={handleToggleMapAssociation}
-                    onUpdateMapMetadata={handleUpdateMapMetadata}
+                    onEditMapInMapMaker={onEditMapInMapMaker}
                   />
                 )}
               </div>

@@ -2,6 +2,29 @@ import { IAIProvider } from './IAIProvider';
 
 export class DemoFallbackProvider implements IAIProvider {
   async generateNarrative(prompt: string): Promise<{ text: string; provider: string }> {
+    if (prompt.includes('DESCRIÇÃO NARRATIVA') || prompt.includes('DADOS DA MASMORRA') || prompt.includes('generate-dungeon-lore')) {
+      const titleMatch = prompt.match(/Título da Masmorra:\s*"([^"\n]+)"/i);
+      const userIdeaMatch = prompt.match(/Ideia \/ Rascunho do Mestre:\s*"([^"\n]+)"/i);
+      const crMatch = prompt.match(/CR Recomendado:\s*([^\n]+)/i);
+
+      const dungeonTitle = titleMatch ? titleMatch[1].trim() : 'Cripta dos Lamentos Esquecidos';
+      const userIdea = userIdeaMatch ? userIdeaMatch[1].trim() : '';
+      const cr = crMatch ? crMatch[1].trim() : 'Nível 4 - 6';
+
+      const customNarrative = userIdea 
+        ? `Adentrando as profundezas de ${dungeonTitle}, o ar se torna gélido e impregnado com a essência de perigo iminente. O piso de lajes rachadas revela vestígios alarmantes (${userIdea}), onde ecos sombrios reverberam pelas abóbadas de pedra.\n\nÀ medida que a luz das tochas vacila, silhuetas inquietas se movem nas sombras milenares, prontas para emboscar qualquer intruso que ouse desafiar o repouso deste complexo subterrâneo.\n\nRumores & Lendas:\n• Habitantes da região sussurram que ${dungeonTitle} guarda os despojos de uma legião esquecida, onde ${userIdea} patrulha os corredores incessantemente.\n• Antigos exploradores afirmam que um mecanismo arcano oculto nas paredes dita a abertura da câmara principal sob o luar.`
+        : `Escavada sob ruínas ancestrais, ${dungeonTitle} (${cr}) exala uma névoa densa e o cheiro pungente de terra fria e ferro oxidado. O silêncio sepulcral é quebrado apenas pelo gotejar ritmado de água alcalina e pelo eco distante de passos pesados.\n\nEstruturas de cantaria megalítica e portais de ferro forjado demarcam o avanço pelo complexo, onde armadilhas adormecidas e entidades ancestrais aguardam a passagem dos desavisados.\n\nRumores & Lendas:\n• Dizem que as profundezas guardam o relicário de uma ordem caída que sucumbiu à ganância e à magia proibida.\n• Aventureiros sobreviventes relatam que as tochas nas paredes se acendem sozinhas quando sangue é derramado nos altares.`;
+
+      return {
+        text: JSON.stringify({
+          title: dungeonTitle,
+          description: customNarrative,
+          slideCoverPrompt: `Cinematic 16:9 dark fantasy entrance to ${dungeonTitle}, ${userIdea ? userIdea + ', ' : ''}ancient stone architecture, eerie torches, dense fog, masterpiece concept art`
+        }),
+        provider: 'demo-fallback'
+      };
+    }
+
     if (prompt.includes('houseName') || prompt.includes('árvore genealógica') || prompt.includes('linhagem')) {
       return {
         text: JSON.stringify({
