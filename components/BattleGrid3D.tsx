@@ -315,6 +315,21 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const [isForgeMenuOpen, setIsForgeMenuOpen] = useState<boolean>(false);
   const [activeSpellTemplate, setActiveSpellTemplate] = useState<SpellTemplate3D | null>(null);
   const [tokenElevations, setTokenElevationsState] = useState<Record<string, number>>(initialTokenElevations || {});
+  const [isAssetsLocked, setIsAssetsLocked] = useState<boolean>(true);
+
+  const handleToggleAssetsLocked = useCallback(() => {
+    setIsAssetsLocked((prev) => {
+      const next = !prev;
+      if (next) {
+        setSelectedBlockId(null);
+        setIsInspectorModalOpen(false);
+        toast.info('🔒 Edição de assets travada.');
+      } else {
+        toast.success('🔓 Edição de assets liberada! Agora você pode mover, girar e configurar objetos.');
+      }
+      return next;
+    });
+  }, []);
 
   // Wrappers to persist updates upward asynchronously without violating React reducer purity
   const setBuildingBlocks = useCallback((updater: BuildingBlock3D[] | ((prev: BuildingBlock3D[]) => BuildingBlock3D[])) => {
@@ -435,6 +450,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   }, [gridConfig.terrainOpacity]);
 
   const forgeRef = useRef({
+    isAssetsLocked,
     buildMode,
     activeBlockType,
     blockRotation,
@@ -447,6 +463,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     terrainSurfaces,
   });
   forgeRef.current = {
+    isAssetsLocked,
     buildMode,
     activeBlockType,
     blockRotation,
@@ -1769,84 +1786,112 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       if (event.button === 0 && blocksGroupRef.current) {
         const hits = raycaster.intersectObjects(blocksGroupRef.current.children, true);
         if (hits.length > 0) {
-          // 4.1 Checar se QUALQUER objeto atingido pelo raio é um handle do Gizmo
-          const gizmoHit = hits.find((h) => {
-            let o: THREE.Object3D | null = h.object;
-            while (o && !o.userData?.isGizmoHandle && o.parent) o = o.parent;
-            return o?.userData?.isGizmoHandle;
-          });
+          if (!forgeRef.current.isAssetsLocked) {
+            // 4.1 Checar se QUALQUER objeto atingido pelo raio é um handle do Gizmo
+            const gizmoHit = hits.find((h) => {
+              let o: THREE.Object3D | null = h.object;
+              while (o && !o.userData?.isGizmoHandle && o.parent) o = o.parent;
+              return o?.userData?.isGizmoHandle;
+            });
 
-          if (gizmoHit) {
-            let gizmoObj: THREE.Object3D | null = gizmoHit.object;
-            while (gizmoObj && !gizmoObj.userData?.isGizmoHandle && gizmoObj.parent) gizmoObj = gizmoObj.parent;
-            if (gizmoObj?.userData?.isGizmoHandle) {
-              event.preventDefault();
-              event.stopPropagation();
-              const hType = gizmoObj.userData.handleType as 'rotate' | 'stretch';
-              const bId = gizmoObj.userData.blockId;
-              const targetBlock = forgeRef.current.buildingBlocks.find((b) => b.id === bId);
-              if (targetBlock) {
-                controls.enabled = false;
-                activeBlockDragRef.current = {
-                  blockId: bId,
-                  mode: hType,
-                  startPoint: gizmoHit.point.clone(),
-                  startRotation: targetBlock.rotationDeg || 0,
-                  startSegments: targetBlock.segmentsCount || 1,
-                  startPos: { x: targetBlock.x, z: targetBlock.z },
-                };
+            if (gizmoHit) {
+              let gizmoObj: THREE.Object3D | null = gizmoHit.object;
+              while (gizmoObj && !gizmoObj.userData?.isGizmoHandle && gizmoObj.parent) gizmoObj = gizmoObj.parent;
+              if (gizmoObj?.userData?.isGizmoHandle) {
+                event.preventDefault();
+                event.stopPropagation();
+                const hType = gizmoObj.userData.handleType as 'rotate' | 'stretch';
+                const bId = gizmoObj.userData.blockId;
+                const targetBlock = forgeRef.current.buildingBlocks.find((b) => b.id === bId);
+                if (targetBlock) {
+                  controls.enabled = false;
+                  activeBlockDragRef.current = {
+                    blockId: bId,
+                    mode: hType,
+                    startPoint: gizmoHit.point.clone(),
+                    startRotation: targetBlock.rotationDeg || 0,
+                    startSegments: targetBlock.segmentsCount || 1,
+                    startPos: { x: targetBlock.x, z: targetBlock.z },
+                  };
+                  return;
+                }
+              }
+            }
+
+            // 4.2 Checar se QUALQUER objeto atingido é o corpo de um bloco de construção
+            const blockHit = hits.find((h) => {
+              let o: THREE.Object3D | null = h.object;
+              while (o && !o.name.startsWith('block-') && o.parent) o = o.parent;
+              return o?.userData?.blockId;
+            });
+
+            if (blockHit) {
+              let obj: THREE.Object3D | null = blockHit.object;
+              while (obj && !obj.name.startsWith('block-') && obj.parent) obj = obj.parent;
+              if (obj?.userData?.blockId) {
+                event.preventDefault();
+                event.stopPropagation();
+                const bId = obj.userData.blockId;
+                const targetBlock = forgeRef.current.buildingBlocks.find((b) => b.id === bId);
+                setSelectedBlockId(bId);
+
+                // Interação Direta com Portas e Portais Medievais
+                if (targetBlock && (targetBlock.type.startsWith('door_') || targetBlock.type === 'portcullis_iron')) {
+                  const nextState = targetBlock.state === 'open' ? 'closed' : 'open';
+                  setBuildingBlocks((prev) =>
+                    prev.map((b) => (b.id === bId ? { ...b, state: nextState } : b))
+                  );
+                  toast.info(`🚪 ${targetBlock.type === 'portcullis_iron' ? 'Grade Levadiça' : 'Porta'} ${nextState === 'open' ? 'aberta' : 'fechada'}!`);
+                  return;
+                }
+
+                // 2 Cliques rápidos no asset abrem o modal de configurações
+                if (event.detail >= 2) {
+                  setIsInspectorModalOpen(true);
+                  toast.info(`⚙️ Configurações de ${targetBlock?.type || 'Asset'}`);
+                  return;
+                }
+
+                // 1 Clique: Inicia arrasto direto para mover no grid (Snap)
+                if (targetBlock) {
+                  controls.enabled = false;
+                  activeBlockDragRef.current = {
+                    blockId: bId,
+                    mode: 'move',
+                    startPoint: blockHit.point.clone(),
+                    startRotation: targetBlock.rotationDeg || 0,
+                    startSegments: targetBlock.segmentsCount || 1,
+                    startPos: { x: targetBlock.x, z: targetBlock.z },
+                  };
+                }
                 return;
               }
             }
-          }
+          } else {
+            // Se estiver TRAVADO, ainda permite abrir/fechar portas interativas com clique sem mover o asset
+            const blockHit = hits.find((h) => {
+              let o: THREE.Object3D | null = h.object;
+              while (o && !o.name.startsWith('block-') && o.parent) o = o.parent;
+              return o?.userData?.blockId;
+            });
 
-          // 4.2 Checar se QUALQUER objeto atingido é o corpo de um bloco de construção
-          const blockHit = hits.find((h) => {
-            let o: THREE.Object3D | null = h.object;
-            while (o && !o.name.startsWith('block-') && o.parent) o = o.parent;
-            return o?.userData?.blockId;
-          });
-
-          if (blockHit) {
-            let obj: THREE.Object3D | null = blockHit.object;
-            while (obj && !obj.name.startsWith('block-') && obj.parent) obj = obj.parent;
-            if (obj?.userData?.blockId) {
-              event.preventDefault();
-              event.stopPropagation();
-              const bId = obj.userData.blockId;
-              const targetBlock = forgeRef.current.buildingBlocks.find((b) => b.id === bId);
-              setSelectedBlockId(bId);
-
-              // Interação Direta com Portas e Portais Medievais
-              if (targetBlock && (targetBlock.type.startsWith('door_') || targetBlock.type === 'portcullis_iron')) {
-                const nextState = targetBlock.state === 'open' ? 'closed' : 'open';
-                setBuildingBlocks((prev) =>
-                  prev.map((b) => (b.id === bId ? { ...b, state: nextState } : b))
-                );
-                toast.info(`🚪 ${targetBlock.type === 'portcullis_iron' ? 'Grade Levadiça' : 'Porta'} ${nextState === 'open' ? 'aberta' : 'fechada'}!`);
-                return;
+            if (blockHit) {
+              let obj: THREE.Object3D | null = blockHit.object;
+              while (obj && !obj.name.startsWith('block-') && obj.parent) obj = obj.parent;
+              if (obj?.userData?.blockId) {
+                const bId = obj.userData.blockId;
+                const targetBlock = forgeRef.current.buildingBlocks.find((b) => b.id === bId);
+                if (targetBlock && (targetBlock.type.startsWith('door_') || targetBlock.type === 'portcullis_iron')) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const nextState = targetBlock.state === 'open' ? 'closed' : 'open';
+                  setBuildingBlocks((prev) =>
+                    prev.map((b) => (b.id === bId ? { ...b, state: nextState } : b))
+                  );
+                  toast.info(`🚪 ${targetBlock.type === 'portcullis_iron' ? 'Grade Levadiça' : 'Porta'} ${nextState === 'open' ? 'aberta' : 'fechada'}!`);
+                  return;
+                }
               }
-
-              // 2 Cliques rápidos no asset abrem o modal de configurações
-              if (event.detail >= 2) {
-                setIsInspectorModalOpen(true);
-                toast.info(`⚙️ Configurações de ${targetBlock?.type || 'Asset'}`);
-                return;
-              }
-
-              // 1 Clique: Inicia arrasto direto para mover no grid (Snap)
-              if (targetBlock) {
-                controls.enabled = false;
-                activeBlockDragRef.current = {
-                  blockId: bId,
-                  mode: 'move',
-                  startPoint: blockHit.point.clone(),
-                  startRotation: targetBlock.rotationDeg || 0,
-                  startSegments: targetBlock.segmentsCount || 1,
-                  startPos: { x: targetBlock.x, z: targetBlock.z },
-                };
-              }
-              return;
             }
           }
         } else if (!event.ctrlKey) {
@@ -2588,6 +2633,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     };
 
     const handleDblClick = (event: MouseEvent) => {
+      if (forgeRef.current.isAssetsLocked) return;
       if (!containerRef.current || !blocksGroupRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -2981,13 +3027,13 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
     buildingBlocks.forEach((block) => {
       const blockMesh = createBuildingBlockMesh(block);
-      if (block.id === selectedBlockId) {
+      if (!isAssetsLocked && block.id === selectedBlockId) {
         const gizmo = createInteractiveTransformGizmo(block);
         blockMesh.add(gizmo);
       }
       group.add(blockMesh);
     });
-  }, [buildingBlocks, selectedBlockId]);
+  }, [buildingBlocks, selectedBlockId, isAssetsLocked]);
 
   // Sync Fire Particle Emitters (Tochas, Fogueiras, Braseiros, Caldeirões, Velas e Tochas de Tokens)
   useEffect(() => {
@@ -3467,6 +3513,8 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         onToggleTorch={handleToggleTorch}
         isForgeMenuOpen={isForgeMenuOpen}
         onToggleForgeMenu={() => setIsForgeMenuOpen(!isForgeMenuOpen)}
+        isAssetsLocked={isAssetsLocked}
+        onToggleAssetsLocked={handleToggleAssetsLocked}
         onAttackTarget={pendingAttack ? undefined : (target) => {
           if (propOnAttackTarget) {
             propOnAttackTarget(target);
@@ -3482,6 +3530,8 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         isDm={isDm}
         isOpen={isForgeMenuOpen}
         onClose={() => setIsForgeMenuOpen(false)}
+        isAssetsLocked={isAssetsLocked}
+        onToggleAssetsLocked={handleToggleAssetsLocked}
         gridConfig={gridConfig}
         onGridConfigChange={setGridConfig}
         activeBlockType={activeBlockType}
@@ -3522,7 +3572,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       />
 
       {/* Selected 3D Asset Transform & Light Inspector (Aberto com 2 cliques rápidos no asset) */}
-      {isInspectorModalOpen && selectedBlockId && (() => {
+      {!isAssetsLocked && isInspectorModalOpen && selectedBlockId && (() => {
         const selBlock = buildingBlocks.find((b) => b.id === selectedBlockId);
         if (!selBlock) return null;
         return (
@@ -3551,7 +3601,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       })()}
 
       {/* Barra de Ações Rápidas do Asset Selecionado (HUD Inferior Central) */}
-      {selectedBlockId && !isInspectorModalOpen && (() => {
+      {!isAssetsLocked && selectedBlockId && !isInspectorModalOpen && (() => {
         const selBlock = buildingBlocks.find((b) => b.id === selectedBlockId);
         if (!selBlock) return null;
         const def = BUILDING_BLOCK_CATALOG[selBlock.type];

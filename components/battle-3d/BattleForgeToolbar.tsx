@@ -33,7 +33,9 @@ import {
   Paintbrush,
   Eraser,
   Droplet,
-  Info
+  Info,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -65,6 +67,8 @@ export interface BattleForgeToolbarProps {
   onSetTerrainOpacity?: (opacity: number) => void;
   terrainsCount?: number;
   onClearAllTerrains?: () => void;
+  isAssetsLocked?: boolean;
+  onToggleAssetsLocked?: () => void;
 }
 
 export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
@@ -94,6 +98,8 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
   onSetTerrainOpacity,
   terrainsCount = 0,
   onClearAllTerrains,
+  isAssetsLocked = true,
+  onToggleAssetsLocked,
 }) => {
   const [activeTab, setActiveTab] = useState<'blocks' | 'terrains' | 'grid' | 'spells' | 'elevation'>('blocks');
   const [blockCategory, setBlockCategory] = useState<'all' | 'structures' | 'lights' | 'props'>('all');
@@ -191,6 +197,20 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
           >
             <Trash2 className="w-3 h-3" />
           </button>
+          {onToggleAssetsLocked && (
+            <button
+              onClick={onToggleAssetsLocked}
+              className={`px-2 py-0.5 rounded border flex items-center gap-1 text-[10px] font-bold transition-all active:scale-95 ${
+                isAssetsLocked
+                  ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm shadow-emerald-500/20'
+              }`}
+              title={isAssetsLocked ? 'Assets travados contra arrasto. Clique para liberar edição livre.' : 'Edição livre ativa. Clique para travar movimentação de assets.'}
+            >
+              {isAssetsLocked ? <Lock className="w-3 h-3 text-slate-400" /> : <Unlock className="w-3 h-3 text-emerald-400" />}
+              <span>{isAssetsLocked ? 'Travado' : 'Edição'}</span>
+            </button>
+          )}
         </div>
       </div>
 

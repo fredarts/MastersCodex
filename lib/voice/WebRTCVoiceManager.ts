@@ -281,35 +281,67 @@ export class WebRTCVoiceManager {
   }
 
   /**
-   * Conecta um stream remoto (áudio e vídeo) recebido do peer
+   * Conecta uma faixa remota individual (áudio ou vídeo) recebida do peer ao stream composto.
    */
-  attachRemoteStream(peerId: string, stream: MediaStream) {
+  attachRemoteTrack(peerId: string, track: MediaStreamTrack) {
     if (typeof window === 'undefined') return;
 
-    this.remoteStreams.set(peerId, stream);
-
-    let audioEl = this.remoteAudioElements.get(peerId);
-    if (!audioEl) {
-      audioEl = document.getElementById(`audio-peer-${peerId}`) as HTMLAudioElement;
-      if (!audioEl) {
-        audioEl = document.createElement('audio');
-        audioEl.id = `audio-peer-${peerId}`;
-        audioEl.autoplay = true;
-        audioEl.setAttribute('playsinline', 'true');
-        document.body.appendChild(audioEl);
-      }
-      this.remoteAudioElements.set(peerId, audioEl);
+    let compositeStream = this.remoteStreams.get(peerId);
+    if (!compositeStream) {
+      compositeStream = new MediaStream();
+      this.remoteStreams.set(peerId, compositeStream);
     }
 
-    audioEl.srcObject = stream;
-    audioEl.muted = this.isDeafened;
+    // Se já tiver uma faixa do mesmo tipo com ID diferente, substitui
+    const existingTracks = track.kind === 'audio' ? compositeStream.getAudioTracks() : compositeStream.getVideoTracks();
+    const isAlreadyPresent = existingTracks.some((t) => t.id === track.id);
+    if (!isAlreadyPresent) {
+      existingTracks.forEach((t) => compositeStream!.removeTrack(t));
+      compositeStream.addTrack(track);
+    }
 
-    // Configurar GainNode e AnalyserNode no AudioContext apenas se houver áudio
-    if (stream.getAudioTracks().length > 0) {
+    // Ouvintes para manter sincronia quando o peer parar ou pausar a trilha
+    track.onended = () => {
+      compositeStream?.removeTrack(track);
+      if (this.onRemoteStreamChange && compositeStream) {
+        this.onRemoteStreamChange(peerId, compositeStream);
+      }
+    };
+    track.onmute = () => {
+      if (this.onRemoteStreamChange && compositeStream) {
+        this.onRemoteStreamChange(peerId, compositeStream);
+      }
+    };
+    track.onunmute = () => {
+      if (this.onRemoteStreamChange && compositeStream) {
+        this.onRemoteStreamChange(peerId, compositeStream);
+      }
+    };
+
+    // Configurar áudio exclusivamente quando a faixa for do tipo 'audio'
+    if (track.kind === 'audio') {
+      let audioEl = this.remoteAudioElements.get(peerId);
+      if (!audioEl) {
+        audioEl = document.getElementById(`audio-peer-${peerId}`) as HTMLAudioElement;
+        if (!audioEl) {
+          audioEl = document.createElement('audio');
+          audioEl.id = `audio-peer-${peerId}`;
+          audioEl.autoplay = true;
+          audioEl.setAttribute('playsinline', 'true');
+          document.body.appendChild(audioEl);
+        }
+        this.remoteAudioElements.set(peerId, audioEl);
+      }
+
+      const audioStream = new MediaStream([track]);
+      audioEl.srcObject = audioStream;
+      audioEl.muted = this.isDeafened;
+
+      // Configurar GainNode e AnalyserNode no AudioContext
       try {
         const ctx = this.getOrCreateAudioContext();
         if (ctx) {
-          const source = ctx.createMediaStreamSource(stream);
+          const source = ctx.createMediaStreamSource(audioStream);
           const gainNode = ctx.createGain();
           const analyser = ctx.createAnalyser();
           analyser.fftSize = 256;
@@ -332,8 +364,18 @@ export class WebRTCVoiceManager {
     }
 
     if (this.onRemoteStreamChange) {
-      this.onRemoteStreamChange(peerId, stream);
+      this.onRemoteStreamChange(peerId, compositeStream);
     }
+  }
+
+  /**
+   * Conecta um stream remoto (áudio e vídeo) recebido do peer
+   */
+  attachRemoteStream(peerId: string, stream: MediaStream) {
+    if (typeof window === 'undefined') return;
+    stream.getTracks().forEach((track) => {
+      this.attachRemoteTrack(peerId, track);
+    });
   }
 
   detachRemoteStream(peerId: string) {

@@ -1,11 +1,68 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { WebRTCVoiceManager } from '../voice/WebRTCVoiceManager';
 
+class MockMediaStream {
+  tracks: MediaStreamTrack[] = [];
+  constructor(tracks: MediaStreamTrack[] = []) {
+    this.tracks = [...tracks];
+  }
+  getTracks() {
+    return this.tracks;
+  }
+  getAudioTracks() {
+    return this.tracks.filter((t) => t.kind === 'audio');
+  }
+  getVideoTracks() {
+    return this.tracks.filter((t) => t.kind === 'video');
+  }
+  addTrack(track: MediaStreamTrack) {
+    this.tracks.push(track);
+  }
+  removeTrack(track: MediaStreamTrack) {
+    this.tracks = this.tracks.filter((t) => t.id !== track.id);
+  }
+}
+
 describe('WebRTCVoiceManager', () => {
   let voiceManager: WebRTCVoiceManager;
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    (global as any).window = {
+      AudioContext: class {
+        createMediaStreamSource() {
+          return { connect: vi.fn() };
+        }
+        createGain() {
+          return { gain: { value: 1 }, connect: vi.fn() };
+        }
+        createAnalyser() {
+          return { fftSize: 256, getByteFrequencyData: vi.fn() };
+        }
+        resume() {
+          return Promise.resolve();
+        }
+        close() {
+          return Promise.resolve();
+        }
+      },
+    };
+
+    (global as any).MediaStream = MockMediaStream;
+
+    (global as any).document = {
+      getElementById: () => null,
+      createElement: () => ({
+        play: () => Promise.resolve(),
+        setAttribute: vi.fn(),
+        remove: vi.fn(),
+      }),
+      body: {
+        appendChild: vi.fn(),
+      },
+    };
+
     voiceManager = new WebRTCVoiceManager();
   });
 
@@ -102,6 +159,56 @@ describe('WebRTCVoiceManager', () => {
     expect(localVideoCb).toHaveBeenCalledWith(null);
   });
 
+  it('deve gerenciar faixas remotas mantendo stream composto com áudio e vídeo juntos', () => {
+    // Mock simples de MediaStreamTrack
+    const audioTrack = {
+      id: 'audio-track-1',
+      kind: 'audio',
+      enabled: true,
+      readyState: 'live',
+      onended: null,
+      onmute: null,
+      onunmute: null,
+    } as unknown as MediaStreamTrack;
+
+    const videoTrack = {
+      id: 'video-track-1',
+      kind: 'video',
+      enabled: true,
+      readyState: 'live',
+      onended: null,
+      onmute: null,
+      onunmute: null,
+    } as unknown as MediaStreamTrack;
+
+    const onRemoteStreamChange = vi.fn();
+    voiceManager.setOnRemoteStreamChange(onRemoteStreamChange);
+
+    // 1. Adicionar áudio
+    voiceManager.attachRemoteTrack('peer-abc', audioTrack);
+    const stream = voiceManager.getRemoteStreams().get('peer-abc');
+    expect(stream).toBeDefined();
+    expect(stream?.getAudioTracks().length).toBe(1);
+    expect(stream?.getVideoTracks().length).toBe(0);
+
+    // 2. Adicionar vídeo em seguida (ao ligar a webcam)
+    voiceManager.attachRemoteTrack('peer-abc', videoTrack);
+    expect(stream?.getAudioTracks().length).toBe(1);
+    expect(stream?.getVideoTracks().length).toBe(1);
+    expect(onRemoteStreamChange).toHaveBeenCalledTimes(2);
+
+    // 3. Simular encerramento da trilha de vídeo
+    if (typeof videoTrack.onended === 'function') {
+      (videoTrack.onended as any)();
+    }
+    expect(stream?.getVideoTracks().length).toBe(0);
+    expect(stream?.getAudioTracks().length).toBe(1); // Áudio continua ativo!
+
+    // 4. Desconectar peer
+    voiceManager.detachRemoteStream('peer-abc');
+    expect(voiceManager.getRemoteStreams().has('peer-abc')).toBe(false);
+  });
+
   it('deve fechar todas as conexões e limpar recursos ao chamar closeAllConnections', () => {
     voiceManager.closeAllConnections();
     expect(voiceManager.getPeerConnections().size).toBe(0);
@@ -110,3 +217,4 @@ describe('WebRTCVoiceManager', () => {
     expect(voiceManager.getRemoteStreams().size).toBe(0);
   });
 });
+

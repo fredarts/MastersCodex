@@ -16,7 +16,9 @@ import {
   Eye,
   Flame,
   Box,
-  Home
+  Home,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { Combatant } from '@/lib/types';
 
@@ -94,6 +96,8 @@ export interface BattleControlsToolbarProps {
   onToggleTorch?: (c: Combatant) => void;
   isForgeMenuOpen?: boolean;
   onToggleForgeMenu?: () => void;
+  isAssetsLocked?: boolean;
+  onToggleAssetsLocked?: () => void;
 }
 
 export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
@@ -143,6 +147,8 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   onToggleTorch,
   isForgeMenuOpen = false,
   onToggleForgeMenu,
+  isAssetsLocked = true,
+  onToggleAssetsLocked,
 }) => {
   const [showEnvMenu, setShowEnvMenu] = useState(false);
   const [availableTextures, setAvailableTextures] = useState<{name: string, url: string}[]>([]);
@@ -413,6 +419,30 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
             >
               <Box className={`w-3.5 h-3.5 ${isForgeMenuOpen ? 'text-amber-400' : 'text-slate-400'}`} />
               <span>Forja 3D</span>
+            </button>
+          )}
+
+          {/* DM Asset Lock / Edit Toggle */}
+          {isDm && onToggleAssetsLocked && (
+            <button
+              onClick={onToggleAssetsLocked}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border backdrop-blur-md transition-all active:scale-95 ${
+                isAssetsLocked
+                  ? 'bg-slate-900/90 hover:bg-slate-800 border-slate-700/60 text-slate-300'
+                  : 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-sm shadow-emerald-500/20'
+              }`}
+              title={
+                isAssetsLocked
+                  ? 'Assets 3D Travados (Clique para liberar a movimentação e edição de assets 3D)'
+                  : 'Edição de Assets Habilitada (Clique para travar e proteger contra movimentação acidental)'
+              }
+            >
+              {isAssetsLocked ? (
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+              ) : (
+                <Unlock className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              )}
+              <span>{isAssetsLocked ? 'Assets Travados' : 'Editar Assets'}</span>
             </button>
           )}
 
@@ -938,7 +968,7 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                       className="w-full bg-slate-900 border border-slate-850 text-slate-300 rounded p-1.5 text-xs outline-none focus:border-amber-500/50"
                     >
                       <option value="">Nenhuma (Cor sólida)</option>
-                      {availableTextures.map(tex => (
+                      {availableTextures.map((tex: { name: string; url: string }) => (
                         <option key={tex.url} value={tex.url}>{tex.name}</option>
                       ))}
                     </select>

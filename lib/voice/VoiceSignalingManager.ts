@@ -125,6 +125,8 @@ export class VoiceSignalingManager {
     }
   }
 
+  private pendingIceCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
+
   /**
    * Handle incoming signaling messages from remote peers
    */
@@ -154,6 +156,7 @@ export class VoiceSignalingManager {
       }
 
       case 'leave-announcement': {
+        this.pendingIceCandidates.delete(peerId);
         this.voiceManager.detachRemoteStream(peerId);
         const pc = this.voiceManager.getPeerConnections().get(peerId);
         if (pc) {
@@ -185,6 +188,8 @@ export class VoiceSignalingManager {
 
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(signal.data));
+          await this.flushPendingIceCandidates(pc, peerId);
+
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
 
@@ -205,6 +210,7 @@ export class VoiceSignalingManager {
         if (existingPc && existingPc.signalingState !== 'stable') {
           try {
             await existingPc.setRemoteDescription(new RTCSessionDescription(signal.data));
+            await this.flushPendingIceCandidates(existingPc, peerId);
           } catch (err) {
             console.warn(`Erro ao processar resposta WebRTC do peer ${peerId}:`, err);
           }
@@ -214,11 +220,17 @@ export class VoiceSignalingManager {
 
       case 'ice-candidate': {
         const pc = this.getPeerConnection(peerId);
-        if (pc && signal.data) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(signal.data));
-          } catch (err) {
-            console.warn('Failed to add ICE candidate:', err);
+        if (signal.data) {
+          if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(signal.data));
+            } catch (err) {
+              console.warn('Falha ao adicionar ICE candidate diretamente:', err);
+            }
+          } else {
+            const queued = this.pendingIceCandidates.get(peerId) || [];
+            queued.push(signal.data);
+            this.pendingIceCandidates.set(peerId, queued);
           }
         }
         break;
@@ -226,13 +238,27 @@ export class VoiceSignalingManager {
     }
   }
 
+  private async flushPendingIceCandidates(pc: RTCPeerConnection, peerId: string): Promise<void> {
+    const queued = this.pendingIceCandidates.get(peerId);
+    if (!queued || queued.length === 0) return;
+
+    for (const candidate of queued) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (err) {
+        console.warn(`Erro ao processar ICE candidate enfileirado para ${peerId}:`, err);
+      }
+    }
+    this.pendingIceCandidates.delete(peerId);
+  }
+
   private setupTrackHandler(pc: RTCPeerConnection, peerId: string) {
     pc.ontrack = (event) => {
-      if (event.streams[0]) {
-        const stream = event.streams[0];
-        this.voiceManager.attachRemoteStream(peerId, stream);
-        if (this.onRemoteStream) {
-          this.onRemoteStream(peerId, stream);
+      if (event.track) {
+        this.voiceManager.attachRemoteTrack(peerId, event.track);
+        const compositeStream = this.voiceManager.getRemoteStreams().get(peerId);
+        if (this.onRemoteStream && compositeStream) {
+          this.onRemoteStream(peerId, compositeStream);
         }
       }
     };

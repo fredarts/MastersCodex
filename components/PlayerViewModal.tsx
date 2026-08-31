@@ -19,7 +19,6 @@ import { PlayerCombatTrackerHUD } from '@/components/player-view/PlayerCombatTra
 import { PlayerTokenActionDock } from '@/components/player-view/PlayerTokenActionDock';
 import { SharedGameLog } from '@/components/live-cockpit/SharedGameLog';
 import { LiveChatPanel } from '@/components/live-cockpit/LiveChatPanel';
-import { MacroBarHUD } from '@/components/live-cockpit/MacroBarHUD';
 import { MacroBarDisplayMode, SecretRollNotificationMode } from '@/lib/types';
 import { PresenceIndicator } from '@/components/live-cockpit/PresenceIndicator';
 import { CharacterSheetModal } from '@/components/character-sheet/CharacterSheetModal';
@@ -950,26 +949,6 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
           )}
         </div>
       </div>
-
-      {/* Floating Macro Bar HUD */}
-      <MacroBarHUD
-        onExecuteMacro={(command) => {
-          const message = {
-            id: `chat-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-            senderId: user?.id || 'anonymous',
-            senderName: playerCharName,
-            channel: 'general' as const,
-            content: command,
-            timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-          };
-          if (broadcastChatMessage) broadcastChatMessage(message);
-        }}
-        activeSheet={activeSheet}
-        displayMode={macroDisplayMode}
-        onUpdateDisplayMode={setMacroDisplayMode}
-        secretMode={secretRollMode}
-        onUpdateSecretMode={setSecretRollMode}
-      />
 
       {/* Modal da Ficha Completa do Personagem */}
       <CharacterSheetModal

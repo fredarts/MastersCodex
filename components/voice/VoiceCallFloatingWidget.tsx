@@ -62,7 +62,7 @@ const ParticipantVideoTile: React.FC<VideoTileProps> = ({
           ref={videoRef}
           autoPlay
           playsInline
-          muted={isLocalUser}
+          muted={true}
           className={`w-full h-full object-cover ${isLocalUser ? '-scale-x-100' : ''}`}
         />
       ) : (
@@ -199,12 +199,6 @@ export const VoiceCallFloatingWidget: React.FC = () => {
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const widgetRef = useRef<HTMLDivElement | null>(null);
-  const dragStartRef = useRef<{ mouseX: number; mouseY: number; startX: number; startY: number }>({
-    mouseX: 0,
-    mouseY: 0,
-    startX: 0,
-    startY: 0,
-  });
 
   // 1. Carregar posição salva ou definir posição padrão no canto inferior direito
   useEffect(() => {
@@ -232,30 +226,49 @@ export const VoiceCallFloatingWidget: React.FC = () => {
     setPosition({ x: defaultX, y: defaultY });
   }, []);
 
-  // 2. Manipuladores de Arrastar (Draggable)
-  const handleMouseDown = (e: React.MouseEvent) => {
-    // Ignorar cliques diretos em botões ou inputs dentro do header
+  // 2. Manipuladores de Arraste (Suporte completo a Mouse, Touch Screen e Tablets via Pointer Events)
+  const dragStartRef = useRef<{ clientX: number; clientY: number; startX: number; startY: number; hasMoved: boolean }>({
+    clientX: 0,
+    clientY: 0,
+    startX: 0,
+    startY: 0,
+    hasMoved: false,
+  });
+
+  const handleDragStart = (e: React.PointerEvent) => {
+    // Ignorar cliques diretos em botões, links, sliders ou inputs
     const target = e.target as HTMLElement;
-    if (target.closest('button') || target.closest('input') || target.closest('select')) {
+    if (target.closest('button') || target.closest('input') || target.closest('select') || target.closest('a')) {
       return;
     }
 
     if (!position) return;
     setIsDragging(true);
     dragStartRef.current = {
-      mouseX: e.clientX,
-      mouseY: e.clientY,
+      clientX: e.clientX,
+      clientY: e.clientY,
       startX: position.x,
       startY: position.y,
+      hasMoved: false,
     };
+
+    // Capturar o ponteiro no elemento alvo se suportado
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch (err) {}
   };
 
   useEffect(() => {
     if (!isDragging) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const dx = e.clientX - dragStartRef.current.mouseX;
-      const dy = e.clientY - dragStartRef.current.mouseY;
+    const handlePointerMove = (e: PointerEvent) => {
+      const dx = e.clientX - dragStartRef.current.clientX;
+      const dy = e.clientY - dragStartRef.current.clientY;
+
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        dragStartRef.current.hasMoved = true;
+      }
+
       const widgetEl = widgetRef.current;
       const width = widgetEl ? widgetEl.offsetWidth : 360;
       const height = widgetEl ? widgetEl.offsetHeight : 280;
@@ -266,7 +279,7 @@ export const VoiceCallFloatingWidget: React.FC = () => {
       setPosition({ x: newX, y: newY });
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       setIsDragging(false);
       if (position) {
         try {
@@ -275,12 +288,14 @@ export const VoiceCallFloatingWidget: React.FC = () => {
       }
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
     };
   }, [isDragging, position]);
 
@@ -324,17 +339,18 @@ export const VoiceCallFloatingWidget: React.FC = () => {
           <div
             className={`bg-[#0d121c]/95 backdrop-blur-md border border-[#2a3449] rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all text-slate-200 ${
               isDragging ? 'opacity-90 ring-2 ring-amber-500/50 shadow-amber-950/50 cursor-grabbing' : ''
-            } ${videoLayout === 'grid' ? 'w-80 sm:w-[380px]' : 'w-72'}`}
+            } ${videoLayout === 'grid' ? 'w-[360px] sm:w-[420px]' : 'w-[340px] sm:w-[360px]'}`}
           >
-            {/* Header da Chamada com Handle de Arraste */}
+            {/* Header da Chamada com Handle de Arraste (Touch / Mouse / Pointer) */}
             <div
-              onMouseDown={handleMouseDown}
-              className="flex items-center justify-between px-3.5 py-2.5 bg-[#141b28] border-b border-[#2a3449] cursor-grab active:cursor-grabbing group"
-              title="Clique e arraste para mover o painel para qualquer lugar da tela"
+              onPointerDown={handleDragStart}
+              style={{ touchAction: 'none' }}
+              className="flex items-center justify-between px-3.5 py-2.5 bg-[#141b28] border-b border-[#2a3449] cursor-grab active:cursor-grabbing group select-none"
+              title="Clique ou toque e arraste para mover o painel na tela"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0 pr-1">
                 <GripHorizontal className="w-3.5 h-3.5 text-slate-500 group-hover:text-amber-400 transition-colors flex-shrink-0" />
-                <span className="relative flex h-2.5 w-2.5">
+                <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                 </span>
@@ -532,11 +548,11 @@ export const VoiceCallFloatingWidget: React.FC = () => {
             )}
 
             {/* Barra de Ações Inferiores */}
-            <div className="p-2 bg-[#141b28] border-t border-[#2a3449] flex items-center justify-between gap-1.5">
+            <div className="p-2 bg-[#141b28] border-t border-[#2a3449] flex items-center justify-between gap-1.5 min-w-0">
               {/* Mute Mic */}
               <button
                 onClick={toggleMute}
-                className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                className={`flex-1 min-w-[85px] py-1.5 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   isMuted
                     ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
                     : isSpeaking
@@ -545,28 +561,28 @@ export const VoiceCallFloatingWidget: React.FC = () => {
                 }`}
                 title={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
               >
-                {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-                <span className="hidden sm:inline">{isMuted ? 'Mutado' : 'Microfone'}</span>
+                {isMuted ? <MicOff className="w-3.5 h-3.5 flex-shrink-0" /> : <Mic className="w-3.5 h-3.5 flex-shrink-0" />}
+                <span className="truncate">{isMuted ? 'Mutado' : 'Microfone'}</span>
               </button>
 
               {/* Toggle Webcam Video */}
               <button
                 onClick={() => toggleVideo()}
-                className={`py-1.5 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all border cursor-pointer ${
+                className={`py-1.5 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all border cursor-pointer flex-shrink-0 ${
                   isVideoEnabled
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
                     : 'bg-[#1e2738] text-slate-400 hover:text-white border-[#2a3449] hover:bg-[#28344c]'
                 }`}
                 title={isVideoEnabled ? 'Desativar Câmera / Webcam' : 'Ativar Câmera / Webcam'}
               >
-                {isVideoEnabled ? <Video className="w-3.5 h-3.5 text-emerald-400" /> : <VideoOff className="w-3.5 h-3.5" />}
-                <span className="hidden sm:inline">{isVideoEnabled ? 'Câmera On' : 'Câmera'}</span>
+                {isVideoEnabled ? <Video className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" /> : <VideoOff className="w-3.5 h-3.5 flex-shrink-0" />}
+                <span>{isVideoEnabled ? 'Câmera On' : 'Câmera'}</span>
               </button>
 
               {/* Deafen */}
               <button
                 onClick={toggleDeafen}
-                className={`p-2 rounded-xl text-xs transition-all border cursor-pointer ${
+                className={`p-2 rounded-xl text-xs transition-all border cursor-pointer flex-shrink-0 ${
                   isDeafened
                     ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                     : 'bg-[#1e2738] text-slate-300 hover:text-white border-[#2a3449] hover:bg-[#28344c]'
@@ -579,7 +595,7 @@ export const VoiceCallFloatingWidget: React.FC = () => {
               {/* Settings */}
               <button
                 onClick={() => setIsSettingsModalOpen(true)}
-                className="p-2 rounded-xl text-xs bg-[#1e2738] text-slate-300 hover:text-white border border-[#2a3449] hover:bg-[#28344c] transition-all cursor-pointer"
+                className="p-2 rounded-xl text-xs bg-[#1e2738] text-slate-300 hover:text-white border border-[#2a3449] hover:bg-[#28344c] transition-all cursor-pointer flex-shrink-0"
                 title="Configurações de Áudio e Vídeo"
               >
                 <Settings className="w-3.5 h-3.5" />
@@ -588,7 +604,7 @@ export const VoiceCallFloatingWidget: React.FC = () => {
               {/* Desconectar */}
               <button
                 onClick={leaveCall}
-                className="p-2 rounded-xl text-xs bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 transition-all cursor-pointer"
+                className="p-2 rounded-xl text-xs bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 transition-all cursor-pointer flex-shrink-0"
                 title="Sair da Chamada"
               >
                 <PhoneOff className="w-3.5 h-3.5" />
@@ -596,15 +612,20 @@ export const VoiceCallFloatingWidget: React.FC = () => {
             </div>
           </div>
         ) : (
-          /* Mini Pill Badge quando Minimizado (também arrastável) */
+          /* Mini Pill Badge quando Minimizado (também arrastável em Touch e Mouse) */
           <div
-            onMouseDown={handleMouseDown}
-            className="cursor-grab active:cursor-grabbing"
+            onPointerDown={handleDragStart}
+            style={{ touchAction: 'none' }}
+            className="cursor-grab active:cursor-grabbing select-none"
           >
             <button
-              onClick={() => setIsWidgetOpen(true)}
+              onClick={() => {
+                if (!dragStartRef.current.hasMoved) {
+                  setIsWidgetOpen(true);
+                }
+              }}
               className="flex items-center gap-2 bg-[#0f141d]/95 hover:bg-[#161c28] border border-[#2a3449] hover:border-emerald-500/50 px-3 py-2 rounded-full shadow-2xl text-slate-200 transition-all group backdrop-blur-md cursor-pointer"
-              title="Expandir Painel de Voz e Vídeo (Arraste para mover)"
+              title="Expandir Painel de Voz e Vídeo (Toque ou arraste para mover)"
             >
               <GripHorizontal className="w-3 h-3 text-slate-500 group-hover:text-amber-400 transition-colors" />
               <span className="relative flex h-2 w-2">
