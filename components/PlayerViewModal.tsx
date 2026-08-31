@@ -622,43 +622,108 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               />
             </ThreeErrorBoundary>
           ) : liveDisplayMode === 'map' ? (
-            typedMapData && typedMapData.grid && typedMapData.grid.length > 0 ? (
-              <div className="w-full h-full relative">
-                {typedMapData.currentLevelName && (
-                  <div className="absolute top-4 left-4 z-20 px-3 py-1.5 bg-slate-950/90 backdrop-blur-md border border-amber-500/30 rounded-2xl flex items-center gap-1.5 text-xs font-bold text-amber-400 shadow-2xl animate-in fade-in duration-200">
-                    <Layers className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Andar: {typedMapData.currentLevelName}</span>
+            (() => {
+              const currentMapId = typedMapData?.activeMapId;
+              const activeCampaignMap = campaignMaps.find((m) => m.id === currentMapId) || null;
+              const dungeonCover = activeCampaignMap?.gridData?.coverImageUrl || activeCampaignMap?.gridData?.levels?.[0]?.bgImageUrl || activeCampaignMap?.gridData?.bgImageUrl;
+              const dungeonLore = activeCampaignMap?.gridData?.description;
+              const dungeonCR = activeCampaignMap?.gridData?.challengeRating || 'Recomendado';
+              const isExplorationStarted = (mapData as any)?.dungeonExplorationStarted === true;
+
+              // Se a exploração ainda não foi iniciada pelo Mestre e houver capa/lore cadastrada, mostra a Capa Cinemática
+              if (!isExplorationStarted && (dungeonCover || dungeonLore)) {
+                return (
+                  <div className="w-full h-full relative flex items-center justify-center p-6 bg-[#06080e] overflow-hidden select-none animate-fade-in">
+                    {dungeonCover && (
+                      <div
+                        className="absolute inset-0 bg-cover bg-center opacity-30 scale-105 filter blur-sm pointer-events-none"
+                        style={{ backgroundImage: `url(${normalizeImageUrl(dungeonCover)})` }}
+                      />
+                    )}
+                    <div className="relative z-10 max-w-2xl w-full bg-[#0d121c]/95 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black flex flex-col gap-4 text-center items-center">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/15 border border-amber-500/40 rounded-full text-amber-300 text-xs font-mono font-bold uppercase">
+                        <span>🏰 {dungeonCR}</span>
+                      </div>
+
+                      {dungeonCover && (
+                        <div className="w-full max-h-60 aspect-[16/9] rounded-2xl overflow-hidden border border-amber-500/40 shadow-xl bg-black">
+                          <img
+                            src={normalizeImageUrl(dungeonCover)}
+                            alt="Capa da Masmorra"
+                            className="w-full h-full object-cover animate-fade-in"
+                          />
+                        </div>
+                      )}
+
+                      <div className="space-y-1">
+                        <h2 className="text-xl sm:text-2xl font-black text-amber-200 uppercase tracking-wide font-serif drop-shadow">
+                          {activeCampaignMap?.title || 'Exploração de Masmorra'}
+                        </h2>
+                        <div className="w-20 h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-transparent mx-auto mt-1" />
+                      </div>
+
+                      {dungeonLore && (
+                        <div className="w-full max-h-36 overflow-y-auto custom-scrollbar p-3 bg-[#080b12] rounded-2xl border border-amber-500/20 text-left">
+                          <p className="text-xs text-amber-100 font-serif leading-relaxed italic">
+                            "{dungeonLore}"
+                          </p>
+                        </div>
+                      )}
+
+                      <p className="text-[11px] text-amber-400/80 font-mono animate-pulse tracking-wider">
+                        ⚔️ Aguardando o Mestre iniciar a exploração...
+                      </p>
+                    </div>
                   </div>
-                )}
-                <DysonCanvas
-                  key={`${currentScene?.id}_${typedMapData.activeMapId || 'default'}_${typedMapData.activeLevelId || 'floor0'}`}
-                  grid={typedMapData.grid || []}
-                  bgImageUrl={typedMapData.bgImageUrl || null}
-                  gridScale={typedMapData.gridScale || 40}
-                  gridOffsetX={typedMapData.gridOffsetX || 0}
-                  gridOffsetY={typedMapData.gridOffsetY || 0}
-                  combatants={combatants}
-                  vectorWalls={typedMapData.vectorWalls || []}
-                  lightSources={typedMapData.lightSources || []}
-                  selectedTool="pan" // Jogador só move a visualização do canvas
-                  selectedTileType="floor"
-                  selectedTokenCombatant={null}
-                  onGridChange={() => {}} // Sem alteração de grid para jogador
-                  isPlayerView={true}
-                  drawings={drawings}
-                />
-              </div>
-            ) : isMapLoading ? (
-              <div className="flex flex-col items-center justify-center gap-3 text-slate-400 font-mono animate-pulse">
-                <Map className="w-10 h-10 text-amber-500/60 animate-bounce" />
-                <p className="text-xs uppercase tracking-widest text-amber-400">Sincronizando Mapa da Dungeon...</p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center gap-3 text-slate-500 font-mono">
-                <Map className="w-10 h-10 text-slate-600" />
-                <p className="text-xs">Nenhum mapa tático associado a esta cena no momento.</p>
-              </div>
-            )
+                );
+              }
+
+              if (typedMapData && typedMapData.grid && typedMapData.grid.length > 0) {
+                return (
+                  <div className="w-full h-full relative">
+                    {typedMapData.currentLevelName && (
+                      <div className="absolute top-4 left-4 z-20 px-3 py-1.5 bg-slate-950/90 backdrop-blur-md border border-amber-500/30 rounded-2xl flex items-center gap-1.5 text-xs font-bold text-amber-400 shadow-2xl animate-in fade-in duration-200">
+                        <Layers className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Andar: {typedMapData.currentLevelName}</span>
+                      </div>
+                    )}
+                    <DysonCanvas
+                      key={`${currentScene?.id}_${typedMapData.activeMapId || 'default'}_${typedMapData.activeLevelId || 'floor0'}`}
+                      grid={typedMapData.grid || []}
+                      bgImageUrl={typedMapData.bgImageUrl || null}
+                      gridScale={typedMapData.gridScale || 40}
+                      gridOffsetX={typedMapData.gridOffsetX || 0}
+                      gridOffsetY={typedMapData.gridOffsetY || 0}
+                      combatants={combatants}
+                      vectorWalls={typedMapData.vectorWalls || []}
+                      lightSources={typedMapData.lightSources || []}
+                      selectedTool="pan"
+                      selectedTileType="floor"
+                      selectedTokenCombatant={null}
+                      onGridChange={() => {}}
+                      isPlayerView={true}
+                      drawings={drawings}
+                    />
+                  </div>
+                );
+              }
+
+              if (isMapLoading) {
+                return (
+                  <div className="flex flex-col items-center justify-center gap-3 text-slate-400 font-mono animate-pulse">
+                    <Map className="w-10 h-10 text-amber-500/60 animate-bounce" />
+                    <p className="text-xs uppercase tracking-widest text-amber-400">Sincronizando Mapa da Dungeon...</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="flex flex-col items-center justify-center gap-3 text-slate-500 font-mono">
+                  <Map className="w-10 h-10 text-slate-600" />
+                  <p className="text-xs">Nenhum mapa tático associado a esta cena no momento.</p>
+                </div>
+              );
+            })()
           ) : (currentScene?.sceneImages && currentScene.sceneImages.length > 0) || currentScene?.imageUrl ? (
             <div className="w-full h-full relative flex items-center justify-center">
               {currentScene.sceneImages && currentScene.sceneImages.length > 0 ? (

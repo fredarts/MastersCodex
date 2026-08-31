@@ -289,7 +289,16 @@ export interface MapLevel {
   lightSources?: LightSource[];
 }
 
-export interface MultiLevelGridData {
+export interface DungeonMetadata {
+  description?: string;          // Descrição narrativa / Lore da masmorra
+  challengeRating?: string;      // Faixa de nível recomendada (ex: 'Nível 3-5')
+  difficultyTier?: 'easy' | 'medium' | 'hard' | 'deadly';
+  coverImageUrl?: string;        // Arte de capa da masmorra (IA / Upload)
+  environmentTheme?: string;     // Ex: 'Catacumbas Sombrias', 'Ruínas Arcanas'
+  isExplorationStarted?: boolean;// Estado de início da exploração na sessão
+}
+
+export interface MultiLevelGridData extends DungeonMetadata {
   version?: number;
   activeLevelId?: string;
   levels: MapLevel[];

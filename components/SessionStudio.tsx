@@ -49,6 +49,8 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
 import { SceneImageAiModal } from '@/components/modals/SceneImageAiModal';
 import { SceneSlideshowStudio } from '@/components/session/SceneSlideshowStudio';
+import { SceneAudioStudio } from '@/components/session/SceneAudioStudio';
+import { SceneDungeonMapsStudio } from '@/components/session/SceneDungeonMapsStudio';
 import { customMonsterService } from '@/lib/services/customMonsterService';
 import { normalizeImageUrl, isYouTubeUrl, getYouTubeThumbnailUrl } from '@/lib/imageUtils';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
@@ -93,7 +95,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
     setActiveScene,
     updateScene,
     deleteScene,
-    campaignMaps
+    campaignMaps,
+    updateCampaignMap
   } = useSession();
   const { worldEntities, activeWorld } = useWorld();
 
@@ -645,6 +648,21 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       ...selectedScene,
       associatedMapIds: newIds
     });
+  };
+
+  const handleUpdateMapMetadata = async (mapId: string, updates: Partial<import('@/lib/types').DungeonMetadata & { title?: string }>) => {
+    const targetMap = campaignMaps.find((m) => m.id === mapId);
+    if (!targetMap) return;
+    const currentGridData = targetMap.gridData || {};
+    const updatedGridData = {
+      ...currentGridData,
+      description: updates.description !== undefined ? updates.description : currentGridData.description,
+      challengeRating: updates.challengeRating !== undefined ? updates.challengeRating : currentGridData.challengeRating,
+      difficultyTier: updates.difficultyTier !== undefined ? updates.difficultyTier : currentGridData.difficultyTier,
+      coverImageUrl: updates.coverImageUrl !== undefined ? updates.coverImageUrl : currentGridData.coverImageUrl,
+      environmentTheme: updates.environmentTheme !== undefined ? updates.environmentTheme : currentGridData.environmentTheme,
+    };
+    await updateCampaignMap(mapId, updates.title || targetMap.title, updatedGridData);
   };
 
   const handleAddNpcToScene = (npc: WorldEntity) => {
@@ -1199,197 +1217,36 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                     />
                   </div>
                 )}
+
                 {activeSubTab === 'audio' && (
-                  <div className="max-w-2xl mx-auto space-y-6">
-                    {/* Trilhas BGM Selecionadas */}
-                    <div className="space-y-2">
-                      <label className="block text-xs font-semibold text-slate-400">Trilhas de Música Selecionadas para esta Cena (BGM):</label>
-                      {bgmTracks.length === 0 ? (
-                        <div className="text-xs text-slate-500 italic p-3 bg-[#0a0d14] rounded-xl border border-dashed border-[#2a3449]">
-                          Nenhuma música associada a esta cena. Selecione abaixo para adicionar.
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5 p-2 bg-[#0a0d14] rounded-xl border border-[#2a3449]">
-                          {bgmTracks.map(trackId => {
-                            const track = allBgmTracks.find(t => t.id === trackId);
-                            return (
-                              <span key={trackId} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-pink-950/40 text-pink-300 text-xs font-bold rounded-lg border border-pink-500/20">
-                                <span>{track ? track.name : 'Trilha Customizada'}</span>
-                                <button 
-                                  type="button" 
-                                  onClick={() => setBgmTracks(bgmTracks.filter(id => id !== trackId))}
-                                  className="text-pink-500 hover:text-pink-300 font-bold ml-1"
-                                >
-                                  &times;
-                                </button>
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Sugestões de Músicas Favoritas */}
-                    {favoriteBgmTracks.length > 0 && (
-                      <div className="space-y-1.5">
-                        <span className="text-[10px] uppercase font-bold text-pink-400 tracking-wider flex items-center gap-1">⭐ Sugestões Favoritas (BGM)</span>
-                        <div className="grid grid-cols-2 gap-2">
-                          {favoriteBgmTracks.map(track => {
-                            const isSelected = bgmTracks.includes(track.id);
-                            return (
-                              <button
-                                key={track.id}
-                                type="button"
-                                onClick={() => {
-                                  if (isSelected) {
-                                    setBgmTracks(bgmTracks.filter(id => id !== track.id));
-                                  } else {
-                                    setBgmTracks([...bgmTracks, track.id]);
-                                  }
-                                }}
-                                className={`p-2.5 rounded-xl border text-left text-xs font-bold transition-all flex items-center justify-between ${
-                                  isSelected
-                                    ? 'bg-pink-500/20 border-pink-500 text-pink-300'
-                                    : 'bg-[#0a0d14] border-[#2a3449] text-slate-400 hover:text-slate-200'
-                                }`}
-                              >
-                                <span className="truncate">{track.name}</span>
-                                <span>{isSelected ? '✓' : '+'}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Todas as Trilhas de Música */}
-                    <div className="space-y-2">
-                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Todas as Músicas (SRD & Uploads)</span>
-                      <div className="max-h-40 overflow-y-auto pr-1 space-y-1.5 border border-[#2a3449] rounded-xl p-2 bg-[#0a0d14]">
-                        {allBgmTracks.map(track => {
-                          const isSelected = bgmTracks.includes(track.id);
-                          return (
-                            <button
-                              key={track.id}
-                              type="button"
-                              onClick={() => {
-                                  if (isSelected) {
-                                    setBgmTracks(bgmTracks.filter(id => id !== track.id));
-                                  } else {
-                                    setBgmTracks([...bgmTracks, track.id]);
-                                  }
-                              }}
-                              className={`w-full p-2 rounded-lg text-left text-xs transition-all flex items-center justify-between ${
-                                isSelected
-                                  ? 'bg-pink-900/30 text-pink-300 font-bold'
-                                  : 'hover:bg-[#121824] text-slate-400 hover:text-slate-200'
-                              }`}
-                            >
-                              <span className="truncate">{track.name}</span>
-                              <span className="text-[10px] font-mono text-slate-500">
-                                {track.isCustom ? 'Upload' : 'Padrão'}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* SFX Section */}
-                    <div className="pt-4 border-t border-slate-800 space-y-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-400 mb-2">
-                          Atalhos de Efeitos Sonoros SFX Selecionados:
-                        </label>
-                        {sfxShortcuts.length === 0 ? (
-                          <div className="text-xs text-slate-500 italic p-3 bg-[#0a0d14] rounded-xl border border-dashed border-[#2a3449]">
-                            Nenhum efeito sonoro rápido associado a esta cena.
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap gap-1.5 p-2 bg-[#0a0d14] rounded-xl border border-[#2a3449]">
-                            {sfxShortcuts.map(sfxId => {
-                              const sfx = allSfxTracks.find(s => s.id === sfxId);
-                              return (
-                                <span key={sfxId} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-950/40 text-amber-300 text-xs font-bold rounded-lg border border-amber-500/20">
-                                  <span>{sfx ? sfx.name : 'Efeito Customizado'}</span>
-                                  <button 
-                                    type="button" 
-                                    onClick={() => setSfxShortcuts(sfxShortcuts.filter(id => id !== sfxId))}
-                                    className="text-amber-500 hover:text-amber-300 font-bold ml-1"
-                                  >
-                                    &times;
-                                  </button>
-                                </span>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Sugestões de SFX Favoritos */}
-                      {favoriteSfxTracks.length > 0 && (
-                        <div className="space-y-1.5">
-                          <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1">⭐ Sugestões Favoritas (SFX)</span>
-                          <div className="grid grid-cols-3 gap-2">
-                            {favoriteSfxTracks.map(sfx => {
-                              const isSelected = sfxShortcuts.includes(sfx.id);
-                              return (
-                                <button
-                                  key={sfx.id}
-                                  type="button"
-                                  onClick={() => {
-                                    if (isSelected) {
-                                      setSfxShortcuts(sfxShortcuts.filter(id => id !== sfx.id));
-                                    } else {
-                                      setSfxShortcuts([...sfxShortcuts, sfx.id]);
-                                    }
-                                  }}
-                                  className={`p-2 rounded-xl border text-center text-xs transition-all flex flex-col items-center gap-1 ${
-                                    isSelected
-                                      ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold'
-                                      : 'bg-[#0a0d14] border-[#2a3449] text-slate-400 hover:text-slate-200'
-                                  }`}
-                                >
-                                  <span className="text-[10px] truncate">{sfx.name}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Todos os Efeitos SFX */}
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1.5">Todos os Efeitos Sonoros</span>
-                        <div className="grid grid-cols-3 gap-2">
-                          {allSfxTracks.map((sfx) => {
-                            const isSelected = sfxShortcuts.includes(sfx.id);
-                            return (
-                              <button
-                                key={sfx.id}
-                                type="button"
-                                onClick={() => {
-                                  if (isSelected) {
-                                    setSfxShortcuts(sfxShortcuts.filter((id) => id !== sfx.id));
-                                  } else {
-                                    setSfxShortcuts([...sfxShortcuts, sfx.id]);
-                                  }
-                                }}
-                                className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center gap-1 ${
-                                  isSelected
-                                    ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold shadow-inner'
-                                    : 'bg-[#0a0d14] border-[#2a3449] text-slate-400 hover:text-slate-200'
-                                }`}
-                              >
-                                <span className="text-xs truncate">{sfx.name}</span>
-                                <span className="text-[8px] font-mono text-slate-500 uppercase">{sfx.isCustom ? 'Upload' : sfx.category}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <SceneAudioStudio
+                    allBgmTracks={allBgmTracks}
+                    favoriteBgmTracks={favoriteBgmTracks}
+                    selectedBgmTrackIds={bgmTracks}
+                    onToggleBgmTrack={(trackId) => {
+                      if (bgmTracks.includes(trackId)) {
+                        setBgmTracks(bgmTracks.filter((id) => id !== trackId));
+                      } else {
+                        setBgmTracks([...bgmTracks, trackId]);
+                      }
+                    }}
+                    onRemoveBgmTrack={(trackId) => {
+                      setBgmTracks(bgmTracks.filter((id) => id !== trackId));
+                    }}
+                    allSfxTracks={allSfxTracks}
+                    favoriteSfxTracks={favoriteSfxTracks}
+                    selectedSfxShortcutIds={sfxShortcuts}
+                    onToggleSfxShortcut={(sfxId) => {
+                      if (sfxShortcuts.includes(sfxId)) {
+                        setSfxShortcuts(sfxShortcuts.filter((id) => id !== sfxId));
+                      } else {
+                        setSfxShortcuts([...sfxShortcuts, sfxId]);
+                      }
+                    }}
+                    onRemoveSfxShortcut={(sfxId) => {
+                      setSfxShortcuts(sfxShortcuts.filter((id) => id !== sfxId));
+                    }}
+                  />
                 )}
 
                 {activeSubTab === 'combat' && (
@@ -2180,59 +2037,12 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                 )}
 
                 {activeSubTab === 'dungeon-maps' && selectedScene && (
-                  <div className="max-w-2xl mx-auto space-y-6">
-                    <div className="bg-[#121824] p-5 rounded-2xl border border-[#2a3449] space-y-4 shadow-xl">
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                          <Map className="w-4.5 h-4.5 text-emerald-400" /> Associar Mapas de Masmorra à Cena
-                        </h4>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          Selecione um ou mais mapas de masmorras da campanha para disponibilizar nesta cena. No cockpit do mestre, você poderá alternar entre eles em tempo real.
-                        </p>
-                      </div>
-
-                      {campaignMaps.length === 0 ? (
-                        <div className="p-6 bg-[#0a0d14]/50 border border-dashed border-[#2a3449] rounded-xl text-center">
-                          <p className="text-xs text-slate-500">Nenhum mapa criado nesta campanha.</p>
-                          <p className="text-[10px] text-slate-600 mt-1">Vá até o menu Mapas no topo para criar sua primeira masmorra.</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
-                          {campaignMaps.map((map) => {
-                            const isAssociated = (selectedScene.associatedMapIds || (selectedScene.associatedMapId ? [selectedScene.associatedMapId] : [])).includes(map.id);
-                            return (
-                              <div
-                                key={map.id}
-                                onClick={() => handleToggleMapAssociation(map.id)}
-                                className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
-                                  isAssociated
-                                    ? 'bg-[#1b2537] border-emerald-500/50 shadow-md shadow-emerald-950/20'
-                                    : 'bg-[#0a0d14]/70 border-[#2a3449] hover:bg-[#121824]'
-                                }`}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-4 h-4 rounded flex items-center justify-center transition-all ${
-                                    isAssociated ? 'bg-emerald-500 text-slate-950' : 'border border-[#2a3449]'
-                                  }`}>
-                                    {isAssociated && <span className="text-[10px] font-black">✓</span>}
-                                  </div>
-                                  <div>
-                                    <h5 className="text-xs font-bold text-slate-200">{map.title || 'Sem título'}</h5>
-                                    <p className="text-[9px] text-slate-500 font-mono mt-0.5">ID: {map.id.slice(0, 8)}...</p>
-                                  </div>
-                                </div>
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  isAssociated ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800/40 text-slate-400 border border-slate-700/30'
-                                }`}>
-                                  {isAssociated ? 'Associado' : 'Disponível'}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <SceneDungeonMapsStudio
+                    campaignMaps={campaignMaps}
+                    selectedScene={selectedScene}
+                    onToggleMapAssociation={handleToggleMapAssociation}
+                    onUpdateMapMetadata={handleUpdateMapMetadata}
+                  />
                 )}
               </div>
             </div>

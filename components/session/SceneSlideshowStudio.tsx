@@ -29,7 +29,8 @@ import {
   Link2,
   Image as ImageIcon,
   X,
-  Palette
+  Palette,
+  Pencil
 } from 'lucide-react';
 import { SceneImage, SlidePack, SlideTransitionType, SlideAspectRatio } from '@/lib/types';
 import { SLIDE_TRANSITION_OPTIONS, SLIDE_ASPECT_RATIO_OPTIONS } from '@/lib/constants/rpgArtStyles';
@@ -288,11 +289,11 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 w-full max-w-[1600px] mx-auto min-h-[680px]">
+    <div className="flex flex-col lg:flex-row gap-6 w-full max-w-[1720px] mx-auto min-h-[680px]">
       {/* ========================================================================= */}
-      {/* PAINEL ESQUERDO: LIVE PREVIEW DO SLIDE & CONTROLES DE TRANSIÇÃO           */}
+      {/* PAINEL ESQUERDO (3/4 DA TELA): LIVE PREVIEW DO SLIDE & CONTROLES          */}
       {/* ========================================================================= */}
-      <div className="w-full lg:w-[48%] flex flex-col gap-4">
+      <div className="w-full lg:w-[72%] xl:w-[74%] flex flex-col gap-4">
         {/* Card do Preview Canvas */}
         <div className="bg-[#121824] rounded-2xl border border-[#2a3449] p-4 shadow-xl flex flex-col gap-3">
           {/* Header do Preview */}
@@ -316,8 +317,8 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
           </div>
 
           {/* Área de Visualização com Shader WebGL */}
-          <div className="relative w-full bg-black/90 rounded-xl overflow-hidden border border-[#2a3449] flex items-center justify-center min-h-[280px]">
-            <div className={`w-full max-h-[380px] ${getAspectClass(currentAspect)} relative flex items-center justify-center overflow-hidden`}>
+          <div className="relative w-full bg-black/90 rounded-xl overflow-hidden border border-[#2a3449] flex items-center justify-center min-h-[360px]">
+            <div className={`w-full max-h-[580px] ${getAspectClass(currentAspect)} relative flex items-center justify-center overflow-hidden`}>
               {activeDisplayUrl ? (
                 isYouTubeUrl(activeDisplayUrl) ? (
                   <iframe
@@ -464,16 +465,16 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* PAINEL DIREITO: GESTÃO DE PACKS, UPLOAD, IA E LISTA DE SLIDES            */}
+      {/* PAINEL DIREITO (1/4 DA TELA): GESTÃO DE PACKS, UPLOAD, IA E LISTA DE SLIDES */}
       {/* ========================================================================= */}
-      <div className="w-full lg:w-[52%] flex flex-col gap-4">
+      <div className="w-full lg:w-[28%] xl:w-[26%] flex flex-col gap-4">
         {/* Seletor de Packs de Slides (Tabs / Decks) */}
         <div className="bg-[#121824] rounded-2xl border border-[#2a3449] p-4 shadow-xl space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-amber-400" />
               <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">
-                Packs de Slides da Cena ({slidePacks.length})
+                Packs ({slidePacks.length})
               </span>
             </div>
 
@@ -488,7 +489,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
           </div>
 
           {/* Abas dos Packs */}
-          <div className="flex flex-wrap gap-2 pt-1">
+          <div className="flex flex-wrap gap-1.5 pt-1">
             {slidePacks.map((pack) => {
               const isActive = pack.id === activeSlidePackId;
               return (
@@ -498,14 +499,14 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                     setActiveSlidePackId(pack.id);
                     setSelectedSlideIndex(0);
                   }}
-                  className={`group relative flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                  className={`group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                     isActive
                       ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md font-black'
                       : 'bg-[#0a0d14] border-[#2a3449] text-slate-400 hover:text-slate-200 hover:bg-[#161c28]'
                   }`}
                 >
-                  <span>{pack.title}</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                  <span className="truncate max-w-[120px]">{pack.title}</span>
+                  <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
                     isActive ? 'bg-amber-500 text-slate-950' : 'bg-[#161c28] text-slate-500'
                   }`}>
                     {pack.images?.length || 0}
@@ -529,34 +530,28 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
 
           {/* Formulário de Criação de Novo Pack */}
           {isCreatingPack && (
-            <div className="p-3 bg-[#0a0d14] border border-amber-500/40 rounded-xl space-y-3 animate-fade-in">
-              <div className="text-[11px] font-bold text-amber-400 uppercase font-mono">
-                Criar Novo Pack de Slides para esta Cena:
+            <div className="p-3 bg-[#0a0d14] border border-amber-500/40 rounded-xl space-y-2.5 animate-fade-in">
+              <div className="text-[10px] font-bold text-amber-400 uppercase font-mono">
+                Novo Pack:
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="space-y-2">
                 <div>
-                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                    Nome do Pack (ex: Sonho do Elfo, Lore Antiga)
-                  </label>
                   <input
                     type="text"
                     value={newPackTitle}
                     onChange={(e) => setNewPackTitle(e.target.value)}
-                    placeholder="Ex: Revelação do Oráculo..."
+                    placeholder="Nome do Pack..."
                     className="w-full bg-[#161c28] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-200"
                   />
                 </div>
                 <div>
-                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                    Categoria Narrativa
-                  </label>
                   <select
                     value={newPackCategory}
                     onChange={(e) => setNewPackCategory(e.target.value as any)}
                     className="w-full bg-[#161c28] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 cursor-pointer"
                   >
                     <option value="sonho">💭 Sonho / Visão Etérea</option>
-                    <option value="lore">📜 Lore & História Ancestral (Grimório)</option>
+                    <option value="lore">📜 Lore & História Ancestral</option>
                     <option value="flashback">⏳ Flashback / Memória</option>
                     <option value="custom">🎬 Cena Especial / Custom</option>
                   </select>
@@ -566,7 +561,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsCreatingPack(false)}
-                  className="px-3 py-1 bg-[#161c28] text-slate-400 text-xs font-bold rounded-lg hover:text-slate-200"
+                  className="px-2.5 py-1 bg-[#161c28] text-slate-400 text-xs font-bold rounded-lg hover:text-slate-200"
                 >
                   Cancelar
                 </button>
@@ -574,40 +569,38 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                   type="button"
                   onClick={handleCreatePack}
                   disabled={!newPackTitle.trim()}
-                  className="px-4 py-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-lg shadow"
+                  className="px-3 py-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-lg shadow"
                 >
-                  Criar Pack
+                  Criar
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* Barra Unificada de Ações de Mídia (Botão Único de Mídia + Botão IA) */}
-        <div className="bg-[#121824] rounded-2xl border border-[#2a3449] p-4 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">
-            Mídias do Pack: <strong className="text-amber-400">{currentPack.title}</strong>
+        {/* Barra Unificada de Ações de Mídia (Upload + IA) */}
+        <div className="bg-[#121824] rounded-2xl border border-[#2a3449] p-3.5 shadow-xl space-y-2.5">
+          <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider font-mono truncate">
+            Mídias: <strong className="text-amber-400">{currentPack.title}</strong>
           </div>
 
-          <div className="flex items-center gap-2.5 w-full sm:w-auto">
-            {/* Botão Único Unificado: Enviar Arquivo ou Link */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => setShowAddMediaModal(true)}
-              className="flex-1 sm:flex-none px-4 py-2 bg-[#161f30] hover:bg-[#1e2a42] border border-amber-500/40 hover:border-amber-500 text-amber-300 font-bold text-xs rounded-xl shadow flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
+              className="px-3 py-2 bg-[#161f30] hover:bg-[#1e2a42] border border-amber-500/40 hover:border-amber-500 text-amber-300 font-bold text-xs rounded-xl shadow flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
             >
-              <Plus className="w-4 h-4 text-amber-400" />
-              <span>Adicionar Mídia (Upload / Link)</span>
+              <Plus className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="truncate">Adicionar Mídia</span>
             </button>
 
-            {/* Botão Gerar com IA */}
             <button
               type="button"
               onClick={onOpenAiModal}
-              className="flex-1 sm:flex-none px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow active:scale-95 cursor-pointer"
+              className="px-3 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow active:scale-95 cursor-pointer"
             >
-              <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
-              <span>Gerar com IA</span>
+              <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
+              <span className="truncate">Gerar com IA</span>
             </button>
           </div>
         </div>
@@ -634,58 +627,16 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                   <div
                     key={imgObj.id}
                     onClick={() => setSelectedSlideIndex(idx)}
-                    className={`p-3.5 rounded-xl border transition-all flex flex-col md:flex-row gap-3 cursor-pointer ${
+                    className={`p-3.5 rounded-2xl border transition-all flex flex-col gap-3 cursor-pointer ${
                       isSelected
-                        ? 'bg-[#161f30] border-amber-500/60 shadow-lg'
+                        ? 'bg-[#161f30] border-amber-500/60 shadow-lg ring-1 ring-amber-500/30'
                         : 'bg-[#0a0d14] border-[#2a3449] hover:border-slate-600'
                     }`}
                   >
-                    {/* Thumbnail & Reordenação */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      {/* Setas de Reordenar */}
-                      <div className="flex flex-col gap-1">
-                        <button
-                          type="button"
-                          disabled={idx === 0}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (idx > 0) {
-                              const next = [...currentPackImages];
-                              const temp = next[idx - 1];
-                              next[idx - 1] = next[idx];
-                              next[idx] = temp;
-                              updateCurrentPackImages(next);
-                              setSelectedSlideIndex(idx - 1);
-                            }
-                          }}
-                          className="p-1 bg-[#121824] hover:bg-[#1f2738] disabled:opacity-20 border border-[#2a3449] rounded text-slate-400 hover:text-amber-300 transition-colors"
-                          title="Mover para cima"
-                        >
-                          <ChevronUp className="w-3 h-3" />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={idx === currentPackImages.length - 1}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (idx < currentPackImages.length - 1) {
-                              const next = [...currentPackImages];
-                              const temp = next[idx + 1];
-                              next[idx + 1] = next[idx];
-                              next[idx] = temp;
-                              updateCurrentPackImages(next);
-                              setSelectedSlideIndex(idx + 1);
-                            }
-                          }}
-                          className="p-1 bg-[#121824] hover:bg-[#1f2738] disabled:opacity-20 border border-[#2a3449] rounded text-slate-400 hover:text-amber-300 transition-colors"
-                          title="Mover para baixo"
-                        >
-                          <ChevronDown className="w-3 h-3" />
-                        </button>
-                      </div>
-
-                      {/* Miniatura do Slide */}
-                      <div className="relative w-28 h-20 bg-black rounded-lg overflow-hidden border border-[#2a3449]">
+                    {/* Linha Superior: Imagem em Primeiro Lugar + Ações de Cabeçalho */}
+                    <div className="flex items-center justify-between gap-2.5">
+                      {/* Miniatura do Slide com Badge */}
+                      <div className="relative w-20 h-14 bg-black rounded-xl overflow-hidden border border-[#2a3449] shrink-0 shadow">
                         {isYouTubeUrl(imgObj.imageUrl) ? (
                           <img src={getYouTubeThumbnailUrl(imgObj.imageUrl) || ''} className="w-full h-full object-cover" alt="YT" />
                         ) : imgObj.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(imgObj.imageUrl) ? (
@@ -693,36 +644,100 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                         ) : (
                           <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" alt={`Slide ${idx + 1}`} />
                         )}
-                        <span className="absolute top-1 left-1 bg-black/80 text-[8px] font-bold text-amber-400 px-1 rounded font-mono">
+                        <span className="absolute top-1 left-1 bg-black/85 text-[8px] font-bold text-amber-400 px-1 rounded font-mono border border-amber-500/30">
                           #{idx + 1}
                         </span>
                       </div>
-                    </div>
 
-                    {/* Inputs de Legenda & Teleprompter */}
-                    <div className="flex-1 space-y-2">
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="block text-[8px] font-bold text-slate-400 uppercase">
-                            Texto de Legenda (Visível aos Jogadores):
-                          </label>
+                      {/* Informações Centrais & Botões de Ação */}
+                      <div className="flex items-center gap-1.5 flex-1 justify-end">
+                        {/* Botão de Estilização com Lápis e Badge de Caixas */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingOverlaySlideIndex(idx);
+                          }}
+                          className="px-2 py-1 bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                          title="Abrir Designer de Legendas & Presets RPG"
+                        >
+                          <Pencil className="w-3 h-3 text-amber-400" />
+                          <span className="text-[10px] font-mono">
+                            Estilizar ({imgObj.textOverlays?.length || (imgObj.overlayText ? 1 : 0)})
+                          </span>
+                        </button>
+
+                        {/* Controles de Posição / Reordenação */}
+                        <div className="flex items-center gap-0.5 bg-[#121824] p-0.5 rounded-xl border border-[#2a3449]">
                           <button
                             type="button"
+                            disabled={idx === 0}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setEditingOverlaySlideIndex(idx);
+                              if (idx > 0) {
+                                const next = [...currentPackImages];
+                                const temp = next[idx - 1];
+                                next[idx - 1] = next[idx];
+                                next[idx] = temp;
+                                updateCurrentPackImages(next);
+                                setSelectedSlideIndex(idx - 1);
+                              }
                             }}
-                            className="px-2 py-0.5 bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 hover:border-amber-400 text-[9px] font-bold rounded-md flex items-center gap-1 transition-all cursor-pointer shadow-sm"
-                            title="Abrir Designer de Legendas & Presets RPG"
+                            className="p-1 hover:bg-[#1f2738] disabled:opacity-20 text-slate-400 hover:text-amber-300 rounded transition-colors"
+                            title="Mover para cima"
                           >
-                            <Palette className="w-2.5 h-2.5 text-amber-400" />
-                            <span>🎨 Estilizar Caixas & Presets ({imgObj.textOverlays?.length || (imgObj.overlayText ? 1 : 0)})</span>
+                            <ChevronUp className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === currentPackImages.length - 1}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (idx < currentPackImages.length - 1) {
+                                const next = [...currentPackImages];
+                                const temp = next[idx + 1];
+                                next[idx + 1] = next[idx];
+                                next[idx] = temp;
+                                updateCurrentPackImages(next);
+                                setSelectedSlideIndex(idx + 1);
+                              }
+                            }}
+                            className="p-1 hover:bg-[#1f2738] disabled:opacity-20 text-slate-400 hover:text-amber-300 rounded transition-colors"
+                            title="Mover para baixo"
+                          >
+                            <ChevronDown className="w-3 h-3" />
                           </button>
                         </div>
+
+                        {/* Botão de Excluir */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const next = currentPackImages.filter((_, i) => i !== idx);
+                            updateCurrentPackImages(next);
+                            if (primaryImageUrl === imgObj.imageUrl) {
+                              setPrimaryImageUrl(next[0]?.imageUrl || '');
+                            }
+                          }}
+                          className="p-1.5 bg-[#121824] hover:bg-rose-950/40 border border-[#2a3449] hover:border-rose-500/40 text-slate-400 hover:text-rose-400 rounded-xl transition-all cursor-pointer"
+                          title="Excluir Slide"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Linha Inferior: Inputs de Legenda e Teleprompter com Labels Limpos */}
+                    <div className="space-y-2 pt-1 border-t border-[#2a3449]/60">
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-bold text-slate-400 uppercase font-mono tracking-wider">
+                          Legenda dos Jogadores:
+                        </label>
                         <input
                           type="text"
                           value={imgObj.overlayText || ''}
-                          placeholder="Ex: O dragão ancestral emerge das cinzas do vulcão..."
+                          placeholder="Texto visível no slide..."
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => {
                             const next = [...currentPackImages];
@@ -737,46 +752,27 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                             };
                             updateCurrentPackImages(next);
                           }}
-                          className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2 py-1 text-xs text-slate-200"
+                          className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-2.5 py-1 text-xs text-slate-200"
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-[8px] font-bold text-amber-400/80 uppercase mb-0.5 flex items-center gap-1">
-                          <Lock className="w-2.5 h-2.5" /> Teleprompter do Narrador:
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-bold text-amber-400/90 uppercase font-mono tracking-wider flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-amber-400" /> Teleprompter do Narrador:
                         </label>
                         <textarea
                           rows={2}
                           value={imgObj.secretNotes || ''}
-                          placeholder="Ex: Ler com voz sussurrada. Os aventureiros devem rolar percepção..."
+                          placeholder="Notas secretas do Mestre para narrar..."
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => {
                             const next = [...currentPackImages];
                             next[idx] = { ...next[idx], secretNotes: e.target.value };
                             updateCurrentPackImages(next);
                           }}
-                          className="w-full bg-[#121824] border border-amber-500/20 focus:border-amber-500 rounded-lg p-1.5 text-xs text-amber-200 font-serif resize-none"
+                          className="w-full bg-[#121824] border border-amber-500/20 focus:border-amber-500 rounded-xl p-2 text-xs text-amber-200 font-serif resize-none"
                         />
                       </div>
-                    </div>
-
-                    {/* Botão de Exclusão */}
-                    <div className="flex items-center justify-end md:justify-center">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const next = currentPackImages.filter((_, i) => i !== idx);
-                          updateCurrentPackImages(next);
-                          if (primaryImageUrl === imgObj.imageUrl) {
-                            setPrimaryImageUrl(next[0]?.imageUrl || '');
-                          }
-                        }}
-                        className="p-1.5 bg-[#121824] hover:bg-rose-950/30 border border-[#2a3449] hover:border-rose-500/40 text-slate-500 hover:text-rose-400 rounded-lg transition-all cursor-pointer"
-                        title="Excluir Slide"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
                     </div>
                   </div>
                 );
