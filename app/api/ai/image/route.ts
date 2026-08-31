@@ -29,23 +29,27 @@ async function tryGenerateWithGoogle(
   modelName: string,
   prompt: string,
   aspectRatio: string,
-  sourceImageResolved?: { mimeType: string; base64Data: string } | null
+  sourceImagesResolved: { mimeType: string; base64Data: string }[] = []
 ): Promise<string | null> {
   try {
     const promptWithNoText = `${prompt}. ${NO_TEXT_DIRECTIVE}`;
 
-    // Se for modelo Gemini multimodal ou se tiver imagem de origem para modelo Gemini
+    // Se for modelo Gemini multimodal (gemini-2.5-flash / gemini-3.1...)
     if (modelName.startsWith('gemini')) {
       const contents: any[] = [];
-      if (sourceImageResolved) {
+      for (const img of sourceImagesResolved) {
         contents.push({
           inlineData: {
-            mimeType: sourceImageResolved.mimeType,
-            data: sourceImageResolved.base64Data,
+            mimeType: img.mimeType,
+            data: img.base64Data,
           },
         });
       }
-      contents.push(promptWithNoText);
+      const refInstruction = sourceImagesResolved.length > 0
+        ? `CRITICAL REFERENCE FIDELITY: Use the visual appearance, face, clothing/armor, and environmental architecture from the provided reference images. `
+        : '';
+
+      contents.push(`${refInstruction}${promptWithNoText}`);
 
       const response = await ai.models.generateContent({
         model: modelName,
@@ -69,27 +73,32 @@ async function tryGenerateWithGoogle(
       // Modelos Imagen (como imagen-3.0-generate-002 / imagen-3.0-generate-001)
       let finalPrompt = promptWithNoText;
 
-      // Se for Image-to-Image com Imagen, usamos Gemini multimodal para analisar a imagem de origem e compor um prompt refinado para o Imagen
-      if (sourceImageResolved) {
+      // Se houver imagens de referência, usamos Gemini multimodal para analisar todas as referências e compor um prompt sintetizado de alta fidelidade para o Imagen 3
+      if (sourceImagesResolved.length > 0) {
         try {
+          const visionContents: any[] = [];
+          for (const img of sourceImagesResolved) {
+            visionContents.push({
+              inlineData: {
+                mimeType: img.mimeType,
+                data: img.base64Data,
+              },
+            });
+          }
+          visionContents.push(
+            `Analyze these character and/or environment reference images. Describe their key visual features (character faces, armor, colors, creatures, architectural style) and combine them into this new scene: "${prompt}". Return a cohesive, highly detailed English prompt suitable for Imagen 3 without any text or subtitles.`
+          );
+
           const visionResp = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: [
-              {
-                inlineData: {
-                  mimeType: sourceImageResolved.mimeType,
-                  data: sourceImageResolved.base64Data,
-                },
-              },
-              `Analyze this character/scene image and describe its core visual composition, pose, colors, and features, while applying the following modifications: "${prompt}". Return a concise, high-detail prompt in English suitable for Imagen 3 image generator without any text.`,
-            ],
+            contents: visionContents,
           });
           const refined = visionResp.text?.trim();
           if (refined) {
             finalPrompt = `${refined}. High quality fantasy RPG concept art, cinematic lighting, 8k resolution. ${NO_TEXT_DIRECTIVE}`;
           }
         } catch (visionErr) {
-          console.warn('[ImageAPI] Falha ao analisar imagem com vision, usando prompt direto:', visionErr);
+          console.warn('[ImageAPI] Falha ao analisar imagens com vision, usando prompt direto:', visionErr);
         }
       }
 
@@ -164,7 +173,7 @@ async function tryGenerateWithPollinations(prompt: string, aspectRatio: string):
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { prompt, aspectRatio: requestedAspectRatio, sourceImage } = body;
+    const { prompt, aspectRatio: requestedAspectRatio, sourceImage, sourceImages, referenceImages } = body;
 
     if (!prompt) {
       return NextResponse.json({ error: 'O prompt é obrigatório.' }, { status: 400 });
@@ -175,8 +184,16 @@ export async function POST(req: NextRequest) {
     const preferredModel = userSettings.imageModel || 'imagen-3.0-generate-002';
     const finalAspectRatio = requestedAspectRatio || '9:16';
 
-    // Resolver sourceImage (Base64 ou URL) se presente
-    const sourceImageResolved = sourceImage ? await resolveSourceImageBase64(sourceImage) : null;
+    // Unificar lista de imagens de referência (suporta sourceImage, sourceImages e referenceImages)
+    const rawImagesList: string[] = [];
+    if (sourceImage && typeof sourceImage === 'string') rawImagesList.push(sourceImage);
+    if (Array.isArray(sourceImages)) rawImagesList.push(...sourceImages.filter(Boolean));
+    if (Array.isArray(referenceImages)) rawImagesList.push(...referenceImages.filter(Boolean));
+
+    // Resolver Base64 em paralelo
+    const resolvedImages = (
+      await Promise.all(rawImagesList.map((img) => resolveSourceImageBase64(img)))
+    ).filter((r): r is { mimeType: string; base64Data: string } => r !== null);
 
     let base64Image: string | null = null;
 
@@ -192,7 +209,7 @@ export async function POST(req: NextRequest) {
       ].filter((m, idx, arr) => arr.indexOf(m) === idx);
 
       for (const model of candidateModels) {
-        base64Image = await tryGenerateWithGoogle(ai, model, prompt, finalAspectRatio, sourceImageResolved);
+        base64Image = await tryGenerateWithGoogle(ai, model, prompt, finalAspectRatio, resolvedImages);
         if (base64Image) {
           console.info(`[ImageAPI] Imagem gerada com sucesso usando o modelo: ${model}`);
           break;

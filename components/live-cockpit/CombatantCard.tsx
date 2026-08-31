@@ -107,8 +107,8 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
   // Legendary Actions Logic
   const isMonsterOrLegendary = c.type === 'monster' || c.type === 'npc' || c.isLegendary || c.legendaryActions !== undefined;
   const maxLegendary = c.maxLegendaryActions ?? 3;
-  const currentLegendary = c.legendaryActions !== undefined ? c.legendaryActions : (c.isLegendary ? maxLegendary : maxLegendary);
-  const isLegendaryActive = c.isLegendary || c.legendaryActions !== undefined;
+  const isLegendaryActive = c.isLegendary === true || (c.isLegendary !== false && c.legendaryActions !== undefined);
+  const currentLegendary = c.legendaryActions !== undefined ? c.legendaryActions : maxLegendary;
 
   const handleSpendLegendary = (cost: number = 1) => {
     const nextVal = Math.max(0, (c.legendaryActions !== undefined ? c.legendaryActions : maxLegendary) - cost);
@@ -168,13 +168,18 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
     onUpdateCombatants((prev) => {
       const next = prev.map((x) => (x.id === c.id ? {
         ...x,
-        isLegendary: nextState,
-        legendaryActions: nextState ? maxLegendary : undefined
+        isLegendary: nextState ? true : false,
+        legendaryActions: nextState ? (x.maxLegendaryActions ?? 3) : undefined,
+        maxLegendaryActions: nextState ? (x.maxLegendaryActions ?? 3) : undefined,
       } : x));
       if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
       return next;
     });
-    toast.info(nextState ? `Ações Lendárias ativadas para ${c.name}!` : `Ações Lendárias desativadas para ${c.name}.`);
+    if (nextState) {
+      toast.success(`⚡ Ações Lendárias ativadas para ${c.name}!`);
+    } else {
+      toast.info(`Ações Lendárias desativadas para ${c.name}.`);
+    }
   };
 
   const handleCardDrop = (targetIdx: number) => {
@@ -526,16 +531,20 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                 </button>
               )}
 
-              {/* Botão compacto para habilitar ações lendárias em monstros/NPCs */}
-              {isMonsterOrLegendary && !isLegendaryActive && (
+              {/* Botão para alternar ações lendárias em monstros/NPCs */}
+              {isMonsterOrLegendary && (
                 <button
                   type="button"
                   onClick={handleToggleLegendaryFeature}
-                  className="px-2 py-0.5 text-[9px] font-extrabold text-amber-400/80 hover:text-amber-300 bg-amber-950/20 hover:bg-amber-950/40 border border-amber-500/30 hover:border-amber-500/60 rounded transition-all flex items-center gap-1 cursor-pointer"
-                  title="Habilitar Ações Lendárias (3/rodada) para este monstro/NPC"
+                  className={`px-2 py-0.5 text-[9px] font-extrabold rounded transition-all flex items-center gap-1 cursor-pointer ${
+                    isLegendaryActive
+                      ? 'text-amber-300 bg-amber-500/20 border border-amber-500/50 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/50'
+                      : 'text-amber-400/80 hover:text-amber-300 bg-amber-950/20 hover:bg-amber-950/40 border border-amber-500/30 hover:border-amber-500/60'
+                  }`}
+                  title={isLegendaryActive ? 'Clique para desativar/reverter Ações Lendárias deste combatente' : 'Habilitar Ações Lendárias (3/rodada) para este monstro/NPC'}
                 >
                   <Zap className="w-2.5 h-2.5 text-amber-400" />
-                  <span>+ Lendário</span>
+                  <span>{isLegendaryActive ? 'Lendário ✓' : '+ Lendário'}</span>
                 </button>
               )}
 
@@ -637,10 +646,11 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
               <button
                 type="button"
                 onClick={handleToggleLegendaryFeature}
-                className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors ml-0.5 cursor-pointer shrink-0"
-                title="Desabilitar Ações Lendárias"
+                className="px-1.5 py-0.5 text-[8px] font-bold text-slate-400 hover:text-rose-300 hover:bg-rose-950/40 border border-slate-700/60 hover:border-rose-500/50 rounded transition-all ml-1 cursor-pointer shrink-0 flex items-center gap-1"
+                title="Desativar / Reverter Ações Lendárias deste combatente"
               >
-                <X className="w-2.5 h-2.5" />
+                <X className="w-3 h-3 text-rose-400" />
+                <span className="uppercase tracking-tight text-[8px] text-rose-300/90 font-sans">Desativar</span>
               </button>
             </div>
           </div>

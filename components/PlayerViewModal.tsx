@@ -12,6 +12,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl } from '@/lib/imageUtils';
 import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
+import { SlideTextOverlayRenderer } from '@/components/session/SlideTextOverlayRenderer';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
 import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
 import { PlayerTurnBanner } from '@/components/player-view/PlayerTurnBanner';
@@ -696,6 +697,8 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                   return (
                     <MagicShaderSlideshow
                       imageUrl={normalizeImageUrl(rawUrl)}
+                      transitionType={currentScene.defaultTransition || 'magical_dissolve'}
+                      aspectRatio={currentSlide?.aspectRatio || currentScene.defaultAspectRatio || '16:9'}
                       className="w-full h-full"
                     />
                   );
@@ -739,25 +742,16 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                   );
                 })()
               )}
-              {/* Legenda cinemática para jogadores */}
+              {/* Legenda e Overlays Cinemáticos para Jogadores */}
               {(() => {
                 const activeImgObj = currentScene.sceneImages?.[currentScene.activeImageIndex ?? 0];
-                const captionText = activeImgObj ? activeImgObj.overlayText : currentScene.sensoryText;
-                const captionTitle = currentScene.title;
-                if (!captionText && !captionTitle) return null;
                 return (
-                  <div className="absolute bottom-8 left-12 right-12 p-5 rounded-2xl bg-[#0a0d14]/90 backdrop-blur-xl border border-amber-500/25 shadow-2xl max-w-4xl mx-auto text-center transition-all animate-fade-in">
-                    {captionTitle && (
-                      <div className="text-[10px] tracking-widest font-black text-amber-400 uppercase font-mono mb-1.5">
-                        — {captionTitle} —
-                      </div>
-                    )}
-                    {captionText && (
-                      <p className="text-sm text-slate-100 font-serif leading-relaxed italic px-4 select-text">
-                        "{captionText}"
-                      </p>
-                    )}
-                  </div>
+                  <SlideTextOverlayRenderer
+                    overlays={activeImgObj?.textOverlays}
+                    fallbackOverlayText={activeImgObj?.overlayText || currentScene.sensoryText}
+                    fallbackTitle={currentScene.title}
+                    triggerKey={`${activeImgObj?.imageUrl || currentScene.imageUrl}-${currentScene.activeImageIndex}`}
+                  />
                 );
               })()}
             </div>

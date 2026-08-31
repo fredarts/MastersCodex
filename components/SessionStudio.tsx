@@ -40,7 +40,7 @@ import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { getEntityPortraitUrl } from '@/lib/world/entityHelpers';
-import { GameScene, SceneType, Combatant, SceneImage, WorldEntity, CustomMonster } from '@/lib/types';
+import { GameScene, SceneType, Combatant, SceneImage, WorldEntity, CustomMonster, SlidePack, SlideTransitionType, SlideAspectRatio } from '@/lib/types';
 import { INITIAL_MONSTERS, SFX_BUTTONS, BGM_TRACKS } from '@/lib/srd-data';
 import { storageService } from '@/lib/services/storageService';
 import { MentionTextarea } from '@/components/ui/MentionTextarea';
@@ -48,6 +48,7 @@ import { WikiTextRenderer } from '@/components/ui/WikiTextRenderer';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { CreateSceneModal } from '@/components/CreateSceneModal';
 import { SceneImageAiModal } from '@/components/modals/SceneImageAiModal';
+import { SceneSlideshowStudio } from '@/components/session/SceneSlideshowStudio';
 import { customMonsterService } from '@/lib/services/customMonsterService';
 import { normalizeImageUrl, isYouTubeUrl, getYouTubeThumbnailUrl } from '@/lib/imageUtils';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
@@ -132,6 +133,10 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
   const [sceneType, setSceneType] = useState<SceneType>('social');
   const [imageUrl, setImageUrl] = useState('');
   const [sceneImages, setSceneImages] = useState<SceneImage[]>([]);
+  const [slidePacks, setSlidePacks] = useState<SlidePack[]>([]);
+  const [activeSlidePackId, setActiveSlidePackId] = useState<string>('pack-main');
+  const [defaultTransition, setDefaultTransition] = useState<SlideTransitionType>('magical_dissolve');
+  const [defaultAspectRatio, setDefaultAspectRatio] = useState<SlideAspectRatio>('16:9');
   const [bgmCategory, setBgmCategory] = useState<'taverna' | 'combate' | 'masmorra' | 'tensao' | 'exploracao'>('taverna');
   const [bgmTracks, setBgmTracks] = useState<string[]>([]);
   const [customAudios, setCustomAudios] = useState<any[]>([]);
@@ -225,13 +230,16 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
 
   useEffect(() => {
     if (scenes.length > 0) {
-      if (!selectedScene || !scenes.some((s) => s.id === selectedScene.id)) {
-        setSelectedScene(scenes[0]);
-      }
+      const savedSceneId = typeof window !== 'undefined' && activeSession ? localStorage.getItem(`codex_activeSceneId_${activeSession.id}`) : null;
+      const targetScene = selectedScene
+        ? (scenes.find((s) => s.id === selectedScene.id) || scenes[0])
+        : (savedSceneId ? scenes.find((s) => s.id === savedSceneId) : null) || (activeScene && scenes.find((s) => s.id === activeScene.id)) || scenes[0];
+
+      setSelectedScene(targetScene);
     } else {
       setSelectedScene(null);
     }
-  }, [scenes, activeSession?.id]);
+  }, [scenes, activeSession?.id, activeScene?.id]);
 
   useEffect(() => {
     if (selectedScene) {
@@ -255,7 +263,47 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       setTerrainSurfaces3D(selectedScene.terrainSurfaces || selectedScene.environmentSettings?.terrain_surfaces_3d || []);
       setGridConfig3D(selectedScene.gridConfig3D || selectedScene.environmentSettings?.grid_config_3d || undefined);
       setFloorTextureUrl(selectedScene.floorTextureUrl || undefined);
-      setSceneImages(selectedScene.sceneImages || []);
+      const initialImages: SceneImage[] = (selectedScene.sceneImages && selectedScene.sceneImages.length > 0)
+        ? selectedScene.sceneImages
+        : selectedScene.imageUrl
+        ? [
+            {
+              id: `img-init-${selectedScene.id}`,
+              imageUrl: selectedScene.imageUrl,
+              overlayText: selectedScene.sensoryText || '',
+              secretNotes: selectedScene.secretNotes || '',
+              mediaType: 'image' as const,
+              aspectRatio: selectedScene.defaultAspectRatio || selectedScene.environmentSettings?.default_aspect_ratio || '16:9',
+            }
+          ]
+        : [];
+
+      setSceneImages(initialImages);
+
+      const rawPacks = (selectedScene.slidePacks && selectedScene.slidePacks.length > 0)
+        ? selectedScene.slidePacks
+        : (selectedScene.environmentSettings?.slide_packs && selectedScene.environmentSettings.slide_packs.length > 0)
+        ? selectedScene.environmentSettings.slide_packs
+        : null;
+
+      const loadedPacks: SlidePack[] = rawPacks && rawPacks.length > 0
+        ? rawPacks
+        : [
+            {
+              id: 'pack-main',
+              title: '🌟 Cena Principal',
+              category: 'principal' as const,
+              transitionType: selectedScene.defaultTransition || selectedScene.environmentSettings?.default_transition || 'magical_dissolve',
+              aspectRatio: selectedScene.defaultAspectRatio || selectedScene.environmentSettings?.default_aspect_ratio || '16:9',
+              images: initialImages,
+              activeImageIndex: selectedScene.activeImageIndex || 0,
+            }
+          ];
+
+      setSlidePacks(loadedPacks);
+      setActiveSlidePackId(selectedScene.activeSlidePackId || selectedScene.environmentSettings?.active_slide_pack_id || loadedPacks[0].id);
+      setDefaultTransition(selectedScene.defaultTransition || selectedScene.environmentSettings?.default_transition || 'magical_dissolve');
+      setDefaultAspectRatio(selectedScene.defaultAspectRatio || selectedScene.environmentSettings?.default_aspect_ratio || '16:9');
     } else {
       setTitle('');
       setSceneType('social');
@@ -277,6 +325,10 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       setGridConfig3D(undefined);
       setFloorTextureUrl(undefined);
       setSceneImages([]);
+      setSlidePacks([]);
+      setActiveSlidePackId('pack-main');
+      setDefaultTransition('magical_dissolve');
+      setDefaultAspectRatio('16:9');
     }
   }, [selectedScene]);
 
@@ -445,8 +497,19 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       };
     });
 
+    const activePack = (slidePacks || []).find((p) => p.id === activeSlidePackId) || (slidePacks || [])[0];
+    const effectiveImages = (activePack && activePack.images && activePack.images.length > 0)
+      ? activePack.images
+      : sceneImages;
+    const effectiveCover = imageUrl || (effectiveImages[0]?.imageUrl) || undefined;
+
     const updatedEnv = {
+      ...(selectedScene.environmentSettings || {}),
       ...environmentSettings,
+      slide_packs: slidePacks,
+      active_slide_pack_id: activeSlidePackId,
+      default_transition: defaultTransition,
+      default_aspect_ratio: defaultAspectRatio,
       building_blocks_3d: buildingBlocks3D,
       terrain_surfaces_3d: terrainSurfaces3D,
       grid_config_3d: gridConfig3D,
@@ -456,7 +519,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       ...selectedScene,
       title,
       sceneType,
-      imageUrl: imageUrl || undefined,
+      imageUrl: effectiveCover,
       bgmCategory,
       bgmTracks,
       sfxShortcuts,
@@ -471,7 +534,11 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       hasFog,
       hasRain,
       floorTextureUrl,
-      sceneImages,
+      sceneImages: effectiveImages,
+      slidePacks,
+      activeSlidePackId,
+      defaultTransition,
+      defaultAspectRatio,
       buildingBlocks: buildingBlocks3D,
       terrainSurfaces: terrainSurfaces3D,
       gridConfig3D,
@@ -482,6 +549,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
     await updateScene(updated);
     setSelectedScene(updated);
     setSceneCombatants(combatantsWithPositions);
+    toast.success('Cena e todos os Packs de Slides salvos com sucesso!');
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
   };
@@ -1111,228 +1179,24 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                 {/* Sub-Tab Editor Content */}
                 <div className={`flex-1 bg-[#0a0d14] ${is3DFullFocus ? 'p-2 overflow-hidden' : 'overflow-y-auto p-6'}`}>
                 {activeSubTab === 'image' && (
-                  <div className="max-w-2xl mx-auto space-y-6">
-                    {/* Add Image Options */}
-                    <div className="bg-[#121824] p-4 rounded-xl border border-[#2a3449] space-y-4">
-                      <div className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                        Adicionar Nova Arte/Mídia ao Slideshow
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Option 1: File Upload */}
-                        <div className="space-y-2">
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase">
-                            Upload de Imagem ou Vídeo (Supabase)
-                          </label>
-                          <input
-                            type="file"
-                            accept="image/*,video/*"
-                            disabled={!isSupabaseConfigured()}
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              const isVideo = file.type.startsWith('video/');
-                              try {
-                                const publicUrl = await storageService.uploadAsset(file, 'scenes');
-                                const newImg: SceneImage = {
-                                  id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-                                  imageUrl: publicUrl,
-                                  overlayText: '',
-                                  secretNotes: '',
-                                  mediaType: isVideo ? 'video' : 'image',
-                                };
-                                setSceneImages(prev => [...prev, newImg]);
-                                if (!imageUrl) setImageUrl(publicUrl); // set primary fallback if empty
-                              } catch (err: any) {
-                                showAlert({
-                                  title: 'Erro de Upload',
-                                  message: err.message || 'Erro ao fazer upload do arquivo.',
-                                  variant: 'danger',
-                                });
-                              }
-                            }}
-                            className={`w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2 py-1 text-xs text-slate-300 file:bg-purple-600/20 file:border-0 file:text-purple-300 file:px-3 file:py-1 file:rounded-md file:text-[10px] file:font-bold file:cursor-pointer ${
-                              !isSupabaseConfigured() ? 'opacity-50 cursor-not-allowed' : ''
-                            }`}
-                          />
-                          {!isSupabaseConfigured() && (
-                            <p className="text-[9px] text-rose-400 font-bold">
-                              ⚠️ Supabase não configurado. Upload desabilitado.
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Option 2: Image/Video URL */}
-                        <div className="space-y-2">
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase">
-                            Ou Colar URL Direta da Imagem / Vídeo
-                          </label>
-                          <div className="flex gap-2">
-                            <input
-                              type="url"
-                              placeholder="https://exemplo.com/mídia.png ou .mp4"
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  const target = e.target as HTMLInputElement;
-                                  if (target.value.trim()) {
-                                    const rawVal = target.value.trim();
-                                    const normalized = normalizeImageUrl(rawVal);
-                                    const isYouTube = isYouTubeUrl(rawVal);
-                                    const isVideo = isYouTube || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(normalized);
-                                    const newImg: SceneImage = {
-                                      id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-                                      imageUrl: normalized,
-                                      overlayText: '',
-                                      secretNotes: '',
-                                      mediaType: isVideo ? 'video' : 'image',
-                                    };
-                                    setSceneImages(prev => [...prev, newImg]);
-                                    if (!imageUrl) setImageUrl(normalized);
-                                    target.value = '';
-                                  }
-                                }
-                              }}
-                              className="flex-1 bg-[#0a0d14] border border-[#2a3449] rounded-lg px-3 py-1 text-xs text-slate-100 font-mono focus:outline-none focus:border-purple-500"
-                            />
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
-                                if (input.value.trim()) {
-                                  const rawVal = input.value.trim();
-                                  const normalized = normalizeImageUrl(rawVal);
-                                  const isYouTube = isYouTubeUrl(rawVal);
-                                  const isVideo = isYouTube || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(normalized);
-                                  const newImg: SceneImage = {
-                                    id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-                                    imageUrl: normalized,
-                                    overlayText: '',
-                                    secretNotes: '',
-                                    mediaType: isVideo ? 'video' : 'image',
-                                  };
-                                  setSceneImages(prev => [...prev, newImg]);
-                                  if (!imageUrl) setImageUrl(normalized);
-                                  input.value = '';
-                                }
-                              }}
-                              className="px-3 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 font-bold text-xs rounded-lg cursor-pointer"
-                            >
-                              Adicionar
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* AI Generation button */}
-                      <div className="pt-2 border-t border-[#2a3449]/40 flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => setShowImageAiModal(true)}
-                          className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow active:scale-95 cursor-pointer"
-                        >
-                          <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
-                          <span>Gerar Imagem com IA</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Scene Images List */}
-                    <div className="space-y-3">
-                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">
-                        Slides Ativos na Cena ({sceneImages.length})
-                      </div>
-                      
-                      {sceneImages.length === 0 ? (
-                        <div className="p-8 text-center text-slate-500 bg-[#161c28] border border-dashed border-[#2a3449] rounded-2xl text-xs">
-                          Nenhuma imagem ou slide adicionado a esta cena. Adicione um arquivo ou cole uma URL acima para começar.
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {sceneImages.map((imgObj, idx) => (
-                            <div key={imgObj.id} className="p-4 bg-[#121824] rounded-xl border border-[#2a3449] flex flex-col md:flex-row gap-4 shadow">
-                              {/* Preview Column */}
-                              <div className="relative w-full md:w-32 h-24 bg-black rounded-lg overflow-hidden border border-[#2a3449]/80 shrink-0">
-                                {isYouTubeUrl(imgObj.imageUrl) ? (
-                                  <>
-                                    <img src={getYouTubeThumbnailUrl(imgObj.imageUrl) || ''} className="w-full h-full object-cover" alt="YouTube Preview" />
-                                    <span className="absolute top-1 right-1 bg-red-600/95 text-[8px] font-bold text-white px-1 rounded uppercase tracking-wider font-mono">
-                                      YOUTUBE
-                                    </span>
-                                  </>
-                                ) : imgObj.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(imgObj.imageUrl) ? (
-                                  <>
-                                    <video src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover bg-black" muted playsInline />
-                                    <span className="absolute top-1 right-1 bg-purple-900/95 text-[8px] font-bold text-purple-200 px-1 rounded uppercase tracking-wider font-mono">
-                                      VÍDEO
-                                    </span>
-                                  </>
-                                ) : (
-                                  <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" />
-                                )}
-                                <span className="absolute top-1 left-1 bg-black/80 text-[9px] font-bold text-amber-400 px-1.5 py-0.5 rounded font-mono">
-                                  Slide {idx + 1}
-                                </span>
-                              </div>
-
-                              {/* Form Inputs Column */}
-                              <div className="flex-1 space-y-3">
-                                <div>
-                                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                                    Texto de Legenda (Visível para os jogadores na tela):
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={imgObj.overlayText || ''}
-                                    placeholder="Ex: O dragão ancestral emerge das cinzas do vulcão..."
-                                    onChange={(e) => {
-                                      const next = [...sceneImages];
-                                      next[idx] = { ...next[idx], overlayText: e.target.value };
-                                      setSceneImages(next);
-                                    }}
-                                    className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-purple-500 rounded-lg px-2.5 py-1 text-xs text-slate-200"
-                                  />
-                                </div>
-
-                                <div>
-                                  <label className="block text-[9px] font-bold text-amber-400/80 uppercase mb-1 flex items-center gap-1">
-                                    <Lock className="w-3 h-3" /> Teleprompter do Narrador (Apenas você visualiza no Cockpit):
-                                  </label>
-                                  <textarea
-                                    rows={2}
-                                    value={imgObj.secretNotes || ''}
-                                    placeholder="Ex: Ler com tom grave. Os jogadores devem rolar salvaguarda de Destreza assim que o dragão rugir..."
-                                    onChange={(e) => {
-                                      const next = [...sceneImages];
-                                      next[idx] = { ...next[idx], secretNotes: e.target.value };
-                                      setSceneImages(next);
-                                    }}
-                                    className="w-full bg-[#0a0d14] border border-amber-500/20 focus:border-amber-500 rounded-lg p-2 text-xs text-amber-200 font-serif resize-none"
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Delete button */}
-                              <div className="flex items-end justify-end md:justify-center md:items-center">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const next = sceneImages.filter((_, i) => i !== idx);
-                                    setSceneImages(next);
-                                    if (imageUrl === imgObj.imageUrl) {
-                                      setImageUrl(next[0]?.imageUrl || '');
-                                    }
-                                  }}
-                                  className="p-2 bg-[#0a0d14] hover:bg-rose-950/20 border border-[#2a3449] hover:border-rose-500/30 text-slate-500 hover:text-rose-400 rounded-lg transition-all cursor-pointer"
-                                  title="Remover Slide"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                  <div className="w-full">
+                    <SceneSlideshowStudio
+                      sceneImages={sceneImages}
+                      setSceneImages={setSceneImages}
+                      slidePacks={slidePacks}
+                      setSlidePacks={setSlidePacks}
+                      activeSlidePackId={activeSlidePackId}
+                      setActiveSlidePackId={setActiveSlidePackId}
+                      defaultTransition={defaultTransition}
+                      setDefaultTransition={setDefaultTransition}
+                      defaultAspectRatio={defaultAspectRatio}
+                      setDefaultAspectRatio={setDefaultAspectRatio}
+                      sceneTitle={title}
+                      sensoryText={sensoryText}
+                      onOpenAiModal={() => setShowImageAiModal(true)}
+                      primaryImageUrl={imageUrl}
+                      setPrimaryImageUrl={setImageUrl}
+                    />
                   </div>
                 )}
                 {activeSubTab === 'audio' && (
@@ -2389,16 +2253,48 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
         onClose={() => setShowImageAiModal(false)}
         sceneTitle={title}
         sensoryText={sensoryText}
-        onApplyImage={(generatedUrl) => {
+        defaultAspectRatio={defaultAspectRatio}
+        onApplyImage={(generatedUrl, aspect) => {
           const newImg: SceneImage = {
             id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
             imageUrl: generatedUrl,
             overlayText: '',
             secretNotes: '',
             mediaType: 'image',
+            aspectRatio: aspect || defaultAspectRatio,
           };
+          
+          // Adicionar no pack ativo
+          setSlidePacks((prevPacks) => {
+            const activeId = activeSlidePackId || (prevPacks[0]?.id ?? 'pack-main');
+            let found = false;
+            const updated = prevPacks.map((pack) => {
+              if (pack.id === activeId) {
+                found = true;
+                return {
+                  ...pack,
+                  images: [...(pack.images || []), newImg],
+                };
+              }
+              return pack;
+            });
+            if (!found) {
+              return [
+                ...prevPacks,
+                {
+                  id: 'pack-main',
+                  title: '🌟 Cena Principal',
+                  category: 'principal' as const,
+                  images: [newImg],
+                }
+              ];
+            }
+            return updated;
+          });
+
           setSceneImages((prev) => [...prev, newImg]);
           if (!imageUrl) setImageUrl(generatedUrl);
+          toast.success('Imagem com IA gerada e adicionada ao Pack!');
         }}
       />
       {/* Modal de Crônica da Sessão (Session Scribe) */}

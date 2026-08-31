@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useCallback } from 'react';
-import { Eye, Map as MapIcon, Mic, Volume2, Swords, RotateCcw } from 'lucide-react';
+import { Eye, Map as MapIcon, Mic, Volume2, Swords, RotateCcw, Layers, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { useSession } from '@/lib/hooks/useSession';
@@ -10,9 +10,10 @@ import { toast } from 'sonner';
 import { ThreeErrorBoundary } from '@/components/ThreeErrorBoundary';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
 import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
+import { SlideTextOverlayRenderer } from '@/components/session/SlideTextOverlayRenderer';
 import { LiveCockpitAudioController } from '@/components/live-cockpit/LiveCockpitAudioController';
 import { CockpitDungeonMap } from '@/components/live-cockpit/CockpitDungeonMap';
-import { GameScene, Combatant } from '@/lib/types';
+import { GameScene, Combatant, SlidePack } from '@/lib/types';
 import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from '@/lib/imageUtils';
 import { useCustomDialog } from '@/context/CustomDialogContext';
 
@@ -106,9 +107,64 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
     }
   };
 
-  const activeImageIndex = activeScene?.activeImageIndex ?? 0;
-  const activeSlideImage = activeScene?.sceneImages?.[activeImageIndex];
+  const slidePacks: SlidePack[] = (activeScene?.slidePacks && activeScene.slidePacks.length > 0)
+    ? activeScene.slidePacks
+    : (activeScene?.environmentSettings?.slide_packs && activeScene.environmentSettings.slide_packs.length > 0)
+    ? activeScene.environmentSettings.slide_packs
+    : (activeScene?.sceneImages && activeScene.sceneImages.length > 0)
+    ? [
+        {
+          id: 'pack-main',
+          title: '🌟 Cena Principal',
+          category: 'principal' as const,
+          transitionType: activeScene.defaultTransition || 'magical_dissolve',
+          aspectRatio: activeScene.defaultAspectRatio || '16:9',
+          images: activeScene.sceneImages,
+          activeImageIndex: activeScene.activeImageIndex || 0,
+        }
+      ]
+    : [];
+
+  const activePackId = activeScene?.activeSlidePackId || activeScene?.environmentSettings?.active_slide_pack_id || slidePacks[0]?.id || 'pack-main';
+  const currentPack = slidePacks.find((p) => p.id === activePackId) || slidePacks[0];
+  const currentPackImages = (currentPack?.images && currentPack.images.length > 0)
+    ? currentPack.images
+    : (activeScene?.sceneImages || []);
+
+  const activeImageIndex = Math.min(
+    Math.max(0, activeScene?.activeImageIndex ?? 0),
+    Math.max(0, currentPackImages.length - 1)
+  );
+  const activeSlideImage = currentPackImages[activeImageIndex];
   const displayImageUrl = activeSlideImage ? normalizeImageUrl(activeSlideImage.imageUrl) : normalizeImageUrl(activeScene?.imageUrl || '');
+
+  const handlePackChange = async (packId: string) => {
+    if (!activeScene) return;
+    const targetPack = slidePacks.find((p) => p.id === packId);
+    if (!targetPack) return;
+
+    const targetImages = targetPack.images || [];
+    const updatedScene: GameScene = {
+      ...activeScene,
+      activeSlidePackId: packId,
+      sceneImages: targetImages,
+      activeImageIndex: 0,
+      defaultTransition: targetPack.transitionType || activeScene.defaultTransition || 'magical_dissolve',
+      defaultAspectRatio: targetPack.aspectRatio || activeScene.defaultAspectRatio || '16:9',
+      environmentSettings: {
+        ...(activeScene.environmentSettings || {}),
+        active_slide_pack_id: packId,
+        slide_packs: slidePacks,
+      }
+    };
+
+    await updateScene(updatedScene);
+    broadcastToPlayerView({
+      payload: updatedScene,
+      activeImageIndex: 0,
+    });
+    toast.success(`Pack de Slides alterado: ${targetPack.title}`);
+  };
 
   const handleStartBattle = async () => {
     if (!activeScene) return;
@@ -408,10 +464,12 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                       />
                     );
                   }
-                  if (activeScene?.sceneImages && activeScene.sceneImages.length > 0) {
+                  if (currentPackImages && currentPackImages.length > 0) {
                     return (
                       <MagicShaderSlideshow
                         imageUrl={displayImageUrl}
+                        transitionType={currentPack?.transitionType || activeScene?.defaultTransition || 'magical_dissolve'}
+                        aspectRatio={activeSlideImage?.aspectRatio || currentPack?.aspectRatio || activeScene?.defaultAspectRatio || '16:9'}
                         className="w-full h-full"
                       />
                     );
@@ -420,17 +478,12 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                     <img src={displayImageUrl} alt="Arte ao vivo" className="w-full h-full object-cover animate-fade-in" />
                   );
                 })()}
-                <div className="absolute bottom-4 left-4 right-4 p-3 rounded-xl bg-black/80 backdrop-blur-md border border-amber-500/30">
-                  <div className="text-xs font-bold text-amber-400 uppercase font-mono">{activeScene?.title}</div>
-                  {(() => {
-                    const txt = activeSlideImage?.overlayText || activeScene?.sensoryText;
-                    return txt ? (
-                      <p className="text-xs text-slate-200 mt-1 italic font-serif leading-relaxed line-clamp-2">
-                        &ldquo;{txt}&rdquo;
-                      </p>
-                    ) : null;
-                  })()}
-                </div>
+                <SlideTextOverlayRenderer
+                  overlays={activeSlideImage?.textOverlays}
+                  fallbackOverlayText={activeSlideImage?.overlayText || activeScene?.sensoryText}
+                  fallbackTitle={currentPack?.title || activeScene?.title}
+                  triggerKey={`${displayImageUrl}-${activeImageIndex}`}
+                />
               </div>
             ) : (
               <div className="text-center p-6 text-slate-500">
@@ -445,61 +498,99 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
           {liveDisplayMode === 'artwork' && (
             <div className="flex flex-row gap-3 shrink-0">
               
-              {/* Slideshow DM Controls */}
-              {activeScene?.sceneImages && activeScene.sceneImages.length > 1 && (
-                <div className="w-[150px] bg-[#121824] border border-[#2a3449] rounded-xl p-3 flex flex-col gap-3 shadow overflow-hidden">
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase font-mono leading-tight">
-                      Controle do Slideshow <br/> ({activeImageIndex + 1} de {activeScene.sceneImages.length})
-                    </span>
-                    <div className="flex gap-1.5 font-sans w-full">
-                      <button
-                        onClick={async () => {
-                          const prevIdx = (activeImageIndex - 1 + activeScene.sceneImages!.length) % activeScene.sceneImages!.length;
-                          await onSlideChange(prevIdx);
-                        }}
-                        className="flex-1 py-1 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] rounded text-[10px] font-bold text-amber-400 cursor-pointer"
+              {/* Slideshow DM Controls com Dropdown de Packs */}
+              {(currentPackImages.length > 0 || slidePacks.length > 1) && (
+                <div className="w-[175px] bg-[#121824] border border-[#2a3449] rounded-xl p-3 flex flex-col gap-3 shadow overflow-hidden">
+                  {/* Seletor Dropdown de Packs de Slides */}
+                  {slidePacks.length > 1 && (
+                    <div className="flex flex-col gap-1 shrink-0 pb-2 border-b border-[#2a3449]/60">
+                      <label className="text-[9px] font-bold text-amber-400 uppercase font-mono flex items-center gap-1">
+                        <Layers className="w-3 h-3" /> Pack de Slides:
+                      </label>
+                      <select
+                        value={activePackId}
+                        onChange={(e) => handlePackChange(e.target.value)}
+                        className="w-full bg-[#0a0d14] border border-amber-500/40 hover:border-amber-400 focus:border-amber-400 text-amber-300 font-bold text-xs rounded-lg px-2 py-1.5 focus:outline-none cursor-pointer transition-colors shadow-inner"
                       >
-                        Ant
-                      </button>
-                      <button
-                        onClick={async () => {
-                          const nextIdx = (activeImageIndex + 1) % activeScene.sceneImages!.length;
-                          await onSlideChange(nextIdx);
-                        }}
-                        className="flex-1 py-1 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] rounded text-[10px] font-bold text-amber-400 cursor-pointer"
-                      >
-                        Próx
-                      </button>
+                        {slidePacks.map((pack) => (
+                          <option key={pack.id} value={pack.id} className="bg-[#121824] text-slate-200">
+                            {pack.title} ({pack.images?.length || 0})
+                          </option>
+                        ))}
+                      </select>
                     </div>
+                  )}
+
+                  {/* Header do Slide e Botões de Navegação */}
+                  <div className="flex flex-col gap-2 shrink-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase font-mono leading-tight">
+                        Slide {currentPackImages.length > 0 ? `${activeImageIndex + 1} de ${currentPackImages.length}` : '0 de 0'}
+                      </span>
+                      {currentPack?.transitionType && (
+                        <span className="text-[8px] bg-[#0a0d14] text-amber-400 px-1.5 py-0.5 rounded font-mono border border-[#2a3449]">
+                          {currentPack.aspectRatio || '16:9'}
+                        </span>
+                      )}
+                    </div>
+                    {currentPackImages.length > 1 && (
+                      <div className="flex gap-1.5 font-sans w-full">
+                        <button
+                          onClick={async () => {
+                            const prevIdx = (activeImageIndex - 1 + currentPackImages.length) % currentPackImages.length;
+                            await onSlideChange(prevIdx);
+                          }}
+                          className="flex-1 py-1.5 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] rounded text-[11px] font-bold text-amber-400 cursor-pointer flex items-center justify-center gap-0.5 transition-all"
+                        >
+                          <ChevronLeft className="w-3 h-3" />
+                          <span>Ant</span>
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const nextIdx = (activeImageIndex + 1) % currentPackImages.length;
+                            await onSlideChange(nextIdx);
+                          }}
+                          className="flex-1 py-1.5 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] rounded text-[11px] font-bold text-amber-400 cursor-pointer flex items-center justify-center gap-0.5 transition-all"
+                        >
+                          <span>Próx</span>
+                          <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Thumbnails list (Vertical) */}
-                  <div className="flex flex-col gap-2 overflow-y-auto py-1 custom-scrollbar flex-1 min-h-0 pr-1">
-                    {activeScene.sceneImages.map((imgObj, idx) => {
-                      const isSelected = idx === activeImageIndex;
-                      return (
-                        <button
-                          key={imgObj.id}
-                          onClick={async () => await onSlideChange(idx)}
-                          className={`relative w-full aspect-video rounded border overflow-hidden shrink-0 transition-all cursor-pointer ${
-                            isSelected ? 'border-amber-400 ring-1 ring-amber-500/40 scale-[1.02]' : 'border-[#2a3449] hover:border-slate-500'
-                          }`}
-                        >
-                          {isYouTubeUrl(imgObj.imageUrl) ? (
-                            <img src={getYouTubeThumbnailUrl(imgObj.imageUrl) || ''} className="w-full h-full object-cover" />
-                          ) : imgObj.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(imgObj.imageUrl) ? (
-                            <video src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" muted playsInline />
-                          ) : (
-                            <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" />
-                          )}
-                          <span className="absolute bottom-1 right-1 bg-black/80 text-[10px] font-bold px-1.5 rounded text-white font-mono backdrop-blur-sm">
-                            {idx + 1}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {currentPackImages.length > 0 ? (
+                    <div className="flex flex-col gap-2 overflow-y-auto py-1 custom-scrollbar flex-1 min-h-0 pr-1">
+                      {currentPackImages.map((imgObj, idx) => {
+                        const isSelected = idx === activeImageIndex;
+                        return (
+                          <button
+                            key={imgObj.id}
+                            onClick={async () => await onSlideChange(idx)}
+                            className={`relative w-full aspect-video rounded border overflow-hidden shrink-0 transition-all cursor-pointer ${
+                              isSelected ? 'border-amber-400 ring-1 ring-amber-500/40 scale-[1.02]' : 'border-[#2a3449] hover:border-slate-500'
+                            }`}
+                          >
+                            {isYouTubeUrl(imgObj.imageUrl) ? (
+                              <img src={getYouTubeThumbnailUrl(imgObj.imageUrl) || ''} className="w-full h-full object-cover" alt="YT" />
+                            ) : imgObj.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(imgObj.imageUrl) ? (
+                              <video src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" muted playsInline />
+                            ) : (
+                              <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" alt={`Slide ${idx + 1}`} />
+                            )}
+                            <span className="absolute bottom-1 right-1 bg-black/80 text-[10px] font-bold px-1.5 rounded text-white font-mono backdrop-blur-sm">
+                              {idx + 1}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-[#0a0d14] rounded-lg border border-dashed border-[#2a3449] text-center">
+                      <p className="text-[10px] text-slate-500 italic">Pack sem slides.</p>
+                    </div>
+                  )}
                 </div>
               )}
 

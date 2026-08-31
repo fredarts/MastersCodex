@@ -66,6 +66,7 @@ import { ThreeErrorBoundary } from './ThreeErrorBoundary';
 import { XCardButton } from './safety/XCardButton';
 import { DysonCanvas } from './map/DysonCanvas';
 import { MagicShaderSlideshow } from './MagicShaderSlideshow';
+import { SlideTextOverlayRenderer } from '@/components/session/SlideTextOverlayRenderer';
 import { normalizeImageUrl, getYouTubeEmbedUrl } from '@/lib/imageUtils';
 import { revealVisionWithLOS, getTokenVisionRadius } from '@/components/map/visionCore';
 
@@ -1651,10 +1652,20 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                       );
                     }
                     return (
-                      <MagicShaderSlideshow
-                        imageUrl={normalizeImageUrl(rawUrl)}
-                        className="w-full h-full"
-                      />
+                      <div className="relative w-full h-full">
+                        <MagicShaderSlideshow
+                          imageUrl={normalizeImageUrl(rawUrl)}
+                          transitionType={currentScene?.defaultTransition || 'magical_dissolve'}
+                          aspectRatio={currentScene?.sceneImages?.[currentScene?.activeImageIndex ?? 0]?.aspectRatio || currentScene?.defaultAspectRatio || '16:9'}
+                          className="w-full h-full"
+                        />
+                        <SlideTextOverlayRenderer
+                          overlays={currentScene?.sceneImages?.[currentScene?.activeImageIndex ?? 0]?.textOverlays}
+                          fallbackOverlayText={currentScene?.sceneImages?.[currentScene?.activeImageIndex ?? 0]?.overlayText || currentScene?.sensoryText}
+                          fallbackTitle={currentScene?.title}
+                          triggerKey={`${rawUrl}-${currentScene?.activeImageIndex}`}
+                        />
+                      </div>
                     );
                   }
 

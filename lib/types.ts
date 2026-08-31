@@ -158,12 +158,80 @@ export interface WorldEntity {
   createdAt?: string;
 }
 
+export type SlideTransitionType = 
+  | 'magical_dissolve' 
+  | 'dream_waves' 
+  | 'arcane_vision' 
+  | 'book_page_flip_3d' 
+  | 'dark_mist' 
+  | 'crossfade';
+
+export type SlideAspectRatio = '16:9' | '4:3' | '1:1' | '9:16';
+
+export interface SlidePack {
+  id: string;
+  title: string;
+  category?: 'principal' | 'sonho' | 'lore' | 'flashback' | 'custom';
+  transitionType?: SlideTransitionType;
+  aspectRatio?: SlideAspectRatio;
+  images: SceneImage[];
+  activeImageIndex?: number;
+}
+
+export type OverlayBoxStylePreset = 
+  | 'cinematic' 
+  | 'scroll_parchment' 
+  | 'arcane_ether' 
+  | 'dark_fantasy' 
+  | 'imperial_gold' 
+  | 'rustic_tavern';
+
+export type OverlayBoxPosition = 
+  | 'bottom-center' 
+  | 'bottom-left' 
+  | 'bottom-right' 
+  | 'top-center' 
+  | 'top-left' 
+  | 'top-right' 
+  | 'center';
+
+export type OverlayBoxWidth = 'compact' | 'medium' | 'wide' | 'full';
+
+export type OverlayFontFamily = 
+  | 'cinzel' 
+  | 'medieval' 
+  | 'uncial' 
+  | 'serif_noble' 
+  | 'runic' 
+  | 'clean';
+
+export interface SlideTextOverlay {
+  id: string;
+  title?: string;
+  text: string;
+  position?: OverlayBoxPosition;
+  width?: OverlayBoxWidth;
+  stylePreset?: OverlayBoxStylePreset;
+  fontSize?: 'sm' | 'base' | 'lg' | 'xl';
+  textAlign?: 'left' | 'center' | 'right';
+  showTitle?: boolean;
+  
+  // Posicionamento e dimensionamento livre interativo (% de 0 a 100)
+  xPercent?: number;
+  yPercent?: number;
+  widthPercent?: number;
+  heightPercent?: number;
+  fontFamily?: OverlayFontFamily;
+}
+
 export interface SceneImage {
   id: string;
   imageUrl: string;
   overlayText?: string;
   secretNotes?: string;
   mediaType?: 'image' | 'video';
+  aspectRatio?: SlideAspectRatio;
+  textOverlays?: SlideTextOverlay[];
 }
 
 export interface GameScene {
@@ -191,6 +259,10 @@ export interface GameScene {
   placementZoneRadius?: number;
   sceneImages?: SceneImage[];
   activeImageIndex?: number;
+  slidePacks?: SlidePack[];
+  activeSlidePackId?: string;
+  defaultTransition?: SlideTransitionType;
+  defaultAspectRatio?: SlideAspectRatio;
   environmentSettings?: Record<string, any>;
   buildingBlocks?: import('./3d-building-blocks').BuildingBlock3D[];
   terrainSurfaces?: import('./3d-terrains').TerrainCellData[];

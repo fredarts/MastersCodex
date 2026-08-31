@@ -91,10 +91,16 @@ export class SupabaseSessionRepository implements ISessionRepository {
         has_fog: sceneData.hasFog,
         has_rain: sceneData.hasRain,
         floor_texture_url: sceneData.floorTextureUrl,
-        scene_images: sceneData.sceneImages || [],
+        scene_images: (sceneData.slidePacks && sceneData.slidePacks.length > 0 && sceneData.slidePacks[0].images)
+          ? sceneData.slidePacks[0].images
+          : (sceneData.sceneImages || []),
         active_image_index: sceneData.activeImageIndex || 0,
         environment_settings: {
           ...(sceneData.environmentSettings || {}),
+          slide_packs: sceneData.slidePacks ?? sceneData.environmentSettings?.slide_packs ?? [],
+          active_slide_pack_id: sceneData.activeSlidePackId ?? sceneData.environmentSettings?.active_slide_pack_id ?? 'pack-main',
+          default_transition: sceneData.defaultTransition ?? sceneData.environmentSettings?.default_transition ?? 'magical_dissolve',
+          default_aspect_ratio: sceneData.defaultAspectRatio ?? sceneData.environmentSettings?.default_aspect_ratio ?? '16:9',
           building_blocks_3d: sceneData.buildingBlocks ?? sceneData.environmentSettings?.building_blocks_3d ?? [],
           grid_config_3d: sceneData.gridConfig3D ?? sceneData.environmentSettings?.grid_config_3d ?? null,
           token_elevations: sceneData.tokenElevations ?? sceneData.environmentSettings?.token_elevations ?? {},
@@ -112,6 +118,12 @@ export class SupabaseSessionRepository implements ISessionRepository {
   async updateScene(scene: GameScene): Promise<void> {
     if (!isValidUuid(scene.id)) return;
 
+    // Obter imagens do pack ativo ou do primeiro pack para fallback em scene_images
+    const activePack = (scene.slidePacks || []).find((p) => p.id === scene.activeSlidePackId) || (scene.slidePacks || [])[0];
+    const fallbackImages = (activePack && activePack.images && activePack.images.length > 0)
+      ? activePack.images
+      : (scene.sceneImages || []);
+
     const { error } = await supabase
       .from('scenes')
       .update({
@@ -122,7 +134,7 @@ export class SupabaseSessionRepository implements ISessionRepository {
         secret_notes: scene.secretNotes,
         bgm_category: scene.bgmCategory,
         bgm_tracks: scene.bgmTracks || [],
-        image_url: scene.imageUrl,
+        image_url: scene.imageUrl || (fallbackImages[0]?.imageUrl) || null,
         npc_audio_url: scene.npcAudioUrl,
         sfx_shortcuts: scene.sfxShortcuts,
         combatants: scene.combatants,
@@ -131,10 +143,14 @@ export class SupabaseSessionRepository implements ISessionRepository {
         has_fog: scene.hasFog,
         has_rain: scene.hasRain,
         floor_texture_url: scene.floorTextureUrl,
-        scene_images: scene.sceneImages || [],
+        scene_images: fallbackImages,
         active_image_index: scene.activeImageIndex || 0,
         environment_settings: {
           ...(scene.environmentSettings || {}),
+          slide_packs: scene.slidePacks ?? scene.environmentSettings?.slide_packs ?? [],
+          active_slide_pack_id: scene.activeSlidePackId ?? scene.environmentSettings?.active_slide_pack_id ?? 'pack-main',
+          default_transition: scene.defaultTransition ?? scene.environmentSettings?.default_transition ?? 'magical_dissolve',
+          default_aspect_ratio: scene.defaultAspectRatio ?? scene.environmentSettings?.default_aspect_ratio ?? '16:9',
           building_blocks_3d: scene.buildingBlocks ?? scene.environmentSettings?.building_blocks_3d ?? [],
           grid_config_3d: scene.gridConfig3D ?? scene.environmentSettings?.grid_config_3d ?? null,
           token_elevations: scene.tokenElevations ?? scene.environmentSettings?.token_elevations ?? {},

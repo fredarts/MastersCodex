@@ -76,8 +76,10 @@ export class LocalStorageSessionRepository implements ISessionRepository {
       const idx = all.findIndex((s) => s.id === scene.id);
       if (idx !== -1) {
         all[idx] = scene;
-        localStorage.setItem('codex_scenes', JSON.stringify(all));
+      } else {
+        all.push(scene);
       }
+      localStorage.setItem('codex_scenes', JSON.stringify(all));
     } catch (_e) {}
   }
 

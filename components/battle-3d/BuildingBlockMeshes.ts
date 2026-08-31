@@ -902,6 +902,106 @@ function buildProceduralMesh(block: BuildingBlock3D, segments: number, hScale: n
       break;
     }
 
+    case 'chandelier_candles': {
+      // Lustre Medieval Circular de Ferro Forjado Suspenso com 6 Velas
+      // 1. Argola / Gancho de suspensão superior no topo
+      const hookGeo = new THREE.TorusGeometry(0.12, 0.03, 8, 16);
+      const hook = new THREE.Mesh(hookGeo, ironMaterial);
+      hook.position.y = 1.2 * hScale;
+      hook.rotation.x = Math.PI / 2;
+      group.add(hook);
+
+      // Hub / Eixo central superior
+      const hubGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.15, 8);
+      const hub = new THREE.Mesh(hubGeo, brassMaterial);
+      hub.position.y = 1.05 * hScale;
+      group.add(hub);
+
+      // 2. Correntes de ferro sustentando o anel principal
+      const chainCount = 4;
+      for (let i = 0; i < chainCount; i++) {
+        const ang = (i / chainCount) * Math.PI * 2;
+        const targetX = Math.cos(ang) * 0.7;
+        const targetZ = Math.sin(ang) * 0.7;
+        
+        const chainGeo = new THREE.CylinderGeometry(0.018, 0.018, 1.15 * hScale, 6);
+        const chain = new THREE.Mesh(chainGeo, ironMaterial);
+        
+        // Posição intermediária e orientação inclinada do hub até o anel
+        chain.position.set(targetX * 0.5, 0.55 * hScale, targetZ * 0.5);
+        chain.lookAt(new THREE.Vector3(targetX, 0, targetZ));
+        chain.rotateX(Math.PI / 2);
+        group.add(chain);
+      }
+
+      // 3. Aro / Roda circular principal de ferro forjado
+      const ringGeo = new THREE.TorusGeometry(0.7, 0.045, 12, 32);
+      const ring = new THREE.Mesh(ringGeo, ironMaterial);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.0;
+      ring.castShadow = true;
+      group.add(ring);
+
+      // Aro decorativo interno de madeira escura / latão
+      const innerRingGeo = new THREE.TorusGeometry(0.66, 0.02, 8, 24);
+      const innerRing = new THREE.Mesh(innerRingGeo, goldTrimMaterial);
+      innerRing.rotation.x = Math.PI / 2;
+      innerRing.position.y = 0.0;
+      group.add(innerRing);
+
+      // Braços transversais de reforço em cruz (Spokes radiais)
+      for (let i = 0; i < 2; i++) {
+        const spokeGeo = new THREE.BoxGeometry(1.4, 0.035 * hScale, 0.045);
+        const spoke = new THREE.Mesh(spokeGeo, ironMaterial);
+        spoke.rotation.y = (i * Math.PI) / 2;
+        spoke.position.y = 0.0;
+        group.add(spoke);
+      }
+
+      // Pingente inferior central decorativo (Finial)
+      const finialGeo = new THREE.ConeGeometry(0.1, 0.35 * hScale, 8);
+      const finial = new THREE.Mesh(finialGeo, brassMaterial);
+      finial.rotation.x = Math.PI;
+      finial.position.y = -0.2 * hScale;
+      group.add(finial);
+
+      // 4. 6 Pratos de gotejamento de cera (Bobeches), Velas de cera e Chamas cintilantes
+      const candleCount = 6;
+      for (let i = 0; i < candleCount; i++) {
+        const ang = (i / candleCount) * Math.PI * 2;
+        const cx = Math.cos(ang) * 0.7;
+        const cz = Math.sin(ang) * 0.7;
+
+        // Prato / Suporte de metal da vela
+        const plateGeo = new THREE.CylinderGeometry(0.12, 0.08, 0.05 * hScale, 10);
+        const plate = new THREE.Mesh(plateGeo, brassMaterial);
+        plate.position.set(cx, 0.03 * hScale, cz);
+        plate.castShadow = true;
+        group.add(plate);
+
+        // Vela cilíndrica de cera de abelha
+        const candleGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.35 * hScale, 8);
+        const candleMesh = new THREE.Mesh(candleGeo, waxMaterial);
+        candleMesh.position.set(cx, 0.22 * hScale, cz);
+        candleMesh.castShadow = true;
+        group.add(candleMesh);
+
+        // Pavio da vela
+        const wickGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.06 * hScale, 4);
+        const wick = new THREE.Mesh(wickGeo, ironMaterial);
+        wick.position.set(cx, 0.41 * hScale, cz);
+        group.add(wick);
+
+        // Chama cônica incandescente da vela
+        const flameGeo = new THREE.ConeGeometry(0.065, 0.18 * hScale, 8);
+        const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa33 });
+        const flame = new THREE.Mesh(flameGeo, flameMat);
+        flame.position.set(cx, 0.5 * hScale, cz);
+        group.add(flame);
+      }
+      break;
+    }
+
     case 'oil_lamp': {
       // Lampião de Latão com redoma de vidro
       const lampBaseGeo = new THREE.CylinderGeometry(0.18, 0.25, 0.2, 12);
@@ -1997,6 +2097,9 @@ export function createBuildingBlockMesh(block: BuildingBlock3D): THREE.Group {
       lightY = 2.05 * hScale;
       lightZ = 0.7;
       light.position.set(0, lightY, lightZ);
+    } else if (block.type === 'chandelier_candles') {
+      lightY = 0.1 * hScale;
+      light.position.y = lightY;
     } else {
       lightY = Math.max(0.6, (block.type === 'brazier' ? 1.5 : block.type === 'torch_standing' ? 1.8 : block.type === 'cauldron' ? 1.1 : 0.8) * hScale);
       light.position.y = lightY;

@@ -124,7 +124,50 @@ export const AssetInspectorTransform: React.FC<AssetInspectorTransformProps> = (
           </div>
         </div>
 
-        {/* 2. ROTATION */}
+        {/* 2. ELEVATION / ALTITUDE (VOO / SUSPENSO NO AR) */}
+        <div className="space-y-1.5 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+          <div className="flex justify-between items-center text-[10px] font-bold text-slate-300">
+            <span className="flex items-center gap-1.5">
+              <ArrowUpRight className="w-3 h-3 text-sky-400" /> Altura / Elevação (Y):
+            </span>
+            <span className="font-mono text-sky-300 font-bold">
+              {((block.yElevation || 0) / 2 * 5).toFixed(0)} ft ({((block.yElevation || 0) / 2 * 1.5).toFixed(1)}m)
+            </span>
+          </div>
+
+          <input
+            type="range"
+            min="0"
+            max="12"
+            step="0.5"
+            value={block.yElevation || 0}
+            onChange={(e) => onUpdateBlock({ ...block, yElevation: parseFloat(e.target.value) })}
+            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+          />
+
+          <div className="grid grid-cols-4 gap-1 pt-1">
+            {[
+              { label: 'Chão', val: 0 },
+              { label: '+5ft', val: 2 },
+              { label: '+9ft', val: 3.5 },
+              { label: '+15ft', val: 6 },
+            ].map((preset) => (
+              <button
+                key={preset.label}
+                onClick={() => onUpdateBlock({ ...block, yElevation: preset.val })}
+                className={`py-1 rounded border font-mono font-bold text-[10px] ${
+                  Math.abs((block.yElevation || 0) - preset.val) < 0.2
+                    ? 'bg-sky-500/20 border-sky-500 text-sky-300'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 3. ROTATION */}
         <div className="space-y-1.5 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
           <div className="flex justify-between items-center text-[10px] font-bold text-slate-300">
             <span className="flex items-center gap-1.5">

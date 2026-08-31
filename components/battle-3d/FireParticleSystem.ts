@@ -147,6 +147,8 @@ export function createFireParticleSystem(scene: THREE.Scene): FireParticleSystem
         return { offsetY: 2.05 * h, offsetZ: 0.7, scale: 0.85, isMystic: false };
       case 'candelabra':
         return { offsetY: 1.08 * h, offsetZ: 0, scale: 0.65, isMystic: false };
+      case 'chandelier_candles':
+        return { offsetY: 0.5 * h, offsetZ: 0, scale: 0.45, isMystic: false };
       case 'oil_lamp':
         return { offsetY: 0.42 * h, offsetZ: 0, scale: 0.55, isMystic: false };
       case 'lantern_medieval':
@@ -194,6 +196,25 @@ export function createFireParticleSystem(scene: THREE.Scene): FireParticleSystem
               z: sideWorldZ,
               type: 'candle',
               scale: 0.45,
+              isMystic: false,
+            });
+          }
+        }
+
+        // No lustre de velas distribuímos as partículas nas 6 velas do anel
+        if (block.type === 'chandelier_candles') {
+          newEmitters.pop(); // remove o ponto central
+          const ringRadius = 0.7;
+          for (let i = 0; i < 6; i++) {
+            const candleAng = rotRad + (i / 6) * Math.PI * 2;
+            const cWorldX = block.x + Math.cos(candleAng) * ringRadius;
+            const cWorldZ = block.z + Math.sin(candleAng) * ringRadius;
+            newEmitters.push({
+              x: cWorldX,
+              y: worldY,
+              z: cWorldZ,
+              type: 'candle',
+              scale: 0.4,
               isMystic: false,
             });
           }

@@ -122,6 +122,47 @@ export function mapSceneRowToDomain(row: SceneRow): GameScene {
     floorTextureUrl: row.floor_texture_url || undefined,
     sceneImages: row.scene_images || [],
     activeImageIndex: row.active_image_index || 0,
+    slidePacks: (row.environment_settings?.slide_packs && row.environment_settings.slide_packs.length > 0)
+      ? row.environment_settings.slide_packs
+      : (row as any).slide_packs && (row as any).slide_packs.length > 0
+      ? (row as any).slide_packs
+      : (row.scene_images && row.scene_images.length > 0)
+      ? [
+          {
+            id: 'pack-main',
+            title: '🌟 Cena Principal',
+            category: 'principal' as const,
+            transitionType: row.environment_settings?.default_transition || 'magical_dissolve',
+            aspectRatio: row.environment_settings?.default_aspect_ratio || '16:9',
+            images: row.scene_images,
+            activeImageIndex: row.active_image_index || 0,
+          }
+        ]
+      : row.image_url
+      ? [
+          {
+            id: 'pack-main',
+            title: '🌟 Cena Principal',
+            category: 'principal' as const,
+            transitionType: row.environment_settings?.default_transition || 'magical_dissolve',
+            aspectRatio: row.environment_settings?.default_aspect_ratio || '16:9',
+            images: [
+              {
+                id: `img-init-${row.id}`,
+                imageUrl: row.image_url,
+                overlayText: row.sensory_text || '',
+                secretNotes: row.secret_notes || '',
+                mediaType: 'image',
+                aspectRatio: row.environment_settings?.default_aspect_ratio || '16:9',
+              }
+            ],
+            activeImageIndex: 0,
+          }
+        ]
+      : undefined,
+    activeSlidePackId: row.environment_settings?.active_slide_pack_id || (row as any).active_slide_pack_id || 'pack-main',
+    defaultTransition: row.environment_settings?.default_transition || (row as any).default_transition || 'magical_dissolve',
+    defaultAspectRatio: row.environment_settings?.default_aspect_ratio || (row as any).default_aspect_ratio || '16:9',
     environmentSettings: row.environment_settings || undefined,
     buildingBlocks: row.environment_settings?.building_blocks_3d || (row as any).building_blocks || [],
     gridConfig3D: row.environment_settings?.grid_config_3d || (row as any).grid_config_3d || undefined,

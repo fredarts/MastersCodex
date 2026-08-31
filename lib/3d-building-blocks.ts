@@ -53,6 +53,7 @@ export type BuildingBlockType =
   | 'torch_wall'
   | 'torch_standing'
   | 'candelabra'
+  | 'chandelier_candles'
   | 'oil_lamp'
   | 'lantern_medieval'
   | 'brazier'
@@ -347,6 +348,21 @@ export const BUILDING_BLOCK_CATALOG: Record<BuildingBlockType, BuildingBlockDefi
     defaultLightColor: '#fed7aa',
     defaultLightIntensity: 2.2,
     defaultLightRadiusFt: 20,
+  },
+  chandelier_candles: {
+    type: 'chandelier_candles',
+    label: 'Lustre de Velas Medieval',
+    category: 'lights',
+    icon: '🕯️',
+    blocksVision: false,
+    blocksMovement: false,
+    providesCover: 'none',
+    heightUnits: 2.0,
+    widthUnits: 1.8,
+    isLightSource: true,
+    defaultLightColor: '#ffaa33',
+    defaultLightIntensity: 4.5,
+    defaultLightRadiusFt: 45,
   },
   oil_lamp: {
     type: 'oil_lamp',
@@ -819,7 +835,7 @@ export function createDefaultBuildingBlock(
     type,
     x,
     z,
-    yElevation: 0,
+    yElevation: type === 'chandelier_candles' ? 3.5 : 0,
     rotationDeg,
     segmentsCount: 1,
     heightScale: 1.0,
