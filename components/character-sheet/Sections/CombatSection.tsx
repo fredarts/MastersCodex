@@ -613,26 +613,26 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
   const hasChangesToReset = sessionBaseline !== null;
 
   return (
-    <div className="space-y-6 pb-20 lg:pb-0 animate-fade-in select-none lg:grid lg:grid-cols-3 lg:gap-4 lg:h-full lg:overflow-hidden">
+    <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden animate-fade-in select-none space-y-2">
       
-      {/* Banner de Forma Selvagem Ativa */}
+      {/* BANNER DE FORMA SELVAGEM ATIVA (SE HOUVER) */}
       {sheet.activeWildShape && (
-        <div className="lg:col-span-3 bg-gradient-to-r from-emerald-950/80 via-[#0d1624] to-amber-950/70 border border-emerald-500/50 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-xl animate-fade-in">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold shrink-0">
-              <PawPrint className="w-5 h-5" />
+        <div className="shrink-0 bg-gradient-to-r from-emerald-950/80 via-[#0d1624] to-amber-950/70 border border-emerald-500/50 rounded-xl p-2 flex items-center justify-between gap-3 shadow-md">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold shrink-0">
+              <PawPrint className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black text-white uppercase tracking-wider font-serif">
-                  🐾 Forma Selvagem Ativa: {sheet.activeWildShape.beastName}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-black text-white uppercase tracking-wider font-serif">
+                  🐾 Forma Selvagem: {sheet.activeWildShape.beastName}
                 </span>
-                <span className="text-[9px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                <span className="text-[8px] font-mono bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded-full border border-emerald-500/40">
                   {sheet.activeWildShape.beastType === 'elemental' ? 'Elemental' : 'Besta'}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-300 font-mono mt-0.5">
-                PV da Besta: <strong className="text-emerald-400">{sheet.activeWildShape.currentBeastHp} / {sheet.activeWildShape.maxBeastHp}</strong> • CA: <strong className="text-cyan-300">{sheet.activeWildShape.beastAc}</strong> • Deslocamento: <strong className="text-amber-300">{sheet.activeWildShape.beastSpeed}</strong>
+              <p className="text-[10px] text-slate-300 font-mono">
+                PV: <strong className="text-emerald-400">{sheet.activeWildShape.currentBeastHp}/{sheet.activeWildShape.maxBeastHp}</strong> • CA: <strong className="text-cyan-300">{sheet.activeWildShape.beastAc}</strong> • Deslocamento: <strong className="text-amber-300">{sheet.activeWildShape.beastSpeed}</strong>
               </p>
             </div>
           </div>
@@ -640,137 +640,129 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
           <button
             type="button"
             onClick={() => onChange(revertWildShape(sheet))}
-            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow-md transition-all active:scale-95 cursor-pointer font-serif flex items-center gap-1.5"
+            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black rounded-lg shadow transition-all active:scale-95 cursor-pointer font-serif flex items-center gap-1"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reverter Forma</span>
+            <RotateCcw className="w-3 h-3" />
+            <span>Reverter</span>
           </button>
         </div>
       )}
 
-      {/* COLUNA 1: ATRIBUTOS PRINCIPAIS */}
-      <div className="space-y-4 lg:overflow-y-auto lg:h-full lg:pr-2 bg3-scrollbar lg:pb-6">
-        <div className="bg3-panel rounded-2xl p-4 space-y-3">
-          {/* HEADER DE ATRIBUTOS COM PONTOS DISPONÍVEIS E BOTÕES DE AÇÃO */}
-          <div className="flex flex-col justify-between gap-3 border-b border-slate-800/80 pb-3">
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-400" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 font-serif">Atributos Principais</h3>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-2">
+      {/* GRADE PRINCIPAL DE 3 COLUNAS BALDUR'S GATE 3 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5 flex-1 min-h-0 overflow-hidden">
+        
+        {/* COLUNA 1: ATRIBUTOS PRINCIPAIS */}
+        <div className="bg3-panel rounded-xl p-2.5 flex flex-col justify-between h-full overflow-hidden space-y-1.5">
+          {/* HEADER DE ATRIBUTOS E BOTÕES DE FERRAMENTAS */}
+          <div className="space-y-1.5 border-b border-amber-500/15 pb-1.5 shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 font-serif">Atributos Principais</h3>
+              </div>
+              
               {isLocked ? (
-                <span className="flex items-center gap-1 text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded-full">
-                  <Lock className="w-3 h-3 text-amber-500" />
-                  Atributos Travados
+                <span className="flex items-center gap-1 text-[8.5px] font-bold bg-slate-900 text-slate-400 border border-slate-700 px-1.5 py-0.2 rounded-full">
+                  <Lock className="w-2.5 h-2.5 text-amber-500" />
+                  Travados
                 </span>
               ) : (
-                <span className="flex items-center gap-1 text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full animate-pulse">
-                  <Unlock className="w-3 h-3 text-emerald-400" />
-                  Distribuição Ativa
+                <span className="flex items-center gap-1 text-[8.5px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded-full animate-pulse">
+                  <Unlock className="w-2.5 h-2.5 text-emerald-400" />
+                  {pointsAvailable} Pts
                 </span>
               )}
             </div>
 
-            {/* BARRA DE AÇÕES: CONTADOR DE PONTOS, 4d6, RESET E CONCLUIR */}
-            <div className="flex flex-col gap-2 w-full">
-              {/* BOTÃO ROLAR 4d6 (DESCARTAR MENOR) */}
+            {/* BOTÕES DE DISTRIBUIÇÃO E PONTOS */}
+            <div className="grid grid-cols-2 gap-1">
               <button
                 type="button"
                 onClick={handleOpen4d6Modal}
-                className="w-full text-[10px] font-bold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 px-2.5 py-1.5 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer"
-                title="Simular rolagem de 4d6 descartando o menor dado para os 6 atributos"
+                className="text-[9px] font-bold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 px-1.5 py-1 rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer truncate"
+                title="Rolar 4d6 descartando o menor para os 6 atributos"
               >
-                <Dices className="w-3.5 h-3.5 text-cyan-400" />
-                Rolar 4d6 (Descartar Menor)
+                <Dices className="w-3 h-3 text-cyan-400 shrink-0" />
+                <span>Rolar 4d6</span>
               </button>
 
-              {/* BOTÃO INICIAR POINT BUY 27 PTS (Se estiver travado ou sem pontos) */}
-              {(isLocked || pointsAvailable === 0) && (
+              {(isLocked || pointsAvailable === 0) ? (
                 <button
                   type="button"
                   onClick={handleStartPointBuy27}
-                  className="w-full text-[10px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-2.5 py-1.5 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer font-serif"
+                  className="text-[9px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-1.5 py-1 rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer font-serif truncate"
                   title="Iniciar distribuição com 27 pontos base D&D 5e"
                 >
-                  <Zap className="w-3 h-3 text-amber-400" />
-                  Point Buy (27 Pts)
+                  <Zap className="w-3 h-3 text-amber-400 shrink-0" />
+                  <span>Point Buy 27</span>
                 </button>
-              )}
-
-              {/* TEXT BOX DE PONTOS DISPONÍVEIS */}
-              {!isLocked && (
-                <div className="flex items-center justify-between bg-[#0b0f19] border border-amber-500/30 rounded-xl px-2.5 py-1">
-                  <span className="text-[10px] font-bold uppercase text-slate-400">Pontos para Investir:</span>
+              ) : (
+                <div className="flex items-center justify-between bg-[#090c14] border border-amber-500/30 rounded-lg px-1.5 py-0.5">
+                  <span className="text-[8px] font-bold text-slate-400">Pts:</span>
                   <input
                     type="number"
                     min={0}
                     max={99}
                     value={pointsAvailable}
                     onChange={(e) => handleAvailablePointsChange(parseInt(e.target.value, 10) || 0)}
-                    className="w-10 bg-slate-900 border border-slate-700 rounded-lg text-center font-black text-xs text-amber-400 focus:outline-none focus:border-amber-500"
-                    title="Pontos livres para investir nos atributos"
+                    className="w-8 bg-transparent text-center font-black text-xs text-amber-400 focus:outline-none font-mono"
                   />
                 </div>
               )}
+            </div>
 
-              {/* BOTÃO CONCEDER PONTOS (MESTRE / ASI) */}
-              <button
-                type="button"
-                onClick={() => handleGrantGmPoints(2)}
-                className="w-full text-[10px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-2.5 py-1.5 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer"
-                title="Adicionar +2 Pontos de Atributo (Evolução de Nível ou Concessão do Mestre)"
-              >
-                <Plus className="w-3 h-3" />
-                Conceder +2 Pts (Mestre)
-              </button>
-
-              <div className="grid grid-cols-2 gap-2 w-full">
-                {/* BOTÃO RESETAR (Só ativo durante a distribuição e se tiver alterações) */}
-                {!isLocked && (
+            {/* AÇÕES DE CONCLUSÃO OU EDIÇÃO */}
+            <div className="flex items-center gap-1">
+              {!isLocked ? (
+                <>
                   <button
                     type="button"
                     onClick={handleResetDistribution}
                     disabled={!hasChangesToReset}
-                    className={`text-[10px] font-bold py-1.5 rounded-xl border transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                    className={`flex-1 text-[9px] font-bold py-1 rounded-lg border transition-all flex items-center justify-center gap-1 ${
                       hasChangesToReset
-                        ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border-rose-500/40'
+                        ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border-rose-500/40 cursor-pointer'
                         : 'bg-slate-900 text-slate-600 border-slate-800 opacity-50 cursor-not-allowed'
                     }`}
-                    title="Desfaz todas as alterações feitas nesta sessão de pontos"
                   >
-                    <RotateCcw className="w-3 h-3" />
+                    <RotateCcw className="w-2.5 h-2.5" />
                     Resetar
                   </button>
-                )}
-
-                {/* BOTÃO CONCLUIR / CONFIRMAR E TRAVAR */}
-                {!isLocked ? (
                   <button
                     type="button"
                     onClick={() => setShowConfirmModal(true)}
-                    className="text-[10px] font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-1.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                    className="flex-1 text-[9px] font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-1 rounded-lg shadow transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <CheckCircle2 className="w-3 h-3" />
                     Concluir
                   </button>
-                ) : (
+                </>
+              ) : (
+                <div className="flex items-center gap-1 w-full">
+                  <button
+                    type="button"
+                    onClick={() => handleGrantGmPoints(2)}
+                    className="flex-1 text-[9px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 py-1 rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer truncate"
+                    title="Conceder +2 Pontos de Atributo"
+                  >
+                    <Plus className="w-2.5 h-2.5" />
+                    +2 Pts
+                  </button>
                   <button
                     type="button"
                     onClick={handleUnlockByGm}
-                    className="col-span-2 text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 py-1.5 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer"
-                    title="Desbloquear atributos para edição do Mestre"
+                    className="flex-1 text-[9px] font-bold bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 py-1 rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer truncate"
                   >
-                    <Unlock className="w-3 h-3 text-amber-400" />
-                    Editar Atributos (Mestre)
+                    <Unlock className="w-2.5 h-2.5 text-amber-400" />
+                    Editar
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* GRID DOS 6 ATRIBUTOS */}
-          <div className="grid grid-cols-2 gap-2.5">
+          {/* GRADE 2x3 DE MEDALHÕES DE ATRIBUTOS BG3 */}
+          <div className="grid grid-cols-2 gap-1.5 flex-1 min-h-0">
             {(Object.keys(ATTRIBUTE_LABELS) as AttributeKey[]).map((attrKey) => {
               const info = ATTRIBUTE_LABELS[attrKey];
               const score = sheet.attributes[attrKey].score;
@@ -782,65 +774,63 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
               return (
                 <div
                   key={attrKey}
-                  className={`bg-[#0b0f19] border rounded-xl p-2.5 flex flex-col items-center justify-between text-center shadow-inner relative transition-all ${
+                  className={`bg-[#090c14] border rounded-xl p-1.5 flex flex-col items-center justify-between text-center shadow-inner relative transition-all ${
                     !isLocked && pointsAvailable > 0
                       ? 'border-amber-500/50 hover:border-amber-400 shadow-amber-500/5'
-                      : 'border-slate-800'
+                      : 'border-slate-800/90'
                   }`}
                 >
-                  <span className="text-[11px] font-extrabold uppercase text-slate-300 font-serif">{info.title}</span>
-                  <span className="text-[9px] text-slate-500 line-clamp-1">{info.desc}</span>
+                  <div className="flex items-center justify-between w-full px-1">
+                    <span className="text-[10px] font-black uppercase text-amber-400 font-serif leading-none">{info.title}</span>
+                    <span className="text-[8px] text-slate-500 font-mono">
+                      {attrKey.toUpperCase()}
+                    </span>
+                  </div>
 
-                  {/* MODIFICADOR EM DESTAQUE (CLICÁVEL PARA ROLAGEM D20) */}
+                  {/* MODIFICADOR EM DESTAQUE (CLIQUE PARA ROLAR D20) */}
                   <button
                     type="button"
                     onClick={() => handleRollAttribute(attrKey)}
-                    className="my-1.5 bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/30 hover:border-amber-500/60 rounded-xl px-2.5 py-0.5 w-full flex items-center justify-center gap-1 group active:scale-95 transition-all shadow-sm cursor-pointer"
-                    title="Clique para rolar o teste d20"
+                    className="my-0.5 bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/30 hover:border-amber-500/60 rounded-lg py-0.5 w-full flex items-center justify-center gap-1 group active:scale-95 transition-all cursor-pointer"
+                    title={`Rolar teste d20 de ${info.title}`}
                   >
-                    <Dices className="w-3 h-3 text-amber-400 group-hover:rotate-12 transition-transform" />
-                    <span className="text-xl font-black text-amber-400 font-mono tracking-tight">
+                    <Dices className="w-3 h-3 text-amber-400/80 group-hover:rotate-12 transition-transform" />
+                    <span className="text-base font-black text-amber-300 font-mono leading-none">
                       {formatModifier(mod)}
                     </span>
                   </button>
 
-                  {/* PAINEL DE CONTROLE DE VALOR BRUTO DO ATRIBUTO */}
+                  {/* VALOR DO ATRIBUTO / STEPPERS */}
                   {isLocked ? (
-                    /* ATRIBUTO TRAVADO */
-                    <div className="flex items-center justify-center gap-1 bg-slate-900/80 border border-slate-800 rounded-lg px-2 py-0.5 w-full">
-                      <span className="text-[9px] text-slate-400 font-semibold">Valor:</span>
-                      <span className="text-[11px] font-black text-white font-mono">{getEffectiveAttributeScore(sheet, attrKey)}</span>
+                    <div className="flex items-center justify-center gap-1 bg-[#121624] border border-slate-800 rounded px-1.5 py-0.2 w-full">
+                      <span className="text-[8px] text-slate-400 font-semibold font-serif">Valor:</span>
+                      <span className="text-[10px] font-black text-white font-mono">{getEffectiveAttributeScore(sheet, attrKey)}</span>
                     </div>
                   ) : (
-                    /* CONTROLES + / - DURANTE A DISTRIBUIÇÃO */
-                    <div className="flex items-center justify-between w-full bg-slate-900 border border-amber-500/30 rounded-lg p-0.5">
+                    <div className="flex items-center justify-between w-full bg-[#121624] border border-amber-500/30 rounded p-0.5">
                       <button
                         type="button"
                         onClick={() => handleDecrementAttribute(attrKey)}
                         disabled={!canDecrease}
-                        className="w-6 h-6 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-30 font-bold text-xs flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
-                        title="Diminuir ponto"
+                        className="w-4 h-4 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-30 font-bold text-[9px] flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
                       >
-                        <Minus className="w-3 h-3" />
+                        -
                       </button>
-
                       <input
                         type="number"
                         min={1}
                         max={30}
                         value={score}
                         onChange={(e) => handleScoreDirectChange(attrKey, parseInt(e.target.value, 10) || 10)}
-                        className="w-8 text-center bg-transparent font-black text-xs text-white focus:outline-none"
+                        className="w-6 text-center bg-transparent font-black text-[10px] text-white focus:outline-none font-mono"
                       />
-
                       <button
                         type="button"
                         onClick={() => handleIncrementAttribute(attrKey)}
                         disabled={!canIncrease}
-                        className="w-6 h-6 rounded bg-amber-500 text-slate-950 hover:bg-amber-400 disabled:opacity-30 font-bold text-xs flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
-                        title="Adicionar ponto"
+                        className="w-4 h-4 rounded bg-amber-500 text-slate-950 hover:bg-amber-400 disabled:opacity-30 font-bold text-[9px] flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
                       >
-                        <Plus className="w-3 h-3" />
+                        +
                       </button>
                     </div>
                   )}
@@ -849,296 +839,283 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
             })}
           </div>
         </div>
-      </div>
 
-      {/* COLUNA 2: COMBATE & VITAIS */}
-      <div className="space-y-4 lg:overflow-y-auto lg:h-full lg:pr-2 bg3-scrollbar lg:pb-6">
-        
-        {/* CARDS DE COMBATE RÁPIDOS */}
-        <div className="grid grid-cols-2 gap-2.5">
-          {/* CA (CLASSE DE ARMADURA DINÂMICA) */}
-          <div className="bg3-panel rounded-2xl p-3 flex flex-col items-center justify-between text-center space-y-1">
-            <div className="flex items-center gap-1">
-              <Shield className="w-4 h-4 text-amber-400" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase font-serif">CA Total</span>
-            </div>
-            <span className="text-2xl font-black text-amber-300 font-mono my-0.5 text-gold-glow">
-              {sheet.armorClass}
-            </span>
-            <div className="w-full space-y-1 bg-[#0b0f19]/60 border border-slate-800 rounded-xl p-1.5 flex flex-col items-center gap-1 font-serif">
-              <span className="text-[9px] font-bold text-slate-300 truncate max-w-full">
-                🛡️ {sheet.equippedArmor || 'Nenhuma'}
+        {/* COLUNA 2: COMBATE, DEFESAS & PONTOS DE VIDA */}
+        <div className="flex flex-col gap-2 h-full overflow-hidden justify-between">
+          
+          {/* CARDS DE COMBATE RÁPIDOS 2x2 */}
+          <div className="grid grid-cols-2 gap-1.5 shrink-0">
+            {/* CA */}
+            <div className="bg3-panel rounded-xl p-2 flex flex-col items-center justify-center text-center">
+              <div className="flex items-center gap-1">
+                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-[9px] font-bold text-slate-400 uppercase font-serif">CA Total</span>
+              </div>
+              <span className="text-xl font-black text-amber-300 font-mono my-0.5 leading-none">
+                {sheet.armorClass}
               </span>
-              <span className="text-[8px] text-slate-500 font-sans">
-                {sheet.hasShield ? '🛡️ Com Escudo (+2 CA)' : '❌ Sem Escudo'}
+              <span className="text-[8px] text-slate-400 truncate max-w-full font-serif">
+                {sheet.equippedArmor || 'Sem Armadura'} {sheet.hasShield ? '(+2 Escudo)' : ''}
               </span>
             </div>
-          </div>
 
-          {/* INICIATIVA */}
-          <div className="bg3-panel rounded-2xl p-3 flex flex-col items-center justify-center text-center">
-            <Zap className="w-5 h-5 text-amber-400 mb-1" />
-            <span className="text-[10px] font-bold text-slate-400 uppercase font-serif">Iniciativa</span>
-            <button
-              type="button"
-              onClick={() => {
-                const res = executeCheckRoll({
-                  sheet,
-                  label: 'Rolagem de Iniciativa',
-                  modifier: dexMod + sheet.initiativeBonus + getJackOfAllTradesBonus(sheet),
-                  rollType: 'attribute',
-                  advantageMode,
-                });
-                if (onRoll) onRoll(res);
-              }}
-              className="text-xl font-black text-amber-300 mt-1 font-mono hover:text-amber-200 cursor-pointer flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20"
-            >
-              <Dices className="w-3 h-3" />
-              {formatModifier(dexMod + sheet.initiativeBonus + getJackOfAllTradesBonus(sheet))}
-            </button>
-            <span className="text-[8px] text-slate-500 mt-1">(DES {formatModifier(dexMod)}{getJackOfAllTradesBonus(sheet) > 0 ? ` + ${getJackOfAllTradesBonus(sheet)}` : ''})</span>
-          </div>
-
-          {/* DESLOCAMENTO */}
-          <div className="bg3-panel rounded-2xl p-3 flex flex-col items-center justify-center text-center">
-            <Crosshair className="w-5 h-5 text-amber-400 mb-1" />
-            <span className="text-[10px] font-bold text-slate-400 uppercase font-serif">Deslocamento</span>
-            <input
-              type="text"
-              value={sheet.speed}
-              onChange={(e) => onChange({ ...sheet, speed: e.target.value })}
-              className="w-full text-center bg-[#0b0f19] border border-slate-700 rounded-xl py-0.5 mt-1 text-xs font-bold text-white focus:outline-none focus:border-amber-500"
-            />
-          </div>
-
-          {/* DADOS DE VIDA */}
-          <div className="bg3-panel rounded-2xl p-3 flex flex-col items-center justify-center text-center">
-            <Heart className="w-5 h-5 text-rose-400 mb-1" />
-            <span className="text-[10px] font-bold text-slate-400 uppercase font-serif">Dados de Vida</span>
-            <span className="text-sm font-black text-rose-300 mt-1 font-mono">{sheet.hitDiceTotal}</span>
-            <span className="text-[9px] text-slate-500">Usados: {sheet.hitDiceUsed}</span>
-          </div>
-        </div>
-
-        {/* PV & VITALIDADE */}
-        <div className="bg3-panel rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-rose-400 flex items-center gap-2 font-serif">
-              <Heart className="w-4 h-4 text-rose-400" />
-              Pontos de Vida (PV)
-            </h3>
-            <span className="text-xs font-extrabold text-slate-300">
-              {sheet.currentHp} / {sheet.maxHp} HP
-            </span>
-          </div>
-
-          {/* BARRA DE PROGRESSO DE HP */}
-          <div className="w-full bg-[#0b0f19] h-2.5 rounded-full overflow-hidden border border-slate-800">
-            <div
-              className={`h-full transition-all duration-300 ${
-                sheet.currentHp <= sheet.maxHp * 0.25
-                  ? 'bg-rose-600 animate-pulse'
-                  : sheet.currentHp <= sheet.maxHp * 0.5
-                  ? 'bg-amber-500'
-                  : 'bg-emerald-500'
-              }`}
-              style={{ width: `${Math.min(100, Math.max(0, (sheet.currentHp / (sheet.maxHp || 1)) * 100))}%` }}
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-2.5 pt-1">
-            <div className="space-y-1">
-              <label className="text-[9px] text-slate-400 uppercase">PV Atual</label>
-              <input
-                type="number"
-                value={sheet.currentHp}
-                onChange={(e) => handleHpChange(parseInt(e.target.value, 10) || 0)}
-                className="w-full bg-[#0b0f19] border border-rose-500/30 rounded-xl py-1 px-2 text-center text-xs font-bold text-white focus:outline-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[9px] text-slate-400 uppercase">PV Máximo</label>
-              <input
-                type="number"
-                value={sheet.maxHp}
-                onChange={(e) => onChange({ ...sheet, maxHp: parseInt(e.target.value, 10) || 1 })}
-                className="w-full bg-[#0b0f19] border border-slate-700 rounded-xl py-1 px-2 text-center text-xs font-bold text-slate-300 focus:outline-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[9px] text-slate-400 uppercase">PV Temporário</label>
-              <input
-                type="number"
-                value={sheet.tempHp}
-                onChange={(e) => onChange({ ...sheet, tempHp: parseInt(e.target.value, 10) || 0 })}
-                className="w-full bg-[#0b0f19] border border-amber-500/30 rounded-xl py-1 px-2 text-center text-xs font-bold text-amber-300 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* TESTES CONTRA A MORTE (DEATH SAVES) */}
-          <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-3 space-y-2 mt-2">
-            <span className="text-[10px] font-bold text-slate-300 flex items-center justify-between">
-              <span className="flex items-center gap-1.5 font-serif text-rose-400">
-                <Skull className="w-3.5 h-3.5 text-rose-400" />
-                Testes Contra a Morte
-              </span>
+            {/* INICIATIVA */}
+            <div className="bg3-panel rounded-xl p-2 flex flex-col items-center justify-center text-center">
+              <div className="flex items-center gap-1">
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-[9px] font-bold text-slate-400 uppercase font-serif">Iniciativa</span>
+              </div>
               <button
                 type="button"
                 onClick={() => {
                   const res = executeCheckRoll({
                     sheet,
-                    label: 'Teste Contra a Morte (Death Save)',
-                    modifier: 0,
-                    rollType: 'saving_throw',
+                    label: 'Rolagem de Iniciativa',
+                    modifier: dexMod + sheet.initiativeBonus + getJackOfAllTradesBonus(sheet),
+                    rollType: 'attribute',
                     advantageMode,
                   });
                   if (onRoll) onRoll(res);
-
-                  if ((res.selectedD20 ?? 10) >= 10) {
-                    onChange({
-                      ...sheet,
-                      deathSaves: {
-                        ...sheet.deathSaves,
-                        successes: Math.min(3, sheet.deathSaves.successes + (res.isCrit ? 2 : 1)),
-                      },
-                    });
-                  } else {
-                    onChange({
-                      ...sheet,
-                      deathSaves: {
-                        ...sheet.deathSaves,
-                        failures: Math.min(3, sheet.deathSaves.failures + (res.isFail ? 2 : 1)),
-                      },
-                    });
-                  }
                 }}
-                className="flex items-center gap-1 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-800/80 px-2 py-0.5 rounded-lg text-[9px] font-extrabold cursor-pointer transition-colors"
+                className="text-base font-black text-amber-300 mt-0.5 font-mono hover:text-amber-200 cursor-pointer flex items-center gap-1 bg-amber-500/10 px-2 py-0.2 rounded border border-amber-500/20"
+                title="Rolar Iniciativa no Chat"
               >
-                <Dices className="w-3 h-3" />
-                Rolar Morte
+                <Dices className="w-2.5 h-2.5" />
+                {formatModifier(dexMod + sheet.initiativeBonus + getJackOfAllTradesBonus(sheet))}
               </button>
-            </span>
+              <span className="text-[7.5px] text-slate-500 mt-0.5 font-mono">DES {formatModifier(dexMod)}</span>
+            </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              {/* SUCESSOS */}
-              <div className="flex items-center justify-between bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
-                <span className="text-[9px] text-emerald-400 font-semibold">Sucessos:</span>
-                <div className="flex gap-0.5">
-                  {[1, 2, 3].map((num) => (
-                    <button
-                      key={num}
-                      type="button"
-                      onClick={() =>
-                        onChange({
-                          ...sheet,
-                          deathSaves: {
-                            ...sheet.deathSaves,
-                            successes: sheet.deathSaves.successes === num ? num - 1 : num,
-                          },
-                        })
-                      }
-                      className={`w-4 h-4 rounded-full border transition-all ${
-                        sheet.deathSaves.successes >= num
-                          ? 'bg-emerald-500 border-emerald-400 shadow-sm shadow-emerald-500/50'
-                          : 'border-slate-700 bg-slate-900'
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
+            {/* DESLOCAMENTO */}
+            <div className="bg3-panel rounded-xl p-2 flex flex-col items-center justify-center text-center">
+              <span className="text-[9px] font-bold text-slate-400 uppercase font-serif">Deslocamento</span>
+              <input
+                type="text"
+                value={sheet.speed}
+                onChange={(e) => onChange({ ...sheet, speed: e.target.value })}
+                className="w-full text-center bg-[#090c14] border border-slate-700/80 rounded py-0.5 mt-0.5 text-xs font-bold text-white focus:outline-none focus:border-amber-500 font-mono"
+              />
+            </div>
 
-              {/* FRACASSOS */}
-              <div className="flex items-center justify-between bg-slate-900/60 p-1.5 rounded-lg border border-slate-800">
-                <span className="text-[9px] text-rose-400 font-semibold">Fracassos:</span>
-                <div className="flex gap-0.5">
-                  {[1, 2, 3].map((num) => (
-                    <button
-                      key={num}
-                      type="button"
-                      onClick={() =>
-                        onChange({
-                          ...sheet,
-                          deathSaves: {
-                            ...sheet.deathSaves,
-                            failures: sheet.deathSaves.failures === num ? num - 1 : num,
-                          },
-                        })
-                      }
-                      className={`w-4 h-4 rounded-full border transition-all ${
-                        sheet.deathSaves.failures >= num
-                          ? 'bg-rose-600 border-rose-500 shadow-sm shadow-rose-600/50'
-                          : 'border-slate-700 bg-slate-900'
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
+            {/* DADOS DE VIDA */}
+            <div className="bg3-panel rounded-xl p-2 flex flex-col items-center justify-center text-center">
+              <span className="text-[9px] font-bold text-slate-400 uppercase font-serif">Dados de Vida</span>
+              <span className="text-xs font-black text-rose-300 mt-0.5 font-mono">{sheet.hitDiceTotal}</span>
+              <span className="text-[8px] text-slate-500 font-mono">Usados: {sheet.hitDiceUsed}</span>
             </div>
           </div>
-        </div>
 
-        {/* CONDIÇÕES ATIVAS */}
-        <div className="bg3-panel rounded-2xl p-4 space-y-2">
-          <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block font-serif">
-            Condições Ativas na Ficha
-          </span>
-          <div className="flex flex-wrap gap-1">
-            {(['Cego', 'Encantado', 'Surdo', 'Atemorizado', 'Agarrado', 'Incapacitado', 'Invisível', 'Paralisado', 'Petrificado', 'Envenenado', 'Caído', 'Restrito', 'Inconsciente', 'Concentração'] as const).map(cond => {
-              const isActive = (sheet.conditions || []).includes(cond);
-              return (
+          {/* PV & VITALIDADE */}
+          <div className="bg3-panel rounded-xl p-2.5 space-y-1.5 shrink-0">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[10px] font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1.5 font-serif">
+                <Heart className="w-3.5 h-3.5 text-rose-400" />
+                Pontos de Vida
+              </h3>
+              <span className="text-[11px] font-black text-white font-mono">
+                {sheet.currentHp} / {sheet.maxHp} HP
+              </span>
+            </div>
+
+            {/* BARRA DE PROGRESSO DE HP */}
+            <div className="w-full bg-[#090c14] h-2 rounded-full overflow-hidden border border-slate-800">
+              <div
+                className={`h-full transition-all duration-300 ${
+                  sheet.currentHp <= sheet.maxHp * 0.25
+                    ? 'bg-rose-600 animate-pulse'
+                    : sheet.currentHp <= sheet.maxHp * 0.5
+                    ? 'bg-amber-500'
+                    : 'bg-emerald-500'
+                }`}
+                style={{ width: `${Math.min(100, Math.max(0, (sheet.currentHp / (sheet.maxHp || 1)) * 100))}%` }}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+              <div className="space-y-0.5">
+                <label className="text-[8px] text-slate-400 uppercase font-serif">PV Atual</label>
+                <input
+                  type="number"
+                  value={sheet.currentHp}
+                  onChange={(e) => handleHpChange(parseInt(e.target.value, 10) || 0)}
+                  className="w-full bg-[#090c14] border border-rose-500/30 rounded py-0.5 text-center text-xs font-black text-white font-mono focus:outline-none"
+                />
+              </div>
+              <div className="space-y-0.5">
+                <label className="text-[8px] text-slate-400 uppercase font-serif">PV Máximo</label>
+                <input
+                  type="number"
+                  value={sheet.maxHp}
+                  onChange={(e) => onChange({ ...sheet, maxHp: parseInt(e.target.value, 10) || 1 })}
+                  className="w-full bg-[#090c14] border border-slate-700 rounded py-0.5 text-center text-xs font-bold text-slate-300 font-mono focus:outline-none"
+                />
+              </div>
+              <div className="space-y-0.5">
+                <label className="text-[8px] text-slate-400 uppercase font-serif">PV Temp</label>
+                <input
+                  type="number"
+                  value={sheet.tempHp}
+                  onChange={(e) => onChange({ ...sheet, tempHp: parseInt(e.target.value, 10) || 0 })}
+                  className="w-full bg-[#090c14] border border-cyan-500/30 rounded py-0.5 text-center text-xs font-black text-cyan-300 font-mono focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* TESTES CONTRA A MORTE */}
+            <div className="bg-[#090c14] border border-slate-800 rounded-lg p-1.5 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] font-bold text-rose-400 flex items-center gap-1 font-serif">
+                  <Skull className="w-3 h-3 text-rose-400" />
+                  Testes Contra a Morte
+                </span>
                 <button
-                  key={cond}
                   type="button"
                   onClick={() => {
-                    const currentConds = sheet.conditions || [];
-                    const updated = currentConds.includes(cond)
-                      ? currentConds.filter(c => c !== cond)
-                      : [...currentConds, cond];
-                    onChange({ ...sheet, conditions: updated });
+                    const res = executeCheckRoll({
+                      sheet,
+                      label: 'Teste Contra a Morte (Death Save)',
+                      modifier: 0,
+                      rollType: 'saving_throw',
+                      advantageMode,
+                    });
+                    if (onRoll) onRoll(res);
+
+                    if ((res.selectedD20 ?? 10) >= 10) {
+                      onChange({
+                        ...sheet,
+                        deathSaves: {
+                          ...sheet.deathSaves,
+                          successes: Math.min(3, sheet.deathSaves.successes + (res.isCrit ? 2 : 1)),
+                        },
+                      });
+                    } else {
+                      onChange({
+                        ...sheet,
+                        deathSaves: {
+                          ...sheet.deathSaves,
+                          failures: Math.min(3, sheet.deathSaves.failures + (res.isFail ? 2 : 1)),
+                        },
+                      });
+                    }
                   }}
-                  className={`px-2 py-0.5 rounded-lg text-[9px] font-extrabold transition-all border cursor-pointer ${
-                    isActive
-                      ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-sm shadow-cyan-500/30'
-                      : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700 hover:text-slate-400'
-                  }`}
+                  className="flex items-center gap-1 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-800/80 px-1.5 py-0.2 rounded text-[8.5px] font-extrabold cursor-pointer transition-colors"
                 >
-                  {cond}
+                  <Dices className="w-2.5 h-2.5" />
+                  Rolar Morte
                 </button>
-              );
-            })}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center justify-between bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-800">
+                  <span className="text-[8px] text-emerald-400 font-semibold">Sucessos:</span>
+                  <div className="flex gap-0.5">
+                    {[1, 2, 3].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() =>
+                          onChange({
+                            ...sheet,
+                            deathSaves: {
+                              ...sheet.deathSaves,
+                              successes: sheet.deathSaves.successes === num ? num - 1 : num,
+                            },
+                          })
+                        }
+                        className={`w-3.5 h-3.5 rounded-full border transition-all cursor-pointer ${
+                          sheet.deathSaves.successes >= num
+                            ? 'bg-emerald-500 border-emerald-400 shadow-sm'
+                            : 'border-slate-700 bg-slate-900'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-800">
+                  <span className="text-[8px] text-rose-400 font-semibold">Fracassos:</span>
+                  <div className="flex gap-0.5">
+                    {[1, 2, 3].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() =>
+                          onChange({
+                            ...sheet,
+                            deathSaves: {
+                              ...sheet.deathSaves,
+                              failures: sheet.deathSaves.failures === num ? num - 1 : num,
+                            },
+                          })
+                        }
+                        className={`w-3.5 h-3.5 rounded-full border transition-all cursor-pointer ${
+                          sheet.deathSaves.failures >= num
+                            ? 'bg-rose-600 border-rose-500 shadow-sm'
+                            : 'border-slate-700 bg-slate-900'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CONDIÇÕES ATIVAS COMPACTAS */}
+          <div className="bg3-panel rounded-xl p-2 space-y-1 shrink-0">
+            <span className="text-[9px] font-bold text-cyan-400 uppercase tracking-wider block font-serif">
+              Condições Ativas
+            </span>
+            <div className="flex flex-wrap gap-1 max-h-[60px] overflow-y-auto bg3-scrollbar">
+              {(['Cego', 'Encantado', 'Surdo', 'Atemorizado', 'Agarrado', 'Incapacitado', 'Invisível', 'Paralisado', 'Petrificado', 'Envenenado', 'Caído', 'Restrito', 'Inconsciente', 'Concentração'] as const).map(cond => {
+                const isActive = (sheet.conditions || []).includes(cond);
+                return (
+                  <button
+                    key={cond}
+                    type="button"
+                    onClick={() => {
+                      const currentConds = sheet.conditions || [];
+                      const updated = currentConds.includes(cond)
+                        ? currentConds.filter(c => c !== cond)
+                        : [...currentConds, cond];
+                      onChange({ ...sheet, conditions: updated });
+                    }}
+                    className={`px-1.5 py-0.2 rounded text-[8px] font-extrabold transition-all border cursor-pointer ${
+                      isActive
+                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-sm'
+                        : 'bg-slate-900/60 border-slate-800 text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    {cond}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-      </div>
-
-      {/* COLUNA 3: ATAQUES & AÇÕES */}
-      <div className="space-y-4 lg:overflow-y-auto lg:h-full lg:pr-2 bg3-scrollbar lg:pb-6">
-        
-        {/* LISTA DE ATAQUES */}
-        <div className="bg3-panel rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between border-b border-amber-500/10 pb-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2 font-serif">
-              <Crosshair className="w-4 h-4 text-amber-400" />
-              Ataques & Ações
+        {/* COLUNA 3: ATAQUES & AÇÕES */}
+        <div className="bg3-panel rounded-xl p-2.5 flex flex-col justify-between h-full overflow-hidden space-y-1.5">
+          <div className="flex items-center justify-between border-b border-amber-500/10 pb-1 shrink-0">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif">
+              <Crosshair className="w-3.5 h-3.5 text-amber-400" />
+              Ataques & Ações ({sheet.attacks.length})
             </h3>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleAddAttack}
-                className="flex items-center gap-0.5 text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded-lg border border-amber-500/30 transition-colors cursor-pointer"
-              >
-                <Plus className="w-3 h-3" />
-                Adicionar
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleAddAttack}
+              className="flex items-center gap-0.5 text-[9px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded-lg border border-amber-500/30 transition-colors cursor-pointer font-serif"
+            >
+              <Plus className="w-3 h-3" />
+              Adicionar
+            </button>
           </div>
 
           {sheet.feats?.some(f => 
             ['Great Weapon Master', 'Sharpshooter', 'Mestre de Armas Grandes', 'Atirador de Elite'].includes(f.name) ||
             ['Great Weapon Master', 'Sharpshooter', 'Mestre de Armas Grandes', 'Atirador de Elite'].includes(f.namePt)
           ) && (
-            <label className="flex items-center justify-center gap-1.5 text-[9px] font-bold text-amber-400 cursor-pointer bg-amber-500/10 border border-amber-500/25 px-2 py-1 rounded-xl w-full">
+            <label className="shrink-0 flex items-center justify-center gap-1 text-[8.5px] font-bold text-amber-400 cursor-pointer bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-lg w-full font-serif">
               <input
                 type="checkbox"
                 checked={powerAttackActive}
@@ -1149,52 +1126,54 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
             </label>
           )}
 
-          <div className="space-y-2 lg:max-h-[380px] lg:overflow-y-auto pr-1 bg3-scrollbar">
+          {/* LISTA SCROLLÁVEL APENAS DENTRO DO CARD DE ARMAS */}
+          <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5 bg3-scrollbar">
             {sheet.attacks.length === 0 ? (
-              <p className="text-[10px] text-slate-500 text-center py-4 font-serif">Nenhuma arma cadastrada.</p>
+              <p className="text-[10px] text-slate-500 text-center py-6 font-serif">Nenhuma arma cadastrada.</p>
             ) : (
               sheet.attacks.map((atk) => (
                 <div
                   key={atk.id}
-                  className="bg-[#0b0f19] border border-slate-800 rounded-xl p-2.5 flex flex-col gap-2"
+                  className="bg-[#090c14] border border-slate-800/90 rounded-lg p-2 flex flex-col gap-1.5"
                 >
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center justify-between gap-1.5">
                     <input
                       type="text"
                       value={atk.name}
                       onChange={(e) => handleUpdateAttack(atk.id, { name: e.target.value })}
                       placeholder="Nome da Arma"
-                      className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5 text-xs text-white font-bold font-serif"
+                      className="flex-1 bg-slate-900/90 border border-slate-700/70 rounded px-1.5 py-0.5 text-xs text-white font-bold font-serif"
                     />
                     <button
                       type="button"
                       onClick={() => handleRemoveAttack(atk.id)}
-                      className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+                      className="p-1 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                      title="Excluir Arma"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
                   
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <div className="flex flex-col flex-1">
-                      <span className="text-[8px] text-slate-500 uppercase">Acerto</span>
+                      <span className="text-[7.5px] text-slate-500 uppercase font-serif">Acerto</span>
                       <input
                         type="text"
                         value={atk.atkBonus}
                         onChange={(e) => handleUpdateAttack(atk.id, { atkBonus: e.target.value })}
-                        placeholder="Bônus (+4)"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg py-0.5 text-xs text-amber-400 font-mono text-center font-bold"
+                        placeholder="+4"
+                        className="w-full bg-slate-900 border border-slate-700 rounded py-0.5 text-xs text-amber-400 font-mono text-center font-bold"
                       />
                     </div>
                     
-                    <div className="flex flex-col flex-[1.5_1.5_0%]">
-                      <span className="text-[8px] text-slate-500 uppercase">Dano / Tipo</span>
+                    <div className="flex flex-col flex-[1.4_1.4_0%]">
+                      <span className="text-[7.5px] text-slate-500 uppercase font-serif">Dano / Tipo</span>
                       <input
                         type="text"
                         value={atk.damage}
                         onChange={(e) => handleUpdateAttack(atk.id, { damage: e.target.value })}
-                        placeholder="Dano (1d8+2)"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg py-0.5 text-xs text-rose-300 font-mono text-center"
+                        placeholder="1d8+2"
+                        className="w-full bg-slate-900 border border-slate-700 rounded py-0.5 text-xs text-rose-300 font-mono text-center"
                       />
                     </div>
 
@@ -1202,10 +1181,10 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
                     <button
                       type="button"
                       onClick={() => handleRollWeapon(atk)}
-                      className="flex items-center justify-center gap-1 bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-2 rounded-lg text-xs font-black transition-transform active:scale-95 shadow-sm shrink-0 cursor-pointer h-[28px] mt-3"
+                      className="flex items-center justify-center gap-1 bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1.5 rounded-lg text-[10px] font-black transition-transform active:scale-95 shadow-sm shrink-0 cursor-pointer h-[26px] mt-2.5 font-serif"
                       title="Rolar Ataque e Dano no Chat"
                     >
-                      <Dices className="w-3.5 h-3.5" />
+                      <Dices className="w-3 h-3" />
                       Rolar
                     </button>
                   </div>
@@ -1213,32 +1192,25 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
               ))
             )}
           </div>
-        </div>
 
-        {/* ATAQUE FURTIVO — Ladinos */}
-        {getClassLevel(sheet, 'Ladino') >= 1 && (
-          <div className="bg3-panel rounded-2xl p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Skull className="w-4 h-4 text-emerald-400" />
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400 font-serif">
-                    Ataque Furtivo
-                  </h3>
-                  <p className="text-[10px] text-slate-500 leading-tight">
-                    Dano extra: <span className="text-emerald-300 font-bold">{getSneakAttackDice(getClassLevel(sheet, 'Ladino'))}</span>
-                  </p>
-                </div>
+          {/* ATAQUE FURTIVO (LADINO) */}
+          {getClassLevel(sheet, 'Ladino') >= 1 && (
+            <div className="bg-[#090c14] border border-emerald-500/30 rounded-lg p-1.5 shrink-0 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Skull className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-[9px] font-bold uppercase text-emerald-400 font-serif">
+                  Furtivo ({getSneakAttackDice(getClassLevel(sheet, 'Ladino'))})
+                </span>
               </div>
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-1 text-[9px] font-bold text-slate-400 cursor-pointer">
+              <div className="flex items-center gap-1.5">
+                <label className="flex items-center gap-0.5 text-[8px] font-bold text-slate-400 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={sneakAttackCrit}
                     onChange={(e) => setSneakAttackCrit(e.target.checked)}
-                    className="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                    className="rounded border-slate-700 bg-slate-900 text-emerald-500"
                   />
-                  Crit 🎯
+                  Crit
                 </label>
                 <button
                   type="button"
@@ -1247,14 +1219,14 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
                     if (onRoll) onRoll(result);
                     setSneakAttackCrit(false);
                   }}
-                  className="flex items-center gap-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-2.5 py-1 rounded-xl text-[10px] font-black transition-transform active:scale-95 shadow-md cursor-pointer"
+                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-2 py-0.5 rounded text-[9px] font-black cursor-pointer font-serif"
                 >
                   Rolar
                 </button>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* ==========================================

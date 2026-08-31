@@ -152,6 +152,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isCropperModalOpen, setIsCropperModalOpen] = useState(false);
   const [avatarAspect, setAvatarAspect] = useState(1);
+  const [activeSubTab, setActiveSubTab] = useState<'identity' | 'tokens'>('identity');
 
   const handleResetSheet = async () => {
     const confirmed = await showConfirm({
@@ -205,7 +206,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
   };
 
   return (
-    <div className="space-y-6 pb-20 lg:pb-0 animate-fade-in select-none lg:grid lg:grid-cols-2 lg:gap-4 lg:h-full lg:overflow-hidden">
+    <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden animate-fade-in select-none space-y-2">
       {levelUpTarget !== null && (
         <LevelUpModal
           isOpen={true}
@@ -219,24 +220,24 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
         />
       )}
 
-      {/* Banner de Forma Selvagem Ativa */}
+      {/* BANNER DE FORMA SELVAGEM ATIVA (SE HOUVER) */}
       {sheet.activeWildShape && (
-        <div className="lg:col-span-2 bg-gradient-to-r from-emerald-950/80 via-[#0d1624] to-amber-950/70 border border-emerald-500/50 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-xl animate-fade-in">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold shrink-0">
-              <PawPrint className="w-5 h-5" />
+        <div className="shrink-0 bg-gradient-to-r from-emerald-950/80 via-[#0d1624] to-amber-950/70 border border-emerald-500/50 rounded-xl p-2 flex items-center justify-between gap-3 shadow-md">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold shrink-0">
+              <PawPrint className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black text-white uppercase tracking-wider font-serif">
-                  🐾 Forma Selvagem Ativa: {sheet.activeWildShape.beastName}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-black text-white uppercase tracking-wider font-serif">
+                  🐾 Forma Selvagem: {sheet.activeWildShape.beastName}
                 </span>
-                <span className="text-[9px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                <span className="text-[8px] font-mono bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded-full border border-emerald-500/40">
                   {sheet.activeWildShape.beastType === 'elemental' ? 'Elemental' : 'Besta'}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-300 font-mono mt-0.5">
-                PV da Besta: <strong className="text-emerald-400">{sheet.activeWildShape.currentBeastHp} / {sheet.activeWildShape.maxBeastHp}</strong> • CA: <strong className="text-cyan-300">{sheet.activeWildShape.beastAc}</strong> • Deslocamento: <strong className="text-amber-300">{sheet.activeWildShape.beastSpeed}</strong>
+              <p className="text-[10px] text-slate-300 font-mono">
+                PV: <strong className="text-emerald-400">{sheet.activeWildShape.currentBeastHp}/{sheet.activeWildShape.maxBeastHp}</strong> • CA: <strong className="text-cyan-300">{sheet.activeWildShape.beastAc}</strong> • Deslocamento: <strong className="text-amber-300">{sheet.activeWildShape.beastSpeed}</strong>
               </p>
             </div>
           </div>
@@ -244,502 +245,497 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
           <button
             type="button"
             onClick={() => onChange(revertWildShape(sheet))}
-            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow-md transition-all active:scale-95 cursor-pointer font-serif flex items-center gap-1.5"
+            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black rounded-lg shadow transition-all active:scale-95 cursor-pointer font-serif flex items-center gap-1"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reverter Forma</span>
+            <RotateCcw className="w-3 h-3" />
+            <span>Reverter</span>
           </button>
         </div>
       )}
 
-      {/* COLUNA ESQUERDA: APARÊNCIA E MODELO */}
-      <div className="space-y-4 lg:overflow-y-auto lg:h-full lg:pr-2 bg3-scrollbar lg:pb-6">
-        {/* CARD: FOTO E NOME DO PERSONAGEM */}
-        <div className="bg3-panel rounded-2xl p-4 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="relative group w-20 h-20 rounded-2xl bg-[#0b0f19] border border-amber-500/30 overflow-hidden flex items-center justify-center shrink-0 shadow-inner">
-              {sheet.avatarUrl ? (
-                <>
-                  <img 
-                     src={sheet.avatarUrl} 
-                     alt={sheet.characterName} 
-                     onLoad={(e) => setAvatarAspect(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)}
-                     className="absolute max-w-none transition-all duration-300" 
-                     style={{
-                       width: avatarAspect >= 1 ? 'auto' : '100%',
-                       height: avatarAspect >= 1 ? '100%' : 'auto',
-                       minWidth: avatarAspect >= 1 ? '100%' : 'auto',
-                       minHeight: avatarAspect >= 1 ? 'auto' : '100%',
-                       top: '50%',
-                       left: '50%',
-                       transform: sheet.avatarSettings 
-                         ? `translate(calc(-50% + ${sheet.avatarSettings.offsetX * (80/256)}px), calc(-50% + ${sheet.avatarSettings.offsetY * (80/256)}px)) scale(${sheet.avatarSettings.zoom})`
-                         : `translate(-50%, calc(-50% - 15%)) scale(1.7)`,
-                     }}
-                  />
-                  
-                  {/* Overlay de Ações (Aparece no Hover) */}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setIsCropperModalOpen(true); }}
-                      className="p-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg transition-transform hover:scale-110 shadow-lg"
-                      title="Ajustar Enquadramento"
-                    >
-                      <Settings2 className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setIsImageModalOpen(true); }}
-                      className="p-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 rounded-lg transition-transform hover:scale-110 shadow-lg"
-                      title="Ver Imagem Completa"
-                    >
-                      <ImageIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <User className="w-10 h-10 text-amber-500/50" />
-              )}
-            </div>
+      {/* SELETOR DE SUB-ABAS (BALDUR'S GATE 3 RUNIC TABS) */}
+      <div className="shrink-0 flex items-center justify-between border-b border-amber-500/20 pb-1.5">
+        <div className="flex items-center gap-1.5 bg-[#0b0e17] p-0.5 rounded-xl border border-amber-500/30">
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('identity')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-black uppercase font-serif tracking-wider transition-all cursor-pointer ${
+              activeSubTab === 'identity'
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            <User className="w-3.5 h-3.5 text-amber-400" />
+            <span>Identidade & Origem</span>
+          </button>
 
-            <div className="flex-1 space-y-2">
-              <label className="text-[11px] font-semibold tracking-wider text-amber-400/80 uppercase font-serif">
-                Nome do Personagem
-              </label>
-              <input
-                type="text"
-                value={sheet.characterName}
-                onChange={(e) => onChange({ ...sheet, characterName: e.target.value })}
-                placeholder="Ex: Thorin Escudo-de-Carvalho"
-                className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl px-3 py-2 text-white font-bold text-lg focus:outline-none focus:border-amber-500 transition-colors"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase flex items-center gap-1.5 mb-1 font-serif">
-              <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
-              Avatar / Foto do Personagem
-            </label>
-            
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="url"
-                value={sheet.avatarUrl || ''}
-                onChange={(e) => onChange({ ...sheet, avatarUrl: e.target.value })}
-                placeholder="Cole a URL da imagem..."
-                className="flex-1 bg-[#0b0f19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-amber-500"
-              />
-              
-              <div className="relative">
-                <input
-                  type="file"
-                  accept="image/*"
-                  disabled={!isSupabaseConfigured()}
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    try {
-                      const publicUrl = await storageService.uploadAsset(file, 'avatars');
-                      onChange({ ...sheet, avatarUrl: publicUrl });
-                    } catch (err: any) {
-                      showAlert({
-                        title: 'Erro no Avatar',
-                        message: err.message || 'Erro ao carregar avatar.',
-                        variant: 'danger',
-                      });
-                    }
-                  }}
-                  className="hidden"
-                  id="avatar-upload-input"
-                />
-                <label
-                  htmlFor="avatar-upload-input"
-                  className={`px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 h-full ${
-                    !isSupabaseConfigured() ? 'opacity-40 cursor-not-allowed text-slate-500' : 'text-slate-950'
-                  }`}
-                >
-                  <span>Fazer Upload</span>
-                </label>
-              </div>
-            </div>
-            {!isSupabaseConfigured() && (
-              <p className="text-[9px] text-rose-400 font-semibold mt-1">
-                ⚠️ Supabase não configurado. Upload de avatar desabilitado.
-              </p>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('tokens')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-black uppercase font-serif tracking-wider transition-all cursor-pointer ${
+              activeSubTab === 'tokens'
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            <Box className="w-3.5 h-3.5 text-sky-400" />
+            <span>Miniatura 3D & Token Standee</span>
+          </button>
         </div>
 
-        {/* CARD DUPLO: TOKEN DO GRID DE BATALHA (3D vs 2D) */}
-        <div className="grid grid-cols-2 gap-3">
-          {/* CARD: BONECO 3D */}
-          <div
-            className={`bg3-panel rounded-2xl p-3 space-y-2 cursor-pointer transition-all duration-300 ${
-              (sheet.tokenType || '3d') === '3d'
-                ? 'ring-2 ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.25)]'
-                : 'opacity-60 hover:opacity-80'
-            }`}
-            onClick={() => onChange({ ...sheet, tokenType: '3d' })}
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif">
-                <Box className="w-3.5 h-3.5 text-sky-400" />
-                Modelo 3D
-              </h3>
-              {(sheet.tokenType || '3d') === '3d' && (
-                <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-mono bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/60 font-semibold uppercase">
-                  <Check className="w-3 h-3" />
-                  Ativo
-                </span>
-              )}
-            </div>
-
-            {/* CONTROLES DE SELEÇÃO E PRÉ-VISUALIZAÇÃO 3D */}
-            {(() => {
-              const currentUrl = sheet.modelUrl || getModelUrlByNameOrPath(sheet.className);
-              const currentIndex = CHARACTER_MODELS_3D.findIndex((m) => m.modelUrl === currentUrl);
-              const activeIndex = currentIndex >= 0 ? currentIndex : 0;
-              const activeModel = CHARACTER_MODELS_3D[activeIndex] || CHARACTER_MODELS_3D[0];
-
-              const handlePrev = (e: React.MouseEvent) => {
-                e.stopPropagation();
-                const newIndex = (activeIndex - 1 + CHARACTER_MODELS_3D.length) % CHARACTER_MODELS_3D.length;
-                onChange({ ...sheet, modelUrl: CHARACTER_MODELS_3D[newIndex].modelUrl, tokenType: '3d' });
-              };
-
-              const handleNext = (e: React.MouseEvent) => {
-                e.stopPropagation();
-                const newIndex = (activeIndex + 1) % CHARACTER_MODELS_3D.length;
-                onChange({ ...sheet, modelUrl: CHARACTER_MODELS_3D[newIndex].modelUrl, tokenType: '3d' });
-              };
-
-              return (
-                <div className="space-y-2">
-                  {/* Dropdown com os nomes e setas de navegação */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={handlePrev}
-                      title="Modelo anterior"
-                      className="p-1 bg-[#0b0f19] hover:bg-amber-500/10 border border-slate-700 hover:border-amber-500/50 rounded-lg text-slate-300 hover:text-amber-400 transition-all shrink-0 active:scale-95 cursor-pointer"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-
-                    <div className="relative flex-1 min-w-0">
-                      <select
-                        value={activeModel.modelUrl}
-                        onChange={(e) => { e.stopPropagation(); onChange({ ...sheet, modelUrl: e.target.value, tokenType: '3d' }); }}
-                        className="w-full bg-[#0b0f19] border border-amber-500/30 rounded-lg px-2 py-1.5 text-[11px] font-bold text-amber-300 focus:outline-none focus:border-amber-500 transition-colors cursor-pointer appearance-none pr-6 truncate"
-                      >
-                        {CHARACTER_MODELS_3D.map((m) => (
-                          <option key={m.id} value={m.modelUrl} className="bg-[#0b0f19] text-amber-200">
-                            {m.icon ? `${m.icon} ` : ''}{m.name}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-amber-400 text-[9px]">
-                        ▼
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleNext}
-                      title="Próximo modelo"
-                      className="p-1 bg-[#0b0f19] hover:bg-amber-500/10 border border-slate-700 hover:border-amber-500/50 rounded-lg text-slate-300 hover:text-amber-400 transition-all shrink-0 active:scale-95 cursor-pointer"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {/* Descrição curta + contador */}
-                  <div className="flex items-center justify-between text-[9px] text-slate-500 px-0.5">
-                    <span className="truncate">{activeModel.description || ''}</span>
-                    <span className="font-mono shrink-0 ml-1">
-                      {activeIndex + 1}/{CHARACTER_MODELS_3D.length}
-                    </span>
-                  </div>
-
-                  {/* Pré-visualização 3D em tempo real */}
-                  <Model3DViewer modelUrl={activeModel.modelUrl} height={240} />
-                </div>
-              );
-            })()}
-          </div>
-
-          {/* CARD: TOKEN 2D (AVATAR/IMAGEM) */}
-          <div
-            className={`bg3-panel rounded-2xl p-3 space-y-2 cursor-pointer transition-all duration-300 flex flex-col ${
-              sheet.tokenType === 'billboard'
-                ? 'ring-2 ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.25)]'
-                : 'opacity-60 hover:opacity-80'
-            }`}
-            onClick={() => onChange({ ...sheet, tokenType: 'billboard' })}
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif">
-                <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
-                Token 2D
-              </h3>
-              {sheet.tokenType === 'billboard' && (
-                <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-mono bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/60 font-semibold uppercase">
-                  <Check className="w-3 h-3" />
-                  Ativo
-                </span>
-              )}
-            </div>
-
-            {/* Preview da imagem 2D como pino standee chroma-keyed */}
-            <div className="flex flex-col items-center justify-center flex-1 min-h-[280px]">
-              {sheet.avatarUrl ? (
-                <ChromaKeyStandee 
-                  imageUrl={sheet.avatarUrl} 
-                  characterName={sheet.characterName} 
-                  isActive={sheet.tokenType === 'billboard'}
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center py-6 text-center space-y-2">
-                  <div className="w-[100px] h-[100px] rounded-full border-2 border-dashed border-slate-600 flex items-center justify-center bg-slate-900/50">
-                    <User className="w-10 h-10 text-slate-600" />
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-medium max-w-[120px]">
-                    Adicione um avatar acima para usar como token 2D
-                  </p>
-                </div>
-              )}
-
-              {/* Label informativo */}
-              <p className="text-[9px] text-slate-500 text-center mt-2 font-medium">
-                {sheet.avatarUrl ? 'Pino 2D com fundo removido (Chroma-Key)' : 'Sem imagem definida'}
-              </p>
-            </div>
-          </div>
-        </div>
+        <span className="text-[10px] text-amber-400/70 font-serif font-bold uppercase tracking-wider hidden sm:inline">
+          {sheet.characterName || 'Personagem'} • Nvl {sheet.level}
+        </span>
       </div>
 
-      {/* COLUNA DIREITA: RAÇA, CLASSE E DETALHES GERAIS */}
-      <div className="space-y-4 lg:overflow-y-auto lg:h-full lg:pr-2 bg3-scrollbar lg:pb-6">
-        {/* CARD: RAÇA, CLASSE E NÍVEL (AUTO-COMPLETE) */}
-        <div className="bg3-panel rounded-2xl p-4 space-y-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2 font-serif">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            Classe, Raça & Autocompletar
-          </h3>
+      {/* CONTEÚDO DAS SUB-ABAS */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {activeSubTab === 'identity' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 h-full overflow-hidden">
+            {/* COLUNA ESQUERDA: NOME, AVATAR & CLASSE/RAÇA */}
+            <div className="flex flex-col gap-2.5 h-full overflow-hidden">
+              {/* CARD: FOTO E NOME DO PERSONAGEM */}
+              <div className="bg3-panel rounded-xl p-2.5 space-y-2 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="relative group w-14 h-14 rounded-xl bg-[#0b0f19] border border-amber-500/40 overflow-hidden flex items-center justify-center shrink-0 shadow-inner">
+                    {sheet.avatarUrl ? (
+                      <>
+                        <img 
+                          src={sheet.avatarUrl} 
+                          alt={sheet.characterName} 
+                          onLoad={(e) => setAvatarAspect(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)}
+                          className="absolute max-w-none transition-all duration-300" 
+                          style={{
+                            width: avatarAspect >= 1 ? 'auto' : '100%',
+                            height: avatarAspect >= 1 ? '100%' : 'auto',
+                            minWidth: avatarAspect >= 1 ? '100%' : 'auto',
+                            minHeight: avatarAspect >= 1 ? 'auto' : '100%',
+                            top: '50%',
+                            left: '50%',
+                            transform: sheet.avatarSettings 
+                              ? `translate(calc(-50% + ${sheet.avatarSettings.offsetX * (56/256)}px), calc(-50% + ${sheet.avatarSettings.offsetY * (56/256)}px)) scale(${sheet.avatarSettings.zoom})`
+                              : `translate(-50%, calc(-50% - 15%)) scale(1.7)`,
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setIsCropperModalOpen(true); }}
+                            className="p-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded transition-transform hover:scale-110 shadow"
+                            title="Ajustar Enquadramento"
+                          >
+                            <Settings2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setIsImageModalOpen(true); }}
+                            className="p-1 bg-sky-500 hover:bg-sky-400 text-slate-950 rounded transition-transform hover:scale-110 shadow"
+                            title="Ver Imagem Completa"
+                          >
+                            <ImageIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <User className="w-8 h-8 text-amber-500/50" />
+                    )}
+                  </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* RAÇA */}
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-300">Raça</label>
-              <select
-                value={sheet.race}
-                onChange={(e) => handleRaceChange(e.target.value)}
-                className="w-full bg-[#0b0f19] border border-slate-700 rounded-xl px-3 py-2.5 text-sm font-semibold text-amber-300 focus:outline-none focus:border-amber-500"
-              >
-                {Object.keys(DND_RACES).map((raceName) => (
-                  <option key={raceName} value={raceName}>
-                    {raceName}
-                  </option>
-                ))}
-              </select>
-            </div>
+                  <div className="flex-1 space-y-1">
+                    <label className="text-[9px] font-bold tracking-wider text-amber-400/80 uppercase font-serif">
+                      Nome do Personagem
+                    </label>
+                    <input
+                      type="text"
+                      value={sheet.characterName}
+                      onChange={(e) => onChange({ ...sheet, characterName: e.target.value })}
+                      placeholder="Ex: Thorin Escudo-de-Carvalho"
+                      className="w-full bg-[#090c14] border border-slate-700/80 rounded-lg px-2.5 py-1 text-white font-bold text-sm focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
 
-            {/* CLASSE */}
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-300">Classe</label>
-              <select
-                value={sheet.className}
-                onChange={(e) => handleClassChange(e.target.value)}
-                className="w-full bg-[#0b0f19] border border-slate-700 rounded-xl px-3 py-2.5 text-sm font-semibold text-amber-300 focus:outline-none focus:border-amber-500"
-              >
-                {Object.keys(DND_CLASSES).map((className) => (
-                  <option key={className} value={className}>
-                    {className}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* NÍVEL SLIDER / INPUT */}
-          <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-300">Nível do Personagem</span>
-              <span className="text-sm font-black px-3 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                Nível {sheet.level}
-              </span>
-            </div>
-            <input
-              type="range"
-              min={1}
-              max={20}
-              value={sheet.level}
-              onChange={(e) => handleLevelChange(parseInt(e.target.value, 10))}
-              className="w-full accent-amber-500 cursor-pointer h-2 bg-slate-700 rounded-lg"
-            />
-            <div className="flex justify-between text-[10px] text-slate-500 font-mono">
-              <span>Lvl 1 (+2 Prof)</span>
-              <span>Lvl 5 (+3 Prof)</span>
-              <span>Lvl 11 (+4 Prof)</span>
-              <span>Lvl 20 (+6 Prof)</span>
-            </div>
-          </div>
-
-          {/* SUBCLASSE & SUBRAÇA */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-[11px] text-slate-400">Subraça {DND_RACES[sheet.race]?.subraces ? '' : '(Indisponível)'}</label>
-              {DND_RACES[sheet.race]?.subraces ? (
-                <select
-                  value={sheet.subrace || ''}
-                  onChange={(e) => handleSubraceChange(e.target.value)}
-                  className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-                >
-                  {Object.keys(DND_RACES[sheet.race].subraces!).map((subKey) => (
-                    <option key={subKey} value={subKey}>{subKey}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={sheet.subrace || ''}
-                  onChange={(e) => handleSubraceChange(e.target.value)}
-                  placeholder="Sem sub-raças"
-                  disabled
-                  className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-500 focus:outline-none focus:border-amber-500 opacity-50 cursor-not-allowed"
-                />
-              )}
-            </div>
-            <div className="space-y-1">
-              <label className="text-[11px] text-slate-400">Subclasse (Opcional)</label>
-              <input
-                type="text"
-                value={sheet.subclass || ''}
-                onChange={(e) => onChange({ ...sheet, subclass: e.target.value })}
-                placeholder="Ex: Assassino / Campeão"
-                className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* CARD: ANTECEDENTE, TENDÊNCIA E XP */}
-        <div className="bg3-panel rounded-2xl p-4 space-y-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2 font-serif">
-            <Shield className="w-4 h-4 text-amber-400" />
-            Origem & Tendência
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-300">Antecedente</label>
-              <select
-                value={sheet.background}
-                onChange={(e) => onChange({ ...sheet, background: e.target.value })}
-                className="w-full bg-[#0b0f19] border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
-              >
-                {DND_BACKGROUNDS.map((bg) => (
-                  <option key={bg} value={bg}>
-                    {bg}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-300">Tendência</label>
-              <select
-                value={sheet.alignment}
-                onChange={(e) => onChange({ ...sheet, alignment: e.target.value })}
-                className="w-full bg-[#0b0f19] border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
-              >
-                {DND_ALIGNMENTS.map((align) => (
-                  <option key={align} value={align}>
-                    {align}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <div className="space-y-1">
-              <label className="text-[11px] text-slate-400">Pontos de Experiência (XP)</label>
-              <input
-                type="number"
-                value={sheet.xp}
-                onChange={(e) => {
-                  const newXp = parseInt(e.target.value, 10) || 0;
-                  const expectedLevel = calculateLevelFromXP(newXp);
+                <div className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    value={sheet.avatarUrl || ''}
+                    onChange={(e) => onChange({ ...sheet, avatarUrl: e.target.value })}
+                    placeholder="URL da imagem / avatar..."
+                    className="flex-1 bg-[#090c14] border border-slate-700/80 rounded-lg px-2 py-1 text-[11px] text-slate-300 focus:outline-none focus:border-amber-500"
+                  />
                   
-                  // Se a XP ganha qualifica para um nível maior que o atual,
-                  // atualiza a XP e abre o modal de Level Up.
-                  if (expectedLevel > sheet.level) {
-                    setLevelUpTarget(expectedLevel);
-                  }
-                  
-                  onChange({ ...sheet, xp: newXp });
-                }}
-                className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[11px] text-slate-400">Nome do Jogador</label>
-              <input
-                type="text"
-                value={sheet.playerName}
-                onChange={(e) => onChange({ ...sheet, playerName: e.target.value })}
-                placeholder="Seu nome"
-                className="w-full bg-[#0b0f19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-              />
-            </div>
-          </div>
+                  <div className="relative shrink-0">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={!isSupabaseConfigured()}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const publicUrl = await storageService.uploadAsset(file, 'avatars');
+                          onChange({ ...sheet, avatarUrl: publicUrl });
+                        } catch (err: any) {
+                          showAlert({
+                            title: 'Erro no Avatar',
+                            message: err.message || 'Erro ao carregar avatar.',
+                            variant: 'danger',
+                          });
+                        }
+                      }}
+                      className="hidden"
+                      id="avatar-upload-input"
+                    />
+                    <label
+                      htmlFor="avatar-upload-input"
+                      className={`px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] rounded-lg transition-all cursor-pointer inline-flex items-center gap-1 font-serif ${
+                        !isSupabaseConfigured() ? 'opacity-40 cursor-not-allowed text-slate-500' : 'text-slate-950'
+                      }`}
+                    >
+                      <span>Upload</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
 
-          {/* INSPIRAÇÃO TOGGLE */}
-          <div className="flex items-center justify-between bg-[#0b0f19] border border-slate-800 rounded-xl p-3 mt-2">
-            <div className="flex items-center gap-2">
-              <Award className={`w-5 h-5 ${sheet.inspiration ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
-              <div>
-                <p className="text-xs font-bold text-slate-200">Inspiração de Dungeon Master</p>
-                <p className="text-[10px] text-slate-400">Concede Vantagem em uma rolagem à sua escolha</p>
+              {/* CARD: RAÇA, CLASSE E NÍVEL */}
+              <div className="bg3-panel rounded-xl p-2.5 space-y-2 flex-1 flex flex-col justify-between">
+                <div className="flex items-center justify-between border-b border-amber-500/10 pb-1">
+                  <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    Classe, Raça & Nível
+                  </h3>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 font-mono">
+                    Nível {sheet.level} (+{Math.floor((sheet.level - 1) / 4) + 2} Prof)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-0.5">
+                    <label className="text-[10px] font-medium text-slate-300 font-serif">Raça</label>
+                    <select
+                      value={sheet.race}
+                      onChange={(e) => handleRaceChange(e.target.value)}
+                      className="w-full bg-[#090c14] border border-slate-700 rounded-lg px-2 py-1 text-xs font-semibold text-amber-300 focus:outline-none focus:border-amber-500 cursor-pointer"
+                    >
+                      {Object.keys(DND_RACES).map((raceName) => (
+                        <option key={raceName} value={raceName}>{raceName}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-0.5">
+                    <label className="text-[10px] font-medium text-slate-300 font-serif">Classe</label>
+                    <select
+                      value={sheet.className}
+                      onChange={(e) => handleClassChange(e.target.value)}
+                      className="w-full bg-[#090c14] border border-slate-700 rounded-lg px-2 py-1 text-xs font-semibold text-amber-300 focus:outline-none focus:border-amber-500 cursor-pointer"
+                    >
+                      {Object.keys(DND_CLASSES).map((className) => (
+                        <option key={className} value={className}>{className}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* SLIDER DE NÍVEL COMPACTO */}
+                <div className="bg-[#090c14] border border-slate-800/80 rounded-lg p-1.5 space-y-1">
+                  <div className="flex items-center justify-between text-[9px] text-slate-400 font-mono">
+                    <span>Evolução de Nível (1-20)</span>
+                    <span className="text-amber-400 font-bold">Nvl {sheet.level}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={1}
+                    max={20}
+                    value={sheet.level}
+                    onChange={(e) => handleLevelChange(parseInt(e.target.value, 10))}
+                    className="w-full accent-amber-500 cursor-pointer h-1.5 bg-slate-700 rounded"
+                  />
+                </div>
+
+                {/* SUBCLASSE & SUBRAÇA */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-0.5">
+                    <label className="text-[9px] text-slate-400 font-serif">Subraça</label>
+                    {DND_RACES[sheet.race]?.subraces ? (
+                      <select
+                        value={sheet.subrace || ''}
+                        onChange={(e) => handleSubraceChange(e.target.value)}
+                        className="w-full bg-[#090c14] border border-slate-700/80 rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none focus:border-amber-500 cursor-pointer"
+                      >
+                        {Object.keys(DND_RACES[sheet.race].subraces!).map((subKey) => (
+                          <option key={subKey} value={subKey}>{subKey}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value=""
+                        placeholder="Nenhuma"
+                        disabled
+                        className="w-full bg-[#090c14] border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-500 opacity-50 cursor-not-allowed"
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-0.5">
+                    <label className="text-[9px] text-slate-400 font-serif">Subclasse</label>
+                    <input
+                      type="text"
+                      value={sheet.subclass || ''}
+                      onChange={(e) => onChange({ ...sheet, subclass: e.target.value })}
+                      placeholder="Ex: Campeão"
+                      className="w-full bg-[#090c14] border border-slate-700/80 rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => onChange({ ...sheet, inspiration: !sheet.inspiration })}
-              className={`w-12 h-6 rounded-full transition-colors relative flex items-center p-1 ${
-                sheet.inspiration ? 'bg-amber-500' : 'bg-slate-700'
-              }`}
-            >
-              <div
-                className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                  sheet.inspiration ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
 
-          {/* CARD: RESETAR FICHA PARA NÍVEL 1 */}
-          <div className="bg3-panel border border-rose-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4">
-            <div className="space-y-0.5">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-rose-400 flex items-center gap-2 font-serif">
-                <RotateCcw className="w-4 h-4 text-rose-400" />
-                Resetar Ficha para Nível 1
-              </h3>
-              <p className="text-[11px] text-slate-400">
-                Redefine atributos, perícias, armas, moedas, magias e talentos para o Nível 1. Mantém nome, raça, classe e história.
-              </p>
+            {/* COLUNA DIREITA: ORIGEM, TENDÊNCIA, XP & INSPIRAÇÃO */}
+            <div className="flex flex-col gap-2.5 h-full overflow-hidden">
+              <div className="bg3-panel rounded-xl p-2.5 space-y-2 flex-1 flex flex-col justify-between">
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif border-b border-amber-500/10 pb-1">
+                  <Shield className="w-3.5 h-3.5 text-amber-400" />
+                  Origem, Tendência & Experiência
+                </h3>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-0.5">
+                    <label className="text-[10px] font-medium text-slate-300 font-serif">Antecedente</label>
+                    <select
+                      value={sheet.background}
+                      onChange={(e) => onChange({ ...sheet, background: e.target.value })}
+                      className="w-full bg-[#090c14] border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500 cursor-pointer"
+                    >
+                      {DND_BACKGROUNDS.map((bg) => (
+                        <option key={bg} value={bg}>{bg}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-0.5">
+                    <label className="text-[10px] font-medium text-slate-300 font-serif">Tendência</label>
+                    <select
+                      value={sheet.alignment}
+                      onChange={(e) => onChange({ ...sheet, alignment: e.target.value })}
+                      className="w-full bg-[#090c14] border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500 cursor-pointer"
+                    >
+                      {DND_ALIGNMENTS.map((align) => (
+                        <option key={align} value={align}>{align}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-0.5">
+                    <label className="text-[9px] text-slate-400 font-serif">Pontos de Experiência (XP)</label>
+                    <input
+                      type="number"
+                      value={sheet.xp}
+                      onChange={(e) => {
+                        const newXp = parseInt(e.target.value, 10) || 0;
+                        const expectedLevel = calculateLevelFromXP(newXp);
+                        if (expectedLevel > sheet.level) {
+                          setLevelUpTarget(expectedLevel);
+                        }
+                        onChange({ ...sheet, xp: newXp });
+                      }}
+                      className="w-full bg-[#090c14] border border-slate-700/80 rounded-lg px-2 py-1 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div className="space-y-0.5">
+                    <label className="text-[9px] text-slate-400 font-serif">Nome do Jogador</label>
+                    <input
+                      type="text"
+                      value={sheet.playerName}
+                      onChange={(e) => onChange({ ...sheet, playerName: e.target.value })}
+                      placeholder="Nome do jogador..."
+                      className="w-full bg-[#090c14] border border-slate-700/80 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {/* INSPIRAÇÃO TOGGLE COMPACTO */}
+                <div className="flex items-center justify-between bg-[#090c14] border border-slate-800 rounded-lg px-2.5 py-1.5">
+                  <div className="flex items-center gap-2">
+                    <Award className={`w-4 h-4 ${sheet.inspiration ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
+                    <div>
+                      <p className="text-[11px] font-bold text-slate-200 font-serif">Inspiração do Mestre</p>
+                      <p className="text-[9px] text-slate-400">Garante Vantagem em 1 rolagem</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ ...sheet, inspiration: !sheet.inspiration })}
+                    className={`w-10 h-5 rounded-full transition-colors relative flex items-center p-0.5 cursor-pointer ${
+                      sheet.inspiration ? 'bg-amber-500' : 'bg-slate-700'
+                    }`}
+                  >
+                    <div
+                      className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                        sheet.inspiration ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* CARD: RESETAR FICHA PARA NÍVEL 1 */}
+                <div className="border border-rose-500/30 bg-rose-950/20 rounded-lg p-2 flex items-center justify-between gap-2">
+                  <div className="space-y-0.2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1 font-serif">
+                      <RotateCcw className="w-3 h-3 text-rose-400" />
+                      Resetar Nível 1
+                    </span>
+                    <p className="text-[9px] text-slate-400">
+                      Restaura atributos e habilidades mantendo identidade.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResetSheet}
+                    className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white border border-rose-500/40 rounded-lg text-[10px] font-bold transition-all shrink-0 active:scale-95 cursor-pointer font-serif flex items-center gap-1"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Resetar</span>
+                  </button>
+                </div>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={handleResetSheet}
-              className="px-4 py-2 bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white border border-rose-500/40 rounded-xl text-xs font-bold transition-all shrink-0 active:scale-95 cursor-pointer flex items-center gap-1.5"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Resetar Nível 1
-            </button>
           </div>
-        </div>
+        )}
+
+        {activeSubTab === 'tokens' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 h-full overflow-hidden">
+            {/* CARD: BONECO 3D */}
+            <div
+              className={`bg3-panel rounded-xl p-3 flex flex-col justify-between cursor-pointer transition-all duration-300 h-full overflow-hidden ${
+                (sheet.tokenType || '3d') === '3d'
+                  ? 'ring-2 ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.25)]'
+                  : 'opacity-70 hover:opacity-90'
+              }`}
+              onClick={() => onChange({ ...sheet, tokenType: '3d' })}
+            >
+              <div className="flex items-center justify-between border-b border-amber-500/10 pb-1 shrink-0">
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif">
+                  <Box className="w-3.5 h-3.5 text-sky-400" />
+                  Modelo 3D Interativo
+                </h3>
+                {(sheet.tokenType || '3d') === '3d' && (
+                  <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-mono bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-800/60 font-semibold uppercase">
+                    <Check className="w-3 h-3" />
+                    Ativo no Grid
+                  </span>
+                )}
+              </div>
+
+              {(() => {
+                const currentUrl = sheet.modelUrl || getModelUrlByNameOrPath(sheet.className);
+                const currentIndex = CHARACTER_MODELS_3D.findIndex((m) => m.modelUrl === currentUrl);
+                const activeIndex = currentIndex >= 0 ? currentIndex : 0;
+                const activeModel = CHARACTER_MODELS_3D[activeIndex] || CHARACTER_MODELS_3D[0];
+
+                const handlePrev = (e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  const newIndex = (activeIndex - 1 + CHARACTER_MODELS_3D.length) % CHARACTER_MODELS_3D.length;
+                  onChange({ ...sheet, modelUrl: CHARACTER_MODELS_3D[newIndex].modelUrl, tokenType: '3d' });
+                };
+
+                const handleNext = (e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  const newIndex = (activeIndex + 1) % CHARACTER_MODELS_3D.length;
+                  onChange({ ...sheet, modelUrl: CHARACTER_MODELS_3D[newIndex].modelUrl, tokenType: '3d' });
+                };
+
+                return (
+                  <div className="space-y-1.5 flex-1 flex flex-col min-h-0 justify-between">
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={handlePrev}
+                        title="Modelo anterior"
+                        className="p-1 bg-[#0b0f19] hover:bg-amber-500/10 border border-slate-700 hover:border-amber-500/50 rounded-lg text-slate-300 hover:text-amber-400 transition-all shrink-0 cursor-pointer"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+
+                      <div className="relative flex-1 min-w-0">
+                        <select
+                          value={activeModel.modelUrl}
+                          onChange={(e) => { e.stopPropagation(); onChange({ ...sheet, modelUrl: e.target.value, tokenType: '3d' }); }}
+                          className="w-full bg-[#0b0f19] border border-amber-500/30 rounded-lg px-2 py-1 text-[11px] font-bold text-amber-300 focus:outline-none focus:border-amber-500 transition-colors cursor-pointer appearance-none pr-6 truncate"
+                        >
+                          {CHARACTER_MODELS_3D.map((m) => (
+                            <option key={m.id} value={m.modelUrl} className="bg-[#0b0f19] text-amber-200">
+                              {m.icon ? `${m.icon} ` : ''}{m.name}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-amber-400 text-[8px]">
+                          ▼
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleNext}
+                        title="Próximo modelo"
+                        className="p-1 bg-[#0b0f19] hover:bg-amber-500/10 border border-slate-700 hover:border-amber-500/50 rounded-lg text-slate-300 hover:text-amber-400 transition-all shrink-0 cursor-pointer"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="flex-1 min-h-0 flex items-center justify-center">
+                      <Model3DViewer modelUrl={activeModel.modelUrl} height={200} />
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* CARD: TOKEN 2D STAND-EE */}
+            <div
+              className={`bg3-panel rounded-xl p-3 flex flex-col justify-between cursor-pointer transition-all duration-300 h-full overflow-hidden ${
+                sheet.tokenType === 'billboard'
+                  ? 'ring-2 ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.25)]'
+                  : 'opacity-70 hover:opacity-90'
+              }`}
+              onClick={() => onChange({ ...sheet, tokenType: 'billboard' })}
+            >
+              <div className="flex items-center justify-between border-b border-amber-500/10 pb-1 shrink-0">
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif">
+                  <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
+                  Token 2D Standee (Pino de Batalha)
+                </h3>
+                {sheet.tokenType === 'billboard' && (
+                  <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-mono bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-800/60 font-semibold uppercase">
+                    <Check className="w-3 h-3" />
+                    Ativo no Grid
+                  </span>
+                )}
+              </div>
+
+              <div className="flex-1 min-h-0 flex flex-col items-center justify-center">
+                {sheet.avatarUrl ? (
+                  <ChromaKeyStandee 
+                    imageUrl={sheet.avatarUrl} 
+                    characterName={sheet.characterName} 
+                    isActive={sheet.tokenType === 'billboard'}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-6 text-center space-y-2">
+                    <div className="w-16 h-16 rounded-full border-2 border-dashed border-slate-600 flex items-center justify-center bg-slate-900/50">
+                      <User className="w-8 h-8 text-slate-600" />
+                    </div>
+                    <p className="text-[10px] text-slate-500 font-medium max-w-[140px]">
+                      Adicione um avatar na aba Identidade para usar como token 2D
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <ZoomableImageModal 

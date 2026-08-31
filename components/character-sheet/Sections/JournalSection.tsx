@@ -238,74 +238,55 @@ export const JournalSection: React.FC<JournalSectionProps> = ({ sheet, onChange 
   };
 
   return (
-    <div className="space-y-4 pb-20 lg:pb-0 animate-fade-in select-none lg:flex lg:flex-col lg:h-full lg:overflow-hidden lg:min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden animate-fade-in select-none space-y-2">
       
-      {/* CABEÇALHO & SELETOR DE SUB-ABAS */}
-      <div className="bg3-panel rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
+      {/* CABEÇALHO & SELETOR DE SUB-ABAS BG3 */}
+      <div className="flex items-center justify-between border-b border-amber-500/20 pb-1.5 shrink-0">
         <div className="flex items-center gap-2">
-          <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-            <ScrollText className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider font-serif">
-              Diário Pessoal & Missões do Jogador
-            </h2>
-            <p className="text-[10px] text-slate-400 font-serif">
-              Registre notas secretas, teorias, diário de bordo e acompanhe seus objetivos individuais.
-            </p>
-          </div>
+          <ScrollText className="w-4 h-4 text-amber-400" />
+          <h2 className="text-xs font-black text-amber-400 uppercase tracking-wider font-serif">
+            Diário Pessoal & Missões
+          </h2>
         </div>
 
         {/* NAVEGAÇÃO DE SUB-ABAS COM CONTADORES */}
-        <div className="flex items-center gap-1.5 bg-[#0b0f19] p-1 rounded-xl border border-slate-800 w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('journal')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold font-serif transition-all ${
-              activeSubTab === 'journal'
-                ? 'bg-amber-500 text-slate-950 shadow-md'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-            }`}
-          >
-            <BookMarked className="w-3.5 h-3.5" />
-            <span>Diário de Bordo</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-              activeSubTab === 'journal' ? 'bg-slate-950/30 text-slate-950' : 'bg-slate-800 text-amber-400'
-            }`}>
-              {entries.length}
-            </span>
-          </button>
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 bg-[#090c14] border border-amber-500/30 p-0.5 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('journal')}
+              className={`flex items-center gap-1.5 px-3 py-1 text-[10px] font-extrabold uppercase rounded-md transition-all cursor-pointer font-serif ${
+                activeSubTab === 'journal'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <BookMarked className="w-3.5 h-3.5" />
+              <span>Diário ({entries.length})</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('quests')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold font-serif transition-all ${
-              activeSubTab === 'quests'
-                ? 'bg-amber-500 text-slate-950 shadow-md'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-            }`}
-          >
-            <Target className="w-3.5 h-3.5" />
-            <span>Missões Pessoais</span>
-            <div className="flex items-center gap-1">
-              {activeQuestsCount > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-                  activeSubTab === 'quests' ? 'bg-slate-950/30 text-slate-950' : 'bg-emerald-950/60 text-emerald-400 border border-emerald-500/30'
-                }`}>
-                  {activeQuestsCount} ativas
-                </span>
-              )}
-            </div>
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('quests')}
+              className={`flex items-center gap-1.5 px-3 py-1 text-[10px] font-extrabold uppercase rounded-md transition-all cursor-pointer font-serif ${
+                activeSubTab === 'quests'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Target className="w-3.5 h-3.5" />
+              <span>Missões ({activeQuestsCount})</span>
+            </button>
+          </div>
 
           <button
             type="button"
             onClick={() => setIsPersonalPinboardOpen(true)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold font-serif transition-all bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/60 text-amber-200 cursor-pointer shadow-sm"
+            className="flex items-center gap-1.5 bg-amber-950/60 hover:bg-amber-900/80 border border-amber-700/60 text-amber-200 px-3 py-1 rounded-lg text-[10px] font-black font-serif cursor-pointer shadow transition-all active:scale-95 uppercase"
             title="Abrir Mural de Investigação e Fios Vermelhos"
           >
             <span>🕵️</span>
-            <span>Mural de Pistas</span>
+            <span>Mural</span>
           </button>
         </div>
       </div>

@@ -354,11 +354,62 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
     });
   };
 
+  const [activeTab, setActiveTab] = useState<'all' | 'actions' | 'passives'>('all');
+
   return (
-    <div className="space-y-4 pb-20 lg:pb-0 animate-fade-in select-none lg:grid lg:grid-cols-2 lg:gap-4 lg:h-full lg:overflow-hidden lg:min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden animate-fade-in select-none space-y-2">
       
-      {/* COLUNA ESQUERDA: RECURSOS ATIVOS E TRIGERERS */}
-      <div className="space-y-4 lg:overflow-y-auto lg:h-full lg:pr-2 bg3-scrollbar lg:pb-6">
+      {/* SELETOR DE SUB-ABAS COMPACTO */}
+      <div className="flex items-center justify-between border-b border-amber-500/20 pb-1.5 shrink-0">
+        <div className="flex items-center gap-2">
+          <Zap className="w-4 h-4 text-amber-400" />
+          <h2 className="text-xs font-black uppercase tracking-wider text-amber-400 font-serif">
+            Habilidades de Classe & Talentos
+          </h2>
+        </div>
+
+        <div className="flex items-center gap-1 bg-[#090c14] border border-amber-500/30 p-0.5 rounded-lg">
+          <button
+            type="button"
+            onClick={() => setActiveTab('all')}
+            className={`px-2.5 py-0.5 text-[9px] font-extrabold uppercase rounded transition-all cursor-pointer font-serif ${
+              activeTab === 'all'
+                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Visão Completa
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('actions')}
+            className={`px-2.5 py-0.5 text-[9px] font-extrabold uppercase rounded transition-all cursor-pointer font-serif ${
+              activeTab === 'actions'
+                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Ações & Recursos
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('passives')}
+            className={`px-2.5 py-0.5 text-[9px] font-extrabold uppercase rounded transition-all cursor-pointer font-serif ${
+              activeTab === 'passives'
+                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Passivas & Talentos
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 flex-1 min-h-0 overflow-hidden">
+        
+        {/* COLUNA ESQUERDA: RECURSOS ATIVOS E TRIGERERS */}
+        {(activeTab === 'all' || activeTab === 'actions') && (
+        <div className={`space-y-2 flex flex-col h-full overflow-hidden min-h-0 ${activeTab === 'actions' ? 'lg:col-span-2' : ''}`}>
         
         {/* SEÇÃO 1: RECURSOS ATIVOS DA CLASSE */}
         {Object.keys(resources).length > 0 && (
@@ -706,73 +757,77 @@ export const ClassAbilitiesSection: React.FC<ClassAbilitiesSectionProps> = ({
           </div>
         </div>
 
-      </div>
-
-      {/* COLUNA DIREITA: PASSIVAS E FEATS */}
-      <div className="space-y-4 lg:overflow-y-auto lg:h-full lg:pr-2 bg3-scrollbar lg:pb-6">
-        
-        {/* SEÇÃO 3: CARACTERÍSTICAS DA CLASSE */}
-        <div className="bg3-panel rounded-2xl p-4 space-y-3">
-          <div className="flex items-center gap-2 border-b border-slate-850 pb-2">
-            <Shield className="w-4 h-4 text-slate-400" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 font-serif">Características da Classe</h3>
-          </div>
-
-          <div className="space-y-2.5">
-            {features.length > 0 ? (
-              features.map((feat) => (
-                <div key={feat.id} className="bg-[#0b0f19]/60 border border-slate-800/80 rounded-xl p-3 space-y-1 shadow-inner">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold text-amber-300 font-serif">{feat.name}</span>
-                    <span className="text-[8px] font-bold bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700">
-                      Nível {feat.level}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-450 leading-relaxed font-serif">{feat.description}</p>
-                  {feat.activation && feat.activation !== 'none' && (
-                    <span className="inline-block text-[8px] font-bold text-cyan-400 mt-1 font-serif">
-                      Ativação: {feat.activation === 'action' ? 'Ação' : feat.activation === 'bonus_action' ? 'Ação Bônus' : feat.activation === 'reaction' ? 'Reação' : 'Especial'}
-                    </span>
-                  )}
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-4 text-xs text-slate-500 italic font-serif">
-                Nenhuma característica cadastrada.
-              </div>
-            )}
-          </div>
         </div>
+        )}
 
-        {/* SEÇÃO 4: TALENTOS ADQUIRIDOS (FEATS) */}
-        {sheet.feats && sheet.feats.length > 0 && (
-          <div className="bg3-panel rounded-2xl p-4 space-y-3">
-            <div className="flex items-center gap-2 border-b border-cyan-500/15 pb-2">
-              <Award className="w-4 h-4 text-cyan-400" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400 font-serif">Talentos (Feats) Adquiridos</h3>
+        {/* COLUNA DIREITA: PASSIVAS E FEATS */}
+        {(activeTab === 'all' || activeTab === 'passives') && (
+        <div className={`space-y-2 flex flex-col h-full overflow-hidden min-h-0 ${activeTab === 'passives' ? 'lg:col-span-2' : ''}`}>
+          
+          {/* SEÇÃO 3: CARACTERÍSTICAS DA CLASSE */}
+          <div className="bg3-panel rounded-xl p-2.5 space-y-1.5 flex-1 min-h-0 flex flex-col">
+            <div className="flex items-center gap-2 border-b border-slate-850 pb-1 shrink-0">
+              <Shield className="w-3.5 h-3.5 text-slate-400" />
+              <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-serif">Características da Classe</h3>
             </div>
 
-            <div className="space-y-2.5">
-              {sheet.feats.map((feat) => (
-                <div key={feat.id} className="bg-[#0b0f19]/80 border border-slate-800 rounded-xl p-3 shadow-inner space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold text-cyan-300 flex items-center gap-1.5 font-serif">
-                      {feat.namePt} <span className="text-[9px] text-slate-500 font-normal">({feat.name})</span>
-                    </span>
-                    <span className="text-[8px] font-bold bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-800 uppercase font-serif">
-                      {feat.category || 'Talento'}
-                    </span>
+            <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1 bg3-scrollbar">
+              {features.length > 0 ? (
+                features.map((feat) => (
+                  <div key={feat.id} className="bg-[#090c14] border border-slate-800/80 rounded-lg p-2 space-y-0.5 shadow-inner">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-extrabold text-amber-300 font-serif">{feat.name}</span>
+                      <span className="text-[8px] font-bold bg-slate-800 text-slate-400 px-1.5 py-0.2 rounded-full border border-slate-700">
+                        Nível {feat.level}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed font-serif">{feat.description}</p>
+                    {feat.activation && feat.activation !== 'none' && (
+                      <span className="inline-block text-[8px] font-bold text-cyan-400 font-serif">
+                        Ativação: {feat.activation === 'action' ? 'Ação' : feat.activation === 'bonus_action' ? 'Ação Bônus' : feat.activation === 'reaction' ? 'Reação' : 'Especial'}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-[10px] text-slate-350 leading-relaxed font-serif">{feat.description}</p>
-                  {feat.chosenAttribute && (
-                    <span className="inline-block text-[9px] font-bold text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-500/20 font-serif uppercase">
-                      Bônus: {feat.chosenAttribute.toUpperCase()} +1
-                    </span>
-                  )}
+                ))
+              ) : (
+                <div className="text-center py-4 text-[10px] text-slate-500 italic font-serif">
+                  Nenhuma característica cadastrada.
                 </div>
-              ))}
+              )}
             </div>
           </div>
+
+          {/* SEÇÃO 4: TALENTOS ADQUIRIDOS (FEATS) */}
+          {sheet.feats && sheet.feats.length > 0 && (
+            <div className="bg3-panel rounded-xl p-2.5 space-y-1.5 flex-1 min-h-0 flex flex-col">
+              <div className="flex items-center gap-2 border-b border-cyan-500/15 pb-1 shrink-0">
+                <Award className="w-3.5 h-3.5 text-cyan-400" />
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 font-serif">Talentos (Feats) Adquiridos</h3>
+              </div>
+
+              <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1 bg3-scrollbar">
+                {sheet.feats.map((feat) => (
+                  <div key={feat.id} className="bg-[#090c14] border border-slate-800 rounded-lg p-2 shadow-inner space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-extrabold text-cyan-300 flex items-center gap-1 font-serif">
+                        {feat.namePt} <span className="text-[8.5px] text-slate-500 font-normal">({feat.name})</span>
+                      </span>
+                      <span className="text-[7.5px] font-bold bg-cyan-950 text-cyan-300 px-1.5 py-0.2 rounded-full border border-cyan-800 uppercase font-serif">
+                        {feat.category || 'Talento'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-350 leading-relaxed font-serif">{feat.description}</p>
+                    {feat.chosenAttribute && (
+                      <span className="inline-block text-[8px] font-bold text-amber-400 bg-amber-950/40 px-1.5 py-0.2 rounded border border-amber-500/20 font-serif uppercase">
+                        Bônus: {feat.chosenAttribute.toUpperCase()} +1
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         )}
       </div>
 

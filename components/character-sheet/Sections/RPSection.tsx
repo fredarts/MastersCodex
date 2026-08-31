@@ -69,229 +69,271 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
     }
   };
 
+  const [activeRPSubTab, setActiveRPSubTab] = useState<'visual' | 'lore'>('visual');
+
   return (
-    <div className="space-y-4 pb-20 lg:pb-0 animate-fade-in select-none lg:grid lg:grid-cols-2 lg:gap-4 lg:h-full lg:overflow-hidden lg:min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden animate-fade-in select-none space-y-2">
       
-      {/* COLUNA ESQUERDA: VISUAL E DETALHES FÍSICOS */}
-      <div className="space-y-4 lg:overflow-y-auto lg:h-full lg:pr-2 bg3-scrollbar lg:pb-6">
-        
-        {/* IMAGEM E GERAÇÃO IA */}
-        <div className="bg3-panel rounded-2xl p-4 space-y-4">
-          <div className="flex flex-col justify-between gap-3 border-b border-amber-500/10 pb-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2 font-serif">
-              <ImageIcon className="w-4 h-4 text-amber-400" />
-              Retrato do Personagem
-            </h3>
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setIsAiModalOpen(true)}
-                className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1.5 rounded-xl font-bold text-xs transition-colors shadow-md active:scale-95 cursor-pointer font-serif uppercase tracking-wider"
-              >
-                <Wand2 className="w-3.5 h-3.5" />
-                Preencher com IA
-              </button>
+      {/* SELETOR DE SUB-ABAS BG3 */}
+      <div className="flex items-center justify-between border-b border-amber-500/20 pb-1.5 shrink-0">
+        <div className="flex items-center gap-2">
+          <BookOpen className="w-4 h-4 text-amber-400" />
+          <h2 className="text-xs font-black uppercase tracking-wider text-amber-400 font-serif">
+            Interpretação, Aparência & Lore
+          </h2>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 bg-[#090c14] border border-amber-500/30 p-0.5 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setActiveRPSubTab('visual')}
+              className={`flex items-center gap-1.5 px-3 py-1 text-[10px] font-extrabold uppercase rounded-md transition-all cursor-pointer font-serif ${
+                activeRPSubTab === 'visual'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <ImageIcon className="w-3.5 h-3.5" />
+              Retrato & Físico
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveRPSubTab('lore')}
+              className={`flex items-center gap-1.5 px-3 py-1 text-[10px] font-extrabold uppercase rounded-md transition-all cursor-pointer font-serif ${
+                activeRPSubTab === 'lore'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Heart className="w-3.5 h-3.5" />
+              Psiquismo & História
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsAiModalOpen(true)}
+            className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1 rounded-lg font-black text-[10px] transition-colors shadow active:scale-95 cursor-pointer font-serif uppercase tracking-wider"
+          >
+            <Wand2 className="w-3.5 h-3.5" />
+            Preencher com IA
+          </button>
+        </div>
+      </div>
+
+      {/* ========================================================
+          SUB-ABA 1: VISUAL & RETRATO + DETALHES FÍSICOS
+          ======================================================== */}
+      {activeRPSubTab === 'visual' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 flex-1 min-h-0 overflow-hidden">
+          {/* RETRATO DO PERSONAGEM */}
+          <div className="bg3-panel rounded-xl p-3 flex flex-col h-full overflow-hidden justify-between space-y-2">
+            <div className="flex items-center justify-between border-b border-amber-500/10 pb-1.5 shrink-0">
+              <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif">
+                <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
+                Retrato de Corpo Inteiro
+              </h3>
               <button
                 type="button"
                 onClick={generateImage}
                 disabled={isGenerating}
-                className="flex items-center gap-1.5 bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-xl font-bold text-xs transition-colors disabled:opacity-50 active:scale-95 cursor-pointer font-serif uppercase tracking-wider"
+                className="flex items-center gap-1 bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-lg font-bold text-[9px] transition-colors disabled:opacity-50 active:scale-95 cursor-pointer font-serif uppercase tracking-wider"
               >
-                {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
-                {isGenerating ? 'Gerando...' : 'Gerar Retrato'}
+                {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                {isGenerating ? 'Gerando...' : 'Gerar com IA'}
               </button>
             </div>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative w-full sm:w-48 h-64 bg-[#0b0f19] border border-slate-700/80 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
-              {sheet.avatarUrl ? (
-                <img 
-                  src={sheet.avatarUrl} 
-                  alt="Visual" 
-                  className="w-full h-full object-contain bg-white cursor-pointer hover:opacity-90 transition-opacity" 
-                  onClick={() => setIsImageModalOpen(true)}
+
+            <div className="flex gap-3 flex-1 min-h-0">
+              <div className="relative w-44 bg-[#090c14] border border-slate-800 rounded-lg overflow-hidden flex items-center justify-center shrink-0">
+                {sheet.avatarUrl ? (
+                  <img 
+                    src={sheet.avatarUrl} 
+                    alt="Visual" 
+                    className="w-full h-full object-contain bg-slate-950 cursor-pointer hover:opacity-90 transition-opacity" 
+                    onClick={() => setIsImageModalOpen(true)}
+                  />
+                ) : (
+                  <span className="text-[9px] text-slate-500 text-center px-2 font-serif">
+                    O retrato aparecerá aqui.<br/>Clique em "Gerar com IA".
+                  </span>
+                )}
+              </div>
+
+              <div className="flex-1 flex flex-col justify-between space-y-1">
+                <label className="text-[9px] font-bold text-slate-400 font-serif">Descrição para Gerador IA:</label>
+                <textarea
+                  value={sheet.appearanceDesc || ''}
+                  onChange={(e) => onChange({ ...sheet, appearanceDesc: e.target.value })}
+                  placeholder="Descreva roupas, cicatrizes, estilo de arma, armadura... A IA usará este texto como guia!"
+                  className="w-full flex-1 bg-[#090c14] border border-slate-700/80 rounded-lg p-2 text-[10px] text-slate-200 focus:outline-none focus:border-amber-500 font-serif leading-relaxed resize-none"
                 />
-              ) : (
-                <span className="text-[10px] text-slate-500 text-center px-4 font-serif">
-                  A imagem de corpo inteiro aparecerá aqui.<br/><br/>
-                  No painel geral, será focado no rosto.
-                </span>
-              )}
+              </div>
             </div>
-            
-            <div className="flex-1 space-y-2">
-              <label className="text-[10px] text-slate-400 block font-serif">Descrição Física para a IA (Opcional)</label>
+          </div>
+
+          {/* CARACTERÍSTICAS FÍSICAS */}
+          <div className="bg3-panel rounded-xl p-3 flex flex-col h-full overflow-hidden justify-between space-y-2">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif border-b border-amber-500/10 pb-1.5 shrink-0">
+              <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+              Características Físicas & Medidas
+            </h3>
+
+            <div className="grid grid-cols-2 gap-2 flex-1 content-center">
+              <div className="space-y-0.5">
+                <label className="text-[8px] text-slate-400 font-serif uppercase">Idade</label>
+                <input
+                  type="text"
+                  value={sheet.age || ''}
+                  onChange={(e) => onChange({ ...sheet, age: e.target.value })}
+                  placeholder="Ex: 24 anos"
+                  className="w-full bg-[#090c14] border border-slate-700/80 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="space-y-0.5">
+                <label className="text-[8px] text-slate-400 font-serif uppercase">Altura</label>
+                <input
+                  type="text"
+                  value={sheet.height || ''}
+                  onChange={(e) => onChange({ ...sheet, height: e.target.value })}
+                  placeholder="Ex: 1.80m"
+                  className="w-full bg-[#090c14] border border-slate-700/80 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="space-y-0.5">
+                <label className="text-[8px] text-slate-400 font-serif uppercase">Peso</label>
+                <input
+                  type="text"
+                  value={sheet.weight || ''}
+                  onChange={(e) => onChange({ ...sheet, weight: e.target.value })}
+                  placeholder="Ex: 80kg"
+                  className="w-full bg-[#090c14] border border-slate-700/80 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="space-y-0.5">
+                <label className="text-[8px] text-slate-400 font-serif uppercase">Olhos</label>
+                <input
+                  type="text"
+                  value={sheet.eyes || ''}
+                  onChange={(e) => onChange({ ...sheet, eyes: e.target.value })}
+                  placeholder="Ex: Castanhos"
+                  className="w-full bg-[#090c14] border border-slate-700/80 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="space-y-0.5">
+                <label className="text-[8px] text-slate-400 font-serif uppercase">Pele</label>
+                <input
+                  type="text"
+                  value={sheet.skin || ''}
+                  onChange={(e) => onChange({ ...sheet, skin: e.target.value })}
+                  placeholder="Ex: Clara / Bronzeada"
+                  className="w-full bg-[#090c14] border border-slate-700/80 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="space-y-0.5">
+                <label className="text-[8px] text-slate-400 font-serif uppercase">Cabelos</label>
+                <input
+                  type="text"
+                  value={sheet.hair || ''}
+                  onChange={(e) => onChange({ ...sheet, hair: e.target.value })}
+                  placeholder="Ex: Castanhos longos"
+                  className="w-full bg-[#090c14] border border-slate-700/80 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          SUB-ABA 2: PSIQUISMO & BIOGRAFIA COMPLETA
+          ======================================================== */}
+      {activeRPSubTab === 'lore' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 flex-1 min-h-0 overflow-hidden">
+          {/* COLUNA 1: PERSONALIDADE, IDEAIS, LIGAÇÕES E DEFEITOS */}
+          <div className="bg3-panel rounded-xl p-2.5 flex flex-col h-full overflow-hidden justify-between space-y-1.5">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif border-b border-amber-500/10 pb-1 shrink-0">
+              <Heart className="w-3.5 h-3.5 text-amber-400" />
+              Psiquismo & Alinhamento
+            </h3>
+
+            <div className="grid grid-cols-2 gap-1.5 flex-1 min-h-0">
+              <div className="flex flex-col space-y-0.5">
+                <label className="text-[8.5px] font-bold text-amber-400/90 font-serif">Traços de Personalidade</label>
+                <textarea
+                  value={sheet.personalityTraits || ''}
+                  onChange={(e) => onChange({ ...sheet, personalityTraits: e.target.value })}
+                  className="w-full flex-1 bg-[#090c14] border border-slate-700/80 rounded p-1.5 text-[10px] text-slate-200 focus:outline-none focus:border-amber-500 font-serif resize-none"
+                />
+              </div>
+
+              <div className="flex flex-col space-y-0.5">
+                <label className="text-[8.5px] font-bold text-amber-400/90 font-serif">Ideais</label>
+                <textarea
+                  value={sheet.ideals || ''}
+                  onChange={(e) => onChange({ ...sheet, ideals: e.target.value })}
+                  className="w-full flex-1 bg-[#090c14] border border-slate-700/80 rounded p-1.5 text-[10px] text-slate-200 focus:outline-none focus:border-amber-500 font-serif resize-none"
+                />
+              </div>
+
+              <div className="flex flex-col space-y-0.5">
+                <label className="text-[8.5px] font-bold text-amber-400/90 font-serif">Ligações</label>
+                <textarea
+                  value={sheet.bonds || ''}
+                  onChange={(e) => onChange({ ...sheet, bonds: e.target.value })}
+                  className="w-full flex-1 bg-[#090c14] border border-slate-700/80 rounded p-1.5 text-[10px] text-slate-200 focus:outline-none focus:border-amber-500 font-serif resize-none"
+                />
+              </div>
+
+              <div className="flex flex-col space-y-0.5">
+                <label className="text-[8.5px] font-bold text-amber-400/90 font-serif">Defeitos</label>
+                <textarea
+                  value={sheet.flaws || ''}
+                  onChange={(e) => onChange({ ...sheet, flaws: e.target.value })}
+                  className="w-full flex-1 bg-[#090c14] border border-slate-700/80 rounded p-1.5 text-[10px] text-slate-200 focus:outline-none focus:border-amber-500 font-serif resize-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* COLUNA 2: HISTÓRIA (BACKSTORY) & ALIADOS */}
+          <div className="flex flex-col gap-2 h-full overflow-hidden justify-between">
+            {/* HISTÓRIA */}
+            <div className="bg3-panel rounded-xl p-2.5 space-y-1 flex-1 flex flex-col min-h-0 justify-between">
+              <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif border-b border-amber-500/10 pb-1 shrink-0">
+                <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                História do Personagem (Biografia)
+              </h3>
               <textarea
-                rows={4}
-                value={sheet.appearanceDesc || ''}
-                onChange={(e) => onChange({ ...sheet, appearanceDesc: e.target.value })}
-                placeholder="Descreva roupas, cicatrizes, estilo de arma, armadura... A IA usará isso para gerar a imagem!"
-                className="w-full bg-[#0b0f19]/80 border border-slate-700/80 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-serif leading-relaxed"
+                value={sheet.backstory || ''}
+                onChange={(e) => onChange({ ...sheet, backstory: e.target.value })}
+                placeholder="Escreva a origem e os eventos marcantes da vida do seu aventureiro..."
+                className="w-full flex-1 bg-[#090c14] border border-slate-700/80 rounded-lg p-2 text-[10px] text-slate-200 focus:outline-none focus:border-amber-500 leading-relaxed font-serif resize-none"
+              />
+            </div>
+
+            {/* ALIADOS & ORGANIZAÇÕES */}
+            <div className="bg3-panel rounded-xl p-2.5 space-y-1 flex-1 flex flex-col min-h-0 justify-between">
+              <h3 className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif border-b border-amber-500/10 pb-1 shrink-0">
+                <Users className="w-3.5 h-3.5 text-amber-400" />
+                Aliados & Organizações
+              </h3>
+              <textarea
+                value={sheet.alliesAndOrganizations || ''}
+                onChange={(e) => onChange({ ...sheet, alliesAndOrganizations: e.target.value })}
+                placeholder="Guildas, ordens cavalheirescas, mentores, contatos..."
+                className="w-full flex-1 bg-[#090c14] border border-slate-700/80 rounded-lg p-2 text-[10px] text-slate-200 focus:outline-none focus:border-amber-500 leading-relaxed font-serif resize-none"
               />
             </div>
           </div>
         </div>
-
-        {/* CARACTERÍSTICAS FÍSICAS */}
-        <div className="bg3-panel rounded-2xl p-4 space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2 font-serif border-b border-amber-500/10 pb-2">
-            <UserCheck className="w-4 h-4 text-amber-400" />
-            Aparência Física & Detalhes
-          </h3>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-            <div className="space-y-1">
-              <label className="text-[9px] text-slate-400 font-serif uppercase">Idade</label>
-              <input
-                type="text"
-                value={sheet.age || ''}
-                onChange={(e) => onChange({ ...sheet, age: e.target.value })}
-                placeholder="Ex: 24 anos"
-                className="w-full bg-[#0b0f19] border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[9px] text-slate-400 font-serif uppercase">Altura</label>
-              <input
-                type="text"
-                value={sheet.height || ''}
-                onChange={(e) => onChange({ ...sheet, height: e.target.value })}
-                placeholder="Ex: 1.80m"
-                className="w-full bg-[#0b0f19] border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[9px] text-slate-400 font-serif uppercase">Peso</label>
-              <input
-                type="text"
-                value={sheet.weight || ''}
-                onChange={(e) => onChange({ ...sheet, weight: e.target.value })}
-                placeholder="Ex: 80kg"
-                className="w-full bg-[#0b0f19] border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[9px] text-slate-400 font-serif uppercase">Olhos</label>
-              <input
-                type="text"
-                value={sheet.eyes || ''}
-                onChange={(e) => onChange({ ...sheet, eyes: e.target.value })}
-                placeholder="Ex: Castanhos"
-                className="w-full bg-[#0b0f19] border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[9px] text-slate-400 font-serif uppercase">Pele</label>
-              <input
-                type="text"
-                value={sheet.skin || ''}
-                onChange={(e) => onChange({ ...sheet, skin: e.target.value })}
-                placeholder="Ex: Moreno"
-                className="w-full bg-[#0b0f19] border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[9px] text-slate-400 font-serif uppercase">Cabelos</label>
-              <input
-                type="text"
-                value={sheet.hair || ''}
-                onChange={(e) => onChange({ ...sheet, hair: e.target.value })}
-                placeholder="Ex: Pretos"
-                className="w-full bg-[#0b0f19] border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* COLUNA DIREITA: PSIQUISMO, LORE E ALIANÇAS */}
-      <div className="space-y-4 lg:overflow-y-auto lg:h-full lg:pr-2 bg3-scrollbar lg:pb-6">
-        {/* PERSONALIDADE, IDEAIS, LIGAÇÕES E DEFEITOS */}
-        <div className="bg3-panel rounded-2xl p-4 space-y-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2 font-serif border-b border-amber-500/10 pb-2">
-            <Heart className="w-4 h-4 text-amber-400" />
-            Psiquismo & Alinhamento
-          </h3>
-
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-350 font-serif">Traços de Personalidade</label>
-              <textarea
-                rows={2}
-                value={sheet.personalityTraits || ''}
-                onChange={(e) => onChange({ ...sheet, personalityTraits: e.target.value })}
-                className="w-full bg-[#0b0f19]/80 border border-slate-700/80 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-serif"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-350 font-serif">Ideais</label>
-              <textarea
-                rows={2}
-                value={sheet.ideals || ''}
-                onChange={(e) => onChange({ ...sheet, ideals: e.target.value })}
-                className="w-full bg-[#0b0f19]/80 border border-slate-700/80 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-serif"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-350 font-serif">Ligações</label>
-              <textarea
-                rows={2}
-                value={sheet.bonds || ''}
-                onChange={(e) => onChange({ ...sheet, bonds: e.target.value })}
-                className="w-full bg-[#0b0f19]/80 border border-slate-700/80 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-serif"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-350 font-serif">Defeitos</label>
-              <textarea
-                rows={2}
-                value={sheet.flaws || ''}
-                onChange={(e) => onChange({ ...sheet, flaws: e.target.value })}
-                className="w-full bg-[#0b0f19]/80 border border-slate-700/80 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-serif"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* HISTÓRIA DO PERSONAGEM (BACKSTORY) */}
-        <div className="bg3-panel rounded-2xl p-4 space-y-2">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2 font-serif border-b border-amber-500/10 pb-2">
-            <BookOpen className="w-4 h-4 text-amber-400" />
-            História do Personagem (Biografia)
-          </h3>
-          <textarea
-            rows={5}
-            value={sheet.backstory || ''}
-            onChange={(e) => onChange({ ...sheet, backstory: e.target.value })}
-            placeholder="Escreva a origem e os eventos marcantes da vida do seu aventureiro..."
-            className="w-full bg-[#0b0f19]/80 border border-slate-700/80 rounded-xl p-3 text-xs text-slate-250 focus:outline-none focus:border-amber-500 leading-relaxed font-serif"
-          />
-        </div>
-
-        {/* ALIADOS E ORGANIZAÇÕES */}
-        <div className="bg3-panel rounded-2xl p-4 space-y-2">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2 font-serif border-b border-amber-500/10 pb-2">
-            <Users className="w-4 h-4 text-amber-400" />
-            Aliados & Organizações
-          </h3>
-          <textarea
-            rows={3}
-            value={sheet.alliesAndOrganizations || ''}
-            onChange={(e) => onChange({ ...sheet, alliesAndOrganizations: e.target.value })}
-            placeholder="Guildas, ordens cavalheirescas, mentores..."
-            className="w-full bg-[#0b0f19]/80 border border-slate-700/80 rounded-xl p-3 text-xs text-slate-250 focus:outline-none focus:border-amber-500 leading-relaxed font-serif"
-          />
-        </div>
-      </div>
+      )}
 
       {/* MODAL DE IMAGEM */}
       <ZoomableImageModal 
@@ -312,4 +354,5 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
     </div>
   );
 };
+
 

@@ -592,8 +592,10 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
     </div>
   );
 
+  const [activeEquipmentSubTab, setActiveEquipmentSubTab] = useState<'inventory' | 'wallet'>('inventory');
+
   return (
-    <div className="space-y-4 pb-20 lg:pb-0 animate-fade-in select-none lg:grid lg:grid-cols-4 lg:gap-3 lg:h-full lg:overflow-hidden lg:min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden animate-fade-in select-none space-y-2">
       {/* ITEM COMPENDIUM MODAL */}
       <ItemCompendiumModal
         sheet={sheet}
@@ -614,444 +616,403 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
         onSelectShop={setActiveShop}
       />
 
-      {/* BARRA DE AÇÕES DO INVENTÁRIO (Top toolbar spanning 4 columns on desktop) */}
-      <div className="bg3-panel rounded-2xl p-3 flex items-center justify-between gap-3 lg:col-span-4 shrink-0 lg:flex-row flex-col">
-        <div className="flex items-center gap-2">
-          <Package className="w-4 h-4 text-amber-400" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 font-serif">Gerenciamento de Mochila</h3>
+      {/* HEADER SUPERIOR COM SUB-ABAS E AÇÕES RÁPIDAS */}
+      <div className="flex items-center justify-between border-b border-amber-500/20 pb-1.5 shrink-0">
+        {/* SUB-ABAS BG3 */}
+        <div className="flex items-center gap-1 bg-[#090c14] border border-amber-500/30 p-0.5 rounded-lg">
+          <button
+            type="button"
+            onClick={() => setActiveEquipmentSubTab('inventory')}
+            className={`flex items-center gap-1.5 px-3 py-1 text-[10px] font-extrabold uppercase rounded-md transition-all cursor-pointer font-serif ${
+              activeEquipmentSubTab === 'inventory'
+                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Package className="w-3.5 h-3.5" />
+            Mochila & Carga ({items.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveEquipmentSubTab('wallet')}
+            className={`flex items-center gap-1.5 px-3 py-1 text-[10px] font-extrabold uppercase rounded-md transition-all cursor-pointer font-serif ${
+              activeEquipmentSubTab === 'wallet'
+                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Coins className="w-3.5 h-3.5" />
+            Bolsa de Moedas & Gastos
+          </button>
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* BOTÕES DE COMPÊNDIO E LOJA */}
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={handleOpenMerchantShop}
-            className="flex items-center gap-1.5 text-[10px] font-black bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 px-3 py-1.5 rounded-xl shadow-md active:scale-95 transition-all cursor-pointer uppercase tracking-wider font-serif"
+            className="flex items-center gap-1 text-[9.5px] font-black bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 px-2.5 py-1 rounded-lg shadow active:scale-95 transition-all cursor-pointer uppercase font-serif"
             title="Abrir Loja Interativa estilo Baldur's Gate 3"
           >
-            <Store className="w-3.5 h-3.5" />
-            Loja & Barter (BG3)
+            <Store className="w-3 h-3" />
+            Loja & Barter
           </button>
           <button
             type="button"
             onClick={() => setIsItemCompendiumOpen(true)}
-            className="flex items-center gap-1.5 text-[10px] font-black bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-3 py-1.5 rounded-xl shadow-md active:scale-95 transition-all cursor-pointer uppercase tracking-wider font-serif"
+            className="flex items-center gap-1 text-[9.5px] font-black bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-lg shadow active:scale-95 transition-all cursor-pointer uppercase font-serif"
           >
-            <ShoppingCart className="w-3.5 h-3.5" />
+            <ShoppingCart className="w-3 h-3" />
             Compêndio
           </button>
           <button
             type="button"
             onClick={handleAddEquipment}
-            className="flex items-center gap-1.5 text-[10px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 px-3 py-1.5 rounded-xl border border-amber-500/30 transition-all active:scale-95 cursor-pointer uppercase tracking-wider font-serif"
+            className="flex items-center gap-1 text-[9.5px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-lg border border-amber-500/30 transition-all active:scale-95 cursor-pointer uppercase font-serif"
           >
-            <Plus className="w-3.5 h-3.5" />
-            Item Manual
+            <Plus className="w-3 h-3" />
+            + Item
           </button>
         </div>
       </div>
 
-      {/* COLUNA 1: ARMAS */}
-      <div className="bg3-panel rounded-2xl p-3 flex flex-col lg:h-full lg:min-h-0 h-[300px]">
-        <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider border-b border-amber-500/15 pb-1.5 mb-2 block font-serif">
-          ⚔️ Armas & Lâminas ({weapons.length})
-        </span>
-        <div className="flex-1 overflow-y-auto space-y-2 pr-1 bg3-scrollbar">
-          {weapons.length === 0 ? (
-            <p className="text-[10px] text-slate-500 text-center py-8 font-serif">Nenhuma arma equipada.</p>
-          ) : (
-            weapons.map(renderItemRow)
-          )}
-        </div>
-      </div>
-
-      {/* COLUNA 2: ARMADURAS & PROTEÇÃO */}
-      <div className="bg3-panel rounded-2xl p-3 flex flex-col lg:h-full lg:min-h-0 h-[300px]">
-        <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider border-b border-amber-500/15 pb-1.5 mb-2 block font-serif">
-          🛡️ Armaduras & Proteção ({armors.length})
-        </span>
-        <div className="flex-1 overflow-y-auto space-y-2 pr-1 bg3-scrollbar">
-          {armors.length === 0 ? (
-            <p className="text-[10px] text-slate-500 text-center py-8 font-serif">Nenhuma armadura na mochila.</p>
-          ) : (
-            armors.map(renderItemRow)
-          )}
-        </div>
-      </div>
-
-      {/* COLUNA 3: CONSUMÍVEIS & POÇÕES */}
-      <div className="bg3-panel rounded-2xl p-3 flex flex-col lg:h-full lg:min-h-0 h-[300px]">
-        <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider border-b border-amber-500/15 pb-1.5 mb-2 block font-serif">
-          🧪 Consumíveis & Elixires ({consumables.length})
-        </span>
-        <div className="flex-1 overflow-y-auto space-y-2 pr-1 bg3-scrollbar">
-          {consumables.length === 0 ? (
-            <p className="text-[10px] text-slate-500 text-center py-8 font-serif">Nenhum consumível.</p>
-          ) : (
-            consumables.map(renderItemRow)
-          )}
-        </div>
-      </div>
-
-      {/* COLUNA 4: OUTROS ITENS, MOEDAS E GEMAS */}
-      <div className="space-y-3 lg:overflow-y-auto lg:h-full lg:pr-2 bg3-scrollbar lg:pb-6">
-        
-        {/* CARTEIRA / MOEDAS */}
-        <div className="bg3-panel rounded-2xl p-3 space-y-2.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center justify-between font-serif border-b border-amber-500/15 pb-1">
-            <span className="flex items-center gap-1.5">
-              <Coins className="w-3.5 h-3.5 text-amber-400" />
-              Bolsa de Moedas
+      {/* ========================================================
+          SUB-ABA 1: MOCHILA & CARGA (3 COLUNAS BALANCEADAS)
+          ======================================================== */}
+      {activeEquipmentSubTab === 'inventory' && (
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden space-y-2">
+          {/* BARRA DE CAPACIDADE DE CARGA */}
+          <div className="bg-[#090c14] border border-slate-800 rounded-xl px-3 py-1.5 flex items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-2">
+              <Scale className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-[10px] font-bold uppercase text-amber-400 font-serif">Capacidade de Carga:</span>
+              <span className="text-xs font-black text-white font-mono">
+                {totalWeight.toFixed(1)} / {maxCarryingCapacity} kg
+              </span>
+            </div>
+            <div className="flex-1 max-w-xs bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+              <div
+                className={`h-full transition-all ${
+                  isEncumbered
+                    ? 'bg-rose-600 animate-pulse'
+                    : totalWeight > maxCarryingCapacity * 0.75
+                    ? 'bg-amber-500'
+                    : 'bg-emerald-500'
+                }`}
+                style={{ width: `${Math.min(100, (totalWeight / (maxCarryingCapacity || 1)) * 100)}%` }}
+              />
+            </div>
+            <span className={`text-[9px] font-bold font-mono px-2 py-0.5 rounded border ${
+              isEncumbered 
+                ? 'bg-rose-950/60 text-rose-300 border-rose-800' 
+                : totalWeight > maxCarryingCapacity * 0.75
+                ? 'bg-amber-950/60 text-amber-300 border-amber-800' 
+                : 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
+            }`}>
+              {isEncumbered ? 'Sobrecarregado' : totalWeight > maxCarryingCapacity * 0.75 ? 'Carga Pesada' : 'Carga Normal'}
             </span>
-            {sheet.startingWealthRolled ? (
-              <span className="flex items-center gap-1 text-[8px] text-slate-500 normal-case font-mono font-normal">
-                <Lock className="w-2.5 h-2.5 text-slate-500" />
-                Protegida
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-[8px] text-amber-600/80 normal-case font-mono font-normal">
-                <Unlock className="w-2.5 h-2.5 text-amber-600/80" />
-                Ajustável
-              </span>
-            )}
-          </span>
-
-          <div className="grid grid-cols-5 gap-1 text-center">
-            {/* PC */}
-            <div className={`bg-[#0b0f19] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-amber-800/40'}`}>
-              <span className="text-[8px] font-black text-amber-700 uppercase block font-mono">PC</span>
-              <input
-                type="number"
-                min={0}
-                value={coins.pc}
-                disabled={isLocked}
-                onChange={(e) => updateCoins({ ...coins, pc: parseInt(e.target.value, 10) || 0 })}
-                className={`w-full bg-slate-900 border rounded py-0.5 text-center text-[10px] font-bold focus:outline-none p-0 ${
-                  isLocked 
-                    ? 'border-transparent text-slate-400 cursor-not-allowed' 
-                    : 'border-slate-800 text-amber-600'
-                }`}
-              />
-            </div>
-            {/* PP */}
-            <div className={`bg-[#0b0f19] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-slate-700/40'}`}>
-              <span className="text-[8px] font-black text-slate-400 uppercase block font-mono">PP</span>
-              <input
-                type="number"
-                min={0}
-                value={coins.pp}
-                disabled={isLocked}
-                onChange={(e) => updateCoins({ ...coins, pp: parseInt(e.target.value, 10) || 0 })}
-                className={`w-full bg-slate-900 border rounded py-0.5 text-center text-[10px] font-bold focus:outline-none p-0 ${
-                  isLocked 
-                    ? 'border-transparent text-slate-400 cursor-not-allowed' 
-                    : 'border-slate-800 text-slate-350'
-                }`}
-              />
-            </div>
-            {/* PE */}
-            <div className={`bg-[#0b0f19] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-emerald-700/40'}`}>
-              <span className="text-[8px] font-black text-emerald-500 uppercase block font-mono">PE</span>
-              <input
-                type="number"
-                min={0}
-                value={coins.pe}
-                disabled={isLocked}
-                onChange={(e) => updateCoins({ ...coins, pe: parseInt(e.target.value, 10) || 0 })}
-                className={`w-full bg-slate-900 border rounded py-0.5 text-center text-[10px] font-bold focus:outline-none p-0 ${
-                  isLocked 
-                    ? 'border-transparent text-slate-400 cursor-not-allowed' 
-                    : 'border-slate-800 text-emerald-400'
-                }`}
-              />
-            </div>
-            {/* PO */}
-            <div className={`bg-[#0b0f19] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-amber-500/40'}`}>
-              <span className="text-[8px] font-black text-amber-400 uppercase block font-mono">PO</span>
-              <input
-                type="number"
-                min={0}
-                value={coins.po}
-                disabled={isLocked}
-                onChange={(e) => updateCoins({ ...coins, po: parseInt(e.target.value, 10) || 0 })}
-                className={`w-full bg-slate-900 border rounded py-0.5 text-center text-[11px] font-black focus:outline-none p-0 ${
-                  isLocked 
-                    ? 'border-transparent text-slate-450 cursor-not-allowed' 
-                    : 'border-slate-850 text-amber-400'
-                }`}
-              />
-            </div>
-            {/* PL */}
-            <div className={`bg-[#0b0f19] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-cyan-500/40'}`}>
-              <span className="text-[8px] font-black text-cyan-400 uppercase block font-mono">PL</span>
-              <input
-                type="number"
-                min={0}
-                value={coins.pl}
-                disabled={isLocked}
-                onChange={(e) => updateCoins({ ...coins, pl: parseInt(e.target.value, 10) || 0 })}
-                className={`w-full bg-slate-900 border rounded py-0.5 text-center text-[10px] font-bold focus:outline-none p-0 ${
-                  isLocked 
-                    ? 'border-transparent text-slate-400 cursor-not-allowed' 
-                    : 'border-slate-800 text-cyan-300'
-                }`}
-              />
-            </div>
           </div>
 
-          {/* Riqueza Inicial do Livro do Jogador */}
-          {!sheet.startingWealthRolled && (
-            <div className="bg-[#05070a]/90 border border-amber-500/20 rounded-xl p-2.5 mt-2.5 space-y-2.5">
-              <div className="flex items-center gap-1.5 text-amber-400">
-                <Dices className="w-3.5 h-3.5 animate-pulse text-amber-400" />
-                <span className="font-serif font-bold text-[10px] tracking-wide uppercase">Riqueza Inicial</span>
+          {/* GRID DAS 3 CATEGORIAS DE ITENS */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5 flex-1 min-h-0 overflow-hidden">
+            {/* COLUNA 1: ARMAS */}
+            <div className="bg3-panel rounded-xl p-2.5 flex flex-col h-full overflow-hidden justify-between">
+              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider border-b border-amber-500/15 pb-1 mb-1 block font-serif shrink-0">
+                ⚔️ Armas & Lâminas ({weapons.length})
+              </span>
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5 bg3-scrollbar min-h-0">
+                {weapons.length === 0 ? (
+                  <p className="text-[10px] text-slate-500 text-center py-8 font-serif">Nenhuma arma na mochila.</p>
+                ) : (
+                  weapons.map(renderItemRow)
+                )}
               </div>
-              <p className="text-slate-400 text-[8.5px] leading-normal font-serif">
-                Selecione sua classe para rolar sua riqueza inicial como no Livro do Jogador e travar sua bolsa.
-              </p>
-              <div className="grid grid-cols-3 gap-1">
-                <select
-                  value={selectedClassRoll}
-                  onChange={(e) => setSelectedClassRoll(e.target.value)}
-                  className="col-span-2 bg-[#0b0f19] border border-amber-900/30 rounded px-1.5 py-1 text-[9px] text-amber-200 focus:outline-none leading-none"
-                >
-                  <option value="">-- Escolher Classe --</option>
-                  {Object.entries(STARTING_WEALTH_FORMULAS).map(([key, value]) => (
-                    <option key={key} value={key}>
-                      {key.charAt(0).toUpperCase() + key.slice(1)} ({value.formula})
-                    </option>
-                  ))}
-                  <option value="custom">Outra (4d4 × 10 PO)</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() => handleRollStartingWealth(selectedClassRoll || normalizeClassName(sheet.className))}
-                  disabled={isRolling}
-                  className="bg-amber-600 hover:bg-amber-505 disabled:bg-slate-850 disabled:text-slate-500 text-slate-950 font-bold font-serif py-1 rounded text-[9px] transition-all flex items-center justify-center gap-1 border border-amber-400/20 active:scale-95 cursor-pointer uppercase"
-                >
-                  {isRolling ? 'Rolando' : 'Rolar'}
-                </button>
+            </div>
+
+            {/* COLUNA 2: ARMADURAS */}
+            <div className="bg3-panel rounded-xl p-2.5 flex flex-col h-full overflow-hidden justify-between">
+              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider border-b border-amber-500/15 pb-1 mb-1 block font-serif shrink-0">
+                🛡️ Armaduras & Proteção ({armors.length})
+              </span>
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5 bg3-scrollbar min-h-0">
+                {armors.length === 0 ? (
+                  <p className="text-[10px] text-slate-500 text-center py-8 font-serif">Nenhuma armadura na mochila.</p>
+                ) : (
+                  armors.map(renderItemRow)
+                )}
               </div>
-              {rollResult && (
-                <div className="bg-[#05070a]/90 border border-emerald-500/20 rounded-lg p-1.5 text-center text-[9px] animate-fadeIn">
-                  <span className="text-slate-350 block font-mono text-[8px]">
-                    Resultado: [{rollResult.rolls.join(' + ')}] = {rollResult.sum}
+            </div>
+
+            {/* COLUNA 3: CONSUMÍVEIS & OUTROS */}
+            <div className="bg3-panel rounded-xl p-2.5 flex flex-col h-full overflow-hidden justify-between">
+              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider border-b border-amber-500/15 pb-1 mb-1 block font-serif shrink-0">
+                🧪 Consumíveis & Geral ({consumables.length + others.length})
+              </span>
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5 bg3-scrollbar min-h-0">
+                {consumables.length + others.length === 0 ? (
+                  <p className="text-[10px] text-slate-500 text-center py-8 font-serif">Nenhum item consumível ou geral.</p>
+                ) : (
+                  <>
+                    {consumables.map(renderItemRow)}
+                    {others.map(renderItemRow)}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          SUB-ABA 2: CARTEIRA, FINANÇAS & TRANSAÇÕES
+          ======================================================== */}
+      {activeEquipmentSubTab === 'wallet' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 flex-1 min-h-0 overflow-hidden">
+          {/* LADO ESQUERDO: MOEDAS & PAGAMENTOS */}
+          <div className="flex flex-col gap-2 h-full overflow-y-auto pr-1 bg3-scrollbar justify-between">
+            {/* CARTEIRA / MOEDAS */}
+            <div className="bg3-panel rounded-xl p-2.5 space-y-2 shrink-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center justify-between font-serif border-b border-amber-500/15 pb-1">
+                <span className="flex items-center gap-1.5">
+                  <Coins className="w-3.5 h-3.5 text-amber-400" />
+                  Bolsa de Moedas
+                </span>
+                {sheet.startingWealthRolled ? (
+                  <span className="flex items-center gap-1 text-[8px] text-slate-500 normal-case font-mono font-normal">
+                    <Lock className="w-2.5 h-2.5 text-slate-500" />
+                    Protegida
                   </span>
-                  <span className="font-black text-emerald-400 font-serif block text-[10px]">
-                    + {rollResult.total} PO ({rollResult.className})
+                ) : (
+                  <span className="flex items-center gap-1 text-[8px] text-amber-600/80 normal-case font-mono font-normal">
+                    <Unlock className="w-2.5 h-2.5 text-amber-600/80" />
+                    Ajustável
                   </span>
+                )}
+              </span>
+
+              <div className="grid grid-cols-5 gap-1 text-center">
+                {/* PC */}
+                <div className={`bg-[#090c14] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-amber-800/40'}`}>
+                  <span className="text-[8px] font-black text-amber-700 uppercase block font-mono">PC</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={coins.pc}
+                    disabled={isLocked}
+                    onChange={(e) => updateCoins({ ...coins, pc: parseInt(e.target.value, 10) || 0 })}
+                    className="w-full bg-transparent text-center text-[10px] font-bold text-amber-600 focus:outline-none p-0"
+                  />
+                </div>
+                {/* PP */}
+                <div className={`bg-[#090c14] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-slate-700/40'}`}>
+                  <span className="text-[8px] font-black text-slate-400 uppercase block font-mono">PP</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={coins.pp}
+                    disabled={isLocked}
+                    onChange={(e) => updateCoins({ ...coins, pp: parseInt(e.target.value, 10) || 0 })}
+                    className="w-full bg-transparent text-center text-[10px] font-bold text-slate-350 focus:outline-none p-0"
+                  />
+                </div>
+                {/* PE */}
+                <div className={`bg-[#090c14] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-emerald-700/40'}`}>
+                  <span className="text-[8px] font-black text-emerald-500 uppercase block font-mono">PE</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={coins.pe}
+                    disabled={isLocked}
+                    onChange={(e) => updateCoins({ ...coins, pe: parseInt(e.target.value, 10) || 0 })}
+                    className="w-full bg-transparent text-center text-[10px] font-bold text-emerald-400 focus:outline-none p-0"
+                  />
+                </div>
+                {/* PO */}
+                <div className={`bg-[#090c14] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-amber-500/40'}`}>
+                  <span className="text-[8px] font-black text-amber-400 uppercase block font-mono">PO</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={coins.po}
+                    disabled={isLocked}
+                    onChange={(e) => updateCoins({ ...coins, po: parseInt(e.target.value, 10) || 0 })}
+                    className="w-full bg-transparent text-center text-[11px] font-black text-amber-400 focus:outline-none p-0"
+                  />
+                </div>
+                {/* PL */}
+                <div className={`bg-[#090c14] border rounded-lg p-1 transition-colors ${isLocked ? 'border-slate-800/40 opacity-70' : 'border-cyan-500/40'}`}>
+                  <span className="text-[8px] font-black text-cyan-400 uppercase block font-mono">PL</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={coins.pl}
+                    disabled={isLocked}
+                    onChange={(e) => updateCoins({ ...coins, pl: parseInt(e.target.value, 10) || 0 })}
+                    className="w-full bg-transparent text-center text-[10px] font-bold text-cyan-300 focus:outline-none p-0"
+                  />
+                </div>
+              </div>
+
+              {/* Riqueza Inicial do Livro do Jogador */}
+              {!sheet.startingWealthRolled && (
+                <div className="bg-[#05070a] border border-amber-500/20 rounded-lg p-2 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-amber-400">
+                    <Dices className="w-3 h-3 animate-pulse text-amber-400" />
+                    <span className="font-serif font-bold text-[9px] tracking-wide uppercase">Riqueza Inicial</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <select
+                      value={selectedClassRoll}
+                      onChange={(e) => setSelectedClassRoll(e.target.value)}
+                      className="col-span-2 bg-[#0b0f19] border border-amber-900/30 rounded px-1.5 py-0.5 text-[8.5px] text-amber-200 focus:outline-none"
+                    >
+                      <option value="">-- Escolher Classe --</option>
+                      {Object.entries(STARTING_WEALTH_FORMULAS).map(([key, value]) => (
+                        <option key={key} value={key}>
+                          {key.charAt(0).toUpperCase() + key.slice(1)} ({value.formula})
+                        </option>
+                      ))}
+                      <option value="custom">Outra (4d4 × 10 PO)</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => handleRollStartingWealth(selectedClassRoll || normalizeClassName(sheet.className))}
+                      disabled={isRolling}
+                      className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold font-serif py-0.5 rounded text-[8.5px] transition-all flex items-center justify-center gap-1 cursor-pointer uppercase"
+                    >
+                      {isRolling ? '...' : 'Rolar'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
-          )}
 
-          {/* Opção de Registrar Pagamento / Despesa */}
-          <div className="border-t border-amber-500/15 pt-2.5 mt-2.5 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[8px] text-slate-400 font-mono">
-                {roleMode === 'dm' ? '🔓 Acesso de Mestre' : '💰 Gestão Financeira'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsSpendingFormOpen(!isSpendingFormOpen)}
-                className="text-[9.5px] font-bold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-all uppercase font-serif active:scale-95 shadow-sm"
-              >
-                <Receipt className="w-3.5 h-3.5 text-amber-400" />
-                {isSpendingFormOpen ? 'Fechar Pagamento' : '💸 Efetuar Pagamento'}
-              </button>
-            </div>
+            {/* FORMULÁRIO DE PAGAMENTO / DESPESAS */}
+            <div className="bg3-panel rounded-xl p-2.5 space-y-2 flex-1 flex flex-col justify-between">
+              <div className="flex items-center justify-between border-b border-amber-500/15 pb-1">
+                <span className="text-[10px] font-bold text-amber-400 uppercase font-serif flex items-center gap-1.5">
+                  <Receipt className="w-3.5 h-3.5" />
+                  Efetuar Pagamento / Despesa
+                </span>
+              </div>
 
-            {isSpendingFormOpen && (
-              <form onSubmit={handleSpendCoins} className="bg-[#05070a] border border-amber-500/30 rounded-xl p-3 space-y-3 animate-slideDown shadow-xl">
-                {/* Sugestões Rápidas de Despesas D&D 5e */}
-                <div className="space-y-1">
-                  <label className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
-                    Sugestões Rápidas (D&D 5e):
-                  </label>
-                  <div className="flex flex-wrap gap-1">
-                    {QUICK_EXPENSES.map((q, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          setSpendReason(q.name);
-                          setSpendAmount(q.amount);
-                          setSpendCoinType(q.coinType);
-                        }}
-                        className="text-[8px] font-medium bg-[#0b0f19] hover:bg-amber-950/50 text-slate-300 hover:text-amber-200 border border-slate-800 hover:border-amber-500/40 px-2 py-0.5 rounded transition-all cursor-pointer"
-                      >
-                        {q.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Nome da Despesa */}
-                <div>
-                  <label className="text-[8px] font-bold text-slate-400 block mb-0.5 font-mono">
-                    Nome da Despesa / Estalagem / Serviço:
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={spendReason}
-                    onChange={(e) => setSpendReason(e.target.value)}
-                    placeholder="Ex: Pernoite na Estalagem do Dragão Verde, 3 Canecas de Cerveja..."
-                    className="w-full bg-[#0b0f19] border border-slate-700/80 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-[9.5px] text-slate-100 placeholder:text-slate-600 focus:outline-none font-serif transition-colors"
-                  />
-                </div>
-
-                {/* Valor e Moeda */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <div className="flex items-center justify-between mb-0.5">
-                      <label className="text-[8px] font-bold text-slate-400 font-mono">Valor:</label>
-                      <div className="flex items-center gap-1">
-                        {[1, 5, 10].map((num) => (
-                          <button
-                            key={num}
-                            type="button"
-                            onClick={() => setSpendAmount((prev) => (prev || 0) + num)}
-                            className="text-[7.5px] font-bold bg-[#121826] hover:bg-amber-950/60 text-amber-300 border border-amber-500/20 px-1 py-0.2 rounded"
-                          >
-                            +{num}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <input
-                      type="number"
-                      min={1}
-                      required
-                      value={spendAmount || ''}
-                      onChange={(e) => setSpendAmount(parseInt(e.target.value, 10) || 0)}
-                      placeholder="Qtd"
-                      className="w-full bg-[#0b0f19] border border-slate-700/80 focus:border-amber-500 rounded-lg px-2 py-1 text-center text-[11px] font-bold text-amber-300 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[8px] font-bold text-slate-400 block mb-0.5 font-mono">
-                      Moeda (Saldo: {coins[spendCoinType]}):
-                    </label>
-                    <select
-                      value={spendCoinType}
-                      onChange={(e) => setSpendCoinType(e.target.value as any)}
-                      className="w-full bg-[#0b0f19] border border-slate-700/80 focus:border-amber-500 rounded-lg px-2 py-1 text-[10px] font-bold text-slate-100 focus:outline-none"
+              {/* Sugestões Rápidas de Despesas */}
+              <div className="space-y-1">
+                <label className="text-[8px] font-bold text-slate-400 uppercase font-mono">
+                  Sugestões Rápidas:
+                </label>
+                <div className="flex flex-wrap gap-1">
+                  {QUICK_EXPENSES.map((q, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setSpendReason(q.name);
+                        setSpendAmount(q.amount);
+                        setSpendCoinType(q.coinType);
+                      }}
+                      className="text-[7.5px] font-medium bg-[#090c14] hover:bg-amber-950/50 text-slate-300 hover:text-amber-200 border border-slate-800 px-1.5 py-0.5 rounded transition-all cursor-pointer truncate"
                     >
-                      <option value="po">PO - Ouro (Saldo: {coins.po})</option>
-                      <option value="pp">PP - Prata (Saldo: {coins.pp})</option>
-                      <option value="pc">PC - Cobre (Saldo: {coins.pc})</option>
-                      <option value="pe">PE - Electrum (Saldo: {coins.pe})</option>
-                      <option value="pl">PL - Platina (Saldo: {coins.pl})</option>
-                    </select>
-                  </div>
+                      {q.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <form onSubmit={handleSpendCoins} className="space-y-1.5">
+                <input
+                  type="text"
+                  required
+                  value={spendReason}
+                  onChange={(e) => setSpendReason(e.target.value)}
+                  placeholder="Nome da Despesa (Ex: Pernoite na Estalagem...)"
+                  className="w-full bg-[#090c14] border border-slate-700/80 rounded px-2 py-1 text-[9px] text-slate-100 placeholder:text-slate-600 focus:outline-none font-serif"
+                />
+
+                <div className="grid grid-cols-2 gap-1.5">
+                  <input
+                    type="number"
+                    min={1}
+                    required
+                    value={spendAmount || ''}
+                    onChange={(e) => setSpendAmount(parseInt(e.target.value, 10) || 0)}
+                    placeholder="Qtd"
+                    className="w-full bg-[#090c14] border border-slate-700/80 rounded px-2 py-0.5 text-center text-[10px] font-bold text-amber-300 focus:outline-none"
+                  />
+                  <select
+                    value={spendCoinType}
+                    onChange={(e) => setSpendCoinType(e.target.value as any)}
+                    className="w-full bg-[#090c14] border border-slate-700/80 rounded px-1.5 py-0.5 text-[9px] font-bold text-slate-100 focus:outline-none"
+                  >
+                    <option value="po">PO (Saldo: {coins.po})</option>
+                    <option value="pp">PP (Saldo: {coins.pp})</option>
+                    <option value="pc">PC (Saldo: {coins.pc})</option>
+                    <option value="pe">PE (Saldo: {coins.pe})</option>
+                    <option value="pl">PL (Saldo: {coins.pl})</option>
+                  </select>
                 </div>
 
-                {/* Aviso se saldo for insuficiente */}
-                {spendAmount > 0 && coins[spendCoinType] < spendAmount && (
-                  <p className="text-[8.5px] font-bold text-rose-400 bg-rose-950/30 border border-rose-800/30 p-1.5 rounded-lg flex items-center gap-1">
-                    ⚠️ Saldo insuficiente em {spendCoinType.toUpperCase()} (Você possui {coins[spendCoinType]}, faltam {spendAmount - coins[spendCoinType]}).
-                  </p>
-                )}
-
-                {/* Botão de Confirmação */}
                 <button
                   type="submit"
                   disabled={spendAmount <= 0 || coins[spendCoinType] < spendAmount || !spendReason.trim()}
-                  className="w-full bg-gradient-to-r from-rose-900 to-rose-950 hover:from-rose-800 hover:to-rose-900 disabled:opacity-50 disabled:cursor-not-allowed text-rose-200 border border-rose-700/50 font-bold font-serif py-1.5 rounded-lg text-[9.5px] transition-all cursor-pointer uppercase active:scale-95 shadow-md flex items-center justify-center gap-1.5"
+                  className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 font-bold font-serif py-1 rounded text-[9.5px] transition-all cursor-pointer uppercase active:scale-95 shadow"
                 >
-                  <Receipt className="w-3.5 h-3.5" />
-                  Efetuar Pagamento de {spendAmount || 0} {spendCoinType.toUpperCase()}
+                  Confirmar Pagamento ({spendAmount || 0} {spendCoinType.toUpperCase()})
                 </button>
               </form>
-            )}
+            </div>
           </div>
-        </div>
 
-        {/* LOG DE TRANSAÇÕES (SEMPRE ACESSÍVEL QUANDO HOUVER TRANSAÇÕES) */}
-        {sheet.transactionHistory && sheet.transactionHistory.length > 0 && (
-          <div className="bg3-panel rounded-2xl p-3 space-y-1.5 shadow-lg border border-amber-500/20">
-            <div className="flex items-center justify-between border-b border-amber-500/15 pb-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif">
-                <History className="w-3.5 h-3.5 text-amber-400" />
-                Histórico de Moedas ({sheet.transactionHistory.length})
+          {/* LADO DIREITO: HISTÓRICO & TESOUROS */}
+          <div className="flex flex-col gap-2 h-full overflow-hidden justify-between">
+            {/* HISTÓRICO DE TRANSAÇÕES */}
+            <div className="bg3-panel rounded-xl p-2.5 space-y-1.5 flex-1 min-h-0 flex flex-col">
+              <div className="flex items-center justify-between border-b border-amber-500/15 pb-1 shrink-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif">
+                  <History className="w-3.5 h-3.5 text-amber-400" />
+                  Histórico de Transações ({sheet.transactionHistory?.length || 0})
+                </span>
+              </div>
+              <div className="flex-1 overflow-y-auto space-y-1 pr-1 bg3-scrollbar min-h-0 text-[8.5px] font-mono leading-tight">
+                {(!sheet.transactionHistory || sheet.transactionHistory.length === 0) ? (
+                  <p className="text-[10px] text-slate-500 text-center py-8 font-serif">Nenhuma transação registrada.</p>
+                ) : (
+                  sheet.transactionHistory.map((t) => (
+                    <div key={t.id} className="flex justify-between items-center bg-[#090c14] border border-slate-850 p-1.5 rounded">
+                      <div className="space-y-0.2 max-w-[70%] truncate">
+                        <span className="text-slate-200 block font-serif truncate" title={t.reason}>
+                          {t.reason}
+                        </span>
+                        <span className="text-slate-500 text-[7.5px] block">{t.date}</span>
+                      </div>
+                      <span className={`font-black text-[9.5px] ${
+                        t.type === 'spend' ? 'text-rose-400' : 'text-emerald-400'
+                      }`}>
+                        {t.type === 'spend' ? '-' : '+'}{t.amount} {t.coinType.toUpperCase()}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* TESOUROS E RELÍQUIAS */}
+            <div className="bg3-panel rounded-xl p-2.5 space-y-1 shrink-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif border-b border-amber-500/15 pb-1">
+                <Gem className="w-3.5 h-3.5 text-amber-400" />
+                Tesouros & Bens Valiosos
               </span>
-            </div>
-            <div className="max-h-[140px] overflow-y-auto space-y-1.5 pr-1 bg3-scrollbar text-[9px] font-mono leading-tight">
-              {sheet.transactionHistory.map((t) => (
-                <div key={t.id} className="flex justify-between items-start border-b border-slate-850/60 pb-1.5 last:border-0 hover:bg-slate-900/40 p-1 rounded transition-colors">
-                  <div className="space-y-0.5 max-w-[75%]">
-                    <span className="text-slate-200 block font-serif leading-none truncate" title={t.reason}>
-                      {t.reason}
-                    </span>
-                    <span className="text-slate-500 text-[8px] block">{t.date}</span>
-                  </div>
-                  <span className={`font-black whitespace-nowrap text-[10px] ${
-                    t.type === 'spend' ? 'text-rose-400' : t.type === 'loot' ? 'text-emerald-400' : 'text-amber-400'
-                  }`}>
-                    {t.type === 'spend' ? '-' : '+'}{t.amount} {t.coinType.toUpperCase()}
-                  </span>
-                </div>
-              ))}
+              <textarea
+                rows={2}
+                value={sheet.treasure || ''}
+                onChange={(e) => onChange({ ...sheet, treasure: e.target.value })}
+                placeholder="Joias, estátuas de jade, gemas preciosas, pergaminhos..."
+                className="w-full bg-[#090c14] border border-slate-700/60 rounded-lg p-1.5 text-[9.5px] text-slate-200 focus:outline-none focus:border-amber-500 leading-relaxed font-serif resize-none"
+              />
             </div>
           </div>
-        )}
-
-        {/* PAINEL DE CARGA TOTAL */}
-        <div className="bg3-panel rounded-2xl p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <Scale className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-[10px] font-bold uppercase text-amber-400 font-serif">Carga Total</span>
-            </div>
-            <span className={`text-[11px] font-black font-mono ${isEncumbered ? 'text-rose-450 text-gold-glow' : 'text-emerald-400'}`}>
-              {totalWeight.toFixed(1)} / {maxCarryingCapacity} kg
-            </span>
-          </div>
-
-          <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
-            <div
-              className={`h-full transition-all duration-300 ${
-                isEncumbered ? 'bg-rose-500 shadow-rose-500/50' : 'bg-emerald-500 shadow-emerald-500/50'
-              }`}
-              style={{ width: `${Math.min(100, (totalWeight / maxCarryingCapacity) * 100)}%` }}
-            />
-          </div>
-          {isEncumbered && (
-            <p className="text-[8px] font-bold text-rose-400">
-              ⚠️ Sobrecarrregado! Penalidades aplicadas.
-            </p>
-          )}
         </div>
-
-        {/* TESOUROS E BENS VALIOSOS */}
-        <div className="bg3-panel rounded-2xl p-3 space-y-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 font-serif border-b border-amber-500/15 pb-1">
-            <Gem className="w-3.5 h-3.5 text-amber-400" />
-            Tesouros & Relíquias
-          </span>
-          <textarea
-            rows={2}
-            value={sheet.treasure || ''}
-            onChange={(e) => onChange({ ...sheet, treasure: e.target.value })}
-            placeholder="Joias de rubi, estátua de jade, pergaminho antigo..."
-            className="w-full bg-[#0b0f19]/80 border border-slate-700/60 rounded-xl p-2.5 text-[10px] text-slate-200 focus:outline-none focus:border-amber-500 leading-relaxed font-serif"
-          />
-        </div>
-
-        {/* OUTROS EQUIPAMENTOS */}
-        <div className="bg3-panel rounded-2xl p-3 flex flex-col h-[220px]">
-          <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider border-b border-amber-500/15 pb-1 mb-2 block font-serif">
-            🎒 Outros Itens ({others.length})
-          </span>
-          <div className="flex-1 overflow-y-auto space-y-2 pr-1 bg3-scrollbar">
-            {others.length === 0 ? (
-              <p className="text-[10px] text-slate-500 text-center py-8 font-serif">Nenhum outro item.</p>
-            ) : (
-              others.map(renderItemRow)
-            )}
-          </div>
-        </div>
-
-      </div>
+      )}
 
       {/* BG3 Readable Item Modal */}
       {readingItem && (
@@ -1065,3 +1026,4 @@ export const EquipmentSection: React.FC<EquipmentSectionProps> = ({ sheet, onCha
     </div>
   );
 };
+

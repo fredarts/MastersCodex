@@ -305,21 +305,21 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
       />
 
       {/* HEADER SUPERIOR FIXO (ESTILO JOGO RPG - BG3) */}
-      <header className="bg-[#0f0e0d] border-b border-amber-500/20 px-4 py-2.5 flex items-center justify-between shrink-0 shadow-lg relative z-20">
+      <header className="bg-[#0f0e0d] border-b border-amber-500/20 px-3 py-1.5 flex items-center justify-between shrink-0 shadow-lg relative z-20 gap-2">
         {/* BOTÃO DO MENU SANDUÍCHE (MOBILE ONLY) */}
         <button
           type="button"
           onClick={() => setIsDrawerOpen(true)}
-          className="p-2 rounded-xl bg-[#141b2d] border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 active:scale-95 transition-all flex items-center gap-2 lg:hidden"
+          className="p-1.5 rounded-lg bg-[#141b2d] border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5 lg:hidden cursor-pointer"
           aria-label="Abrir Menu de Seções"
         >
-          <Menu className="w-5 h-5" />
-          <span className="text-xs font-bold uppercase hidden sm:inline">Menu Ficha</span>
+          <Menu className="w-4 h-4" />
+          <span className="text-[10px] font-bold uppercase hidden sm:inline">Menu Ficha</span>
         </button>
 
-        {/* DETALHES RÁPIDOS DO PERSONAGEM (Pushed left on desktop) */}
-        <div className="flex items-center gap-2.5 lg:mr-auto">
-          <div className="relative w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 overflow-hidden flex items-center justify-center shrink-0">
+        {/* DETALHES RÁPIDOS DO PERSONAGEM */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="relative w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 overflow-hidden flex items-center justify-center shrink-0">
             {sheet.avatarUrl ? (
               <img 
                  src={sheet.avatarUrl} 
@@ -334,26 +334,26 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
                    top: '50%',
                    left: '50%',
                    transform: sheet.avatarSettings 
-                     ? `translate(calc(-50% + ${sheet.avatarSettings.offsetX * (36/256)}px), calc(-50% + ${sheet.avatarSettings.offsetY * (36/256)}px)) scale(${sheet.avatarSettings.zoom})`
+                     ? `translate(calc(-50% + ${sheet.avatarSettings.offsetX * (32/256)}px), calc(-50% + ${sheet.avatarSettings.offsetY * (32/256)}px)) scale(${sheet.avatarSettings.zoom})`
                      : `translate(-50%, calc(-50% - 15%)) scale(1.7)`,
                  }}
               />
             ) : (
-              <User className="w-5 h-5 text-amber-400/80" />
+              <User className="w-4 h-4 text-amber-400/80" />
             )}
           </div>
-          <div className="flex flex-col">
-            <h2 className="text-sm font-black text-amber-400 font-serif leading-none truncate max-w-[140px] md:max-w-[200px]">
+          <div className="flex flex-col whitespace-nowrap">
+            <h2 className="text-xs font-black text-amber-400 font-serif leading-tight">
               {sheet.characterName || 'Sem Nome'}
             </h2>
-            <span className="text-[10px] font-semibold text-slate-400 leading-tight">
-              {sheet.race} {sheet.className} (Nível {sheet.level})
+            <span className="text-[9px] font-semibold text-slate-400 leading-tight">
+              {sheet.race} {sheet.className} (Nív. {sheet.level})
             </span>
           </div>
         </div>
 
-        {/* NAVEGAÇÃO DE ABAS SUPERIORES - DESKTOP ONLY */}
-        <nav className="hidden lg:flex items-center gap-1.5 bg-[#12100e] border border-amber-500/25 px-2 py-1 rounded-xl shadow-inner mx-auto">
+        {/* NAVEGAÇÃO DE ABAS SUPERIORES - DESKTOP / TABLET */}
+        <nav className="hidden lg:flex items-center gap-1 bg-[#12100e] border border-amber-500/25 px-1.5 py-0.5 rounded-xl shadow-inner mx-1">
           {NAV_TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -375,28 +375,28 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
                   setActiveTab(tab.id);
                   setIsSettingsOpen(false);
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider font-serif transition-all border ${
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[9.5px] font-black uppercase tracking-wider font-serif transition-all border cursor-pointer ${
                   isActive
-                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 text-gold-glow'
-                    : 'text-slate-400 border-transparent hover:text-slate-200'
+                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/40 text-gold-glow shadow-sm'
+                    : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800/40'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="w-3 h-3" />
                 <span>{shortLabels[tab.id]}</span>
               </button>
             );
           })}
         </nav>
 
-        {/* AÇÕES DE SALVAR, CONFIGURAÇÕES E FECHAR (Pushed right on desktop) */}
-        <div className="flex items-center gap-2 lg:ml-auto relative">
-          {/* MENU DROPDOWN DE FERRAMENTAS - DESKTOP ONLY */}
+        {/* AÇÕES DE SALVAR, CONFIGURAÇÕES E FECHAR */}
+        <div className="flex items-center gap-1.5 shrink-0 relative">
+          {/* MENU DROPDOWN DE FERRAMENTAS */}
           {!readOnly && (
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                className={`p-2 rounded-xl border transition-all ${
+                className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
                   isSettingsOpen 
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' 
                     : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
@@ -457,7 +457,7 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
             <button
               type="button"
               onClick={onMinimize}
-              className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80 border border-slate-700"
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-800/80 border border-slate-700 cursor-pointer"
               title="Minimizar Ficha"
             >
               <Minus className="w-4 h-4" />
@@ -465,98 +465,46 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
           )}
 
           {readOnly ? (
-            <span className="flex items-center gap-1.5 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-bold text-[10px] px-2.5 py-1.5 rounded-xl">
-              <Eye className="w-3.5 h-3.5" />
+            <span className="flex items-center gap-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-bold text-[9px] px-2 py-1 rounded-lg">
+              <Eye className="w-3 h-3" />
               LEITURA
             </span>
           ) : (
             <button
               type="button"
               onClick={handleSave}
-              className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-3 py-2 rounded-xl shadow-md active:scale-95 transition-transform"
+              className="p-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg shadow-md active:scale-95 transition-transform cursor-pointer flex items-center justify-center"
+              title="Salvar Ficha"
             >
               {isSavedFeedback ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4 text-slate-950 animate-bounce" />
-                  <span>Salvo!</span>
-                </>
+                <CheckCircle2 className="w-4 h-4 text-slate-950 animate-bounce" />
               ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  <span>Salvar</span>
-                </>
+                <Save className="w-4 h-4 text-slate-950" />
               )}
             </button>
           )}
           <button
             type="button"
             onClick={handleClose}
-            className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80 border border-slate-700"
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-800/80 border border-slate-700 cursor-pointer flex items-center justify-center"
+            title="Fechar Ficha"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       </header>
 
-      {/* SELETOR DE MODO DE DADO (VANTAGEM / NORMAL / DESVANTAGEM) */}
-      <div className="bg-[#0b0f19] border-b border-amber-500/20 px-3 py-1.5 flex items-center justify-between gap-2 shrink-0">
-        <div className="flex items-center gap-1.5">
-          <Dices className="w-4 h-4 text-amber-400" />
-          <span className="text-[10px] font-extrabold uppercase text-slate-400">Modo de Rolagem d20:</span>
-        </div>
-
-        <div className="flex items-center bg-[#141b2d] p-0.5 rounded-xl border border-slate-800 gap-1">
-          <button
-            type="button"
-            onClick={() => setAdvantageMode('disadvantage')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase transition-all ${
-              advantageMode === 'disadvantage'
-                ? 'bg-rose-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <TrendingDown className="w-3 h-3" />
-            Desvantagem
-          </button>
-          <button
-            type="button"
-            onClick={() => setAdvantageMode('normal')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase transition-all ${
-              advantageMode === 'normal'
-                ? 'bg-amber-500 text-slate-950 shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Normal
-          </button>
-          <button
-            type="button"
-            onClick={() => setAdvantageMode('advantage')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase transition-all ${
-              advantageMode === 'advantage'
-                ? 'bg-emerald-500 text-slate-950 shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <TrendingUp className="w-3 h-3" />
-            Vantagem
-          </button>
-        </div>
-      </div>
-
-
-
-      {/* CONTEÚDO DA ABA SELECIONADA */}
-      <main className="flex-1 overflow-y-auto lg:overflow-hidden p-4 max-w-4xl lg:max-w-7xl w-full mx-auto relative scrollbar-thin lg:flex lg:flex-col lg:min-h-0 lg:h-[calc(100vh-120px)]">
+      {/* CONTEÚDO DA ABA SELECIONADA (100% DA ALTURA LIVRE ZERO-SCROLL) */}
+      <main className="flex-1 min-h-0 overflow-hidden px-3 py-2 max-w-7xl w-full mx-auto relative flex flex-col">
         {/* BANNER FLUTUANTE DE FEEDBACK DE ROLAGEM */}
         {lastRoll && (
-          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#141b2d]/95 border border-amber-500/50 rounded-2xl px-5 py-3 shadow-2xl backdrop-blur-md flex items-center gap-4 animate-bounce-subtle">
-            <Dices className="w-6 h-6 text-amber-400 animate-spin-once" />
+          <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 bg-[#141b2d]/95 border border-amber-500/50 rounded-2xl px-5 py-2.5 shadow-2xl backdrop-blur-md flex items-center gap-4 animate-bounce-subtle">
+            <Dices className="w-5 h-5 text-amber-400 animate-spin-once" />
             <div>
-              <span className="text-[10px] font-bold uppercase text-slate-400 block">{lastRoll.characterName}</span>
+              <span className="text-[10px] font-bold uppercase text-slate-400 block font-serif">{lastRoll.characterName}</span>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-extrabold text-white">{lastRoll.label}:</span>
-                <span className="text-xl font-black text-amber-400 font-mono">{lastRoll.total}</span>
+                <span className="text-xs font-extrabold text-white font-serif">{lastRoll.label}:</span>
+                <span className="text-lg font-black text-amber-400 font-mono">{lastRoll.total}</span>
                 <span className="text-[10px] text-slate-400 font-mono">
                   (d20: {lastRoll.selectedD20 ?? 10} {lastRoll.modifier >= 0 ? `+${lastRoll.modifier}` : lastRoll.modifier})
                   {lastRoll.isCrit && ' 🔥 CRÍTICO!'}
@@ -564,13 +512,13 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
                 </span>
               </div>
             </div>
-            <button type="button" onClick={() => setLastRoll(null)} className="text-slate-400 hover:text-white p-1">
+            <button type="button" onClick={() => setLastRoll(null)} className="text-slate-400 hover:text-white p-1 cursor-pointer">
               <X className="w-4 h-4" />
             </button>
           </div>
         )}
 
-        <fieldset disabled={readOnly} className={`border-none p-0 m-0 min-w-0 lg:h-full lg:flex lg:flex-col lg:min-h-0 ${readOnly ? 'pointer-events-none select-none' : ''}`}>
+        <fieldset disabled={readOnly} className={`border-none p-0 m-0 min-w-0 flex-1 min-h-0 flex flex-col overflow-hidden ${readOnly ? 'pointer-events-none select-none' : ''}`}>
           {activeTab === 'general' && <GeneralSection sheet={sheet} onChange={readOnly ? () => {} : setSheet} />}
           {activeTab === 'combat' && (
             <CombatSection
@@ -602,7 +550,14 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
       </main>
 
       {/* BARRA DE COMBATE DE ACESSO RÁPIDO NO RODAPÉ */}
-      {!readOnly && <QuickCombatBar sheet={sheet} onChange={setSheet} />}
+      {!readOnly && (
+        <QuickCombatBar
+          sheet={sheet}
+          onChange={setSheet}
+          advantageMode={advantageMode}
+          onAdvantageModeChange={setAdvantageMode}
+        />
+      )}
 
       {/* DRAWER LATERAL DO MENU SANDUÍCHE (RETRÁTIL MOBILE) */}
       {isDrawerOpen && (
