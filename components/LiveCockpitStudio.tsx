@@ -1241,10 +1241,6 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
           activeScene={activeScene}
           liveDisplayMode={liveDisplayMode}
           setLiveDisplayMode={setLiveDisplayMode}
-          onOpenCreateScene={() => setShowCreateSceneModal(true)}
-          onOpenPlayerView={onOpenPlayerView}
-          onOpenStreamerOverlay={() => setShowStreamerOverlayModal(true)}
-          onToggleNotebook={() => setIsNotebookOpen((prev: boolean) => !prev)}
         />
 
         <div className="flex-1 flex min-h-0 relative">

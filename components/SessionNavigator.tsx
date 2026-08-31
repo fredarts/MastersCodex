@@ -2,32 +2,23 @@
 
 import React, { useState } from 'react';
 import { 
-  Play, 
   Plus, 
-  Calendar, 
-  Film, 
-  Swords, 
-  MessageSquare, 
-  Beer, 
-  Compass, 
   ChevronRight, 
-  Sparkles,
-  Layers,
   Edit3,
   Check,
-  Crown
+  Crown,
+  Calendar
 } from 'lucide-react';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
-import { GameScene, Combatant } from '@/lib/types';
-import { CreateSceneModal } from '@/components/CreateSceneModal';
+import { GameScene } from '@/lib/types';
 
 interface SessionNavigatorProps {
-  onEquipScene: (scene: GameScene) => void;
+  onEquipScene?: (scene: GameScene) => void;
 }
 
-export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene }) => {
+export const SessionNavigator: React.FC<SessionNavigatorProps> = () => {
   const { activeWorld, updateWorld } = useWorld();
   const { userCampaigns, activeCampaign, setActiveCampaign, updateCampaign, createCampaign } = useCampaign();
   const {
@@ -36,20 +27,15 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
     setActiveSession, 
     createSession,
     updateSession,
-    scenes, 
-    activeScene, 
-    setActiveScene,
-    updateScene
   } = useSession();
 
-  const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
   const [showNewSessionInput, setShowNewSessionInput] = useState(false);
   const [newSessionTitle, setNewSessionTitle] = useState('');
 
   const [showNewCampaignInput, setShowNewCampaignInput] = useState(false);
   const [newCampaignTitle, setNewCampaignTitle] = useState('');
 
-  // Editing states for World, Campaign, Session, and Scene
+  // Editing states for World, Campaign, and Session
   const [editingWorldId, setEditingWorldId] = useState<string | null>(null);
   const [editedWorldTitle, setEditedWorldTitle] = useState('');
 
@@ -58,9 +44,6 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
 
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editedSessionTitle, setEditedSessionTitle] = useState('');
-
-  const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
-  const [editedSceneTitle, setEditedSceneTitle] = useState('');
 
   if (!activeCampaign || (activeWorld && activeCampaign.worldId !== activeWorld.id)) return null;
 
@@ -105,27 +88,6 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
       await updateSession({ ...activeSession, title: editedSessionTitle.trim() });
     }
     setEditingSessionId(null);
-  };
-
-  const handleSaveSceneTitle = async (sc: GameScene) => {
-    if (editedSceneTitle.trim()) {
-      await updateScene({ ...sc, title: editedSceneTitle.trim() });
-    }
-    setEditingSceneId(null);
-  };
-
-  const getSceneIcon = (type: string) => {
-    switch (type) {
-      case 'combat':
-        return <Swords className="w-3.5 h-3.5 text-rose-400" />;
-      case 'dialogue': return <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />;
-      case 'social':
-        return <Beer className="w-3.5 h-3.5 text-amber-400" />;
-      case 'exploration':
-        return <Compass className="w-3.5 h-3.5 text-emerald-400" />;
-      default:
-        return <Sparkles className="w-3.5 h-3.5 text-purple-400" />;
-    }
   };
 
   return (
@@ -356,97 +318,6 @@ export const SessionNavigator: React.FC<SessionNavigatorProps> = ({ onEquipScene
         )}
       </div>
 
-      {/* Scenes Timeline Carousel */}
-      <div className="flex-1 flex items-center gap-2 overflow-x-auto tablet-scroll-x tablet-hide-scrollbar py-0.5 px-2">
-        <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider flex items-center gap-1 font-mono flex-shrink-0">
-          <Film className="w-3 h-3 text-slate-400" /> CENAS DA SESSÃO:
-        </span>
-
-        {scenes.length === 0 ? (
-          <span className="text-xs text-slate-500 italic flex-shrink-0">Nenhuma cena criada para esta sessão.</span>
-        ) : (
-          scenes.map((sc: any) => {
-            const isActive = activeScene?.id === sc.id;
-            const isEditingThisScene = editingSceneId === sc.id;
-
-            if (isEditingThisScene) {
-              return (
-                <div key={sc.id} className="flex items-center gap-1 bg-[#161c28] border border-amber-500 rounded-xl px-2 py-1 text-xs flex-shrink-0">
-                  <input
-                    type="text"
-                    autoFocus
-                    value={editedSceneTitle}
-                    onChange={(e) => setEditedSceneTitle(e.target.value)}
-                    className="bg-[#0a0d14] border border-amber-500/50 rounded px-1.5 py-0.5 text-xs text-amber-300 font-bold focus:outline-none w-28"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSaveSceneTitle(sc);
-                      if (e.key === 'Escape') setEditingSceneId(null);
-                    }}
-                  />
-                  <button onClick={() => handleSaveSceneTitle(sc)} className="p-0.5 text-emerald-400 hover:text-emerald-300">
-                    <Check className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              );
-            }
-
-            return (
-              <div
-                key={sc.id}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs transition-all flex-shrink-0 group tablet-touch-button ${
-                  isActive
-                    ? 'bg-gradient-to-r from-amber-500/20 to-amber-700/20 border-amber-500 text-amber-300 font-bold shadow-md shadow-amber-500/10'
-                    : 'bg-[#161c28] border-[#2a3449] text-slate-300 hover:bg-[#1f2738]'
-                }`}
-              >
-                <button
-                  onClick={() => {
-                    setActiveScene(sc);
-                    onEquipScene(sc);
-                  }}
-                  className="flex items-center gap-1.5"
-                >
-                  {getSceneIcon(sc.sceneType)}
-                  <span className="truncate max-w-[140px]">{sc.title}</span>
-                </button>
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingSceneId(sc.id);
-                    setEditedSceneTitle(sc.title);
-                  }}
-                  className="p-0.5 text-slate-500 hover:text-amber-400 rounded transition-colors opacity-70 group-hover:opacity-100"
-                  title="Editar Nome da Cena"
-                >
-                  <Edit3 className="w-3 h-3" />
-                </button>
-
-                {isActive && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Add Scene Button */}
-      {activeSession && (
-        <button
-          onClick={() => setShowCreateSceneModal(true)}
-          className="flex items-center gap-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold px-3 py-1 rounded-lg text-xs shadow transition-all active:scale-95 flex-shrink-0 tablet-touch-button"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>+ Adicionar Cena</span>
-        </button>
-      )}
-
-      {/* Modal for Creating Scenes */}
-      <CreateSceneModal
-        isOpen={showCreateSceneModal}
-        onClose={() => setShowCreateSceneModal(false)}
-      />
     </div>
   );
 };

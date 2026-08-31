@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut, Gift, Mic, MicOff, Video, VideoOff, PhoneCall, Radio, Headphones, Store, ChevronDown, Layers } from 'lucide-react';
+import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut, Gift, Mic, MicOff, Video, VideoOff, PhoneCall, Radio, Headphones, Store, ChevronDown, Layers, Play, BookOpen } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -15,6 +15,8 @@ import { BG3MerchantModal } from '@/components/merchant/BG3MerchantModal';
 import { MerchantShop } from '@/lib/merchant/merchantTypes';
 import { CharacterSheet } from '@/lib/types';
 import { DetectivePinboardModal } from '@/components/investigation/DetectivePinboardModal';
+import { DMNotebookDrawer } from '@/components/live-cockpit/DMNotebookDrawer';
+import { StreamerOverlayModal } from '@/components/overlay/config/StreamerOverlayModal';
 
 interface HeaderProps {
   onOpenSearch: () => void;
@@ -53,6 +55,8 @@ export const Header: React.FC<HeaderProps> = ({
   const [isPinboardOpen, setIsPinboardOpen] = useState(false);
   const [activeTradeShop, setActiveTradeShop] = useState<MerchantShop | null>(null);
   const [isTradeModalOpen, setIsTradeModalOpen] = useState(false);
+  const [isNotebookOpen, setIsNotebookOpen] = useState(false);
+  const [isStreamerOverlayOpen, setIsStreamerOverlayOpen] = useState(false);
 
   const previewSheet: CharacterSheet = {
     id: 'dm-preview-character',
@@ -258,7 +262,7 @@ export const Header: React.FC<HeaderProps> = ({
                 className="fixed inset-0 z-[100]" 
                 onClick={() => setIsToolsMenuOpen(false)}
               />
-              <div className="absolute right-0 mt-2 w-64 bg-[#121824] border border-[#2a3449] rounded-2xl shadow-2xl z-[110] p-2 space-y-1 animate-fade-in backdrop-blur-md">
+              <div className="absolute right-0 mt-2 w-72 bg-[#121824] border border-[#2a3449] rounded-2xl shadow-2xl z-[110] p-2 space-y-1 animate-fade-in backdrop-blur-md">
                 <div className="px-3 py-1.5 border-b border-[#2a3449]/80 mb-1 flex items-center justify-between">
                   <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 font-mono">
                     Recursos da Mesa
@@ -269,6 +273,68 @@ export const Header: React.FC<HeaderProps> = ({
                     </span>
                   )}
                 </div>
+
+                {/* Tela dos Jogadores */}
+                <button
+                  onClick={() => {
+                    setIsToolsMenuOpen(false);
+                    onOpenPlayerView();
+                  }}
+                  className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:text-amber-300 hover:bg-[#1f2738] rounded-xl transition-all flex items-center justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 group-hover:bg-amber-500/20 group-hover:scale-105 transition-all">
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-slate-200 group-hover:text-amber-300">Tela dos Jogadores</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Janela de projeção secundária</span>
+                    </div>
+                  </div>
+                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
+                    PROJEÇÃO
+                  </span>
+                </button>
+
+                {/* Caderno DM */}
+                {roleMode === 'dm' && (
+                  <button
+                    onClick={() => {
+                      setIsToolsMenuOpen(false);
+                      setIsNotebookOpen(true);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:text-amber-300 hover:bg-[#1f2738] rounded-xl transition-all flex items-center gap-2.5 group cursor-pointer"
+                  >
+                    <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 group-hover:bg-amber-500/20 group-hover:scale-105 transition-all">
+                      <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-slate-200 group-hover:text-amber-300">Caderno DM</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Anotações rápidas & lore da mesa</span>
+                    </div>
+                  </button>
+                )}
+
+                {/* Overlay OBS */}
+                {roleMode === 'dm' && (
+                  <button
+                    onClick={() => {
+                      setIsToolsMenuOpen(false);
+                      setIsStreamerOverlayOpen(true);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:text-indigo-300 hover:bg-[#1f2738] rounded-xl transition-all flex items-center gap-2.5 group cursor-pointer"
+                  >
+                    <div className="p-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 group-hover:bg-indigo-500/20 group-hover:scale-105 transition-all">
+                      <Video className="w-3.5 h-3.5 text-indigo-400" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-slate-200 group-hover:text-indigo-300">Overlay OBS</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Transmissão ao vivo & stream HUD</span>
+                    </div>
+                  </button>
+                )}
+
+                <div className="border-t border-[#2a3449]/60 my-1" />
 
                 {/* Baú da Party */}
                 {isInsideCampaign && (
@@ -486,6 +552,20 @@ export const Header: React.FC<HeaderProps> = ({
       <DetectivePinboardModal
         isOpen={isPinboardOpen}
         onClose={() => setIsPinboardOpen(false)}
+      />
+
+      {/* DM Notebook Persistent Drawer */}
+      <DMNotebookDrawer
+        isOpen={isNotebookOpen}
+        onClose={() => setIsNotebookOpen(false)}
+        campaignId={activeCampaign?.id}
+      />
+
+      {/* Streamer Mode / OBS Overlay Settings Modal */}
+      <StreamerOverlayModal
+        isOpen={isStreamerOverlayOpen}
+        onClose={() => setIsStreamerOverlayOpen(false)}
+        campaignId={activeCampaign?.id || ''}
       />
     </header>
   );

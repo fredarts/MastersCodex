@@ -1,12 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Globe, Plus, Sparkles, Rocket, Compass, Layers, Crown, ArrowRight, Edit3, BookOpen, Play, Settings, Network, Check } from 'lucide-react';
+import { Globe, Plus, Sparkles, Rocket, Compass, Layers, Crown, ArrowRight, Edit3, BookOpen, Play, Settings, Check } from 'lucide-react';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { World, UserCampaign } from '@/lib/types';
 import { WorldEditor } from '@/components/WorldEditor';
-import { LoreGraph } from '@/components/LoreGraph';
 
 interface WorldbuilderStudioProps {
   onOpenCreateCampaignWithWorld: (world: World) => void;
@@ -21,7 +20,6 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
   const { userCampaigns, setActiveCampaign } = useCampaign();
   const [showCreateWorldModal, setShowCreateWorldModal] = useState(false);
   const [isEditingActiveWorld, setIsEditingActiveWorld] = useState(false);
-  const [subTab, setSubTab] = useState<'overview' | 'lore'>('overview');
 
   // World inline title editing state
   const [editingWorldId, setEditingWorldId] = useState<string | null>(null);
@@ -112,52 +110,36 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
 
   return (
     <div className="flex-1 bg-[#0a0d14] flex flex-col overflow-hidden select-none">
-      {/* Worldbuilder Studio Sub-header Navigation */}
-      <div className="bg-[#0f141d] border-b border-[#2a3449] px-6 py-2 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setSubTab('overview')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              subTab === 'overview'
-                ? 'bg-amber-500 text-slate-950 shadow-md'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-[#161c28]'
-            }`}
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span>Biblioteca de Mundos & Universos</span>
-          </button>
-          <button
-            onClick={() => setSubTab('lore')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              subTab === 'lore'
-                ? 'bg-emerald-500 text-slate-950 shadow-md'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-[#161c28]'
-            }`}
-          >
-            <Network className="w-3.5 h-3.5" />
-            <span>Lore Graph (Grafo de Conexões)</span>
-          </button>
+      <div className="flex-1 p-6 overflow-y-auto">
+      {/* Header Banner with Fantasy Landscape Background */}
+      <div className="relative overflow-hidden rounded-2xl mb-6 shadow-2xl border border-amber-500/30 p-6 flex flex-wrap items-center justify-between gap-4 group">
+        {/* Background Image & Atmospheric Gradients */}
+        <div className="absolute inset-0 z-0">
+          <img
+            src="/assets/worldbuilder-banner.jpg"
+            alt="Worldbuilding Fantasy Landscape"
+            className="w-full h-full object-cover object-[center_35%] scale-105 group-hover:scale-100 transition-transform duration-1000 ease-out"
+          />
+          {/* Dark on the left for sharp text contrast, transitioning to completely transparent from ~45% to the right */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#07090e] via-[#0a0d14]/85 via-35% to-transparent to-70%" />
+          <div className="absolute inset-0 ring-1 ring-inset ring-amber-500/25 rounded-2xl pointer-events-none" />
         </div>
-      </div>
 
-      {subTab === 'lore' ? (
-        <LoreGraph />
-      ) : (
-        <div className="flex-1 p-6 overflow-y-auto">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-[#161c28] via-[#1a2234] to-[#0f141d] border border-amber-500/30 p-6 rounded-2xl mb-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-inner">
-            <Globe className="w-6 h-6" />
+        {/* Foreground Content */}
+        <div className="relative z-10 flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/10 backdrop-blur-md">
+            <Globe className="w-7 h-7 drop-shadow-md" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-widest text-amber-400 bg-amber-950/60 border border-amber-500/30 px-2.5 py-0.5 rounded">
+              <span className="text-xs font-extrabold uppercase tracking-widest text-amber-300 bg-amber-950/80 border border-amber-500/40 px-2.5 py-0.5 rounded-md shadow-sm backdrop-blur-sm">
                 WORLDBUILDING STUDIO
               </span>
             </div>
-            <h2 className="text-xl font-bold text-slate-100 mt-1">Sua Biblioteca de Mundos & Universos</h2>
-            <p className="text-xs text-slate-400 mt-0.5 max-w-xl">
+            <h2 className="text-2xl font-black text-slate-100 mt-1 tracking-tight drop-shadow-md">
+              Sua Biblioteca de Mundos & Universos
+            </h2>
+            <p className="text-xs text-slate-300/90 mt-0.5 max-w-xl font-medium drop-shadow leading-relaxed">
               Crie a história, geografia, NPCs, facções e religiões do seu mundo. Depois, inicie múltiplas campanhas ativas alimentadas por esse universo!
             </p>
           </div>
@@ -165,7 +147,7 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
 
         <button
           onClick={() => setShowCreateWorldModal(true)}
-          className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-xs shadow-lg shadow-amber-500/20 transition-all active:scale-95"
+          className="relative z-10 flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs shadow-xl shadow-amber-500/30 transition-all active:scale-95 hover:scale-105 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Forjar Novo Mundo</span>
@@ -405,9 +387,8 @@ export const WorldbuilderStudio: React.FC<WorldbuilderStudioProps> = ({
             );
           })
         )}
-      </div>
         </div>
-      )}
+      </div>
 
       {/* Modal Create World */}
       {showCreateWorldModal && (

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Tv, Play, Swords, Map as MapIcon, Image as ImageIcon, Sparkles, Radio, BookOpen, Video } from 'lucide-react';
+import { Tv, Swords, Map as MapIcon, Image as ImageIcon, Radio } from 'lucide-react';
 import { GameScene } from '@/lib/types';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { PresenceIndicator } from '@/components/live-cockpit/PresenceIndicator';
@@ -11,8 +11,8 @@ interface LiveCockpitHeaderProps {
   activeScene: GameScene | null;
   liveDisplayMode: 'artwork' | 'map' | 'combat';
   setLiveDisplayMode: (mode: 'artwork' | 'map' | 'combat') => void;
-  onOpenPlayerView: () => void;
-  onOpenCreateScene: () => void;
+  onOpenPlayerView?: () => void;
+  onOpenCreateScene?: () => void;
   onOpenStreamerOverlay?: () => void;
   onToggleNotebook?: () => void;
 }
@@ -21,10 +21,6 @@ export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
   activeScene,
   liveDisplayMode,
   setLiveDisplayMode,
-  onOpenPlayerView,
-  onOpenCreateScene,
-  onOpenStreamerOverlay,
-  onToggleNotebook,
 }) => {
   const { onlineUsers } = useLiveCockpit();
 
@@ -87,41 +83,7 @@ export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-3">
-        <PresenceIndicator users={onlineUsers} className="border-r border-zinc-800 pr-3 mr-1" />
-
-        {onToggleNotebook && (
-          <button
-            onClick={onToggleNotebook}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-semibold rounded-lg border border-amber-500/30 transition-colors"
-            title="Abrir Caderno de Anotações do DM"
-          >
-            <BookOpen className="w-3.5 h-3.5 text-amber-400" /> Caderno DM
-          </button>
-        )}
-
-        {onOpenStreamerOverlay && (
-          <button
-            onClick={onOpenStreamerOverlay}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-semibold rounded-lg border border-amber-500/30 transition-colors"
-            title="Gerar Overlay transparente para OBS / Transmissões"
-          >
-            <Video className="w-3.5 h-3.5 text-amber-400" /> Overlay OBS
-          </button>
-        )}
-
-        <button
-          onClick={onOpenCreateScene}
-          className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold rounded-lg border border-zinc-700 transition-colors"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Nova Cena
-        </button>
-
-        <button
-          onClick={onOpenPlayerView}
-          className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs rounded-lg shadow-lg shadow-amber-500/20 transition-all transform hover:scale-105 active:scale-95"
-        >
-          <Play className="w-3.5 h-3.5 fill-current" /> Tela dos Jogadores
-        </button>
+        <PresenceIndicator users={onlineUsers} />
       </div>
     </div>
   );
