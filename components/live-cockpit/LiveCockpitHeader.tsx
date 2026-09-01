@@ -47,38 +47,38 @@ export const LiveCockpitHeader: React.FC<LiveCockpitHeaderProps> = ({
       <LiveCalendarWidget />
 
       {/* Controles de Projeção */}
-      <div className="flex items-center gap-2 bg-zinc-950/80 p-1.5 rounded-xl border border-zinc-800">
+      <div className="flex items-center gap-1.5 bg-zinc-950/80 p-1 rounded-xl border border-zinc-800">
         <button
           onClick={() => setLiveDisplayMode('artwork')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
             liveDisplayMode === 'artwork'
               ? 'bg-amber-500 text-zinc-950 font-bold shadow-md shadow-amber-500/20'
               : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
           }`}
         >
-          <ImageIcon className="w-3.5 h-3.5" /> Ilustração
+          <ImageIcon className="w-3.5 h-3.5" /> Art
         </button>
 
         <button
           onClick={() => setLiveDisplayMode('map')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
             liveDisplayMode === 'map'
               ? 'bg-indigo-500 text-white font-bold shadow-md shadow-indigo-500/20'
               : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
           }`}
         >
-          <MapIcon className="w-3.5 h-3.5" /> Dungeon Map
+          <MapIcon className="w-3.5 h-3.5" /> Dungeon
         </button>
 
         <button
           onClick={() => setLiveDisplayMode('combat')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
             liveDisplayMode === 'combat'
               ? 'bg-rose-500 text-white font-bold shadow-md shadow-rose-500/20'
               : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
           }`}
         >
-          <Swords className="w-3.5 h-3.5" /> Grid 3D / Combate
+          <Swords className="w-3.5 h-3.5" /> Grid de Combate
         </button>
       </div>
 

@@ -77,6 +77,7 @@ export type AddCombatantTab = 'monsters' | 'players' | 'custom' | 'npcs';
 interface LiveCockpitStudioState {
   // UI Panel states
   isTimelineCollapsed: boolean;
+  isRightPanelCollapsed: boolean;
   rightPanelTab: RightPanelTab;
   teleprompterFontSize: number;
   expandedId: string | null;
@@ -134,6 +135,8 @@ interface LiveCockpitStudioState {
   // UI Toggles
   toggleTimeline: () => void;
   setIsTimelineCollapsed: (v: boolean) => void;
+  toggleRightPanel: () => void;
+  setIsRightPanelCollapsed: (v: boolean) => void;
   setRightPanelTab: (tab: RightPanelTab) => void;
   setTeleprompterFontSize: (updater: number | ((prev: number) => number)) => void;
   setExpandedId: (id: string | null) => void;
@@ -192,6 +195,7 @@ interface LiveCockpitStudioState {
 export const useLiveCockpitStudioStore = create<LiveCockpitStudioState>((set) => ({
   // Initial UI Panel states
   isTimelineCollapsed: false,
+  isRightPanelCollapsed: false,
   rightPanelTab: 'init',
   teleprompterFontSize: 18,
   expandedId: null,
@@ -255,6 +259,15 @@ export const useLiveCockpitStudioStore = create<LiveCockpitStudioState>((set) =>
       return { isTimelineCollapsed: next };
     }),
   setIsTimelineCollapsed: (v) => set({ isTimelineCollapsed: v }),
+  toggleRightPanel: () =>
+    set((state) => {
+      const next = !state.isRightPanelCollapsed;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('masters_codex_right_panel_collapsed', String(next));
+      }
+      return { isRightPanelCollapsed: next };
+    }),
+  setIsRightPanelCollapsed: (v) => set({ isRightPanelCollapsed: v }),
   setRightPanelTab: (tab) => set({ rightPanelTab: tab }),
   setTeleprompterFontSize: (updater) =>
     set((state) => ({

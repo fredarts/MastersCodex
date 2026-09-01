@@ -127,11 +127,28 @@ export const CockpitDungeonMap: React.FC = () => {
 
   const handleStartExploration = () => {
     setIsExplorationStarted(true);
+    const activeLevelName = activeLevels.find((l) => l.id === activeLevelId)?.name;
+    const mapPayload = {
+      grid,
+      bgImageUrl,
+      gridScale,
+      gridOffsetX,
+      gridOffsetY,
+      vectorWalls,
+      lightSources,
+      activeMapId: currentMapId,
+      activeLevelId,
+      currentLevelName: activeLevelName,
+      sceneId: activeScene?.id,
+      dungeonExplorationStarted: true,
+    };
+    lastBroadcast.current = JSON.stringify(mapPayload);
     broadcastToPlayerView({
       dungeonExplorationStarted: true,
       activeMapId: currentMapId,
+      mapData: mapPayload,
     });
-    toast.success('Exploração da masmorra iniciada! O mapa tático foi revelado.');
+    toast.success('Exploração da masmorra iniciada! O mapa tático foi revelado aos jogadores.');
   };
 
   // Collapsible HUD states - All collapsed by default
@@ -445,9 +462,14 @@ export const CockpitDungeonMap: React.FC = () => {
           activeLevelId: lvlId,
           currentLevelName: currentLvlState?.name || 'Andar',
           sceneId: activeScene.id,
+          dungeonExplorationStarted: isExplorationStarted,
         };
         lastBroadcast.current = JSON.stringify(payload);
-        broadcastToPlayerView({ mapData: payload });
+        broadcastToPlayerView({
+          dungeonExplorationStarted: isExplorationStarted,
+          activeMapId: activeId,
+          mapData: payload
+        });
       }
     });
   }, [activeScene, fetchSceneMap, loadMapFromMultiState, broadcastToPlayerView]);
@@ -533,6 +555,7 @@ export const CockpitDungeonMap: React.FC = () => {
         sceneId: activeScene.id,
         fogMatrix,
         tokens,
+        dungeonExplorationStarted: isExplorationStarted,
       };
 
       saveSceneMap(activeScene.id, multiMapStateRef.current).catch((e: any) => {
@@ -543,13 +566,15 @@ export const CockpitDungeonMap: React.FC = () => {
       if (lastBroadcast.current !== stringified) {
         lastBroadcast.current = stringified;
         broadcastToPlayerView({
+          dungeonExplorationStarted: isExplorationStarted,
+          activeMapId: currentMapId,
           mapData: mapPayload
         });
       }
     }, 800);
 
     return () => clearTimeout(delayDebounce);
-  }, [grid, bgImageUrl, vectorWalls, lightSources, gridScale, gridOffsetX, gridOffsetY, activeScene, isLoading, currentMapId, activeLevelId, activeLevels, saveSceneMap, broadcastToPlayerView]);
+  }, [grid, bgImageUrl, vectorWalls, lightSources, gridScale, gridOffsetX, gridOffsetY, activeScene, isLoading, currentMapId, activeLevelId, activeLevels, isExplorationStarted, saveSceneMap, broadcastToPlayerView]);
 
   // Instant In-Memory Floor / Level Switcher
   const handleSwitchLevel = (targetLevelId: string) => {

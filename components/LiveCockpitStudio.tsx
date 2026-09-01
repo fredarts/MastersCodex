@@ -96,6 +96,8 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const {
     isTimelineCollapsed,
     setIsTimelineCollapsed,
+    isRightPanelCollapsed,
+    setIsRightPanelCollapsed,
     rightPanelTab,
     setRightPanelTab,
     isCombatActive,
@@ -169,15 +171,19 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     }
   }, [activeCampaign?.id, setCustomAudios]);
 
-  // Load initial timeline collapse state
+  // Load initial timeline and right panel collapse state
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('masters_codex_timeline_collapsed');
-      if (saved !== null) {
-        setIsTimelineCollapsed(saved === 'true');
+      const savedTimeline = localStorage.getItem('masters_codex_timeline_collapsed');
+      if (savedTimeline !== null) {
+        setIsTimelineCollapsed(savedTimeline === 'true');
+      }
+      const savedRight = localStorage.getItem('masters_codex_right_panel_collapsed');
+      if (savedRight !== null) {
+        setIsRightPanelCollapsed(savedRight === 'true');
       }
     }
-  }, [setIsTimelineCollapsed]);
+  }, [setIsTimelineCollapsed, setIsRightPanelCollapsed]);
 
   // Sync Combat Active status with current scene or combatants array
   useEffect(() => {
@@ -1191,13 +1197,50 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     setShowBattleSetupModal(false);
   };
 
-  const handleStartImpromptuCombat = () => {
-    setShowBattleSetupModal(true);
+  const handleStartBattle = async () => {
+    if (!activeScene) return;
+
+    // Captura o estado atual dos combatentes (vida e posição) no início da batalha
+    const snapshot = JSON.parse(JSON.stringify(combatants)) as Combatant[];
+
+    const resetCombatants = combatants.map((c, i) => ({
+      ...c,
+      actionUsed: false,
+      bonusActionUsed: false,
+      reactionUsed: false,
+      movementUsed: 0,
+      hasDashed: false,
+      turnStartX: c.x,
+      turnStartZ: c.z,
+      isCurrentTurn: i === 0,
+    }));
+
+    const updatedScene = {
+      ...activeScene,
+      isBattleStarted: true,
+      battleStartSnapshot: snapshot,
+      combatants: resetCombatants,
+    };
+
+    setCombatants(resetCombatants);
+    broadcastToPlayerView({ combatants: resetCombatants, isBattleStarted: true });
+
+    setIsBattleStarted(true);
+    setCurrentTurnIndex(0);
+    setRoundCount(1);
+    await updateScene(updatedScene);
+    toast.success('Batalha iniciada! Boa sorte aos aventureiros.');
   };
 
-  const handleEndCombat = () => {
+  const handleEndCombat = async () => {
     lastInitializedSceneIdRef.current = null;
     combatEngine.endCombat();
+    setIsBattleStarted(false);
+    if (activeScene) {
+      const updated = { ...activeScene, isBattleStarted: false };
+      await updateScene(updated);
+    }
+    broadcastToPlayerView({ isBattleStarted: false });
     onGenerateLoot();
   };
 
@@ -1253,20 +1296,21 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
           </div>
 
           {/* 3. Right Sidebar: Iniciativa/Combate */}
-          <CombatInitiativePanel
-            characterSheets={characterSheets}
-            getSpeedInMeters={getSpeedInMeters}
-            rollDice={rollDice}
-            deductAction={deductAction}
-            handleHpChange={handleHpChange}
-            handleToggleCondition={handleToggleCondition}
-            handleCastSpellFromCard={handleCastSpellFromCard}
-            handleNextTurn={combatEngine.handleNextTurn}
-            handlePrevTurn={combatEngine.handlePrevTurn}
-            handleEndCombat={handleEndCombat}
-            handleStartImpromptuCombat={handleStartImpromptuCombat}
-            onSlideChange={handleSlideChange}
-          />
+            <CombatInitiativePanel
+              characterSheets={characterSheets}
+              getSpeedInMeters={getSpeedInMeters}
+              rollDice={rollDice}
+              deductAction={deductAction}
+              handleHpChange={handleHpChange}
+              handleToggleCondition={handleToggleCondition}
+              handleCastSpellFromCard={handleCastSpellFromCard}
+              handleStartBattle={handleStartBattle}
+              handleNextTurn={combatEngine.handleNextTurn}
+              handlePrevTurn={combatEngine.handlePrevTurn}
+              handleEndCombat={handleEndCombat}
+              handleStartImpromptuCombat={handleStartBattle}
+              onSlideChange={handleSlideChange}
+            />
         </div>
       </div>
 

@@ -623,15 +623,21 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
             </ThreeErrorBoundary>
           ) : liveDisplayMode === 'map' ? (
             (() => {
-              const currentMapId = typedMapData?.activeMapId;
-              const activeCampaignMap = campaignMaps.find((m) => m.id === currentMapId) || null;
+              const typedMapData = mapData as any;
+              const currentMapId = typedMapData?.activeMapId || 
+                (currentScene?.associatedMapIds && currentScene.associatedMapIds[0]) || 
+                currentScene?.associatedMapId || 
+                (campaignMaps.find(m => currentScene?.associatedMapIds?.includes(m.id))?.id) || 
+                campaignMaps[0]?.id;
+
+              const activeCampaignMap = campaignMaps.find((m) => m.id === currentMapId) || campaignMaps[0] || null;
               const dungeonCover = activeCampaignMap?.gridData?.coverImageUrl || activeCampaignMap?.gridData?.levels?.[0]?.bgImageUrl || activeCampaignMap?.gridData?.bgImageUrl;
               const dungeonLore = activeCampaignMap?.gridData?.description;
               const dungeonCR = activeCampaignMap?.gridData?.challengeRating || 'Recomendado';
-              const isExplorationStarted = (mapData as any)?.dungeonExplorationStarted === true;
+              const isExplorationStarted = typedMapData?.dungeonExplorationStarted === true || (mapData as any)?.dungeonExplorationStarted === true;
 
-              // Se a exploração ainda não foi iniciada pelo Mestre e houver capa/lore cadastrada, mostra a Capa Cinemática
-              if (!isExplorationStarted && (dungeonCover || dungeonLore)) {
+              // Se a exploração ainda não foi iniciada pelo Mestre, mostra a Capa Cinemática
+              if (!isExplorationStarted && (dungeonCover || dungeonLore || activeCampaignMap)) {
                 return (
                   <div className="w-full h-full relative flex items-center justify-center p-3 sm:p-4 pb-20 sm:pb-24 bg-[#06080e] overflow-hidden select-none animate-fade-in">
                     {dungeonCover && (

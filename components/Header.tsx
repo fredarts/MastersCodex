@@ -123,33 +123,6 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Role Mode Switcher Button (Mestre vs Jogador) */}
-        <div className="bg-[#161c28] border border-[#2a3449] p-1 rounded-xl flex items-center gap-1 shadow-inner">
-          <button
-            onClick={() => setRoleMode('dm')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              roleMode === 'dm'
-                ? 'bg-amber-500 text-slate-950 shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-            title="Modo Mestre (DM Studio): Criar mundos e combates"
-          >
-            <Crown className="w-3.5 h-3.5" />
-            <span>Mestre</span>
-          </button>
-          <button
-            onClick={() => setRoleMode('player')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              roleMode === 'player'
-                ? 'bg-cyan-500 text-slate-950 shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-            title="Modo Jogador: Ver suas mesas e participar como player"
-          >
-            <Swords className="w-3.5 h-3.5" />
-            <span>Jogador</span>
-          </button>
-        </div>
       </div>
 
       {/* Quick Search & Actions */}
@@ -486,6 +459,34 @@ export const Header: React.FC<HeaderProps> = ({
                         {roleMode === 'dm' ? '👑 Modo Mestre' : '⚔️ Modo Jogador'}
                       </span>
                     </div>
+                  </div>
+
+                  {/* Role Mode Switcher (Mestre vs Jogador) */}
+                  <div className="p-1 bg-[#0f141d] border border-[#2a3449] rounded-xl mb-2 flex items-center gap-1 shadow-inner">
+                    <button
+                      onClick={() => setRoleMode('dm')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        roleMode === 'dm'
+                          ? 'bg-amber-500 text-slate-950 shadow-md'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                      title="Modo Mestre (DM Studio): Criar mundos e combates"
+                    >
+                      <Crown className="w-3.5 h-3.5" />
+                      <span>Mestre</span>
+                    </button>
+                    <button
+                      onClick={() => setRoleMode('player')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        roleMode === 'player'
+                          ? 'bg-cyan-500 text-slate-950 shadow-md'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                      title="Modo Jogador: Ver suas mesas e participar como player"
+                    >
+                      <Swords className="w-3.5 h-3.5" />
+                      <span>Jogador</span>
+                    </button>
                   </div>
 
                   {/* Configurações Option */}

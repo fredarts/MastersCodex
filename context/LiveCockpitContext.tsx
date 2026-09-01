@@ -278,11 +278,21 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
             gridScale: data.gridScale !== undefined ? data.gridScale : prev.gridScale,
             gridOffsetX: data.gridOffsetX !== undefined ? data.gridOffsetX : prev.gridOffsetX,
             gridOffsetY: data.gridOffsetY !== undefined ? data.gridOffsetY : prev.gridOffsetY,
+            dungeonExplorationStarted: data.dungeonExplorationStarted !== undefined ? data.dungeonExplorationStarted : prev.dungeonExplorationStarted,
+            activeMapId: data.activeMapId !== undefined ? data.activeMapId : prev.activeMapId,
           };
         });
       } else {
         setMapData(data);
       }
+    }
+
+    if (payload.dungeonExplorationStarted !== undefined) {
+      setMapData((prev: any) => ({
+        ...(prev || {}),
+        dungeonExplorationStarted: payload.dungeonExplorationStarted,
+        activeMapId: payload.activeMapId || prev?.activeMapId,
+      }));
     }
 
     const sceneData = payload.payload || payload;

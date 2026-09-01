@@ -362,43 +362,6 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
 
   return (
     <div className="flex-1 bg-[#0a0d14] flex flex-col overflow-hidden border-r border-[#2a3449]">
-      <div className="bg-[#121824]/80 p-3 border-b border-[#2a3449] flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <span className="text-xs font-bold text-slate-200 uppercase font-mono flex items-center gap-1.5">
-            <Eye className="w-3.5 h-3.5 text-cyan-400" />
-            Projeção dos Jogadores (Espelho ao Vivo)
-          </span>
-          
-          {/* Battle Controls inserted near the Live Display Mode */}
-          {liveDisplayMode === 'combat' && (
-            <div className="flex items-center gap-2 pl-4 border-l border-[#2a3449]">
-              {!isBattleStarted ? (
-                <button
-                  onClick={handleStartBattle}
-                  className="px-3 py-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-slate-950 font-black text-[10px] rounded shadow-lg transition-all flex items-center gap-1.5 uppercase cursor-pointer"
-                >
-                  <Swords className="w-3 h-3" />
-                  Iniciar Batalha
-                </button>
-              ) : (
-                <button
-                  onClick={handleResetBattle}
-                  className="px-3 py-1 bg-[#1a2234] hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 font-bold text-[10px] rounded transition-all flex items-center gap-1.5 uppercase cursor-pointer"
-                  title="Restaurar HP e posições de quando a batalha iniciou"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  Resetar Batalha
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-        
-        <span className="text-[10px] text-slate-400 font-mono">
-          Modo Atual: <strong className="text-amber-400 uppercase">{liveDisplayMode}</strong>
-        </span>
-      </div>
-
       <div className="flex-1 p-3 sm:p-4 flex flex-col min-h-0 gap-3 overflow-hidden">
         {/* Main Display Preview Container */}
         <div className="flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden">

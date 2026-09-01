@@ -60,35 +60,35 @@ export const LiveCalendarWidget: React.FC<LiveCalendarWidgetProps> = ({
 
   const primaryMoon = currentDateTime.moons[0];
 
-  // Collapsed Mode: Only Moon/Sun toggle + Date & Time
+  // Collapsed Mode: Only Moon/Sun toggle + Day number & Time
   if (isCollapsed) {
     return (
-      <div className={`flex items-center gap-2 bg-[#121824]/90 border border-amber-500/20 px-2.5 py-1.5 rounded-xl shadow-lg backdrop-blur-md transition-all ${className}`}>
+      <div className={`flex items-center gap-1.5 bg-[#121824]/90 border border-amber-500/20 px-2 py-1 rounded-xl shadow-lg backdrop-blur-md transition-all ${className}`}>
         {/* Moon/Sun Expand Button */}
         <button
           type="button"
           onClick={toggleCollapse}
-          className="w-8 h-8 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-400/60 flex items-center justify-center text-amber-400 hover:scale-105 active:scale-95 transition-all cursor-pointer group/btn"
+          className="w-7 h-7 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-400/60 flex items-center justify-center text-amber-400 hover:scale-105 active:scale-95 transition-all cursor-pointer group/btn"
           title="Expandir ferramentas de tempo & descanso"
         >
           {currentDateTime.isNight ? (
-            <Moon className="w-4 h-4 text-cyan-300 group-hover/btn:rotate-12 transition-transform" />
+            <Moon className="w-3.5 h-3.5 text-cyan-300 group-hover/btn:rotate-12 transition-transform" />
           ) : (
-            <Sun className="w-4 h-4 text-amber-400 group-hover/btn:rotate-45 transition-transform" />
+            <Sun className="w-3.5 h-3.5 text-amber-400 group-hover/btn:rotate-45 transition-transform" />
           )}
         </button>
 
-        {/* Compact Date & Time */}
+        {/* Compact Day & Time (Click toggles collapse / expands full view) */}
         <button
           type="button"
-          onClick={handleOpenTodayModal}
-          className="text-left hover:opacity-90 transition-opacity flex items-center gap-2"
-          title="Clique para ver detalhes do dia, clima e notas in-game"
+          onClick={toggleCollapse}
+          className="text-left hover:opacity-90 transition-opacity flex items-center gap-1.5 px-1 cursor-pointer"
+          title="Clique para expandir o calendário completo e clima"
         >
           <span className="text-xs font-bold text-slate-100 hover:text-amber-300 transition-colors">
-            {currentDateTime.formattedDate}
+            Dia {currentDateTime.day}
           </span>
-          <span className="text-slate-600">•</span>
+          <span className="text-slate-600 text-xs">•</span>
           <span className="flex items-center gap-1 text-amber-400/90 font-mono font-bold text-xs">
             <Clock className="w-3 h-3" /> {currentDateTime.formattedTime}
           </span>
