@@ -33,22 +33,26 @@ import {
   Image as ImageIcon,
   Wand2,
   ArrowRight,
+  Search,
 } from 'lucide-react';
 import { LinesAndVeilsPanel } from '@/components/safety/LinesAndVeilsPanel';
 import { PushNotificationToggle } from '@/components/push/PushNotificationToggle';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useWorld } from '@/lib/hooks/useWorld';
-import { CampaignFeedEventType, CampaignMember } from '@/lib/types';
+import { CampaignFeedEventType, CampaignMember, WorldEntity } from '@/lib/types';
+import { worldService } from '@/lib/services/worldService';
 import { CreateCampaignModal } from '@/components/CreateCampaignModal';
+import { EditCampaignDetailsModal } from '@/components/modals/EditCampaignDetailsModal';
 import { CampaignDocumentsStudio } from '@/components/campaign/CampaignDocumentsStudio';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { useCustomDialog } from '@/context/CustomDialogContext';
+import { toast } from 'sonner';
 
 export const CampaignSettingsStudio: React.FC = () => {
   const { user } = useAuth();
   const { showConfirm } = useCustomDialog();
-  const { userWorlds, activeWorld } = useWorld();
+  const { userWorlds, activeWorld, worldEntities } = useWorld();
   const { 
     userCampaigns,
     activeCampaign, 
@@ -105,10 +109,8 @@ export const CampaignSettingsStudio: React.FC = () => {
   const [isFeedFilterCollapsed, setIsFeedFilterCollapsed] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
 
-  // Campaign Header Edit State
-  const [isEditingHeader, setIsEditingHeader] = useState(false);
-  const [editTitle, setEditTitle] = useState('');
-  const [editDescription, setEditDescription] = useState('');
+  // Campaign Edit Modal State
+  const [showEditDetailsModal, setShowEditDetailsModal] = useState(false);
 
   // New Feed Event Form state
   const [showAddFeedModal, setShowAddFeedModal] = useState(false);
@@ -132,6 +134,25 @@ export const CampaignSettingsStudio: React.FC = () => {
 
   // AI Tone State
   const [aiTone, setAiTone] = useState<'heroic' | 'dark' | 'gritty' | 'funny'>('heroic');
+
+  // World NPCs & Party Add States
+  const [campaignWorldEntities, setCampaignWorldEntities] = useState<WorldEntity[]>([]);
+  const [partyAddSubTab, setPartyAddSubTab] = useState<'players' | 'npcs'>('players');
+  const [npcSearchQuery, setNpcSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (activeCampaign?.worldId) {
+      if (activeWorld && activeWorld.id === activeCampaign.worldId && worldEntities && worldEntities.length > 0) {
+        setCampaignWorldEntities(worldEntities);
+      } else {
+        worldService.fetchWorldEntities(activeCampaign.worldId, user?.id).then((res) => {
+          if (res.ok) setCampaignWorldEntities(res.value);
+        });
+      }
+    } else if (worldEntities && worldEntities.length > 0) {
+      setCampaignWorldEntities(worldEntities);
+    }
+  }, [activeCampaign?.worldId, activeWorld?.id, worldEntities, user?.id]);
 
   // Empty State: Allow selecting or creating campaigns directly from here!
   if (!activeCampaign || activeCampaign.role !== 'dm' || (activeWorld && activeCampaign.worldId !== activeWorld.id)) {
@@ -244,6 +265,35 @@ export const CampaignSettingsStudio: React.FC = () => {
     });
   }
 
+  const availablePlayers = React.useMemo(() => {
+    return rosterMembers.filter(
+      (m) => m.role === 'player' && !(activeCampaign?.partyMembers || []).some((pm) => pm.id === m.id)
+    );
+  }, [rosterMembers, activeCampaign?.partyMembers]);
+
+  const worldNpcs = React.useMemo(() => {
+    return campaignWorldEntities.filter(
+      (e) => e.category === 'npc' || (e.category as string) === 'person'
+    );
+  }, [campaignWorldEntities]);
+
+  const availableNpcs = React.useMemo(() => {
+    return worldNpcs.filter(
+      (npc) => !(activeCampaign?.partyMembers || []).some((pm) => pm.id === npc.id)
+    );
+  }, [worldNpcs, activeCampaign?.partyMembers]);
+
+  const filteredAvailableNpcs = React.useMemo(() => {
+    const q = npcSearchQuery.toLowerCase().trim();
+    if (!q) return availableNpcs;
+    return availableNpcs.filter(
+      (npc) =>
+        npc.name.toLowerCase().includes(q) ||
+        (npc.subType || '').toLowerCase().includes(q) ||
+        (npc.shortDesc || '').toLowerCase().includes(q)
+    );
+  }, [availableNpcs, npcSearchQuery]);
+
   const filteredFeed = feedEvents.filter((ev) => {
     if (feedFilter !== 'all' && ev.eventType !== feedFilter) return false;
     return true;
@@ -315,20 +365,20 @@ export const CampaignSettingsStudio: React.FC = () => {
   return (
     <div className="flex-1 bg-[#0a0d14] flex flex-col overflow-hidden select-none">
       {/* Top Banner */}
-      <div className="relative bg-gradient-to-r from-[#161c28] via-[#1a2234] to-[#0f141d] border-b border-[#2a3449] p-5 shadow-lg flex flex-wrap items-center justify-between gap-4 overflow-hidden">
+      <div className="relative bg-gradient-to-r from-[#161c28] via-[#1a2234] to-[#0f141d] border-b border-[#2a3449] p-3 sm:p-3.5 shadow-lg flex flex-wrap items-center justify-between gap-3 overflow-hidden flex-shrink-0">
         {activeCampaign.coverImageUrl && (
           <div 
             className="absolute inset-0 opacity-15 bg-cover bg-center pointer-events-none filter blur-[1px]" 
             style={{ backgroundImage: `url(${activeCampaign.coverImageUrl})` }}
           />
         )}
-        <div className="flex items-center gap-3.5 relative z-10">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-inner">
-            <Settings className="w-6 h-6" />
+        <div className="flex items-center gap-3 relative z-10">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-inner">
+            <Settings className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-mono">
+              <span className="text-[9.5px] font-bold uppercase tracking-widest bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-mono">
                 PAINEL DA CAMPANHA
               </span>
 
@@ -339,7 +389,7 @@ export const CampaignSettingsStudio: React.FC = () => {
                   const selected = worldCampaigns.find((c) => c.id === e.target.value);
                   if (selected) setActiveCampaign(selected);
                 }}
-                className="bg-[#0a0d14] border border-[#2a3449] rounded px-2 py-0.5 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-500"
+                className="bg-[#0a0d14] border border-[#2a3449] rounded px-2 py-0.5 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
               >
                 {worldCampaigns.map((c, idx) => (
                   <option key={`${c.id}-${idx}`} value={c.id}>
@@ -348,90 +398,43 @@ export const CampaignSettingsStudio: React.FC = () => {
                 ))}
               </select>
             </div>
-            {isEditingHeader ? (
-              <div className="mt-2 space-y-2 max-w-md animate-fade-in">
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  placeholder="Nome da Campanha"
-                  className="w-full text-base font-bold bg-[#0a0d14] border border-amber-500/60 focus:border-amber-400 text-slate-100 px-3 py-1 rounded-xl outline-none shadow-inner"
-                  autoFocus
-                />
-                <textarea
-                  rows={4}
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  placeholder="Descrição da Campanha / Sinopse"
-                  className="w-full text-xs bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500/50 text-slate-300 p-2.5 rounded-xl outline-none resize-none font-serif leading-relaxed"
-                />
-                <div className="flex items-center gap-2 pt-0.5">
-                  <button
-                    onClick={async () => {
-                      if (editTitle.trim()) {
-                        await updateCampaign({
-                          ...activeCampaign,
-                          title: editTitle.trim(),
-                          description: editDescription.trim(),
-                        });
-                      }
-                      setIsEditingHeader(false);
-                    }}
-                    className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg shadow flex items-center gap-1 transition-all"
-                  >
-                    <Check className="w-3.5 h-3.5" /> Salvar
-                  </button>
-                  <button
-                    onClick={() => setIsEditingHeader(false)}
-                    className="px-3 py-1 bg-[#161c28] hover:bg-[#1f2738] text-slate-400 hover:text-slate-200 text-xs rounded-lg border border-[#2a3449] transition-all"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            ) : (
               <div>
-                <div className="flex items-center gap-2 mt-0.5 group">
-                  <h2 className="text-xl font-bold text-slate-100">{activeCampaign.title}</h2>
+                <div className="flex items-center gap-1.5 mt-0.5 group">
+                  <h2 className="text-base sm:text-lg font-bold text-slate-100">{activeCampaign.title}</h2>
                   <button
-                    onClick={() => {
-                      setEditTitle(activeCampaign.title);
-                      setEditDescription(activeCampaign.description || '');
-                      setIsEditingHeader(true);
-                    }}
-                    className="p-1 text-slate-400 hover:text-amber-400 hover:bg-[#161c28] rounded-lg transition-all border border-transparent hover:border-[#2a3449]"
-                    title="Editar Nome e Descrição da Campanha"
+                    onClick={() => setShowEditDetailsModal(true)}
+                    className="p-1 text-slate-400 hover:text-amber-400 hover:bg-[#161c28] rounded-lg transition-all border border-transparent hover:border-[#2a3449] cursor-pointer"
+                    title="Editar Detalhes e Gerar Imagem/Texto com IA"
                   >
-                    <Pencil className="w-4 h-4" />
+                    <Pencil className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <p className="text-xs text-slate-400 max-w-xl truncate">{activeCampaign.description}</p>
+                <p className="text-[11px] text-slate-400 max-w-xl truncate">{activeCampaign.description}</p>
               </div>
-            )}
           </div>
         </div>
 
         {/* Invite Code Quick Badge & Actions */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <button
             onClick={() => setShowCreateCampaignModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] text-amber-400 hover:text-amber-300 font-bold text-xs rounded-xl"
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] text-amber-400 hover:text-amber-300 font-bold text-xs rounded-xl cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5" />
             <span>Outra Campanha</span>
           </button>
 
-          <div className="bg-[#0a0d14] border border-amber-500/30 p-2.5 rounded-xl flex items-center gap-3 shadow-md">
+          <div className="bg-[#0a0d14] border border-amber-500/30 px-2.5 py-1.5 rounded-xl flex items-center gap-2.5 shadow-md">
             <div>
-              <div className="text-[9px] font-bold text-slate-500 uppercase">CÓDIGO DE CONVITE:</div>
+              <div className="text-[8.5px] font-bold text-slate-500 uppercase">CÓDIGO DE CONVITE:</div>
               <div className="text-xs font-mono font-bold text-amber-400">{activeCampaign.inviteCode}</div>
             </div>
             <button
               onClick={handleCopyCode}
-              className="p-1.5 bg-[#161c28] hover:bg-[#1f2738] text-slate-300 rounded-lg text-xs transition-colors flex items-center gap-1"
+              className="p-1 bg-[#161c28] hover:bg-[#1f2738] text-slate-300 rounded-lg text-xs transition-colors flex items-center gap-1 cursor-pointer"
             >
-              {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-amber-400" />}
-              <span className="text-[10px] font-bold">{copiedCode ? 'Copiado!' : 'Copiar'}</span>
+              {copiedCode ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-amber-400" />}
+              <span className="text-[9.5px] font-bold">{copiedCode ? 'Copiado!' : 'Copiar'}</span>
             </button>
           </div>
         </div>
@@ -606,12 +609,12 @@ export const CampaignSettingsStudio: React.FC = () => {
           }
 
           return (
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#0a0d14]">
+            <div className="flex-1 overflow-hidden p-3 md:p-3.5 flex flex-col gap-2.5 bg-[#0a0d14] h-full min-h-0">
               
-              {/* Hero Panoramic Cover Banner */}
-              <div className="relative w-full rounded-2xl overflow-hidden border border-amber-500/40 bg-[#111622] shadow-2xl group">
+              {/* Hero Panoramic Cover Banner (Compact) */}
+              <div className="relative w-full rounded-2xl overflow-hidden border border-amber-500/40 bg-[#111622] shadow-xl group flex-shrink-0">
                 {activeCampaign.coverImageUrl ? (
-                  <div className="relative w-full aspect-[21/9] min-h-[240px] max-h-[360px] overflow-hidden bg-black/60">
+                  <div className="relative w-full aspect-[21/6] max-h-[140px] overflow-hidden bg-black/60">
                     <img 
                       src={activeCampaign.coverImageUrl} 
                       alt={activeCampaign.title} 
@@ -621,72 +624,68 @@ export const CampaignSettingsStudio: React.FC = () => {
                     <div className="absolute inset-0 bg-gradient-to-r from-[#0a0d14]/80 via-transparent to-transparent"></div>
 
                     {/* Overlay Content */}
-                    <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
-                      <div className="space-y-2 max-w-2xl">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="px-2.5 py-1 bg-amber-500/30 border border-amber-400/40 text-amber-300 text-xs font-bold rounded-lg uppercase tracking-wider backdrop-blur-md flex items-center gap-1.5 shadow-sm">
-                            <Globe className="w-3.5 h-3.5 text-amber-400" />
+                    <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5 flex items-end justify-between gap-3">
+                      <div className="space-y-1 max-w-xl">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="px-2 py-0.5 bg-amber-500/30 border border-amber-400/40 text-amber-300 text-[10px] font-bold rounded-lg uppercase tracking-wider backdrop-blur-md flex items-center gap-1 shadow-sm">
+                            <Globe className="w-3 h-3 text-amber-400" />
                             <span>{activeWorld ? activeWorld.title : 'Mundo Avulso'}</span>
                           </span>
 
                           {activeCampaign.themeTone && (
-                            <span className="px-2.5 py-1 bg-slate-900/70 border border-slate-700 text-slate-200 text-xs font-medium rounded-lg backdrop-blur-md flex items-center gap-1.5">
-                              <Crown className="w-3.5 h-3.5 text-amber-400" />
+                            <span className="px-2 py-0.5 bg-slate-900/70 border border-slate-700 text-slate-200 text-[10px] font-medium rounded-lg backdrop-blur-md flex items-center gap-1">
+                              <Crown className="w-3 h-3 text-amber-400" />
                               <span>{activeCampaign.themeTone}</span>
                             </span>
                           )}
 
-                          <span className="px-2.5 py-1 bg-slate-900/70 border border-slate-700 text-cyan-300 text-xs font-medium rounded-lg backdrop-blur-md flex items-center gap-1.5">
-                            <Users className="w-3.5 h-3.5" />
+                          <span className="px-2 py-0.5 bg-slate-900/70 border border-slate-700 text-cyan-300 text-[10px] font-medium rounded-lg backdrop-blur-md flex items-center gap-1">
+                            <Users className="w-3 h-3" />
                             <span>{rosterMembers.length} no Elenco</span>
                           </span>
                         </div>
 
-                        <h1 className="text-2xl md:text-4xl font-extrabold text-white tracking-wide drop-shadow-lg font-serif">
+                        <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-wide drop-shadow-lg font-serif">
                           {activeCampaign.title}
                         </h1>
                       </div>
 
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <button
-                          onClick={() => setShowCreateCampaignModal(true)}
-                          className="px-4 py-2 bg-[#161c28]/90 hover:bg-[#1f2738] border border-amber-500/40 text-amber-300 text-xs font-bold rounded-xl transition-all shadow-md backdrop-blur-md flex items-center gap-1.5"
+                          onClick={() => setShowEditDetailsModal(true)}
+                          className="px-3 py-1.5 bg-[#161c28]/90 hover:bg-[#1f2738] border border-amber-500/40 text-amber-300 text-xs font-bold rounded-xl transition-all shadow-md backdrop-blur-md flex items-center gap-1 cursor-pointer"
                         >
-                          <Plus className="w-4 h-4" />
-                          <span>Nova Campanha</span>
+                          <Pencil className="w-3.5 h-3.5" />
+                          <span>Editar Detalhes</span>
                         </button>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="p-8 md:p-10 flex flex-col md:flex-row items-center justify-between gap-6 bg-gradient-to-r from-[#161c28] via-[#1a2234] to-[#0f141d]">
-                    <div className="space-y-3 text-center md:text-left">
-                      <div className="flex items-center justify-center md:justify-start gap-2">
-                        <span className="px-2.5 py-1 bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-bold rounded-lg uppercase tracking-wider">
+                  <div className="p-3.5 sm:p-4 flex items-center justify-between gap-4 bg-gradient-to-r from-[#161c28] via-[#1a2234] to-[#0f141d]">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold rounded-lg uppercase tracking-wider">
                           {activeWorld ? activeWorld.title : 'Campanha de RPG'}
                         </span>
                         {activeCampaign.themeTone && (
-                          <span className="text-xs text-slate-400 font-medium">— {activeCampaign.themeTone}</span>
+                          <span className="text-[11px] text-slate-400 font-medium">— {activeCampaign.themeTone}</span>
                         )}
                       </div>
-                      <h1 className="text-2xl md:text-3xl font-extrabold text-slate-100 font-serif">
+                      <h1 className="text-lg sm:text-xl font-extrabold text-slate-100 font-serif">
                         {activeCampaign.title}
                       </h1>
-                      <p className="text-xs text-slate-400 max-w-xl">
+                      <p className="text-[11px] text-slate-400 max-w-xl truncate">
                         Nenhuma capa panorâmica configurada para esta mesa. Você pode forjar uma arte 16:9 personalizada com IA.
                       </p>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row items-center gap-3">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <button
-                        onClick={() => {
-                          setEditTitle(activeCampaign.title);
-                          setEditDescription(activeCampaign.description || '');
-                          setIsEditingHeader(true);
-                        }}
-                        className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg flex items-center gap-1.5 transition-all"
+                        onClick={() => setShowEditDetailsModal(true)}
+                        className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg flex items-center gap-1.5 transition-all cursor-pointer"
                       >
-                        <Pencil className="w-4 h-4" />
+                        <Pencil className="w-3.5 h-3.5" />
                         <span>Editar Detalhes</span>
                       </button>
                     </div>
@@ -695,46 +694,38 @@ export const CampaignSettingsStudio: React.FC = () => {
               </div>
 
               {/* Main Content Grid: 2 Columns */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1 min-h-0 overflow-hidden">
                 
-                {/* Left Column (2 Cols): Synopsis, Lore & Adventure Hook */}
-                <div className="lg:col-span-2 space-y-6">
+                {/* Left Column (lg:col-span-7): Synopsis & Adventure Hook */}
+                <div className="lg:col-span-7 flex flex-col gap-2.5 h-full min-h-0 overflow-hidden">
                   
                   {/* Synopsis Panel */}
-                  <div className="bg-[#141a27] border border-[#252f44] rounded-2xl p-6 shadow-xl relative overflow-hidden">
-                    <div className="flex items-center justify-between border-b border-[#252f44] pb-3 mb-4">
-                      <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                  <div className="bg-[#141a27] border border-[#252f44] rounded-2xl p-3 sm:p-3.5 shadow-xl flex-1 flex flex-col min-h-0 overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-[#252f44] pb-2 mb-2 flex-shrink-0">
+                      <h3 className="text-xs sm:text-sm font-bold text-slate-100 flex items-center gap-2">
                         <Scroll className="w-4 h-4 text-amber-400" />
                         <span>Sinopse & Diário de Abertura da Mesa</span>
                       </h3>
                       <button
-                        onClick={() => {
-                          setEditTitle(activeCampaign.title);
-                          setEditDescription(activeCampaign.description || '');
-                          setIsEditingHeader(true);
-                        }}
-                        className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-[#1b2336] rounded-lg transition-colors flex items-center gap-1 text-xs"
+                        onClick={() => setShowEditDetailsModal(true)}
+                        className="p-1 text-slate-400 hover:text-amber-400 hover:bg-[#1b2336] rounded-lg transition-colors flex items-center gap-1 text-xs cursor-pointer"
                         title="Editar Sinopse"
                       >
-                        <Pencil className="w-3.5 h-3.5" />
+                        <Pencil className="w-3 h-3" />
                         <span className="hidden sm:inline">Editar</span>
                       </button>
                     </div>
 
                     {synopsisText ? (
-                      <div className="text-xs text-slate-200 font-serif leading-relaxed space-y-3 whitespace-pre-line bg-[#0d121c] p-4 rounded-xl border border-[#252f44]/80">
+                      <div className="text-xs text-slate-200 font-serif leading-relaxed whitespace-pre-line bg-[#0d121c] p-3 rounded-xl border border-[#252f44]/80 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
                         {synopsisText}
                       </div>
                     ) : (
-                      <div className="text-center py-6 text-slate-500">
-                        <p className="text-xs italic mb-3">Nenhuma sinopse cadastrada para esta campanha ainda.</p>
+                      <div className="text-center py-6 text-slate-500 my-auto">
+                        <p className="text-xs italic mb-2">Nenhuma sinopse cadastrada para esta campanha ainda.</p>
                         <button
-                          onClick={() => {
-                            setEditTitle(activeCampaign.title);
-                            setEditDescription(activeCampaign.description || '');
-                            setIsEditingHeader(true);
-                          }}
-                          className="px-3.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold rounded-lg transition-all"
+                          onClick={() => setShowEditDetailsModal(true)}
+                          className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold rounded-lg transition-all cursor-pointer"
                         >
                           + Adicionar Sinopse
                         </button>
@@ -742,162 +733,64 @@ export const CampaignSettingsStudio: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Adventure Hook Card (Call to Action / Session 0) */}
+                  {/* Adventure Hook Card (Call to Action / Session 0) - if exists */}
                   {hookText && (
-                    <div className="bg-gradient-to-br from-[#192233] to-[#121724] border border-amber-500/40 rounded-2xl p-5 shadow-xl space-y-2">
-                      <div className="flex items-center gap-2 text-amber-400">
-                        <Compass className="w-4 h-4 text-amber-400" />
-                        <h4 className="text-xs font-extrabold uppercase tracking-wider text-amber-300">
+                    <div className="bg-gradient-to-br from-[#192233] to-[#121724] border border-amber-500/40 rounded-xl p-2.5 shadow-md space-y-1 flex-shrink-0">
+                      <div className="flex items-center gap-1.5 text-amber-400">
+                        <Compass className="w-3.5 h-3.5 text-amber-400" />
+                        <h4 className="text-[10.5px] font-extrabold uppercase tracking-wider text-amber-300">
                           Gancho Inicial de Aventura (Sessão 0 / Call to Action)
                         </h4>
                       </div>
-                      <p className="text-xs text-slate-200 font-sans italic bg-[#0a0e17]/80 p-3.5 rounded-xl border border-amber-500/20 leading-relaxed">
+                      <p className="text-xs text-slate-200 font-sans italic bg-[#0a0e17]/80 p-2.5 rounded-lg border border-amber-500/20 leading-relaxed">
                         "{hookText}"
                       </p>
                     </div>
                   )}
-
-                  {/* Campaign Quick Actions Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button
-                      onClick={() => setActiveTab('feed')}
-                      className="p-4 rounded-xl bg-[#141a27] border border-[#252f44] hover:border-amber-500/60 text-left transition-all group flex items-start justify-between shadow-md"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
-                          <BookOpen className="w-4 h-4" />
-                          <span>Diário da Jornada & Feed</span>
-                        </div>
-                        <p className="text-[11px] text-slate-400">
-                          {feedEvents.length} registros, recaps de sessão e batalhas.
-                        </p>
-                      </div>
-                      <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab('roster')}
-                      className="p-4 rounded-xl bg-[#141a27] border border-[#252f44] hover:border-cyan-500/60 text-left transition-all group flex items-start justify-between shadow-md"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-cyan-400 font-bold text-xs">
-                          <Users className="w-4 h-4" />
-                          <span>Elenco & Jogadores</span>
-                        </div>
-                        <p className="text-[11px] text-slate-400">
-                          {rosterMembers.length} membros conectados à mesa.
-                        </p>
-                      </div>
-                      <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-1 transition-all" />
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab('party')}
-                      className="p-4 rounded-xl bg-[#141a27] border border-[#252f44] hover:border-rose-500/60 text-left transition-all group flex items-start justify-between shadow-md"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-rose-400 font-bold text-xs">
-                          <Swords className="w-4 h-4" />
-                          <span>Party & Inventário</span>
-                        </div>
-                        <p className="text-[11px] text-slate-400">
-                          {activeCampaign?.partyMembers?.length || 0} heróis e tesouro do grupo.
-                        </p>
-                      </div>
-                      <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-rose-400 group-hover:translate-x-1 transition-all" />
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab('houserules')}
-                      className="p-4 rounded-xl bg-[#141a27] border border-[#252f44] hover:border-purple-500/60 text-left transition-all group flex items-start justify-between shadow-md"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-purple-400 font-bold text-xs">
-                          <Scroll className="w-4 h-4" />
-                          <span>Regras da Casa</span>
-                        </div>
-                        <p className="text-[11px] text-slate-400">
-                          {houseRules.length} diretrizes e regras customizadas.
-                        </p>
-                      </div>
-                      <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
-                    </button>
-                  </div>
-
                 </div>
 
-                {/* Right Column (1 Col): Roster & Table Metadata */}
-                <div className="space-y-6">
+                {/* Right Column (lg:col-span-5): Connected Players (Elenco da Mesa) + Push Notification */}
+                <div className="lg:col-span-5 flex flex-col gap-2.5 h-full min-h-0 overflow-hidden">
                   
-                  {/* Table Info & Invite Card */}
-                  <div className="bg-[#141a27] border border-[#252f44] rounded-2xl p-5 shadow-xl space-y-4">
-                    <div className="flex items-center justify-between border-b border-[#252f44] pb-2.5">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                        Código de Convite
-                      </span>
-                      <Crown className="w-4 h-4 text-amber-400" />
-                    </div>
-
-                    <div className="p-3 bg-[#0a0d14] border border-amber-500/30 rounded-xl flex items-center justify-between">
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase block">Código da Mesa:</span>
-                        <span className="text-sm font-mono font-bold text-amber-400 tracking-wider">
-                          {activeCampaign.inviteCode}
-                        </span>
-                      </div>
-                      <button
-                        onClick={handleCopyCode}
-                        className="px-3 py-1.5 bg-[#161c28] hover:bg-[#1f2738] text-slate-200 rounded-lg text-xs font-bold transition-all border border-[#2a3449] flex items-center gap-1.5"
-                      >
-                        {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-amber-400" />}
-                        <span>{copiedCode ? 'Copiado!' : 'Copiar'}</span>
-                      </button>
-                    </div>
-
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
-                      Compartilhe este código com seus jogadores para que eles possam ingressar nesta mesa pelo Dashboard do Jogador.
-                    </p>
-                  </div>
-
                   {/* Connected Players Widget */}
-                  <div className="bg-[#141a27] border border-[#252f44] rounded-2xl p-5 shadow-xl space-y-3">
-                    <div className="flex items-center justify-between border-b border-[#252f44] pb-2.5">
-                      <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                  <div className="bg-[#141a27] border border-[#252f44] rounded-2xl p-3 sm:p-3.5 shadow-xl flex-1 flex flex-col min-h-0 overflow-hidden space-y-2">
+                    <div className="flex items-center justify-between border-b border-[#252f44] pb-2 flex-shrink-0">
+                      <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                         <Users className="w-4 h-4 text-cyan-400" />
                         <span>Elenco da Mesa ({rosterMembers.length})</span>
                       </span>
                       <button
                         onClick={() => setShowAddMemberModal(true)}
-                        className="text-[11px] font-bold text-amber-400 hover:text-amber-300 transition-colors"
+                        className="text-[11px] font-bold text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
                       >
                         + Convidar
                       </button>
                     </div>
 
-                    <div className="space-y-2 max-h-56 overflow-y-auto">
+                    <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1">
                       {rosterMembers.map((member) => (
                         <div
                           key={member.id}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-[#0a0d14] border border-[#252f44]"
+                          className="flex items-center justify-between p-2 rounded-xl bg-[#0a0d14] border border-[#252f44]"
                         >
-                          <div className="flex items-center gap-2.5">
-                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs ${
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
                               member.role === 'dm' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
                             }`}>
                               {member.displayName ? member.displayName.charAt(0).toUpperCase() : 'J'}
                             </div>
-                            <div>
-                              <div className="text-xs font-bold text-slate-200">
+                            <div className="truncate">
+                              <div className="text-xs font-bold text-slate-200 truncate">
                                 {member.displayName || member.characterName || 'Jogador Anônimo'}
                               </div>
-                              <div className="text-[10px] text-slate-400">
+                              <div className="text-[9.5px] text-slate-400 font-mono truncate">
                                 {member.role === 'dm' ? '👑 Mestre de RPG' : `⚔️ ${member.characterName || 'Personagem não definido'}`}
                               </div>
                             </div>
                           </div>
 
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${
-                            member.role === 'dm' ? 'text-amber-300 bg-amber-500/10 border-amber-500/30' : 'text-cyan-300 bg-cyan-500/10 border-cyan-500/30'
+                          <span className={`text-[9.5px] font-semibold px-2 py-0.5 rounded border shrink-0 ${
+                            member.role === 'dm' ? 'text-amber-300 bg-amber-500/10 border-amber-500/30 font-bold' : 'text-cyan-300 bg-cyan-500/10 border-cyan-500/30'
                           }`}>
                             {member.role === 'dm' ? 'DM' : 'Jogador'}
                           </span>
@@ -907,7 +800,9 @@ export const CampaignSettingsStudio: React.FC = () => {
                   </div>
 
                   {/* Push Notification Integration */}
-                  <PushNotificationToggle campaignId={activeCampaign?.id} userId={user?.id} />
+                  <div className="flex-shrink-0">
+                    <PushNotificationToggle campaignId={activeCampaign?.id} userId={user?.id} />
+                  </div>
 
                 </div>
 
@@ -1203,98 +1098,281 @@ export const CampaignSettingsStudio: React.FC = () => {
         )}
 
         {activeTab === 'party' && (
-          <div className="flex-1 flex flex-col h-full bg-[#0a0d14]">
-            <div className="p-6 border-b border-[#2a3449]">
-              <h3 className="font-bold text-lg text-slate-100 flex items-center gap-2">
-                <Swords className="w-5 h-5 text-rose-400" /> Membros da Party Oficial
-              </h3>
-              <p className="text-sm text-slate-400 mt-2">
-                Defina os personagens e NPCs que formam o grupo oficial da campanha.
-                Esta lista será usada para dividir ouro automaticamente e enviar loots.
-              </p>
-            </div>
+          <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden p-3 md:p-3.5 gap-2.5 bg-[#0a0d14]">
             
-            <div className="flex-1 p-6 overflow-y-auto space-y-4">
-              {activeCampaign?.partyMembers && activeCampaign.partyMembers.length > 0 ? (
-                activeCampaign.partyMembers.map((member) => (
-                  <div key={member.id} className="p-4 bg-[#161c28] border border-[#2a3449] rounded-xl flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center overflow-hidden">
-                        {member.avatarUrl ? (
-                          <img src={member.avatarUrl} alt={member.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-slate-500 font-bold text-xs">{member.type === 'player' ? 'PC' : 'NPC'}</span>
-                        )}
-                      </div>
-                      <div>
-                        <div className="font-bold text-slate-100">{member.name}</div>
-                        <div className="text-[10px] uppercase font-semibold text-slate-400">
-                          {member.type === 'player' ? 'Personagem de Jogador' : 'NPC do Mestre'}
+            {/* Compact Top Header */}
+            <div className="p-3 sm:p-3.5 bg-gradient-to-r from-[#161c28] via-[#1a2234] to-[#0f141d] border border-[#2a3449] rounded-2xl flex items-center justify-between gap-3 shrink-0 shadow-lg">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400">
+                  <Swords className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-sm text-slate-100 font-serif">
+                      Membros da Party Oficial
+                    </h3>
+                    <span className="text-[9.5px] font-mono px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold">
+                      {activeCampaign.partyMembers?.length || 0} Integrantes
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Grupo oficial de heróis e NPCs aliados para divisão de tesouro, loots e XP.
+                  </p>
+                </div>
+              </div>
+
+              {activeCampaign.worldId && (
+                <span className="hidden sm:flex text-[10px] text-amber-400 bg-[#0a0d14] px-2.5 py-1 rounded-lg border border-amber-500/30 items-center gap-1">
+                  <Globe className="w-3 h-3" />
+                  <span>Mundo: {activeWorld?.title || 'Mundo Ativo'}</span>
+                </span>
+              )}
+            </div>
+
+            {/* 2-Column Responsive Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1 min-h-0 overflow-hidden">
+              
+              {/* Left Column (lg:col-span-6): Membros Atuais da Party */}
+              <div className="lg:col-span-6 flex flex-col gap-2 h-full min-h-0 overflow-hidden bg-[#141a27] border border-[#252f44] rounded-2xl p-3 sm:p-3.5 shadow-xl">
+                <div className="flex items-center justify-between border-b border-[#252f44] pb-2 shrink-0">
+                  <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-rose-400" />
+                    <span>Membros Ativos no Grupo</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    {activeCampaign.partyMembers?.length || 0} integrantes
+                  </span>
+                </div>
+
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+                  {activeCampaign?.partyMembers && activeCampaign.partyMembers.length > 0 ? (
+                    activeCampaign.partyMembers.map((member) => (
+                      <div 
+                        key={member.id} 
+                        className="p-2 bg-[#0a0d14] border border-[#252f44] hover:border-[#354360] rounded-xl flex items-center justify-between gap-3 transition-all"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden border ${
+                            member.type === 'player'
+                              ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40'
+                              : 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                          }`}>
+                            {member.avatarUrl ? (
+                              <img src={member.avatarUrl} alt={member.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <span>{member.type === 'player' ? 'PC' : 'NPC'}</span>
+                            )}
+                          </div>
+                          <div className="truncate">
+                            <div className="font-bold text-xs text-slate-100 truncate">{member.name}</div>
+                            <div className="text-[9.5px] uppercase font-semibold text-slate-400 flex items-center gap-1">
+                              <span className={member.type === 'player' ? 'text-cyan-400' : 'text-amber-400'}>
+                                {member.type === 'player' ? '🎮 Personagem de Jogador' : '🧙‍♂️ NPC Aliado do Mestre'}
+                              </span>
+                            </div>
+                          </div>
                         </div>
+
+                        <button
+                          onClick={async () => {
+                            const newParty = (activeCampaign.partyMembers || []).filter(m => m.id !== member.id);
+                            await updateCampaign({ ...activeCampaign, partyMembers: newParty });
+                            toast.success(`${member.name} removido da party.`);
+                          }}
+                          className="p-1.5 bg-rose-950/40 text-rose-400 hover:bg-rose-900/60 rounded-lg transition-colors border border-rose-900/50 shrink-0 cursor-pointer"
+                          title="Remover da Party"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
+                    ))
+                  ) : (
+                    <div className="p-6 text-center text-slate-500 bg-[#0a0d14]/40 rounded-xl border border-dashed border-[#252f44] my-auto">
+                      <Users className="w-8 h-8 mx-auto mb-2 text-slate-600 opacity-60" />
+                      <p className="text-xs font-semibold text-slate-300">Nenhum membro na party oficial ainda.</p>
+                      <p className="text-[10.5px] text-slate-500 mt-0.5">
+                        Adicione jogadores do elenco ou NPCs do mundo usando a coluna ao lado.
+                      </p>
                     </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column (lg:col-span-6): Adicionar Jogadores e NPCs do Mundo */}
+              <div className="lg:col-span-6 flex flex-col gap-2.5 h-full min-h-0 overflow-hidden bg-[#141a27] border border-[#252f44] rounded-2xl p-3 sm:p-3.5 shadow-xl">
+                
+                {/* Sub-Tabs Switcher for Add Party (Players vs World NPCs) */}
+                <div className="flex items-center justify-between border-b border-[#252f44] pb-2 shrink-0">
+                  <span className="text-xs font-bold text-slate-200">
+                    Adicionar ao Grupo
+                  </span>
+                  <div className="flex items-center gap-1 bg-[#0a0d14] p-0.5 rounded-lg border border-[#2a3449]">
                     <button
-                      onClick={async () => {
-                        const newParty = (activeCampaign.partyMembers || []).filter(m => m.id !== member.id);
-                        await updateCampaign({ ...activeCampaign, partyMembers: newParty });
-                      }}
-                      className="p-2 bg-rose-950/40 text-rose-400 hover:bg-rose-900/60 rounded-lg transition-colors border border-rose-900/50"
-                      title="Remover da Party"
+                      onClick={() => setPartyAddSubTab('players')}
+                      className={`px-2.5 py-1 text-[10.5px] font-bold rounded-md transition-all cursor-pointer ${
+                        partyAddSubTab === 'players'
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      Jogadores ({availablePlayers.length})
+                    </button>
+                    <button
+                      onClick={() => setPartyAddSubTab('npcs')}
+                      className={`px-2.5 py-1 text-[10.5px] font-bold rounded-md transition-all cursor-pointer ${
+                        partyAddSubTab === 'npcs'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      NPCs do Mundo ({availableNpcs.length})
                     </button>
                   </div>
-                ))
-              ) : (
-                <div className="p-8 text-center text-slate-500 bg-[#0f141d]/40 rounded-2xl border border-dashed border-[#2a3449]">
-                  Nenhum membro na party oficial ainda.
                 </div>
-              )}
 
-              <div className="pt-6 border-t border-[#2a3449]">
-                <h4 className="font-bold text-sm text-slate-200 mb-4">Adicionar à Party</h4>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 bg-[#161c28] rounded-xl border border-[#2a3449]">
-                    <div className="text-xs font-bold text-slate-400 mb-3">Jogadores do Elenco</div>
-                    <div className="space-y-2">
-                      {rosterMembers
-                        .filter(m => m.role === 'player' && !(activeCampaign?.partyMembers || []).some(pm => pm.id === m.id))
-                        .map(m => (
-                          <div key={m.id} className="flex items-center justify-between bg-[#0a0d14] p-2 rounded-lg border border-[#2a3449]/50">
-                            <span className="text-sm font-semibold text-slate-300">{m.characterName || m.displayName}</span>
+                {/* Sub-Tab: Available Players */}
+                {partyAddSubTab === 'players' && (
+                  <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                    <div className="text-[11px] text-slate-400 shrink-0">
+                      Jogadores conectados ao elenco da campanha:
+                    </div>
+                    
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+                      {availablePlayers.length > 0 ? (
+                        availablePlayers.map((m) => (
+                          <div
+                            key={m.id}
+                            className="flex items-center justify-between p-2 rounded-xl bg-[#0a0d14] border border-[#252f44] hover:border-[#354360] transition-all"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 flex items-center justify-center font-bold text-xs shrink-0">
+                                {m.displayName ? m.displayName.charAt(0).toUpperCase() : 'J'}
+                              </div>
+                              <div className="truncate">
+                                <div className="text-xs font-bold text-slate-200 truncate">
+                                  {m.characterName || m.displayName}
+                                </div>
+                                <div className="text-[9.5px] text-slate-400 font-mono truncate">
+                                  {m.displayName}
+                                </div>
+                              </div>
+                            </div>
+
                             <button
                               onClick={async () => {
-                                const newParty = [...(activeCampaign?.partyMembers || []), {
-                                  id: m.id,
-                                  name: m.characterName || m.displayName || 'Desconhecido',
-                                  type: 'player' as const,
-                                  userId: m.userId,
-                                  avatarUrl: m.avatarUrl
-                                }];
+                                const newParty = [
+                                  ...(activeCampaign?.partyMembers || []),
+                                  {
+                                    id: m.id,
+                                    name: m.characterName || m.displayName || 'Jogador',
+                                    type: 'player' as const,
+                                    userId: m.userId,
+                                    avatarUrl: m.avatarUrl,
+                                  },
+                                ];
                                 await updateCampaign({ ...activeCampaign, partyMembers: newParty });
+                                toast.success(`${m.characterName || m.displayName} adicionado à party!`);
                               }}
-                              className="px-3 py-1 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40 rounded text-xs font-bold border border-emerald-500/30"
+                              className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/40 rounded-lg text-xs font-bold border border-emerald-500/40 transition-all flex items-center gap-1 shrink-0 cursor-pointer"
                             >
-                              Adicionar
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Adicionar</span>
                             </button>
                           </div>
-                      ))}
-                      {rosterMembers.filter(m => m.role === 'player' && !(activeCampaign?.partyMembers || []).some(pm => pm.id === m.id)).length === 0 && (
-                        <div className="text-xs text-slate-500 text-center py-2">Todos os jogadores já estão na party.</div>
+                        ))
+                      ) : (
+                        <div className="p-5 text-center text-slate-500 bg-[#0a0d14]/40 rounded-xl border border-dashed border-[#252f44] my-auto">
+                          <p className="text-xs font-semibold text-slate-400">Todos os jogadores do elenco já estão na party.</p>
+                        </div>
                       )}
                     </div>
                   </div>
-                  
-                  <div className="p-4 bg-[#161c28] rounded-xl border border-[#2a3449]">
-                    <div className="text-xs font-bold text-slate-400 mb-3">NPCs do Mundo (Em breve)</div>
-                    <div className="text-xs text-slate-500 text-center py-4 bg-[#0a0d14] rounded-lg border border-[#2a3449]/50">
-                      Adicionar NPCs criados no mundo à party estará disponível na próxima atualização.
+                )}
+
+                {/* Sub-Tab: Available World NPCs */}
+                {partyAddSubTab === 'npcs' && (
+                  <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                    {/* Search filter for NPCs */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="relative flex-1">
+                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={npcSearchQuery}
+                          onChange={(e) => setNpcSearchQuery(e.target.value)}
+                          placeholder="Buscar NPC por nome ou papel..."
+                          className="w-full text-xs bg-[#0a0d14] border border-[#252f44] focus:border-amber-500 text-slate-200 pl-8 pr-2.5 py-1.5 rounded-lg outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+                      {filteredAvailableNpcs.length > 0 ? (
+                        filteredAvailableNpcs.map((npc) => (
+                          <div
+                            key={npc.id}
+                            className="flex items-center justify-between p-2 rounded-xl bg-[#0a0d14] border border-[#252f44] hover:border-amber-500/40 transition-all group"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+                                {npc.images?.[0] ? (
+                                  <img src={npc.images[0]} alt={npc.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <span>{npc.name.charAt(0).toUpperCase()}</span>
+                                )}
+                              </div>
+                              <div className="truncate">
+                                <div className="text-xs font-bold text-slate-200 truncate group-hover:text-amber-300 transition-colors">
+                                  {npc.name}
+                                </div>
+                                <div className="text-[9.5px] text-slate-400 truncate flex items-center gap-1.5">
+                                  <span className="text-amber-400 font-medium">{npc.subType || 'NPC'}</span>
+                                  {npc.shortDesc && (
+                                    <span className="text-slate-500 truncate">• {npc.shortDesc}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={async () => {
+                                const newParty = [
+                                  ...(activeCampaign?.partyMembers || []),
+                                  {
+                                    id: npc.id,
+                                    name: npc.name,
+                                    type: 'npc' as const,
+                                    avatarUrl: npc.images?.[0] || undefined,
+                                  },
+                                ];
+                                await updateCampaign({ ...activeCampaign, partyMembers: newParty });
+                                toast.success(`${npc.name} recrutado para a party!`);
+                              }}
+                              className="px-2.5 py-1 bg-amber-500/20 text-amber-300 hover:bg-amber-500/40 rounded-lg text-xs font-bold border border-amber-500/40 transition-all flex items-center gap-1 shrink-0 cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Adicionar</span>
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-5 text-center text-slate-500 bg-[#0a0d14]/40 rounded-xl border border-dashed border-[#252f44] my-auto space-y-1">
+                          <p className="text-xs font-semibold text-slate-400">
+                            {npcSearchQuery ? 'Nenhum NPC encontrado com esse termo.' : 'Nenhum NPC disponível para adicionar.'}
+                          </p>
+                          <p className="text-[10.5px] text-slate-500">
+                            Crie NPCs no menu de Worldbuilding para integrá-los como aliados na campanha.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
+                )}
+
               </div>
+
             </div>
+
           </div>
         )}
 
@@ -1539,6 +1617,15 @@ export const CampaignSettingsStudio: React.FC = () => {
         isOpen={showCreateCampaignModal}
         onClose={() => setShowCreateCampaignModal(false)}
       />
+
+      {/* Modal Edit Campaign Details & AI Visual Forge */}
+      {activeCampaign && (
+        <EditCampaignDetailsModal
+          isOpen={showEditDetailsModal}
+          onClose={() => setShowEditDetailsModal(false)}
+          campaign={activeCampaign}
+        />
+      )}
     </div>
   );
 };

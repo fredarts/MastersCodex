@@ -782,7 +782,7 @@ export interface CampaignAudio {
   campaignId: string;
   name: string;
   url: string;
-  type: 'bgm' | 'sfx';
+  type: 'bgm' | 'sfx' | 'narration';
   category: string;
   isLoop: boolean;
   iconName?: string;

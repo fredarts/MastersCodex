@@ -347,6 +347,19 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
   const sceneGridConfig = activeScene?.gridConfig3D || liveEnvironmentSettings?.grid_config_3d;
   const sceneElevations = activeScene?.tokenElevations || liveEnvironmentSettings?.token_elevations;
 
+  const activeAspectRatio = activeSlideImage?.aspectRatio || currentPack?.aspectRatio || activeScene?.defaultAspectRatio || '16:9';
+
+  const getAspectClass = (aspect: string) => {
+    switch (aspect) {
+      case '4:3': return 'aspect-[4/3]';
+      case '1:1': return 'aspect-square';
+      case '9:16': return 'aspect-[9/16]';
+      case '16:9':
+      default:
+        return 'aspect-video';
+    }
+  };
+
   return (
     <div className="flex-1 bg-[#0a0d14] flex flex-col overflow-hidden border-r border-[#2a3449]">
       <div className="bg-[#121824]/80 p-3 border-b border-[#2a3449] flex items-center justify-between">
@@ -362,7 +375,7 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
               {!isBattleStarted ? (
                 <button
                   onClick={handleStartBattle}
-                  className="px-3 py-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-slate-950 font-black text-[10px] rounded shadow-lg transition-all flex items-center gap-1.5 uppercase"
+                  className="px-3 py-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-slate-950 font-black text-[10px] rounded shadow-lg transition-all flex items-center gap-1.5 uppercase cursor-pointer"
                 >
                   <Swords className="w-3 h-3" />
                   Iniciar Batalha
@@ -370,7 +383,7 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
               ) : (
                 <button
                   onClick={handleResetBattle}
-                  className="px-3 py-1 bg-[#1a2234] hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 font-bold text-[10px] rounded transition-all flex items-center gap-1.5 uppercase"
+                  className="px-3 py-1 bg-[#1a2234] hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 font-bold text-[10px] rounded transition-all flex items-center gap-1.5 uppercase cursor-pointer"
                   title="Restaurar HP e posições de quando a batalha iniciou"
                 >
                   <RotateCcw className="w-3 h-3" />
@@ -386,19 +399,16 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
         </span>
       </div>
 
-      <div className="flex-1 p-4 flex flex-col min-h-0 space-y-4 overflow-hidden">
-        {/* Top Section: Display & Slideshow Controls */}
-        <div className="flex flex-row gap-4 items-stretch justify-center w-full flex-1 min-h-0 max-h-[65vh]">
-          
-          {/* Live Visual Mirror Display Container */}
-          <div className="flex-1 flex items-center justify-center min-w-0">
-            <div
-              ref={containerRef}
-              onMouseMove={handleMouseMove}
-              onClick={handleClick}
-              className="h-full max-w-full w-auto aspect-video bg-black rounded-2xl border border-[#2a3449] overflow-hidden relative shadow-2xl flex items-center justify-center"
-            >
-              {liveDisplayMode === 'combat' ? (
+      <div className="flex-1 p-3 sm:p-4 flex flex-col min-h-0 gap-3 overflow-hidden">
+        {/* Main Display Preview Container */}
+        <div className="flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden">
+          <div
+            ref={containerRef}
+            onMouseMove={handleMouseMove}
+            onClick={handleClick}
+            className={`h-full max-w-full w-auto ${liveDisplayMode === 'artwork' ? getAspectClass(activeAspectRatio) : 'aspect-video'} bg-black rounded-2xl border border-[#2a3449] overflow-hidden relative shadow-2xl flex items-center justify-center`}
+          >
+            {liveDisplayMode === 'combat' ? (
               <ThreeErrorBoundary>
                 <BattleGrid3D
                   combatants={combatants}
@@ -491,135 +501,112 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                 <p className="text-xs">Nenhuma arte ou mapa transmitido no momento.</p>
               </div>
             )}
-            </div>
           </div>
+        </div>
 
-          {/* Right Side Panels: Slideshow & NPC Voice */}
-          {liveDisplayMode === 'artwork' && (
-            <div className="flex flex-row gap-3 shrink-0">
-              
-              {/* Slideshow DM Controls com Dropdown de Packs */}
-              {(currentPackImages.length > 0 || slidePacks.length > 1) && (
-                <div className="w-[175px] bg-[#121824] border border-[#2a3449] rounded-xl p-3 flex flex-col gap-3 shadow overflow-hidden">
-                  {/* Seletor Dropdown de Packs de Slides */}
-                  {slidePacks.length > 1 && (
-                    <div className="flex flex-col gap-1 shrink-0 pb-2 border-b border-[#2a3449]/60">
-                      <label className="text-[9px] font-bold text-amber-400 uppercase font-mono flex items-center gap-1">
-                        <Layers className="w-3 h-3" /> Pack de Slides:
-                      </label>
-                      <select
-                        value={activePackId}
-                        onChange={(e) => handlePackChange(e.target.value)}
-                        className="w-full bg-[#0a0d14] border border-amber-500/40 hover:border-amber-400 focus:border-amber-400 text-amber-300 font-bold text-xs rounded-lg px-2 py-1.5 focus:outline-none cursor-pointer transition-colors shadow-inner"
-                      >
-                        {slidePacks.map((pack) => (
-                          <option key={pack.id} value={pack.id} className="bg-[#121824] text-slate-200">
-                            {pack.title} ({pack.images?.length || 0})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Header do Slide e Botões de Navegação */}
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase font-mono leading-tight">
-                        Slide {currentPackImages.length > 0 ? `${activeImageIndex + 1} de ${currentPackImages.length}` : '0 de 0'}
-                      </span>
-                      {currentPack?.transitionType && (
-                        <span className="text-[8px] bg-[#0a0d14] text-amber-400 px-1.5 py-0.5 rounded font-mono border border-[#2a3449]">
-                          {currentPack.aspectRatio || '16:9'}
-                        </span>
-                      )}
-                    </div>
-                    {currentPackImages.length > 1 && (
-                      <div className="flex gap-1.5 font-sans w-full">
-                        <button
-                          onClick={async () => {
-                            const prevIdx = (activeImageIndex - 1 + currentPackImages.length) % currentPackImages.length;
-                            await onSlideChange(prevIdx);
-                          }}
-                          className="flex-1 py-1.5 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] rounded text-[11px] font-bold text-amber-400 cursor-pointer flex items-center justify-center gap-0.5 transition-all"
-                        >
-                          <ChevronLeft className="w-3 h-3" />
-                          <span>Ant</span>
-                        </button>
-                        <button
-                          onClick={async () => {
-                            const nextIdx = (activeImageIndex + 1) % currentPackImages.length;
-                            await onSlideChange(nextIdx);
-                          }}
-                          className="flex-1 py-1.5 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] rounded text-[11px] font-bold text-amber-400 cursor-pointer flex items-center justify-center gap-0.5 transition-all"
-                        >
-                          <span>Próx</span>
-                          <ChevronRight className="w-3 h-3" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Thumbnails list (Vertical) */}
-                  {currentPackImages.length > 0 ? (
-                    <div className="flex flex-col gap-2 overflow-y-auto py-1 custom-scrollbar flex-1 min-h-0 pr-1">
-                      {currentPackImages.map((imgObj, idx) => {
-                        const isSelected = idx === activeImageIndex;
-                        return (
-                          <button
-                            key={imgObj.id}
-                            onClick={async () => await onSlideChange(idx)}
-                            className={`relative w-full aspect-video rounded border overflow-hidden shrink-0 transition-all cursor-pointer ${
-                              isSelected ? 'border-amber-400 ring-1 ring-amber-500/40 scale-[1.02]' : 'border-[#2a3449] hover:border-slate-500'
-                            }`}
-                          >
-                            {isYouTubeUrl(imgObj.imageUrl) ? (
-                              <img src={getYouTubeThumbnailUrl(imgObj.imageUrl) || ''} className="w-full h-full object-cover" alt="YT" />
-                            ) : imgObj.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(imgObj.imageUrl) ? (
-                              <video src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" muted playsInline />
-                            ) : (
-                              <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" alt={`Slide ${idx + 1}`} />
-                            )}
-                            <span className="absolute bottom-1 right-1 bg-black/80 text-[10px] font-bold px-1.5 rounded text-white font-mono backdrop-blur-sm">
-                              {idx + 1}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="p-3 bg-[#0a0d14] rounded-lg border border-dashed border-[#2a3449] text-center">
-                      <p className="text-[10px] text-slate-500 italic">Pack sem slides.</p>
-                    </div>
-                  )}
+        {/* Bottom Horizontal Filmstrip Timeline (Artwork Mode) */}
+        {liveDisplayMode === 'artwork' && (currentPackImages.length > 0 || slidePacks.length > 1) && (
+          <div className="h-16 shrink-0 bg-[#121824]/95 border border-[#2a3449] rounded-2xl px-3 py-1.5 flex items-center gap-3 shadow-xl overflow-hidden select-none">
+            
+            {/* Pack Selector & Info */}
+            <div className="flex items-center gap-2 shrink-0 pr-3 border-r border-[#2a3449]/70">
+              {slidePacks.length > 1 ? (
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-bold text-amber-400 uppercase font-mono flex items-center gap-1">
+                    <Layers className="w-3 h-3" /> Pack:
+                  </span>
+                  <select
+                    value={activePackId}
+                    onChange={(e) => handlePackChange(e.target.value)}
+                    className="bg-[#0a0d14] border border-amber-500/40 hover:border-amber-400 focus:border-amber-400 text-amber-300 font-bold text-xs rounded-lg px-2 py-1 focus:outline-none cursor-pointer max-w-[140px] truncate"
+                  >
+                    {slidePacks.map((pack) => (
+                      <option key={pack.id} value={pack.id} className="bg-[#121824] text-slate-200">
+                        {pack.title} ({pack.images?.length || 0})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-bold text-amber-400 uppercase font-mono flex items-center gap-1">
+                    <Layers className="w-3 h-3" /> {currentPack?.title || 'Pack de Slides'}
+                  </span>
+                  <span className="text-[10.5px] font-bold text-slate-300 font-mono">
+                    {currentPackImages.length} {currentPackImages.length === 1 ? 'slide' : 'slides'}
+                  </span>
                 </div>
               )}
 
-              {/* NPC Voice Trigger Box */}
-              <div className="w-[140px] bg-[#121824] border border-[#2a3449] rounded-xl p-3 flex flex-col gap-2 shadow h-fit shrink-0">
-                <div className="flex flex-col gap-0.5">
-                  <div className="text-[10px] font-bold text-cyan-400 uppercase font-mono flex items-center gap-1">
-                    <Mic className="w-3 h-3" /> Voz de NPC
-                  </div>
-                  <div className="text-xs font-bold text-slate-200 truncate" title={activeScene?.npcName || 'Nenhum NPC'}>
-                    {activeScene?.npcName || 'Nenhum NPC'}
-                  </div>
-                </div>
-                <button
-                  disabled={!activeScene?.npcAudioUrl}
-                  onClick={() => setPlayingNpcVoice(!playingNpcVoice)}
-                  className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                    activeScene?.npcAudioUrl
-                      ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
-                      : 'bg-[#1a2234] text-slate-600 cursor-not-allowed'
-                  }`}
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                  <span>{playingNpcVoice ? 'Pausar' : 'Tocar'}</span>
-                </button>
+              <div className="flex flex-col items-end pl-1">
+                <span className="text-[9px] font-mono text-slate-400">
+                  {currentPackImages.length > 0 ? `${activeImageIndex + 1}/${currentPackImages.length}` : '0/0'}
+                </span>
+                <span className="text-[8px] bg-[#0a0d14] text-amber-400 px-1 py-0.2 rounded font-mono border border-[#2a3449]">
+                  {activeAspectRatio}
+                </span>
               </div>
             </div>
-          )}
-        </div>
+
+            {/* Navigation Arrow Left */}
+            {currentPackImages.length > 1 && (
+              <button
+                onClick={async () => {
+                  const prevIdx = (activeImageIndex - 1 + currentPackImages.length) % currentPackImages.length;
+                  await onSlideChange(prevIdx);
+                }}
+                className="h-10 w-8 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] hover:border-amber-500/40 rounded-xl text-amber-400 flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-inner"
+                title="Slide Anterior"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Horizontal Filmstrip of Slide Thumbnails */}
+            <div className="flex-1 flex items-center gap-2 overflow-x-auto custom-scrollbar h-full py-0.5 px-1 min-w-0">
+              {currentPackImages.map((imgObj, idx) => {
+                const isSelected = idx === activeImageIndex;
+                return (
+                  <button
+                    key={imgObj.id}
+                    onClick={async () => await onSlideChange(idx)}
+                    className={`relative h-full aspect-video rounded-lg border overflow-hidden shrink-0 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'border-amber-400 ring-2 ring-amber-500/40 scale-105 z-10 shadow-lg'
+                        : 'border-[#2a3449] hover:border-slate-400 opacity-75 hover:opacity-100'
+                    }`}
+                  >
+                    {isYouTubeUrl(imgObj.imageUrl) ? (
+                      <img src={getYouTubeThumbnailUrl(imgObj.imageUrl) || ''} className="w-full h-full object-cover" alt="YT" />
+                    ) : imgObj.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(imgObj.imageUrl) ? (
+                      <video src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" muted playsInline />
+                    ) : (
+                      <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" alt={`Slide ${idx + 1}`} />
+                    )}
+                    <span className="absolute bottom-0.5 right-0.5 bg-black/85 text-[8.5px] font-bold px-1 rounded text-white font-mono backdrop-blur-sm">
+                      {idx + 1}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Navigation Arrow Right */}
+            {currentPackImages.length > 1 && (
+              <button
+                onClick={async () => {
+                  const nextIdx = (activeImageIndex + 1) % currentPackImages.length;
+                  await onSlideChange(nextIdx);
+                }}
+                className="h-10 w-8 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] hover:border-amber-500/40 rounded-xl text-amber-400 flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-inner"
+                title="Próximo Slide"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+
+          </div>
+        )}
       </div>
     </div>
   );

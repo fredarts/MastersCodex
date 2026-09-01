@@ -289,15 +289,15 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 w-full max-w-[1720px] mx-auto min-h-[680px]">
+    <div className="flex flex-col lg:flex-row gap-3 xl:gap-4 w-full h-full min-h-0 flex-1 overflow-hidden">
       {/* ========================================================================= */}
-      {/* PAINEL ESQUERDO (3/4 DA TELA): LIVE PREVIEW DO SLIDE & CONTROLES          */}
+      {/* PAINEL ESQUERDO: LIVE PREVIEW DO SLIDE & CONTROLES                        */}
       {/* ========================================================================= */}
-      <div className="w-full lg:w-[72%] xl:w-[74%] flex flex-col gap-4">
+      <div className="w-full lg:w-[58%] xl:w-[60%] flex flex-col gap-2.5 h-full min-h-0 flex-1 overflow-hidden">
         {/* Card do Preview Canvas */}
-        <div className="bg-[#121824] rounded-2xl border border-[#2a3449] p-4 shadow-xl flex flex-col gap-3">
+        <div className="bg-[#121824] rounded-2xl border border-[#2a3449] p-3 shadow-xl flex flex-col gap-2 flex-1 min-h-0 justify-between overflow-hidden">
           {/* Header do Preview */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">
@@ -317,8 +317,8 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
           </div>
 
           {/* Área de Visualização com Shader WebGL */}
-          <div className="relative w-full bg-black/90 rounded-xl overflow-hidden border border-[#2a3449] flex items-center justify-center min-h-[360px]">
-            <div className={`w-full max-h-[580px] ${getAspectClass(currentAspect)} relative flex items-center justify-center overflow-hidden`}>
+          <div className="relative w-full flex-1 min-h-0 bg-black/90 rounded-xl overflow-hidden border border-[#2a3449] flex items-center justify-center p-1">
+            <div className={`w-full h-full max-h-full ${getAspectClass(currentAspect)} relative flex items-center justify-center overflow-hidden`}>
               {activeDisplayUrl ? (
                 isYouTubeUrl(activeDisplayUrl) ? (
                   <iframe
@@ -344,8 +344,8 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                   />
                 )
               ) : (
-                <div className="text-center p-8 text-slate-500 flex flex-col items-center gap-2">
-                  <Film className="w-10 h-10 opacity-40 text-amber-400" />
+                <div className="text-center p-4 text-slate-500 flex flex-col items-center gap-2">
+                  <Film className="w-8 h-8 opacity-40 text-amber-400" />
                   <p className="text-xs font-semibold">Nenhum slide selecionado.</p>
                   <p className="text-[10px] text-slate-600">Adicione uma imagem ou gere com IA ao lado para pré-visualizar.</p>
                 </div>
@@ -362,7 +362,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
           </div>
 
           {/* Barra de Ações Rápidas do Preview */}
-          <div className="flex items-center justify-between pt-1 gap-2">
+          <div className="flex items-center justify-between pt-0.5 gap-2 flex-shrink-0">
             {/* Navegação entre Slides do Pack */}
             <div className="flex items-center gap-1.5">
               <button
@@ -372,7 +372,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                 className="p-1.5 bg-[#161c28] hover:bg-[#1f2738] disabled:opacity-30 border border-[#2a3449] rounded-lg text-slate-300 transition-all cursor-pointer"
                 title="Slide Anterior"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-3.5 h-3.5" />
               </button>
               <span className="text-xs font-mono font-bold text-slate-300 px-2">
                 {currentPackImages.length > 0 ? `${selectedSlideIndex + 1} / ${currentPackImages.length}` : '0 / 0'}
@@ -384,7 +384,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                 className="p-1.5 bg-[#161c28] hover:bg-[#1f2738] disabled:opacity-30 border border-[#2a3449] rounded-lg text-slate-300 transition-all cursor-pointer"
                 title="Próximo Slide"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
@@ -392,7 +392,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
             <button
               type="button"
               onClick={handleTestTransition}
-              className="px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+              className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
             >
               <Play className="w-3.5 h-3.5 fill-slate-950" />
               <span>Testar Transição</span>
@@ -401,22 +401,22 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
         </div>
 
         {/* Configuração de Transição & Formato do Pack */}
-        <div className="bg-[#121824] rounded-2xl border border-[#2a3449] p-4 shadow-xl space-y-4">
-          <div className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400" />
+        <div className="bg-[#121824] rounded-2xl border border-[#2a3449] p-2.5 xl:p-3 shadow-xl space-y-2 flex-shrink-0">
+          <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             Configurações de Transição & Formato do Pack
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {/* Seletor de Efeito de Transição */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase">
+            <div className="space-y-1">
+              <label className="block text-[9px] font-bold text-slate-400 uppercase font-mono">
                 Efeito de Transição (WebGL)
               </label>
               <select
                 value={currentPack.transitionType || defaultTransition}
                 onChange={(e) => updateCurrentPackSettings({ transitionType: e.target.value as SlideTransitionType })}
-                className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl px-3 py-2 text-xs text-amber-300 font-bold focus:outline-none transition-all cursor-pointer shadow-inner"
+                className="w-full bg-[#0a0d14] border border-[#2a3449] focus:border-amber-500 rounded-xl px-2.5 py-1.5 text-xs text-amber-300 font-bold focus:outline-none transition-all cursor-pointer shadow-inner"
               >
                 {SLIDE_TRANSITION_OPTIONS.map((opt) => (
                   <option key={opt.id} value={opt.id} className="bg-[#121824] text-slate-200">
@@ -427,8 +427,8 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
             </div>
 
             {/* Seletor de Proporção de Tela (Aspect Ratio) */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase">
+            <div className="space-y-1">
+              <label className="block text-[9px] font-bold text-slate-400 uppercase font-mono">
                 Proporção de Exibição (Aspect)
               </label>
               <div className="grid grid-cols-4 gap-1">
@@ -437,7 +437,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                     key={opt.id}
                     type="button"
                     onClick={() => updateCurrentPackSettings({ aspectRatio: opt.id })}
-                    className={`py-1.5 rounded-lg border text-[11px] font-bold transition-all ${
+                    className={`py-1 rounded-lg border text-[10px] font-bold transition-all ${
                       currentAspect === opt.id
                         ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow'
                         : 'bg-[#0a0d14] border-[#2a3449] text-slate-400 hover:text-slate-200'
@@ -452,11 +452,11 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
 
           {/* Teleprompter Preview se preenchido */}
           {activeSlide?.secretNotes && (
-            <div className="p-3 bg-amber-950/20 border border-amber-500/30 rounded-xl space-y-1">
-              <div className="text-[10px] font-bold text-amber-400 uppercase flex items-center gap-1 font-mono">
-                <Lock className="w-3 h-3" /> Teleprompter do Narrador (Slide Atual):
+            <div className="p-2 bg-amber-950/20 border border-amber-500/30 rounded-xl space-y-0.5 max-h-16 overflow-y-auto custom-scrollbar">
+              <div className="text-[9px] font-bold text-amber-400 uppercase flex items-center gap-1 font-mono">
+                <Lock className="w-2.5 h-2.5" /> Teleprompter do Narrador (Slide Atual):
               </div>
-              <p className="text-xs text-amber-200 font-serif italic">
+              <p className="text-[11px] text-amber-200 font-serif italic line-clamp-2">
                 {activeSlide.secretNotes}
               </p>
             </div>
@@ -465,14 +465,14 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* PAINEL DIREITO (1/4 DA TELA): GESTÃO DE PACKS, UPLOAD, IA E LISTA DE SLIDES */}
+      {/* PAINEL DIREITO: GESTÃO DE PACKS, UPLOAD, IA E LISTA DE SLIDES            */}
       {/* ========================================================================= */}
-      <div className="w-full lg:w-[28%] xl:w-[26%] flex flex-col gap-4">
+      <div className="w-full lg:w-[42%] xl:w-[40%] flex flex-col gap-2.5 h-full min-h-0 flex-1 overflow-hidden">
         {/* Seletor de Packs de Slides (Tabs / Decks) */}
-        <div className="bg-[#121824] rounded-2xl border border-[#2a3449] p-4 shadow-xl space-y-3">
+        <div className="bg-[#121824] rounded-2xl border border-[#2a3449] p-2.5 shadow-xl space-y-2 flex-shrink-0">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-amber-400" />
+            <div className="flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-amber-400" />
               <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">
                 Packs ({slidePacks.length})
               </span>
@@ -481,15 +481,15 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
             <button
               type="button"
               onClick={() => setIsCreatingPack((prev) => !prev)}
-              className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold rounded-lg flex items-center gap-1 transition-all cursor-pointer"
+              className="px-2 py-0.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] font-bold rounded-lg flex items-center gap-1 transition-all cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-3 h-3" />
               <span>Novo Pack</span>
             </button>
           </div>
 
           {/* Abas dos Packs */}
-          <div className="flex flex-wrap gap-1.5 pt-1">
+          <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto custom-scrollbar">
             {slidePacks.map((pack) => {
               const isActive = pack.id === activeSlidePackId;
               return (
@@ -499,14 +499,14 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                     setActiveSlidePackId(pack.id);
                     setSelectedSlideIndex(0);
                   }}
-                  className={`group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                  className={`group relative flex items-center gap-1.5 px-2 py-1 rounded-xl border text-[11px] font-bold transition-all cursor-pointer ${
                     isActive
                       ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md font-black'
                       : 'bg-[#0a0d14] border-[#2a3449] text-slate-400 hover:text-slate-200 hover:bg-[#161c28]'
                   }`}
                 >
-                  <span className="truncate max-w-[120px]">{pack.title}</span>
-                  <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
+                  <span className="truncate max-w-[110px]">{pack.title}</span>
+                  <span className={`text-[8px] px-1 py-0.2 rounded-full font-mono ${
                     isActive ? 'bg-amber-500 text-slate-950' : 'bg-[#161c28] text-slate-500'
                   }`}>
                     {pack.images?.length || 0}
@@ -520,7 +520,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                       className="opacity-0 group-hover:opacity-100 hover:text-rose-400 text-slate-500 transition-opacity p-0.5"
                       title="Excluir Pack"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash2 className="w-2.5 h-2.5" />
                     </button>
                   )}
                 </div>
@@ -530,25 +530,25 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
 
           {/* Formulário de Criação de Novo Pack */}
           {isCreatingPack && (
-            <div className="p-3 bg-[#0a0d14] border border-amber-500/40 rounded-xl space-y-2.5 animate-fade-in">
+            <div className="p-2.5 bg-[#0a0d14] border border-amber-500/40 rounded-xl space-y-2 animate-fade-in">
               <div className="text-[10px] font-bold text-amber-400 uppercase font-mono">
                 Novo Pack:
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <div>
                   <input
                     type="text"
                     value={newPackTitle}
                     onChange={(e) => setNewPackTitle(e.target.value)}
                     placeholder="Nome do Pack..."
-                    className="w-full bg-[#161c28] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-200"
+                    className="w-full bg-[#161c28] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2 py-1 text-xs text-slate-200"
                   />
                 </div>
                 <div>
                   <select
                     value={newPackCategory}
                     onChange={(e) => setNewPackCategory(e.target.value as any)}
-                    className="w-full bg-[#161c28] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 cursor-pointer"
+                    className="w-full bg-[#161c28] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2 py-1 text-xs text-slate-200 cursor-pointer"
                   >
                     <option value="sonho">💭 Sonho / Visão Etérea</option>
                     <option value="lore">📜 Lore & História Ancestral</option>
@@ -557,11 +557,11 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                   </select>
                 </div>
               </div>
-              <div className="flex justify-end gap-2 pt-1">
+              <div className="flex justify-end gap-1.5 pt-0.5">
                 <button
                   type="button"
                   onClick={() => setIsCreatingPack(false)}
-                  className="px-2.5 py-1 bg-[#161c28] text-slate-400 text-xs font-bold rounded-lg hover:text-slate-200"
+                  className="px-2 py-0.5 bg-[#161c28] text-slate-400 text-xs font-bold rounded-lg hover:text-slate-200"
                 >
                   Cancelar
                 </button>
@@ -569,7 +569,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                   type="button"
                   onClick={handleCreatePack}
                   disabled={!newPackTitle.trim()}
-                  className="px-3 py-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-lg shadow"
+                  className="px-2.5 py-0.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-lg shadow"
                 >
                   Criar
                 </button>
@@ -579,16 +579,16 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
         </div>
 
         {/* Barra Unificada de Ações de Mídia (Upload + IA) */}
-        <div className="bg-[#121824] rounded-2xl border border-[#2a3449] p-3.5 shadow-xl space-y-2.5">
-          <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider font-mono truncate">
+        <div className="bg-[#121824] rounded-2xl border border-[#2a3449] p-2.5 shadow-xl space-y-1.5 flex-shrink-0">
+          <div className="text-[10px] font-bold text-slate-300 uppercase tracking-wider font-mono truncate">
             Mídias: <strong className="text-amber-400">{currentPack.title}</strong>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
             <button
               type="button"
               onClick={() => setShowAddMediaModal(true)}
-              className="px-3 py-2 bg-[#161f30] hover:bg-[#1e2a42] border border-amber-500/40 hover:border-amber-500 text-amber-300 font-bold text-xs rounded-xl shadow flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+              className="px-2.5 py-1.5 bg-[#161f30] hover:bg-[#1e2a42] border border-amber-500/40 hover:border-amber-500 text-amber-300 font-bold text-xs rounded-xl shadow flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span className="truncate">Adicionar Mídia</span>
@@ -597,7 +597,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
             <button
               type="button"
               onClick={onOpenAiModal}
-              className="px-3 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow active:scale-95 cursor-pointer"
+              className="px-2.5 py-1.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow active:scale-95 cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
               <span className="truncate">Gerar com IA</span>
@@ -605,38 +605,38 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
           </div>
         </div>
 
-        {/* Lista Reordenável de Slides do Pack Ativo */}
-        <div className="bg-[#121824] rounded-2xl border border-[#2a3449] p-4 shadow-xl space-y-3 flex-1">
-          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono flex items-center justify-between">
+        {/* Lista Reordenável de Slides do Pack Ativo (Único container com scroll na tela) */}
+        <div className="bg-[#121824] rounded-2xl border border-[#2a3449] p-3 shadow-xl flex flex-col min-h-0 flex-1 overflow-hidden">
+          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono flex items-center justify-between pb-1 flex-shrink-0">
             <span>Slides do Pack ({currentPackImages.length})</span>
             {currentPackImages.length > 0 && (
-              <span className="text-[10px] text-slate-500">Clique em um slide para pré-visualizar à esquerda</span>
+              <span className="text-[9px] text-slate-500 hidden sm:inline">Clique para pré-visualizar</span>
             )}
           </div>
 
           {currentPackImages.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 bg-[#0a0d14] border border-dashed border-[#2a3449] rounded-2xl text-xs space-y-2">
-              <p className="font-semibold text-slate-400">Nenhum slide adicionado a este pack ainda.</p>
-              <p className="text-[11px] text-slate-600">Clique em <strong>"Adicionar Mídia"</strong> ou <strong>"Gerar com IA"</strong> acima para começar.</p>
+            <div className="p-6 text-center text-slate-500 bg-[#0a0d14] border border-dashed border-[#2a3449] rounded-xl text-xs space-y-1.5 my-auto">
+              <p className="font-semibold text-slate-400">Nenhum slide adicionado.</p>
+              <p className="text-[10px] text-slate-600">Adicione uma mídia ou gere com IA acima.</p>
             </div>
           ) : (
-            <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+            <div className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-1.5 custom-scrollbar">
               {currentPackImages.map((imgObj, idx) => {
                 const isSelected = selectedSlideIndex === idx;
                 return (
                   <div
                     key={imgObj.id}
                     onClick={() => setSelectedSlideIndex(idx)}
-                    className={`p-3.5 rounded-2xl border transition-all flex flex-col gap-3 cursor-pointer ${
+                    className={`p-2.5 rounded-xl border transition-all flex flex-col gap-2 cursor-pointer ${
                       isSelected
                         ? 'bg-[#161f30] border-amber-500/60 shadow-lg ring-1 ring-amber-500/30'
                         : 'bg-[#0a0d14] border-[#2a3449] hover:border-slate-600'
                     }`}
                   >
                     {/* Linha Superior: Imagem em Primeiro Lugar + Ações de Cabeçalho */}
-                    <div className="flex items-center justify-between gap-2.5">
+                    <div className="flex items-center justify-between gap-2">
                       {/* Miniatura do Slide com Badge */}
-                      <div className="relative w-20 h-14 bg-black rounded-xl overflow-hidden border border-[#2a3449] shrink-0 shadow">
+                      <div className="relative w-16 h-11 bg-black rounded-lg overflow-hidden border border-[#2a3449] shrink-0 shadow">
                         {isYouTubeUrl(imgObj.imageUrl) ? (
                           <img src={getYouTubeThumbnailUrl(imgObj.imageUrl) || ''} className="w-full h-full object-cover" alt="YT" />
                         ) : imgObj.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(imgObj.imageUrl) ? (
@@ -644,13 +644,13 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                         ) : (
                           <img src={normalizeImageUrl(imgObj.imageUrl)} className="w-full h-full object-cover" alt={`Slide ${idx + 1}`} />
                         )}
-                        <span className="absolute top-1 left-1 bg-black/85 text-[8px] font-bold text-amber-400 px-1 rounded font-mono border border-amber-500/30">
+                        <span className="absolute top-0.5 left-0.5 bg-black/85 text-[8px] font-bold text-amber-400 px-1 rounded font-mono border border-amber-500/30">
                           #{idx + 1}
                         </span>
                       </div>
 
                       {/* Informações Centrais & Botões de Ação */}
-                      <div className="flex items-center gap-1.5 flex-1 justify-end">
+                      <div className="flex items-center gap-1 flex-1 justify-end">
                         {/* Botão de Estilização com Lápis e Badge de Caixas */}
                         <button
                           type="button"
@@ -658,17 +658,17 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                             e.stopPropagation();
                             setEditingOverlaySlideIndex(idx);
                           }}
-                          className="px-2 py-1 bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                          className="px-2 py-1 bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold rounded-lg flex items-center gap-1 transition-all cursor-pointer shadow-sm"
                           title="Abrir Designer de Legendas & Presets RPG"
                         >
-                          <Pencil className="w-3 h-3 text-amber-400" />
-                          <span className="text-[10px] font-mono">
+                          <Pencil className="w-2.5 h-2.5 text-amber-400" />
+                          <span className="font-mono">
                             Estilizar ({imgObj.textOverlays?.length || (imgObj.overlayText ? 1 : 0)})
                           </span>
                         </button>
 
                         {/* Controles de Posição / Reordenação */}
-                        <div className="flex items-center gap-0.5 bg-[#121824] p-0.5 rounded-xl border border-[#2a3449]">
+                        <div className="flex items-center gap-0.5 bg-[#121824] p-0.5 rounded-lg border border-[#2a3449]">
                           <button
                             type="button"
                             disabled={idx === 0}
@@ -720,7 +720,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                               setPrimaryImageUrl(next[0]?.imageUrl || '');
                             }
                           }}
-                          className="p-1.5 bg-[#121824] hover:bg-rose-950/40 border border-[#2a3449] hover:border-rose-500/40 text-slate-400 hover:text-rose-400 rounded-xl transition-all cursor-pointer"
+                          className="p-1 bg-[#121824] hover:bg-rose-950/40 border border-[#2a3449] hover:border-rose-500/40 text-slate-400 hover:text-rose-400 rounded-lg transition-all cursor-pointer"
                           title="Excluir Slide"
                         >
                           <Trash2 className="w-3 h-3" />
@@ -729,9 +729,9 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                     </div>
 
                     {/* Linha Inferior: Inputs de Legenda e Teleprompter com Labels Limpos */}
-                    <div className="space-y-2 pt-1 border-t border-[#2a3449]/60">
-                      <div className="space-y-1">
-                        <label className="block text-[9px] font-bold text-slate-400 uppercase font-mono tracking-wider">
+                    <div className="space-y-1.5 pt-1 border-t border-[#2a3449]/60">
+                      <div className="space-y-0.5">
+                        <label className="block text-[8.5px] font-bold text-slate-400 uppercase font-mono tracking-wider">
                           Legenda dos Jogadores:
                         </label>
                         <input
@@ -752,16 +752,16 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                             };
                             updateCurrentPackImages(next);
                           }}
-                          className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-xl px-2.5 py-1 text-xs text-slate-200"
+                          className="w-full bg-[#121824] border border-[#2a3449] focus:border-amber-500 rounded-lg px-2 py-1 text-xs text-slate-200"
                         />
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="block text-[9px] font-bold text-amber-400/90 uppercase font-mono tracking-wider flex items-center gap-1">
-                          <Lock className="w-3 h-3 text-amber-400" /> Teleprompter do Narrador:
+                      <div className="space-y-0.5">
+                        <label className="block text-[8.5px] font-bold text-amber-400/90 uppercase font-mono tracking-wider flex items-center gap-1">
+                          <Lock className="w-2.5 h-2.5 text-amber-400" /> Teleprompter do Narrador:
                         </label>
                         <textarea
-                          rows={2}
+                          rows={1}
                           value={imgObj.secretNotes || ''}
                           placeholder="Notas secretas do Mestre para narrar..."
                           onClick={(e) => e.stopPropagation()}
@@ -770,7 +770,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                             next[idx] = { ...next[idx], secretNotes: e.target.value };
                             updateCurrentPackImages(next);
                           }}
-                          className="w-full bg-[#121824] border border-amber-500/20 focus:border-amber-500 rounded-xl p-2 text-xs text-amber-200 font-serif resize-none"
+                          className="w-full bg-[#121824] border border-amber-500/20 focus:border-amber-500 rounded-lg px-2 py-1 text-xs text-amber-200 font-serif resize-none"
                         />
                       </div>
                     </div>

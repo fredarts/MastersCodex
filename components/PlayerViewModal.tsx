@@ -633,20 +633,20 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               // Se a exploração ainda não foi iniciada pelo Mestre e houver capa/lore cadastrada, mostra a Capa Cinemática
               if (!isExplorationStarted && (dungeonCover || dungeonLore)) {
                 return (
-                  <div className="w-full h-full relative flex items-center justify-center p-6 bg-[#06080e] overflow-hidden select-none animate-fade-in">
+                  <div className="w-full h-full relative flex items-center justify-center p-3 sm:p-4 pb-20 sm:pb-24 bg-[#06080e] overflow-hidden select-none animate-fade-in">
                     {dungeonCover && (
                       <div
                         className="absolute inset-0 bg-cover bg-center opacity-30 scale-105 filter blur-sm pointer-events-none"
                         style={{ backgroundImage: `url(${normalizeImageUrl(dungeonCover)})` }}
                       />
                     )}
-                    <div className="relative z-10 max-w-2xl w-full bg-[#0d121c]/95 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black flex flex-col gap-4 text-center items-center">
-                      <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/15 border border-amber-500/40 rounded-full text-amber-300 text-xs font-mono font-bold uppercase">
+                    <div className="relative z-10 max-w-lg w-full max-h-full bg-[#0d121c]/95 border-2 border-amber-500/50 rounded-2xl p-3 sm:p-4 shadow-2xl shadow-black flex flex-col gap-2 text-center items-center overflow-hidden">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-amber-500/15 border border-amber-500/40 rounded-full text-amber-300 text-[10.5px] font-mono font-bold uppercase shrink-0">
                         <span>🏰 {dungeonCR}</span>
                       </div>
 
                       {dungeonCover && (
-                        <div className="w-full max-h-60 aspect-[16/9] rounded-2xl overflow-hidden border border-amber-500/40 shadow-xl bg-black">
+                        <div className="w-full max-h-36 sm:max-h-40 aspect-[16/9] rounded-xl overflow-hidden border border-amber-500/40 shadow-xl bg-black shrink-0">
                           <img
                             src={normalizeImageUrl(dungeonCover)}
                             alt="Capa da Masmorra"
@@ -655,22 +655,22 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                         </div>
                       )}
 
-                      <div className="space-y-1">
-                        <h2 className="text-xl sm:text-2xl font-black text-amber-200 uppercase tracking-wide font-serif drop-shadow">
+                      <div className="space-y-0.5 shrink-0">
+                        <h2 className="text-sm sm:text-base font-black text-amber-200 uppercase tracking-wide font-serif drop-shadow">
                           {activeCampaignMap?.title || 'Exploração de Masmorra'}
                         </h2>
-                        <div className="w-20 h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-transparent mx-auto mt-1" />
+                        <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-transparent mx-auto mt-0.5" />
                       </div>
 
                       {dungeonLore && (
-                        <div className="w-full max-h-36 overflow-y-auto custom-scrollbar p-3 bg-[#080b12] rounded-2xl border border-amber-500/20 text-left">
-                          <p className="text-xs text-amber-100 font-serif leading-relaxed italic">
+                        <div className="w-full max-h-24 sm:max-h-28 overflow-y-auto custom-scrollbar p-2 bg-[#080b12] rounded-xl border border-amber-500/20 text-left flex-1 min-h-0">
+                          <p className="text-[11px] text-amber-100 font-serif leading-relaxed italic">
                             "{dungeonLore}"
                           </p>
                         </div>
                       )}
 
-                      <p className="text-[11px] text-amber-400/80 font-mono animate-pulse tracking-wider">
+                      <p className="text-[10px] text-amber-400/80 font-mono animate-pulse tracking-wider shrink-0">
                         ⚔️ Aguardando o Mestre iniciar a exploração...
                       </p>
                     </div>

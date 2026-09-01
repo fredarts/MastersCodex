@@ -1683,7 +1683,7 @@ export const CockpitDungeonMap: React.FC = () => {
       {/* TELA DE ABERTURA CINEMÁTICA DA MASMORRA (ANTES DE INICIAR A EXPLORAÇÃO)     */}
       {/* ========================================================================= */}
       {!isExplorationStarted && (activeDungeonCover || activeDungeonLore) && (
-        <div className="absolute inset-0 z-40 bg-[#06080e]/95 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in select-none">
+        <div className="absolute inset-0 z-40 bg-[#06080e]/95 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-3.5 animate-fade-in select-none overflow-hidden">
           {/* Fundo com Arte da Masmorra Desfocada */}
           {activeDungeonCover && (
             <div 
@@ -1693,17 +1693,17 @@ export const CockpitDungeonMap: React.FC = () => {
           )}
 
           {/* Card Central de Apresentação da Masmorra */}
-          <div className="relative z-10 max-w-2xl w-full bg-[#0d121c]/95 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black flex flex-col gap-5 text-center items-center">
+          <div className="relative z-10 max-w-md sm:max-w-lg w-full max-h-full bg-[#0d121c]/95 border-2 border-amber-500/50 rounded-2xl p-2.5 sm:p-3.5 shadow-2xl shadow-black flex flex-col gap-1.5 sm:gap-2 text-center items-center overflow-hidden">
             
             {/* Badge de Desafio D&D 5e */}
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/15 border border-amber-500/40 rounded-full text-amber-300 text-xs font-mono font-bold tracking-wider uppercase">
-              <Compass className="w-3.5 h-3.5 text-amber-400" />
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-amber-500/15 border border-amber-500/40 rounded-full text-amber-300 text-[9.5px] font-mono font-bold tracking-wider uppercase shrink-0">
+              <Compass className="w-3 h-3 text-amber-400" />
               <span>{activeDungeonCR}</span>
             </div>
 
             {/* Imagem de Capa em Destaque */}
             {activeDungeonCover && (
-              <div className="w-full max-h-56 aspect-[16/9] rounded-2xl overflow-hidden border-2 border-amber-500/30 shadow-xl bg-black">
+              <div className="w-full max-h-28 sm:max-h-36 aspect-[16/9] rounded-xl overflow-hidden border border-amber-500/30 shadow-md bg-black shrink-0">
                 <img
                   src={normalizeImageUrl(activeDungeonCover)}
                   alt="Capa da Masmorra"
@@ -1713,17 +1713,17 @@ export const CockpitDungeonMap: React.FC = () => {
             )}
 
             {/* Título da Masmorra */}
-            <div className="space-y-1">
-              <h2 className="text-xl sm:text-2xl font-black text-amber-200 uppercase tracking-wide font-serif drop-shadow-md">
+            <div className="space-y-0.5 shrink-0">
+              <h2 className="text-xs sm:text-sm font-black text-amber-200 uppercase tracking-wide font-serif drop-shadow-md">
                 {activeCampaignMap?.title || 'Exploração de Masmorra'}
               </h2>
-              <div className="w-24 h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-transparent mx-auto mt-2" />
+              <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-transparent mx-auto mt-0.5" />
             </div>
 
             {/* Lore / Descrição Narrativa para o Mestre Ler */}
             {activeDungeonLore ? (
-              <div className="w-full max-h-40 overflow-y-auto custom-scrollbar p-3.5 bg-[#080b12] rounded-2xl border border-amber-500/20 text-left">
-                <p className="text-xs text-amber-100 font-serif leading-relaxed italic">
+              <div className="w-full max-h-20 sm:max-h-24 overflow-y-auto custom-scrollbar p-2 bg-[#080b12] rounded-xl border border-amber-500/20 text-left flex-1 min-h-0">
+                <p className="text-[10.5px] sm:text-xs text-amber-100 font-serif leading-relaxed italic">
                   "{activeDungeonLore}"
                 </p>
               </div>
@@ -1733,9 +1733,9 @@ export const CockpitDungeonMap: React.FC = () => {
             <button
               type="button"
               onClick={handleStartExploration}
-              className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm uppercase tracking-wider rounded-2xl shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2.5 transition-all transform hover:scale-105 active:scale-95 cursor-pointer ring-2 ring-amber-300"
+              className="w-full sm:w-auto px-5 py-2 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all transform hover:scale-102 active:scale-95 cursor-pointer ring-1 ring-amber-300 shrink-0"
             >
-              <Swords className="w-4 h-4 stroke-[2.5]" />
+              <Swords className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>⚔️ Iniciar Exploração da Masmorra</span>
             </button>
           </div>

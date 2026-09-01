@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS public.campaign_audio_assets (
   campaign_id UUID NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   url TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('bgm', 'sfx')),
+  type TEXT NOT NULL CHECK (type IN ('bgm', 'sfx', 'narration')),
   category TEXT NOT NULL DEFAULT 'custom',
   is_loop BOOLEAN DEFAULT false,
   icon_name TEXT DEFAULT 'Music', -- Usado para diferenciar ícones de SFX customizados

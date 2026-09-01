@@ -186,9 +186,15 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
     .map(a => ({ id: a.id, name: a.name, iconName: a.icon_name || 'Music', url: a.url, category: a.category, isCustom: true }));
   const allSfxTracks = [...srdSfxs, ...customSfxs];
 
+  // Formatar todas as narrações (Custom)
+  const allNarrations = customAudios
+    .filter(a => a.type === 'narration')
+    .map(a => ({ id: a.id, name: a.name, url: a.url, category: a.category || 'narracao', isCustom: true }));
+
   // Identificar favoritos
   const favoriteBgmTracks = allBgmTracks.filter(t => favorites.includes(t.id));
   const favoriteSfxTracks = allSfxTracks.filter(s => favorites.includes(s.id));
+  const favoriteNarrations = allNarrations.filter(n => favorites.includes(n.id));
   const [sceneCombatants, setSceneCombatants] = useState<Combatant[]>([]);
   const [combatAddTab, setCombatAddTab] = useState<'srd' | 'world' | 'npcs' | 'players'>('srd');
   const [combatSearchQuery, setCombatSearchQuery] = useState('');
@@ -1197,9 +1203,15 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                 </aside>
 
                 {/* Sub-Tab Editor Content */}
-                <div className={`flex-1 bg-[#0a0d14] ${is3DFullFocus ? 'p-2 overflow-hidden' : 'overflow-y-auto p-6'}`}>
+                <div className={`flex-1 bg-[#0a0d14] ${
+                  is3DFullFocus 
+                    ? 'p-2 overflow-hidden' 
+                    : (activeSubTab === 'image' || activeSubTab === 'audio' || activeSubTab === 'combat' || activeSubTab === 'dungeon-maps')
+                    ? 'p-2.5 sm:p-3 md:p-3.5 overflow-hidden flex flex-col min-h-0 h-full'
+                    : 'overflow-y-auto p-6'
+                }`}>
                 {activeSubTab === 'image' && (
-                  <div className="w-full">
+                  <div className="w-full h-full min-h-0 flex-1 flex flex-col">
                     <SceneSlideshowStudio
                       sceneImages={sceneImages}
                       setSceneImages={setSceneImages}
@@ -1221,44 +1233,63 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                 )}
 
                 {activeSubTab === 'audio' && (
-                  <SceneAudioStudio
-                    allBgmTracks={allBgmTracks}
-                    favoriteBgmTracks={favoriteBgmTracks}
-                    selectedBgmTrackIds={bgmTracks}
-                    onToggleBgmTrack={(trackId) => {
-                      if (bgmTracks.includes(trackId)) {
+                  <div className="w-full h-full min-h-0 flex-1 flex flex-col">
+                    <SceneAudioStudio
+                      allBgmTracks={allBgmTracks}
+                      favoriteBgmTracks={favoriteBgmTracks}
+                      selectedBgmTrackIds={bgmTracks}
+                      onToggleBgmTrack={(trackId) => {
+                        if (bgmTracks.includes(trackId)) {
+                          setBgmTracks(bgmTracks.filter((id) => id !== trackId));
+                        } else {
+                          setBgmTracks([...bgmTracks, trackId]);
+                        }
+                      }}
+                      onRemoveBgmTrack={(trackId) => {
                         setBgmTracks(bgmTracks.filter((id) => id !== trackId));
-                      } else {
-                        setBgmTracks([...bgmTracks, trackId]);
-                      }
-                    }}
-                    onRemoveBgmTrack={(trackId) => {
-                      setBgmTracks(bgmTracks.filter((id) => id !== trackId));
-                    }}
-                    allSfxTracks={allSfxTracks}
-                    favoriteSfxTracks={favoriteSfxTracks}
-                    selectedSfxShortcutIds={sfxShortcuts}
-                    onToggleSfxShortcut={(sfxId) => {
-                      if (sfxShortcuts.includes(sfxId)) {
+                      }}
+                      allSfxTracks={allSfxTracks}
+                      favoriteSfxTracks={favoriteSfxTracks}
+                      selectedSfxShortcutIds={sfxShortcuts}
+                      onToggleSfxShortcut={(sfxId) => {
+                        if (sfxShortcuts.includes(sfxId)) {
+                          setSfxShortcuts(sfxShortcuts.filter((id) => id !== sfxId));
+                        } else {
+                          setSfxShortcuts([...sfxShortcuts, sfxId]);
+                        }
+                      }}
+                      onRemoveSfxShortcut={(sfxId) => {
                         setSfxShortcuts(sfxShortcuts.filter((id) => id !== sfxId));
-                      } else {
-                        setSfxShortcuts([...sfxShortcuts, sfxId]);
-                      }
-                    }}
-                    onRemoveSfxShortcut={(sfxId) => {
-                      setSfxShortcuts(sfxShortcuts.filter((id) => id !== sfxId));
-                    }}
-                  />
+                      }}
+                      allNarrations={allNarrations}
+                      favoriteNarrations={favoriteNarrations}
+                      npcAudioUrl={npcAudioUrl}
+                      npcName={npcName}
+                      onSelectNarration={(narr) => {
+                        if (npcAudioUrl === narr.url) {
+                          setNpcAudioUrl('');
+                          setNpcName('');
+                        } else {
+                          setNpcAudioUrl(narr.url);
+                          setNpcName(narr.name);
+                        }
+                      }}
+                      onRemoveNarration={() => {
+                        setNpcAudioUrl('');
+                        setNpcName('');
+                      }}
+                    />
+                  </div>
                 )}
 
                 {activeSubTab === 'combat' && (
-                  <div className={`w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 items-start transition-all duration-300 ${
-                    is3DFullFocus ? 'max-w-none px-0' : areMenusCollapsed ? 'max-w-[95%] xl:max-w-[1550px]' : 'max-w-7xl'
+                  <div className={`w-full h-full min-h-0 flex-1 flex flex-col lg:flex-row gap-3 xl:gap-4 max-w-[1720px] mx-auto overflow-hidden animate-fade-in select-none ${
+                    is3DFullFocus ? 'max-w-none px-0' : ''
                   }`}>
                     {/* Left Column: Monster/Player Selection & Current Scene Combatants List */}
-                    <div className={`space-y-3.5 bg-[#121824]/90 p-4 rounded-2xl border border-[#2a3449] shadow-xl transition-all duration-300 ${
-                      is3DFullFocus ? 'hidden' : areMenusCollapsed ? 'lg:col-span-4' : 'lg:col-span-5'
-                    }`}>
+                    <div className={`bg-[#121824]/90 p-3 rounded-2xl border border-[#2a3449] shadow-xl flex flex-col gap-2.5 w-full ${
+                      is3DFullFocus ? 'hidden' : areMenusCollapsed ? 'lg:w-[36%] xl:w-[34%]' : 'lg:w-[40%] xl:w-[38%]'
+                    } h-full min-h-0 flex-shrink-0 overflow-y-auto custom-scrollbar`}>
                       {/* Medidor de Dificuldade de Encontros (CR/XP D&D 5e) */}
                       <EncounterDifficultyMeter
                         party={encounterPartyList}
@@ -1267,21 +1298,21 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                       />
 
                       {/* Gerador Rápido de Encontros por Dificuldade */}
-                      <div className="p-3 bg-[#161c28] border border-amber-500/30 rounded-xl space-y-2">
-                        <div className="flex items-center justify-between text-xs font-bold text-amber-300">
-                          <span className="flex items-center gap-1.5 font-serif">
-                            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <div className="p-2.5 bg-[#161c28] border border-amber-500/30 rounded-xl space-y-1.5 flex-shrink-0">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-amber-300">
+                          <span className="flex items-center gap-1 font-serif">
+                            <Sparkles className="w-3 h-3 text-amber-400" />
                             Gerador Rápido de Encontros (D&D 5e):
                           </span>
-                          <span className="text-[10px] text-slate-400 font-mono">
+                          <span className="text-[9px] text-slate-400 font-mono">
                             Auto Balanceado
                           </span>
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                           <button
                             type="button"
                             onClick={() => handleAutoGenerateEncounter('easy')}
-                            className="px-2 py-1.5 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-700/60 text-emerald-300 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
+                            className="px-2 py-1 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-700/60 text-emerald-300 rounded-lg text-[11px] font-bold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
                             title="Gerar encontro com dificuldade Fácil para a party"
                           >
                             <Shield className="w-3 h-3" /> Fácil
@@ -1289,7 +1320,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                           <button
                             type="button"
                             onClick={() => handleAutoGenerateEncounter('medium')}
-                            className="px-2 py-1.5 bg-amber-950/60 hover:bg-amber-900/80 border border-amber-700/60 text-amber-300 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
+                            className="px-2 py-1 bg-amber-950/60 hover:bg-amber-900/80 border border-amber-700/60 text-amber-300 rounded-lg text-[11px] font-bold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
                             title="Gerar encontro com dificuldade Média para a party"
                           >
                             <Swords className="w-3 h-3" /> Médio
@@ -1297,7 +1328,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                           <button
                             type="button"
                             onClick={() => handleAutoGenerateEncounter('hard')}
-                            className="px-2 py-1.5 bg-orange-950/60 hover:bg-orange-900/80 border border-orange-700/60 text-orange-300 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
+                            className="px-2 py-1 bg-orange-950/60 hover:bg-orange-900/80 border border-orange-700/60 text-orange-300 rounded-lg text-[11px] font-bold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
                             title="Gerar encontro com dificuldade Difícil para a party"
                           >
                             <Flame className="w-3 h-3" /> Difícil
@@ -1305,7 +1336,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                           <button
                             type="button"
                             onClick={() => handleAutoGenerateEncounter('deadly')}
-                            className="px-2 py-1.5 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-700/60 text-rose-300 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
+                            className="px-2 py-1 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-700/60 text-rose-300 rounded-lg text-[11px] font-bold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer"
                             title="Gerar encontro com dificuldade Mortal para a party"
                           >
                             <Skull className="w-3 h-3" /> Mortal
@@ -1314,10 +1345,10 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                       </div>
 
                       {/* Widget Unificado de Adição de Combatentes (SRD, Mundo, NPCs e Jogadores) */}
-                      <div className="p-3 bg-[#161c28] border border-[#2a3449] hover:border-amber-500/30 rounded-xl space-y-2.5 relative combat-dropdown-container transition-all">
+                      <div className="p-2.5 bg-[#161c28] border border-[#2a3449] hover:border-amber-500/30 rounded-xl space-y-2 relative combat-dropdown-container transition-all flex-shrink-0">
                         {/* Tab Bar / Segmented Control */}
-                        <div className="flex items-center justify-between border-b border-[#2a3449] pb-2 gap-1 overflow-x-auto scrollbar-none">
-                          <div className="flex gap-1.5 flex-wrap">
+                        <div className="flex items-center justify-between border-b border-[#2a3449] pb-1.5 gap-1 overflow-x-auto scrollbar-none">
+                          <div className="flex gap-1 flex-wrap">
                             <button
                               type="button"
                               onClick={() => {
@@ -1325,7 +1356,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                 setCombatSearchQuery('');
                                 setShowCombatDropdown(false);
                               }}
-                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                              className={`px-2 py-0.5 rounded-lg text-[9.5px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 ${
                                 combatAddTab === 'srd'
                                   ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm'
                                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
@@ -1342,7 +1373,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                 setCombatSearchQuery('');
                                 setShowCombatDropdown(false);
                               }}
-                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                              className={`px-2 py-0.5 rounded-lg text-[9.5px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 ${
                                 combatAddTab === 'world'
                                   ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm'
                                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
@@ -1359,7 +1390,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                 setCombatSearchQuery('');
                                 setShowCombatDropdown(false);
                               }}
-                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                              className={`px-2 py-0.5 rounded-lg text-[9.5px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 ${
                                 combatAddTab === 'npcs'
                                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
                                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
@@ -1376,7 +1407,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                 setCombatSearchQuery('');
                                 setShowCombatDropdown(false);
                               }}
-                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                              className={`px-2 py-0.5 rounded-lg text-[9.5px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 ${
                                 combatAddTab === 'players'
                                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
                                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
@@ -1391,7 +1422,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                             <button
                               type="button"
                               onClick={handleAddAllPlayersToScene}
-                              className="px-2 py-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 rounded-lg text-[9px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1 shrink-0 font-sans cursor-pointer"
+                              className="px-1.5 py-0.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 rounded-lg text-[8.5px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1 shrink-0 font-sans cursor-pointer"
                               title="Adicionar todos os jogadores ao combate com 1 clique"
                             >
                               <Users className="w-2.5 h-2.5" /> Importar Grupo
@@ -1401,21 +1432,21 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
 
                         {/* Conteúdo da Aba Jogadores */}
                         {combatAddTab === 'players' ? (
-                          <div className="space-y-2">
+                          <div className="space-y-1.5">
                             {campaignMembers.length === 0 ? (
-                              <div className="p-3 text-center text-slate-500 text-xs">
+                              <div className="p-2.5 text-center text-slate-500 text-xs">
                                 Nenhum jogador conectado na campanha
                               </div>
                             ) : (
-                              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto custom-scrollbar p-0.5">
+                              <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar p-0.5">
                                 {campaignMembers.map((mem) => (
                                   <button
                                     key={mem.id}
                                     type="button"
                                     onClick={() => handleAddPlayerToScene(mem)}
-                                    className="px-2.5 py-1.5 bg-[#0a0d14] hover:bg-[#121824] border border-cyan-500/40 hover:border-cyan-400 rounded-xl text-xs font-bold text-cyan-300 hover:text-cyan-200 transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                                    className="px-2 py-1 bg-[#0a0d14] hover:bg-[#121824] border border-cyan-500/40 hover:border-cyan-400 rounded-lg text-[11px] font-bold text-cyan-300 hover:text-cyan-200 transition-all flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer"
                                   >
-                                    <Shield className="w-3 h-3 text-cyan-400" />
+                                    <Shield className="w-2.5 h-2.5 text-cyan-400" />
                                     <span>+ {mem.characterName || mem.displayName}</span>
                                   </button>
                                 ))}
@@ -1425,9 +1456,9 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                         ) : (
                           /* Conteúdo das Abas SRD, Mundo e NPCs (Campo de busca + Qtd + Dropdown) */
                           <div className="relative">
-                            <div className="flex gap-2 items-center">
+                            <div className="flex gap-1.5 items-center">
                               <div className="relative flex-1">
-                                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
                                 <input
                                   type="text"
                                   value={combatSearchQuery}
@@ -1443,7 +1474,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                       ? "Buscar monstro / homebrew do mundo..."
                                       : "Buscar NPC por nome ou subtipo..."
                                   }
-                                  className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-xl pl-9 pr-8 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-rose-500/40 font-sans"
+                                  className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-xl pl-8 pr-7 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-rose-500/40 font-sans"
                                 />
                                 {combatSearchQuery && (
                                   <button
@@ -1452,7 +1483,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                       setCombatSearchQuery('');
                                       setShowCombatDropdown(false);
                                     }}
-                                    className="absolute right-3 top-2 text-xs text-slate-400 hover:text-slate-200 font-sans cursor-pointer"
+                                    className="absolute right-2.5 top-1.5 text-xs text-slate-400 hover:text-slate-200 font-sans cursor-pointer"
                                   >
                                     ✕
                                   </button>
@@ -1460,8 +1491,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                               </div>
 
                               {combatAddTab !== 'npcs' && (
-                                <div className="flex items-center gap-1 shrink-0 bg-[#0a0d14] border border-[#2a3449] rounded-xl px-2 py-1 select-none">
-                                  <span className="text-[10px] text-slate-500 font-bold uppercase font-sans">Qtd:</span>
+                                <div className="flex items-center gap-1 shrink-0 bg-[#0a0d14] border border-[#2a3449] rounded-xl px-1.5 py-0.5 select-none">
+                                  <span className="text-[9px] text-slate-500 font-bold uppercase font-sans">Qtd:</span>
                                   <input
                                     type="number"
                                     min="1"
@@ -1471,20 +1502,20 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                       const val = parseInt(e.target.value, 10);
                                       setMonsterQty(isNaN(val) ? 1 : Math.max(1, Math.min(99, val)));
                                     }}
-                                    className="w-8 bg-transparent text-xs text-slate-200 text-center font-bold focus:outline-none font-sans"
+                                    className="w-7 bg-transparent text-xs text-slate-200 text-center font-bold focus:outline-none font-sans"
                                   />
                                   <div className="flex flex-col gap-0.5">
                                     <button
                                       type="button"
                                       onClick={() => setMonsterQty((prev) => Math.min(99, prev + 1))}
-                                      className="text-[8px] text-slate-400 hover:text-slate-200 px-0.5 leading-none cursor-pointer"
+                                      className="text-[7px] text-slate-400 hover:text-slate-200 px-0.5 leading-none cursor-pointer"
                                     >
                                       ▲
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => setMonsterQty((prev) => Math.max(1, prev - 1))}
-                                      className="text-[8px] text-slate-400 hover:text-slate-200 px-0.5 leading-none cursor-pointer"
+                                      className="text-[7px] text-slate-400 hover:text-slate-200 px-0.5 leading-none cursor-pointer"
                                     >
                                       ▼
                                     </button>
@@ -1495,7 +1526,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
 
                             {/* Floating Dropdown List */}
                             {showCombatDropdown && (
-                              <div className="absolute left-0 right-0 mt-1.5 bg-[#121824] border border-[#2a3449] rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto custom-scrollbar divide-y divide-slate-800/60">
+                              <div className="absolute left-0 right-0 mt-1.5 bg-[#121824] border border-[#2a3449] rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto custom-scrollbar divide-y divide-slate-800/60">
                                 {combatAddTab === 'srd' && (
                                   filteredMonsters.length === 0 ? (
                                     <div className="p-3 text-center text-slate-500 text-xs font-sans">
@@ -1514,15 +1545,15 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                             setCombatSearchQuery('');
                                             setShowCombatDropdown(false);
                                           }}
-                                          className="w-full px-3 py-2 text-left hover:bg-[#1c2436] flex items-center justify-between text-xs transition-colors group font-sans cursor-pointer gap-2"
+                                          className="w-full px-2.5 py-1.5 text-left hover:bg-[#1c2436] flex items-center justify-between text-xs transition-colors group font-sans cursor-pointer gap-2"
                                         >
-                                          <div className="flex items-center gap-2 flex-wrap min-w-0">
-                                            <Skull className="w-3.5 h-3.5 text-rose-400 group-hover:text-rose-300 shrink-0" />
-                                            <span className="font-bold text-slate-200 group-hover:text-slate-100 truncate">{m.name}</span>
-                                            <span className="text-[10px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded font-mono shrink-0">
+                                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                            <Skull className="w-3 h-3 text-rose-400 group-hover:text-rose-300 shrink-0" />
+                                            <span className="font-bold text-slate-200 group-hover:text-slate-100 truncate text-[11px]">{m.name}</span>
+                                            <span className="text-[9px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded font-mono shrink-0">
                                               CR {m.cr} • {crToXp(m.cr).toLocaleString()} XP
                                             </span>
-                                            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+                                            <span className={`text-[8.5px] font-mono font-bold px-1 py-0.2 rounded border shrink-0 ${
                                               preview.difficulty === 'deadly' ? 'bg-rose-950/60 text-rose-300 border-rose-800/60' :
                                               preview.difficulty === 'hard' ? 'bg-orange-950/60 text-orange-300 border-orange-800/60' :
                                               preview.difficulty === 'medium' ? 'bg-amber-950/60 text-amber-300 border-amber-800/60' :
@@ -1532,7 +1563,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                               +{monsterXp.toLocaleString()} XP → {preview.difficultyLabel}
                                             </span>
                                           </div>
-                                          <span className="text-[10px] text-rose-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                          <span className="text-[9.5px] text-rose-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                             + Adicionar ({monsterQty})
                                           </span>
                                         </button>
@@ -1559,15 +1590,15 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                             setCombatSearchQuery('');
                                             setShowCombatDropdown(false);
                                           }}
-                                          className="w-full px-3 py-2 text-left hover:bg-[#1c2436] flex items-center justify-between text-xs transition-colors group font-sans cursor-pointer gap-2"
+                                          className="w-full px-2.5 py-1.5 text-left hover:bg-[#1c2436] flex items-center justify-between text-xs transition-colors group font-sans cursor-pointer gap-2"
                                         >
-                                          <div className="flex items-center gap-2 flex-wrap min-w-0">
-                                            <Skull className="w-3.5 h-3.5 text-purple-400 group-hover:text-purple-300 shrink-0" />
-                                            <span className="font-bold text-slate-200 group-hover:text-slate-100 truncate">{m.name}</span>
-                                            <span className="text-[10px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded font-mono shrink-0">
+                                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                            <Skull className="w-3 h-3 text-purple-400 group-hover:text-purple-300 shrink-0" />
+                                            <span className="font-bold text-slate-200 group-hover:text-slate-100 truncate text-[11px]">{m.name}</span>
+                                            <span className="text-[9px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded font-mono shrink-0">
                                               CR {m.cr} • {crToXp(m.cr).toLocaleString()} XP
                                             </span>
-                                            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+                                            <span className={`text-[8.5px] font-mono font-bold px-1 py-0.2 rounded border shrink-0 ${
                                               preview.difficulty === 'deadly' ? 'bg-rose-950/60 text-rose-300 border-rose-800/60' :
                                               preview.difficulty === 'hard' ? 'bg-orange-950/60 text-orange-300 border-orange-800/60' :
                                               preview.difficulty === 'medium' ? 'bg-amber-950/60 text-amber-300 border-amber-800/60' :
@@ -1577,12 +1608,12 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                               +{monsterXp.toLocaleString()} XP → {preview.difficultyLabel}
                                             </span>
                                             {m.type && (
-                                              <span className="text-[9px] text-purple-400 bg-purple-950/40 border border-purple-500/20 px-1 py-0.5 rounded uppercase font-mono">
+                                              <span className="text-[8px] text-purple-400 bg-purple-950/40 border border-purple-500/20 px-1 py-0.2 rounded uppercase font-mono">
                                                 {m.type}
                                               </span>
                                             )}
                                           </div>
-                                          <span className="text-[10px] text-purple-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                          <span className="text-[9.5px] text-purple-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                             + Adicionar ({monsterQty})
                                           </span>
                                         </button>
@@ -1610,15 +1641,15 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                             setCombatSearchQuery('');
                                             setShowCombatDropdown(false);
                                           }}
-                                          className="w-full px-3 py-2 text-left hover:bg-[#1c2436] flex items-center justify-between text-xs transition-colors group cursor-pointer gap-2"
+                                          className="w-full px-2.5 py-1.5 text-left hover:bg-[#1c2436] flex items-center justify-between text-xs transition-colors group cursor-pointer gap-2"
                                         >
-                                          <div className="flex items-center gap-2 flex-wrap min-w-0">
-                                            <User className="w-3.5 h-3.5 text-amber-400 group-hover:text-amber-300 shrink-0" />
-                                            <span className="font-bold text-slate-200 group-hover:text-slate-100 truncate">{npc.name}</span>
-                                            <span className="text-[10px] font-mono text-amber-400 bg-amber-950/40 px-1 py-0.5 rounded border border-amber-500/20 shrink-0">
+                                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                            <User className="w-3 h-3 text-amber-400 group-hover:text-amber-300 shrink-0" />
+                                            <span className="font-bold text-slate-200 group-hover:text-slate-100 truncate text-[11px]">{npc.name}</span>
+                                            <span className="text-[9px] font-mono text-amber-400 bg-amber-950/40 px-1 py-0.5 rounded border border-amber-500/20 shrink-0">
                                               ND {npcCr} • {npcXp.toLocaleString()} XP
                                             </span>
-                                            <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+                                            <span className={`text-[8.5px] font-mono font-bold px-1 py-0.2 rounded border shrink-0 ${
                                               preview.difficulty === 'deadly' ? 'bg-rose-950/60 text-rose-300 border-rose-800/60' :
                                               preview.difficulty === 'hard' ? 'bg-orange-950/60 text-orange-300 border-orange-800/60' :
                                               preview.difficulty === 'medium' ? 'bg-amber-950/60 text-amber-300 border-amber-800/60' :
@@ -1628,12 +1659,12 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                               +{npcXp.toLocaleString()} XP → {preview.difficultyLabel}
                                             </span>
                                             {npc.subType && (
-                                              <span className="text-[10px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded">
+                                              <span className="text-[9px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded">
                                                 {npc.subType}
                                               </span>
                                             )}
                                           </div>
-                                          <span className="text-[10px] text-amber-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                          <span className="text-[9.5px] text-amber-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                             + Adicionar
                                           </span>
                                         </button>
@@ -1648,44 +1679,44 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                       </div>
 
                       {/* Scene Combatants List */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs font-bold text-slate-200 uppercase tracking-wider">
+                      <div className="space-y-1.5 flex-1 min-h-0 flex flex-col">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-200 uppercase tracking-wider flex-shrink-0">
                           <span>Combatentes da Cena ({sceneCombatants.length}):</span>
                           {sceneCombatants.length > 0 && (
                             <button
                               type="button"
                               onClick={() => setSceneCombatants([])}
-                              className="text-[10px] text-rose-400 hover:underline font-normal cursor-pointer"
+                              className="text-[9.5px] text-rose-400 hover:underline font-normal cursor-pointer"
                             >
                               Limpar Todos
                             </button>
                           )}
                         </div>
 
-                        <div className="space-y-1.5 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                        <div className="space-y-1 overflow-y-auto custom-scrollbar flex-1 min-h-[90px] pr-1">
                           {sceneCombatants.length === 0 ? (
-                            <div className="p-4 text-center text-slate-500 bg-[#161c28] border border-dashed border-[#2a3449] rounded-xl text-xs">
+                            <div className="p-3 text-center text-slate-500 bg-[#161c28] border border-dashed border-[#2a3449] rounded-xl text-xs">
                               Nenhum combatente nesta cena. Clique nos monstros ou jogadores acima para incluir no encontro!
                             </div>
                           ) : (
                             sceneCombatants.map((c, idx) => (
-                              <div key={idx} className="p-2.5 bg-[#161c28] border border-[#2a3449] hover:border-slate-600 rounded-xl flex items-center justify-between shadow-sm transition-all gap-2">
-                                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                              <div key={idx} className="p-2 bg-[#161c28] border border-[#2a3449] hover:border-slate-600 rounded-xl flex items-center justify-between shadow-sm transition-all gap-2">
+                                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                                   {c.type === 'player' ? (
-                                    <Shield className="w-4 h-4 text-cyan-400 shrink-0" />
+                                    <Shield className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                                   ) : c.type === 'npc' ? (
-                                    <User className="w-4 h-4 text-amber-400 shrink-0" />
+                                    <User className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                                   ) : (
-                                    <Skull className="w-4 h-4 text-rose-400 shrink-0" />
+                                    <Skull className="w-3.5 h-3.5 text-rose-400 shrink-0" />
                                   )}
-                                  <span className="text-xs font-bold text-slate-100 truncate">{c.name}</span>
-                                  <span className="text-[10px] text-slate-400 font-mono shrink-0">HP: {c.hp} | CA: {c.ac}</span>
+                                  <span className="text-xs font-bold text-slate-100 truncate max-w-[120px]">{c.name}</span>
+                                  <span className="text-[9.5px] text-slate-400 font-mono shrink-0">HP: {c.hp} | CA: {c.ac}</span>
                                   {c.type !== 'player' && (
-                                    <span className="text-[9px] font-mono text-rose-400 bg-rose-950/40 px-1 py-0.5 rounded border border-rose-900/50 shrink-0">
+                                    <span className="text-[8.5px] font-mono text-rose-400 bg-rose-950/40 px-1 py-0.2 rounded border border-rose-900/50 shrink-0">
                                       CR {c.cr || '0'} • {crToXp(c.cr).toLocaleString()} XP
                                     </span>
                                   )}
-                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${
+                                  <span className={`text-[8px] font-bold px-1 py-0.2 rounded uppercase shrink-0 ${
                                     c.type === 'player' 
                                       ? 'bg-cyan-500/20 text-cyan-300' 
                                       : c.type === 'npc'
@@ -1701,7 +1732,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                   className="text-slate-500 hover:text-rose-400 p-1 rounded transition-colors cursor-pointer shrink-0"
                                   title="Remover combatente"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-3 h-3" />
                                 </button>
                               </div>
                             ))
@@ -1711,11 +1742,11 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                     </div>
 
                     {/* Right Column: 3D Battle Grid Interactive Preview */}
-                    <div className={`space-y-2.5 bg-[#121824]/90 p-4 rounded-2xl border border-amber-500/30 shadow-xl transition-all duration-300 ${
-                      is3DFullFocus ? 'lg:col-span-12 w-full' : areMenusCollapsed ? 'lg:col-span-8' : 'lg:col-span-7'
-                    }`}>
-                      <div className="flex items-center justify-between text-xs font-bold text-slate-200 uppercase tracking-wider">
-                        <span className="flex items-center gap-2">
+                    <div className={`bg-[#121824]/90 p-3 rounded-2xl border border-amber-500/30 shadow-xl flex flex-col gap-2 ${
+                      is3DFullFocus ? 'w-full' : areMenusCollapsed ? 'lg:w-[64%] xl:w-[66%]' : 'lg:w-[60%] xl:w-[62%]'
+                    } h-full min-h-0 flex-1 overflow-hidden`}>
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-200 uppercase tracking-wider flex-shrink-0">
+                        <span className="flex items-center gap-1.5">
                           <Swords className="w-4 h-4 text-amber-400" />
                           <span>Pré-configuração e Posicionamento 3D no Grid:</span>
                           {is3DFullFocus && (
@@ -1725,14 +1756,14 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                           )}
                         </span>
                         
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2">
                           <span className="text-[10px] text-amber-400 font-mono font-normal hidden sm:inline normal-case">
                             Arraste & posicione no painel 3D
                           </span>
                           <button
                             type="button"
                             onClick={toggle3DFullFocus}
-                            className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 text-[11px] font-bold transition-all shadow-md active:scale-95 cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-xl border flex items-center gap-1 text-[11px] font-bold transition-all shadow-md active:scale-95 cursor-pointer ${
                               is3DFullFocus
                                 ? 'bg-amber-500 text-slate-950 border-amber-400 hover:bg-amber-400 font-black'
                                 : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-amber-500/40 hover:border-amber-400'
@@ -1741,12 +1772,12 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                           >
                             {is3DFullFocus ? (
                               <>
-                                <Minimize2 className="w-3.5 h-3.5" />
-                                <span>Restaurar Menus</span>
+                                <Minimize2 className="w-3 h-3" />
+                                <span>Restaurar</span>
                               </>
                             ) : (
                               <>
-                                <Maximize2 className="w-3.5 h-3.5" />
+                                <Maximize2 className="w-3 h-3" />
                                 <span>Expandir Tela Máxima</span>
                               </>
                             )}
@@ -1754,9 +1785,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                         </div>
                       </div>
 
-                      <div className={`w-full bg-black rounded-2xl border border-amber-500/30 overflow-hidden relative shadow-2xl transition-all duration-300 ${
-                        is3DFullFocus ? 'h-[calc(100vh-360px)]' : areMenusCollapsed ? 'h-[460px]' : 'h-[400px]'
-                      }`}>
+                      <div className="w-full flex-1 min-h-0 bg-black rounded-2xl border border-amber-500/30 overflow-hidden relative shadow-2xl">
                         {sceneCombatants.length === 0 ? (
                           <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center text-slate-400 bg-slate-950/80 backdrop-blur-sm">
                             <Swords className="w-12 h-12 text-amber-500/40 mb-3 animate-pulse" />
@@ -1798,7 +1827,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                 if (env.timeOfDayPreset) {
                                   setTimeOfDay(env.timeOfDayPreset);
                                 }
-                                setTimeOfDayHour(env.timeOfDayHour);
+                                timeOfDayHour && setTimeOfDayHour(env.timeOfDayHour);
                                 setHasFog(env.hasFog);
                                 setHasRain(env.hasRain);
                                 setEnvironmentSettings(prev => ({ ...prev, ...env }));
@@ -2039,12 +2068,14 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                 )}
 
                 {activeSubTab === 'dungeon-maps' && selectedScene && (
-                  <SceneDungeonMapsStudio
-                    campaignMaps={campaignMaps}
-                    selectedScene={selectedScene}
-                    onToggleMapAssociation={handleToggleMapAssociation}
-                    onEditMapInMapMaker={onEditMapInMapMaker}
-                  />
+                  <div className="w-full h-full min-h-0 flex-1 flex flex-col">
+                    <SceneDungeonMapsStudio
+                      campaignMaps={campaignMaps}
+                      selectedScene={selectedScene}
+                      onToggleMapAssociation={handleToggleMapAssociation}
+                      onEditMapInMapMaker={onEditMapInMapMaker}
+                    />
+                  </div>
                 )}
               </div>
             </div>
