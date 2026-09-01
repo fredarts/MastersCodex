@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Mic, 
   MicOff, 
@@ -198,9 +199,33 @@ export const VoiceCallFloatingWidget: React.FC = () => {
   const [activeVolumeUserId, setActiveVolumeUserId] = useState<string | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const widgetRef = useRef<HTMLDivElement | null>(null);
 
-  // 1. Carregar posição salva ou definir posição padrão no canto inferior direito
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Função para garantir que o widget fique 100% visível e contido dentro da viewport
+  const clampPosition = useCallback((targetX: number, targetY: number) => {
+    if (typeof window === 'undefined') return { x: targetX, y: targetY };
+    const widgetEl = widgetRef.current;
+    const width = widgetEl ? widgetEl.offsetWidth : (videoLayout === 'grid' ? 420 : 360);
+    const height = widgetEl ? widgetEl.offsetHeight : 280;
+    const padding = 12;
+
+    const minX = padding;
+    const maxX = Math.max(minX, window.innerWidth - width - padding);
+    const minY = padding;
+    const maxY = Math.max(minY, window.innerHeight - height - padding);
+
+    return {
+      x: Math.max(minX, Math.min(maxX, targetX)),
+      y: Math.max(minY, Math.min(maxY, targetY)),
+    };
+  }, [videoLayout]);
+
+  // 1. Carregar posição salva ou definir posição padrão garantida no canto inferior direito
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -209,10 +234,8 @@ export const VoiceCallFloatingWidget: React.FC = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
-          // Garantir que a posição salva ainda esteja dentro do viewport
-          const clampedX = Math.max(10, Math.min(window.innerWidth - 320, parsed.x));
-          const clampedY = Math.max(10, Math.min(window.innerHeight - 200, parsed.y));
-          setPosition({ x: clampedX, y: clampedY });
+          const clamped = clampPosition(parsed.x, parsed.y);
+          setPosition(clamped);
           return;
         }
       }
@@ -220,11 +243,35 @@ export const VoiceCallFloatingWidget: React.FC = () => {
       console.warn('Erro ao carregar posição do widget:', e);
     }
 
-    // Posição padrão (canto inferior direito)
-    const defaultX = Math.max(10, window.innerWidth - 400);
-    const defaultY = Math.max(10, window.innerHeight - 380);
-    setPosition({ x: defaultX, y: defaultY });
-  }, []);
+    // Posição padrão segura inicial
+    const width = videoLayout === 'grid' ? 420 : 360;
+    const height = 280;
+    const defaultX = Math.max(12, window.innerWidth - width - 24);
+    const defaultY = Math.max(12, window.innerHeight - height - 24);
+    setPosition(clampPosition(defaultX, defaultY));
+  }, [clampPosition, videoLayout]);
+
+  // Re-ajustar posição automaticamente ao redimensionar a janela ou rotacionar tablet
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleResize = () => {
+      setPosition((prev) => {
+        if (!prev) return null;
+        return clampPosition(prev.x, prev.y);
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [clampPosition]);
+
+  // Re-ajustar posição quando expandir/minimizar ou alternar layout de vídeo
+  useEffect(() => {
+    setPosition((prev) => {
+      if (!prev) return null;
+      return clampPosition(prev.x, prev.y);
+    });
+  }, [isWidgetOpen, videoLayout, clampPosition]);
 
   // 2. Manipuladores de Arraste (Suporte completo a Mouse, Touch Screen e Tablets via Pointer Events)
   const dragStartRef = useRef<{ clientX: number; clientY: number; startX: number; startY: number; hasMoved: boolean }>({
@@ -269,14 +316,11 @@ export const VoiceCallFloatingWidget: React.FC = () => {
         dragStartRef.current.hasMoved = true;
       }
 
-      const widgetEl = widgetRef.current;
-      const width = widgetEl ? widgetEl.offsetWidth : 360;
-      const height = widgetEl ? widgetEl.offsetHeight : 280;
+      const targetX = dragStartRef.current.startX + dx;
+      const targetY = dragStartRef.current.startY + dy;
+      const clamped = clampPosition(targetX, targetY);
 
-      const newX = Math.max(10, Math.min(window.innerWidth - width - 10, dragStartRef.current.startX + dx));
-      const newY = Math.max(10, Math.min(window.innerHeight - height - 10, dragStartRef.current.startY + dy));
-
-      setPosition({ x: newX, y: newY });
+      setPosition(clamped);
     };
 
     const handlePointerUp = () => {
@@ -297,19 +341,26 @@ export const VoiceCallFloatingWidget: React.FC = () => {
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerUp);
     };
-  }, [isDragging, position]);
+  }, [isDragging, position, clampPosition]);
 
   const resetPosition = useCallback(() => {
     if (typeof window === 'undefined') return;
-    const defaultX = Math.max(10, window.innerWidth - (videoLayout === 'grid' ? 390 : 300) - 24);
-    const defaultY = Math.max(10, window.innerHeight - 380 - 24);
-    setPosition({ x: defaultX, y: defaultY });
+    const width = videoLayout === 'grid' ? 420 : 360;
+    const height = isWidgetOpen ? 280 : 48;
+    const defaultX = Math.max(12, window.innerWidth - width - 24);
+    const defaultY = Math.max(12, window.innerHeight - height - 24);
+    const clamped = clampPosition(defaultX, defaultY);
+    setPosition(clamped);
     try {
-      localStorage.setItem(DRAG_STORAGE_KEY, JSON.stringify({ x: defaultX, y: defaultY }));
+      localStorage.setItem(DRAG_STORAGE_KEY, JSON.stringify(clamped));
     } catch (e) {}
-  }, [videoLayout]);
+  }, [videoLayout, isWidgetOpen, clampPosition]);
 
   if (!isInCall && !isConnecting) {
+    return null;
+  }
+
+  if (!mounted || typeof document === 'undefined') {
     return null;
   }
 
@@ -318,16 +369,16 @@ export const VoiceCallFloatingWidget: React.FC = () => {
         position: 'fixed',
         left: `${position.x}px`,
         top: `${position.y}px`,
-        zIndex: 45,
+        zIndex: 99999999,
       }
     : {
         position: 'fixed',
         bottom: '24px',
         right: '24px',
-        zIndex: 45,
+        zIndex: 99999999,
       };
 
-  return (
+  return createPortal(
     <>
       <div
         ref={widgetRef}
@@ -653,6 +704,7 @@ export const VoiceCallFloatingWidget: React.FC = () => {
 
       {/* Modal de Configurações */}
       <VoiceSettingsModal />
-    </>
+    </>,
+    document.body
   );
 };

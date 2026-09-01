@@ -228,7 +228,7 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
         : 'bg-[#0f141d]/95 border-amber-500/30'
     }`}>
       {/* Dock Bar Top Header & Resource Counters */}
-      <div className="bg-gradient-to-r from-[#141a26] via-[#1b2333] to-[#121723] p-3 flex flex-wrap items-center justify-between gap-2 border-b border-[#2a3449]">
+      <div className="bg-gradient-to-r from-[#141a26] via-[#1b2333] to-[#121723] p-2 sm:p-2.5 md:p-3 flex flex-wrap items-center justify-between gap-2 border-b border-[#2a3449]">
         {/* Turn Status Badge */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold shadow-inner">

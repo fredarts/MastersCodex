@@ -350,18 +350,51 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setPeerSpeakingStates({});
     setRemoteStreams({});
     setCameraError(null);
+    setIsWidgetOpen(false);
     toast.info('Você saiu da chamada.');
   }, []);
 
-  // 5. Encerrar chamada quando a campanha ativa for desfeita ou o usuário fizer logout
+  // 5. Encerrar chamada quando a campanha ativa for desfeita, o usuário fizer logout ou fechar a aba
   useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (signalingManagerRef.current) {
+        signalingManagerRef.current.destroy();
+        signalingManagerRef.current = null;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       if (signalingManagerRef.current) {
         signalingManagerRef.current.destroy();
         signalingManagerRef.current = null;
       }
     };
   }, [activeCampaign?.id]);
+
+  // Limpeza automática de peers desconectados da sala
+  useEffect(() => {
+    const activeUserIds = new Set(onlineUsers.map((u) => u.userId));
+    setInCallPeerIds((prev) => {
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (activeUserIds.has(id)) {
+          next.add(id);
+        }
+      });
+      return next.size !== prev.size ? next : prev;
+    });
+    setConnectedPeerIds((prev) => {
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (activeUserIds.has(id)) {
+          next.add(id);
+        }
+      });
+      return next.size !== prev.size ? next : prev;
+    });
+  }, [onlineUsers]);
 
   // 6. Processar sinais WebRTC recebidos pelo Supabase Broadcast
   useEffect(() => {
@@ -647,6 +680,17 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     remoteStreams,
   ]);
 
+  const activeCallPeersCount = useMemo(() => {
+    const activeOnlineIds = new Set(onlineUsers.map((u) => u.userId));
+    let count = 0;
+    inCallPeerIds.forEach((id) => {
+      if (activeOnlineIds.has(id)) {
+        count++;
+      }
+    });
+    return count;
+  }, [inCallPeerIds, onlineUsers]);
+
   const value = {
     isInCall,
     isConnecting,
@@ -671,7 +715,7 @@ export const VoiceCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     clearCameraError,
     participants,
     connectedPeersCount: connectedPeerIds.size,
-    activeCallPeersCount: inCallPeerIds.size,
+    activeCallPeersCount,
     isWidgetOpen,
     setIsWidgetOpen,
     isSettingsModalOpen,

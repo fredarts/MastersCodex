@@ -11,6 +11,7 @@ export class WebRTCVoiceManager {
   private localAudioStream: MediaStream | null = null;
   private localVideoStream: MediaStream | null = null;
   private peerConnections: Map<string, RTCPeerConnection> = new Map();
+  private remoteSourceNodes: Map<string, MediaStreamAudioSourceNode> = new Map();
   private remoteGainNodes: Map<string, GainNode> = new Map();
   private remoteAnalysers: Map<string, AnalyserNode> = new Map();
   private remoteAudioElements: Map<string, HTMLAudioElement> = new Map();
@@ -63,6 +64,20 @@ export class WebRTCVoiceManager {
       // Se estiver em modo PTT ou mutado, começa com áudio desabilitado
       this.applyMuteState();
 
+      // Se houver conexões ativas com peers, atualizar o track de áudio nos senders
+      const newAudioTrack = this.localAudioStream.getAudioTracks()[0];
+      if (newAudioTrack) {
+        this.peerConnections.forEach((pc, peerId) => {
+          const senders = pc.getSenders();
+          const audioSender = senders.find((s) => s.track?.kind === 'audio');
+          if (audioSender) {
+            audioSender.replaceTrack(newAudioTrack).catch((err) => {
+              console.warn(`Erro ao substituir track de áudio para peer ${peerId}:`, err);
+            });
+          }
+        });
+      }
+
       this.setupAudioAnalysis();
       return this.localAudioStream;
     } catch (e) {
@@ -101,8 +116,22 @@ export class WebRTCVoiceManager {
 
       // Adicionar ou substituir track de vídeo em todas as conexões peer ativas
       this.peerConnections.forEach((pc, peerId) => {
-        const senders = pc.getSenders();
-        const videoSender = senders.find((s) => s.track?.kind === 'video' || (s as any).kind === 'video');
+        let videoSender: RTCRtpSender | null = null;
+
+        if (typeof pc.getTransceivers === 'function') {
+          const transceivers = pc.getTransceivers();
+          const vt = transceivers.find(
+            (t) => t.receiver?.track?.kind === 'video' || t.sender?.track?.kind === 'video'
+          );
+          if (vt && vt.sender) {
+            videoSender = vt.sender;
+          }
+        }
+
+        if (!videoSender) {
+          const senders = pc.getSenders();
+          videoSender = senders.find((s) => s.track?.kind === 'video') || null;
+        }
 
         if (videoSender) {
           videoSender.replaceTrack(videoTrack).catch((err) => {
@@ -147,8 +176,23 @@ export class WebRTCVoiceManager {
 
     // Limpar/substituir para null nos senders WebRTC
     this.peerConnections.forEach((pc, peerId) => {
-      const senders = pc.getSenders();
-      const videoSender = senders.find((s) => s.track?.kind === 'video');
+      let videoSender: RTCRtpSender | null = null;
+
+      if (typeof pc.getTransceivers === 'function') {
+        const transceivers = pc.getTransceivers();
+        const vt = transceivers.find(
+          (t) => t.receiver?.track?.kind === 'video' || t.sender?.track?.kind === 'video'
+        );
+        if (vt && vt.sender) {
+          videoSender = vt.sender;
+        }
+      }
+
+      if (!videoSender) {
+        const senders = pc.getSenders();
+        videoSender = senders.find((s) => s.track?.kind === 'video') || null;
+      }
+
       if (videoSender) {
         videoSender.replaceTrack(null).catch((err) => {
           console.warn(`Erro ao zerar track de vídeo para ${peerId}:`, err);
@@ -274,10 +318,18 @@ export class WebRTCVoiceManager {
         }
       });
 
-      requestAnimationFrame(check);
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(check);
+      } else if (typeof setTimeout === 'function') {
+        setTimeout(check, 50);
+      }
     };
 
-    requestAnimationFrame(check);
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(check);
+    } else if (typeof setTimeout === 'function') {
+      setTimeout(check, 50);
+    }
   }
 
   /**
@@ -335,12 +387,35 @@ export class WebRTCVoiceManager {
 
       const audioStream = new MediaStream([track]);
       audioEl.srcObject = audioStream;
-      audioEl.muted = this.isDeafened;
 
-      // Configurar GainNode e AnalyserNode no AudioContext
+      // Configurar GainNode, AnalyserNode e conectar à saída de áudio (ctx.destination)
       try {
         const ctx = this.getOrCreateAudioContext();
         if (ctx) {
+          if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+          }
+
+          // Desconectar nós anteriores se existirem
+          const prevSource = this.remoteSourceNodes.get(peerId);
+          if (prevSource) {
+            try {
+              prevSource.disconnect();
+            } catch (e) {}
+          }
+          const prevGain = this.remoteGainNodes.get(peerId);
+          if (prevGain) {
+            try {
+              prevGain.disconnect();
+            } catch (e) {}
+          }
+          const prevAnalyser = this.remoteAnalysers.get(peerId);
+          if (prevAnalyser) {
+            try {
+              prevAnalyser.disconnect();
+            } catch (e) {}
+          }
+
           const source = ctx.createMediaStreamSource(audioStream);
           const gainNode = ctx.createGain();
           const analyser = ctx.createAnalyser();
@@ -349,13 +424,26 @@ export class WebRTCVoiceManager {
           const initialVol = this.peerVolumes.get(peerId) ?? 1.0;
           gainNode.gain.value = this.isDeafened ? 0 : initialVol;
 
+          // Pipeline Web Audio: source -> gainNode -> analyser -> ctx.destination
           source.connect(gainNode);
           gainNode.connect(analyser);
+          gainNode.connect(ctx.destination);
+
+          this.remoteSourceNodes.set(peerId, source);
           this.remoteGainNodes.set(peerId, gainNode);
           this.remoteAnalysers.set(peerId, analyser);
+
+          // Quando a Web Audio API reproduz via ctx.destination, o elemento de áudio
+          // pode ser mutado para evitar eco ou mantido ativo conforme política do navegador
+          audioEl.muted = true;
+        } else {
+          audioEl.muted = this.isDeafened;
+          audioEl.volume = Math.min(1.0, Math.max(0, this.peerVolumes.get(peerId) ?? 1.0));
         }
       } catch (err) {
-        console.warn(`Não foi possível criar GainNode para o peer ${peerId}:`, err);
+        console.warn(`Não foi possível criar GainNode para o peer ${peerId}, usando fallback de áudio:`, err);
+        audioEl.muted = this.isDeafened;
+        audioEl.volume = Math.min(1.0, Math.max(0, this.peerVolumes.get(peerId) ?? 1.0));
       }
 
       audioEl.play().catch((err) => {
@@ -385,8 +473,31 @@ export class WebRTCVoiceManager {
       audioEl.remove();
       this.remoteAudioElements.delete(peerId);
     }
-    this.remoteGainNodes.delete(peerId);
-    this.remoteAnalysers.delete(peerId);
+
+    const source = this.remoteSourceNodes.get(peerId);
+    if (source) {
+      try {
+        source.disconnect();
+      } catch (e) {}
+      this.remoteSourceNodes.delete(peerId);
+    }
+
+    const gain = this.remoteGainNodes.get(peerId);
+    if (gain) {
+      try {
+        gain.disconnect();
+      } catch (e) {}
+      this.remoteGainNodes.delete(peerId);
+    }
+
+    const analyser = this.remoteAnalysers.get(peerId);
+    if (analyser) {
+      try {
+        analyser.disconnect();
+      } catch (e) {}
+      this.remoteAnalysers.delete(peerId);
+    }
+
     this.remoteStreams.delete(peerId);
   }
 
@@ -519,7 +630,26 @@ export class WebRTCVoiceManager {
       el.remove();
     });
     this.remoteAudioElements.clear();
+
+    this.remoteSourceNodes.forEach((source) => {
+      try {
+        source.disconnect();
+      } catch (e) {}
+    });
+    this.remoteSourceNodes.clear();
+
+    this.remoteGainNodes.forEach((gain) => {
+      try {
+        gain.disconnect();
+      } catch (e) {}
+    });
     this.remoteGainNodes.clear();
+
+    this.remoteAnalysers.forEach((analyser) => {
+      try {
+        analyser.disconnect();
+      } catch (e) {}
+    });
     this.remoteAnalysers.clear();
     this.remoteStreams.clear();
 

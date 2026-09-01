@@ -77,11 +77,12 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
     }
 
     const filteredCamps = userCampaigns.filter((c) => c.role === roleMode);
+    const availableCamps = filteredCamps.length > 0 ? filteredCamps : userCampaigns;
 
-    if (filteredCamps.length > 0) {
+    if (availableCamps.length > 0) {
       let target: UserCampaign | null = null;
 
-      if (roleMode === 'dm' && activeWorld) {
+      if (roleMode === 'dm' && activeWorld && filteredCamps.length > 0) {
         // Find campaigns strictly associated with the active world
         const worldCamps = filteredCamps.filter((c) => c.worldId === activeWorld.id);
         const worldSavedId = typeof window !== 'undefined' ? localStorage.getItem(`codex_activeCampaignId_world_${activeWorld.id}`) : null;
@@ -92,12 +93,11 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
         if (!target && worldCamps.length > 0) {
           target = worldCamps[0];
         }
-        // If the active world has 0 campaigns, target stays null! Do NOT fall back to other worlds!
       } else {
         const key = `codex_activeCampaignId_${roleMode}`;
         const savedActiveId = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
-        const found = savedActiveId ? filteredCamps.find((c) => c.id === savedActiveId) : null;
-        target = found || filteredCamps[0];
+        const found = savedActiveId ? availableCamps.find((c) => c.id === savedActiveId) : null;
+        target = found || availableCamps[0];
       }
       
       setActiveCampaignState(target);

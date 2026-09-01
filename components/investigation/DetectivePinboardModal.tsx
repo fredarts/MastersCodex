@@ -119,6 +119,16 @@ export const DetectivePinboardModal: React.FC<DetectivePinboardModalProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Touch & Gesture State (Pinch-to-zoom & Multitouch Pan)
+  const pinchStateRef = useRef<{
+    initialDistance: number;
+    initialZoom: number;
+    initialPan: { x: number; y: number };
+    initialCenter: { x: number; y: number };
+  } | null>(null);
+  const isTouchPanningRef = useRef<boolean>(false);
+  const touchPanStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
   const { broadcastInvestigationBoard } = useRealtimeSync({
     campaignId: activeCampaign?.id,
     onInvestigationBoardUpdate: ({ board: remoteBoard }) => {
@@ -183,7 +193,7 @@ export const DetectivePinboardModal: React.FC<DetectivePinboardModalProps> = ({
     };
   };
 
-  // Dragging de Pinos
+  // Dragging de Pinos (Mouse)
   const handlePinMouseDown = (e: React.MouseEvent, pin: PinBoardItem) => {
     e.stopPropagation();
     if (isConnectingMode) {
@@ -198,6 +208,26 @@ export const DetectivePinboardModal: React.FC<DetectivePinboardModalProps> = ({
       x: mouseX - pin.position.x,
       y: mouseY - pin.position.y,
     });
+  };
+
+  // Dragging de Pinos (Touch)
+  const handlePinTouchStart = (e: React.TouchEvent, pin: PinBoardItem) => {
+    e.stopPropagation();
+    if (isConnectingMode) {
+      handlePinClickInConnectMode(pin.id);
+      return;
+    }
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      setDraggingPinId(pin.id);
+      const rect = containerRef.current?.getBoundingClientRect();
+      const touchX = (touch.clientX - (rect?.left || 0) - pan.x) / zoom;
+      const touchY = (touch.clientY - (rect?.top || 0) - pan.y) / zoom;
+      setDragOffset({
+        x: touchX - pin.position.x,
+        y: touchY - pin.position.y,
+      });
+    }
   };
 
   // Canvas Mouse Move (Pan, Pin Drag e Linha Elástica)
@@ -242,7 +272,7 @@ export const DetectivePinboardModal: React.FC<DetectivePinboardModalProps> = ({
     }
   };
 
-  // Pan pelo Background
+  // Pan pelo Background (Mouse)
   const handleBackgroundMouseDown = (e: React.MouseEvent) => {
     if (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'svg') {
       if (isConnectingMode) {
@@ -256,6 +286,128 @@ export const DetectivePinboardModal: React.FC<DetectivePinboardModalProps> = ({
         y: e.clientY - pan.y,
       });
     }
+  };
+
+  // Touch Handlers para Canvas (Pan de 1 Dedo e Pinch Zoom de 2 Dedos)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      // Inicia gesto de pinça (zoom)
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const center = {
+        x: (t1.clientX + t2.clientX) / 2,
+        y: (t1.clientY + t2.clientY) / 2,
+      };
+
+      pinchStateRef.current = {
+        initialDistance: dist,
+        initialZoom: zoom,
+        initialPan: { ...pan },
+        initialCenter: center,
+      };
+      isTouchPanningRef.current = false;
+      return;
+    }
+
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      const rect = containerRef.current?.getBoundingClientRect();
+      const touchX = (t.clientX - (rect?.left || 0) - pan.x) / zoom;
+      const touchY = (t.clientY - (rect?.top || 0) - pan.y) / zoom;
+      setMousePos({ x: touchX, y: touchY });
+
+      // Se tocou no fundo ou svg
+      if (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'svg') {
+        if (isConnectingMode) {
+          setIsConnectingMode(false);
+          setConnectionSourcePinId(null);
+          return;
+        }
+        isTouchPanningRef.current = true;
+        touchPanStartRef.current = {
+          x: t.clientX - pan.x,
+          y: t.clientY - pan.y,
+        };
+      }
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    // 2 Dedos: Pinch-to-Zoom e Pan Simultâneo com Âncora
+    if (e.touches.length === 2 && pinchStateRef.current) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const currentCenter = {
+        x: (t1.clientX + t2.clientX) / 2,
+        y: (t1.clientY + t2.clientY) / 2,
+      };
+
+      const scale = dist / pinchStateRef.current.initialDistance;
+      const newZoom = Math.min(Math.max(pinchStateRef.current.initialZoom * scale, 0.4), 2.2);
+
+      const rect = containerRef.current?.getBoundingClientRect();
+      const pivotX = pinchStateRef.current.initialCenter.x - (rect?.left || 0);
+      const pivotY = pinchStateRef.current.initialCenter.y - (rect?.top || 0);
+
+      const deltaCenter = {
+        x: currentCenter.x - pinchStateRef.current.initialCenter.x,
+        y: currentCenter.y - pinchStateRef.current.initialCenter.y,
+      };
+
+      const zoomRatio = newZoom / pinchStateRef.current.initialZoom;
+      const newPanX = pivotX - (pivotX - pinchStateRef.current.initialPan.x) * zoomRatio + deltaCenter.x;
+      const newPanY = pivotY - (pivotY - pinchStateRef.current.initialPan.y) * zoomRatio + deltaCenter.y;
+
+      setZoom(newZoom);
+      setPan({ x: Math.round(newPanX), y: Math.round(newPanY) });
+      return;
+    }
+
+    // 1 Dedo: Mover Fio Elástico, Arrastar Pista ou Pan do Canvas
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      const rect = containerRef.current?.getBoundingClientRect();
+      const currentX = (t.clientX - (rect?.left || 0) - pan.x) / zoom;
+      const currentY = (t.clientY - (rect?.top || 0) - pan.y) / zoom;
+      setMousePos({ x: currentX, y: currentY });
+
+      // Arrastar Pista via Touch
+      if (draggingPinId && board) {
+        const newX = currentX - dragOffset.x;
+        const newY = currentY - dragOffset.y;
+        setBoard((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            items: prev.items.map((p) =>
+              p.id === draggingPinId
+                ? { ...p, position: { x: Math.round(newX), y: Math.round(newY) } }
+                : p
+            ),
+          };
+        });
+        return;
+      }
+
+      // Pan do Canvas via Touch
+      if (isTouchPanningRef.current) {
+        setPan({
+          x: t.clientX - touchPanStartRef.current.x,
+          y: t.clientY - touchPanStartRef.current.y,
+        });
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (draggingPinId && board) {
+      persistAndBroadcastBoard(board);
+      setDraggingPinId(null);
+    }
+    pinchStateRef.current = null;
+    isTouchPanningRef.current = false;
   };
 
   // Zoom pelo Wheel
@@ -589,8 +741,12 @@ export const DetectivePinboardModal: React.FC<DetectivePinboardModalProps> = ({
           onMouseDown={handleBackgroundMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
           onWheel={handleWheel}
-          className="flex-1 relative overflow-hidden bg-[#24170f] cursor-grab active:cursor-grabbing"
+          className="flex-1 relative overflow-hidden bg-[#24170f] cursor-grab active:cursor-grabbing touch-none select-none"
           style={{
             backgroundImage: `
               radial-gradient(circle at center, rgba(30, 20, 14, 0.4) 0%, rgba(10, 6, 4, 0.85) 100%),
@@ -735,7 +891,7 @@ export const DetectivePinboardModal: React.FC<DetectivePinboardModalProps> = ({
                       transform: `translate(-50%, -50%) rotate(${rot}deg)`,
                       zIndex: 35,
                     }}
-                    className="group/tag cursor-pointer animate-in zoom-in-75 duration-150 select-none"
+                    className="group/tag cursor-pointer animate-in zoom-in-75 duration-150 select-none touch-none"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleToggleCollapseConnection(conn.id);
@@ -765,7 +921,7 @@ export const DetectivePinboardModal: React.FC<DetectivePinboardModalProps> = ({
                     transform: `translate(-50%, -50%) rotate(${rot}deg)`,
                     zIndex: 35,
                   }}
-                  className="group/paper cursor-pointer select-none animate-in zoom-in-95 duration-150"
+                  className="group/paper cursor-pointer select-none animate-in zoom-in-95 duration-150 touch-none"
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedConnection(conn);
@@ -847,13 +1003,15 @@ export const DetectivePinboardModal: React.FC<DetectivePinboardModalProps> = ({
                 <div
                   key={`pin-item-${pin.id || idx}-${idx}`}
                   onMouseDown={(e) => handlePinMouseDown(e, pin)}
+                  onTouchStart={(e) => handlePinTouchStart(e, pin)}
                   style={{
                     transform: `translate(${pin.position.x}px, ${pin.position.y}px) rotate(${pin.rotationDeg}deg)`,
                     transformOrigin: '104px 0px',
                     position: 'absolute',
                     zIndex: isSource ? 40 : 20,
+                    touchAction: 'none',
                   }}
-                  className={`w-52 p-3 rounded-xl shadow-2xl transition-shadow cursor-grab active:cursor-grabbing border ${
+                  className={`w-52 p-3 rounded-xl shadow-2xl transition-shadow cursor-grab active:cursor-grabbing border touch-none ${
                     pin.isWaxSealed
                       ? 'bg-stone-900 border-red-900/80 shadow-red-950/40'
                       : 'bg-[#f4ebd9] text-stone-900 border-amber-900/40 shadow-black/60'
@@ -861,9 +1019,11 @@ export const DetectivePinboardModal: React.FC<DetectivePinboardModalProps> = ({
                 >
                   {/* Alfinete Metálico com Cabeça Esférica Colorida - Clique direto para puxar/ligar fio */}
                   <div 
-                    className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center group/pin cursor-pointer"
+                    className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center group/pin cursor-pointer p-1"
                     onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     onClick={(e) => handlePushPinClick(e, pin)}
+                    onTouchEnd={(e) => handlePushPinClick(e as any, pin)}
                     title={isSource ? "Clique para cancelar puxada de fio" : "Clique na bolinha para puxar ou ligar um fio"}
                   >
                     <div 

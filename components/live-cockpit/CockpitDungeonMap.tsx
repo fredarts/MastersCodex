@@ -140,6 +140,22 @@ export const CockpitDungeonMap: React.FC = () => {
       }
     }
 
+    let fogMatrix = '';
+    const tokens: { name: string; color: string; r: number; c: number }[] = [];
+    for (let r = 0; r < grid.length; r++) {
+      for (let c = 0; c < grid[r].length; c++) {
+        fogMatrix += grid[r][c].fog ? '1' : '0';
+        if (grid[r][c].tokenName) {
+          tokens.push({
+            name: grid[r][c].tokenName!,
+            color: grid[r][c].tokenColor || 'bg-cyan-500',
+            r,
+            c
+          });
+        }
+      }
+    }
+
     const activeLevelName = activeLevels.find((l) => l.id === activeLevelId)?.name;
     const mapPayload = {
       grid,
@@ -153,6 +169,8 @@ export const CockpitDungeonMap: React.FC = () => {
       activeLevelId,
       currentLevelName: activeLevelName,
       sceneId: activeScene?.id,
+      fogMatrix,
+      tokens,
       dungeonExplorationStarted: true,
     };
     lastBroadcast.current = JSON.stringify(mapPayload);
@@ -202,6 +220,22 @@ export const CockpitDungeonMap: React.FC = () => {
     }
     setGrid(coveredGrid);
 
+    let fogMatrix = '';
+    const tokens: { name: string; color: string; r: number; c: number }[] = [];
+    for (let r = 0; r < coveredGrid.length; r++) {
+      for (let c = 0; c < coveredGrid[r].length; c++) {
+        fogMatrix += coveredGrid[r][c].fog ? '1' : '0';
+        if (coveredGrid[r][c].tokenName) {
+          tokens.push({
+            name: coveredGrid[r][c].tokenName!,
+            color: coveredGrid[r][c].tokenColor || 'bg-cyan-500',
+            r,
+            c
+          });
+        }
+      }
+    }
+
     const activeLevelName = activeLevels.find((l) => l.id === activeLevelId)?.name;
     const mapPayload = {
       grid: coveredGrid,
@@ -215,6 +249,8 @@ export const CockpitDungeonMap: React.FC = () => {
       activeLevelId,
       currentLevelName: activeLevelName,
       sceneId: activeScene?.id,
+      fogMatrix,
+      tokens,
       dungeonExplorationStarted: false,
     };
     lastBroadcast.current = JSON.stringify(mapPayload);

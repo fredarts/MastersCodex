@@ -1,10 +1,11 @@
 /* eslint-disable react-hooks/purity */
 import React, { useState } from 'react';
 import { AdvantageMode, AttributeKey, CharacterSheet, CharacterWeaponAttack, DiceRollEvent } from '@/lib/types';
-import { formatModifier, getAttributeModifier, getEffectiveAttributeScore, recalculateSheetDerivedStats, ARMOR_TABLE, calculateArmorClass, hasClass, getJackOfAllTradesBonus, getClassLevel, WEAPON_TABLE, revertWildShape } from '@/lib/dnd5e-calculator';
+import { formatModifier, getAttributeModifier, getEffectiveAttributeScore, recalculateSheetDerivedStats, ARMOR_TABLE, calculateArmorClass, hasClass, getJackOfAllTradesBonus, getClassLevel, WEAPON_TABLE, revertWildShape, applyRacePreset } from '@/lib/dnd5e-calculator';
 import { executeCheckRoll, executeWeaponAttackRoll, broadcastDiceRoll, executeSneakAttackRoll, getSneakAttackDice } from '@/lib/dnd5e-dice';
 import { Shield, Heart, Zap, Crosshair, Plus, Minus, Trash2, Skull, Dices, Lock, Unlock, RotateCcw, CheckCircle2, AlertCircle, RefreshCw, Sparkles, PawPrint } from 'lucide-react';
 import { WeaponCompendiumModal } from '../Modals/WeaponCompendiumModal';
+import { toast } from 'sonner';
 
 interface CombatSectionProps {
   sheet: CharacterSheet;
@@ -112,41 +113,52 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
     if (!rolled4d6Set) return;
     ensureSessionBaseline();
 
-    const updatedSheet: CharacterSheet = {
+    let updatedSheet: CharacterSheet = {
       ...sheet,
       attributePointsAvailable: 0,
       attributesLocked: true,
       attributes: {
-        str: { ...sheet.attributes.str, score: rolled4d6Set.str.total },
-        dex: { ...sheet.attributes.dex, score: rolled4d6Set.dex.total },
-        con: { ...sheet.attributes.con, score: rolled4d6Set.con.total },
-        int: { ...sheet.attributes.int, score: rolled4d6Set.int.total },
-        wis: { ...sheet.attributes.wis, score: rolled4d6Set.wis.total },
-        cha: { ...sheet.attributes.cha, score: rolled4d6Set.cha.total },
+        str: { ...sheet.attributes.str, score: rolled4d6Set.str.total, baseScore: rolled4d6Set.str.total },
+        dex: { ...sheet.attributes.dex, score: rolled4d6Set.dex.total, baseScore: rolled4d6Set.dex.total },
+        con: { ...sheet.attributes.con, score: rolled4d6Set.con.total, baseScore: rolled4d6Set.con.total },
+        int: { ...sheet.attributes.int, score: rolled4d6Set.int.total, baseScore: rolled4d6Set.int.total },
+        wis: { ...sheet.attributes.wis, score: rolled4d6Set.wis.total, baseScore: rolled4d6Set.wis.total },
+        cha: { ...sheet.attributes.cha, score: rolled4d6Set.cha.total, baseScore: rolled4d6Set.cha.total },
       },
     };
+
+    if (updatedSheet.race) {
+      updatedSheet = applyRacePreset(updatedSheet, updatedSheet.race, updatedSheet.subrace);
+    }
 
     onChange(recalculateSheetDerivedStats(updatedSheet));
     setShow4d6Modal(false);
     setSessionBaseline(null);
+    toast.success('Rolagem 4d6 aplicada aos atributos!');
   };
 
   const handleStartPointBuy27 = () => {
     ensureSessionBaseline();
-    const updatedSheet: CharacterSheet = {
+    let updatedSheet: CharacterSheet = {
       ...sheet,
       attributePointsAvailable: 27,
       attributesLocked: false,
       attributes: {
-        str: { ...sheet.attributes.str, score: 8 },
-        dex: { ...sheet.attributes.dex, score: 8 },
-        con: { ...sheet.attributes.con, score: 8 },
-        int: { ...sheet.attributes.int, score: 8 },
-        wis: { ...sheet.attributes.wis, score: 8 },
-        cha: { ...sheet.attributes.cha, score: 8 },
+        str: { ...sheet.attributes.str, score: 8, baseScore: 8 },
+        dex: { ...sheet.attributes.dex, score: 8, baseScore: 8 },
+        con: { ...sheet.attributes.con, score: 8, baseScore: 8 },
+        int: { ...sheet.attributes.int, score: 8, baseScore: 8 },
+        wis: { ...sheet.attributes.wis, score: 8, baseScore: 8 },
+        cha: { ...sheet.attributes.cha, score: 8, baseScore: 8 },
       },
     };
+
+    if (updatedSheet.race) {
+      updatedSheet = applyRacePreset(updatedSheet, updatedSheet.race, updatedSheet.subrace);
+    }
+
     onChange(recalculateSheetDerivedStats(updatedSheet));
+    toast.info('Point Buy 27 iniciado! Atributos base definidos em 8.');
   };
 
   const handleIncrementAttribute = (attrKey: AttributeKey) => {
@@ -155,7 +167,10 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
 
     const currentScore = sheet.attributes[attrKey].score;
     const currentBase = sheet.attributes[attrKey].baseScore ?? currentScore;
-    if (currentBase >= 15) return;
+    if (currentScore >= 20) {
+      toast.warning('O valor máximo para atributos padrão de personagens é 20.');
+      return;
+    }
 
     const updatedSheet: CharacterSheet = {
       ...sheet,
@@ -163,18 +178,22 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
       attributesLocked: false,
       attributes: {
         ...sheet.attributes,
-        [attrKey]: { ...sheet.attributes[attrKey], score: currentScore + 1, baseScore: (sheet.attributes[attrKey].baseScore ?? currentScore) + 1 },
+        [attrKey]: { 
+          ...sheet.attributes[attrKey], 
+          score: currentScore + 1, 
+          baseScore: currentBase + 1 
+        },
       },
     };
     onChange(recalculateSheetDerivedStats(updatedSheet));
   };
 
   const handleDecrementAttribute = (attrKey: AttributeKey) => {
+    ensureSessionBaseline();
     const currentScore = sheet.attributes[attrKey].score;
-    const baselineScore = sessionBaseline?.attributes[attrKey] ?? currentScore;
+    const currentBase = sheet.attributes[attrKey].baseScore ?? currentScore;
 
-    // Só permite decrementar se for maior que o baseline da sessão ou se tiver pontos
-    if (currentScore <= Math.min(baselineScore, 1)) return;
+    if (currentScore <= 1 || currentBase <= 1) return;
 
     const updatedSheet: CharacterSheet = {
       ...sheet,
@@ -182,7 +201,11 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
       attributesLocked: false,
       attributes: {
         ...sheet.attributes,
-        [attrKey]: { ...sheet.attributes[attrKey], score: currentScore - 1, baseScore: (sheet.attributes[attrKey].baseScore ?? currentScore) - 1 },
+        [attrKey]: { 
+          ...sheet.attributes[attrKey], 
+          score: currentScore - 1, 
+          baseScore: currentBase - 1 
+        },
       },
     };
     onChange(recalculateSheetDerivedStats(updatedSheet));
@@ -190,16 +213,11 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
 
   const handleScoreDirectChange = (attrKey: AttributeKey, newScore: number) => {
     ensureSessionBaseline();
+    const safeScore = Math.max(1, Math.min(30, newScore));
     const currentScore = sheet.attributes[attrKey].score;
     const currentBase = sheet.attributes[attrKey].baseScore ?? currentScore;
     const bonus = currentScore - currentBase;
-    
-    // Calculates new base, capped at 15 max invested
-    let newBase = newScore - bonus;
-    if (newBase > 15) newBase = 15;
-    if (newBase < 1) newBase = 1;
-    
-    const safeScore = newBase + bonus;
+    const newBase = Math.max(1, safeScore - bonus);
 
     const updatedSheet = {
       ...sheet,
@@ -228,26 +246,33 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
       attributePointsAvailable: (pointsAvailable || 0) + amount,
       attributesLocked: false,
     });
+    toast.info(`+${amount} ponto(s) concedido(s) para investir.`);
   };
 
   const handleResetDistribution = () => {
     if (!sessionBaseline) return;
     const resetAttributes = { ...sheet.attributes };
     (Object.keys(sessionBaseline.attributes) as AttributeKey[]).forEach((key) => {
+      const origScore = sessionBaseline.attributes[key];
       resetAttributes[key] = {
         ...resetAttributes[key],
-        score: sessionBaseline.attributes[key],
+        score: origScore,
+        baseScore: origScore,
       };
     });
 
-    const updatedSheet: CharacterSheet = {
+    let updatedSheet: CharacterSheet = {
       ...sheet,
       attributePointsAvailable: sessionBaseline.pointsAvailable,
       attributesLocked: false,
       attributes: resetAttributes,
     };
+    if (updatedSheet.race) {
+      updatedSheet = applyRacePreset(updatedSheet, updatedSheet.race, updatedSheet.subrace);
+    }
     onChange(recalculateSheetDerivedStats(updatedSheet));
     setSessionBaseline(null);
+    toast.info('Distribuição de atributos restaurada.');
   };
 
   const handleConfirmCompletion = () => {
@@ -256,9 +281,11 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
       attributesLocked: true,
       attributePointsAvailable: Math.max(0, pointsAvailable),
     };
-    onChange(recalculateSheetDerivedStats(updatedSheet));
+    const finalSheet = recalculateSheetDerivedStats(updatedSheet);
+    onChange(finalSheet);
     setSessionBaseline(null);
     setShowConfirmModal(false);
+    toast.success('Atributos distribuídos e salvos com sucesso!');
   };
 
   const handleUnlockByGm = () => {
@@ -267,6 +294,7 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
       ...sheet,
       attributesLocked: false,
     });
+    toast.info('Atributos liberados para edição.');
   };
 
   const handleRollAttribute = (attrKey: AttributeKey) => {
@@ -768,8 +796,8 @@ export const CombatSection: React.FC<CombatSectionProps> = ({
               const score = sheet.attributes[attrKey].score;
               const mod = getAttributeModifier(sheet, attrKey);
               const baseScore = sheet.attributes[attrKey].baseScore ?? score;
-              const canDecrease = !isLocked && score > Math.min(sessionBaseline?.attributes[attrKey] ?? score, 1);
-              const canIncrease = !isLocked && pointsAvailable > 0 && baseScore < 15;
+              const canDecrease = !isLocked && score > 1;
+              const canIncrease = !isLocked && pointsAvailable > 0 && score < 20;
 
               return (
                 <div

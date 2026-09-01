@@ -114,6 +114,19 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   );
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
 
+  // Garante que o CampaignContext tenha a campanha ativa sincronizada para conectar ao WebSocket Supabase
+  useEffect(() => {
+    if (userCampaigns && userCampaigns.length > 0) {
+      const target = (selectedCampaignId ? userCampaigns.find(c => c.id === selectedCampaignId) : null) ||
+        userCampaigns.find(c => c.role === 'player') ||
+        userCampaigns[0];
+      if (target && target.id !== activeCampaign?.id) {
+        setSelectedCampaignId(target.id);
+        setActiveCampaign(target);
+      }
+    }
+  }, [userCampaigns, selectedCampaignId, activeCampaign?.id, setActiveCampaign]);
+
   // Solicita o snapshot atual do Mestre ao carregar o lobby com retentativas automáticas
   useEffect(() => {
     if (broadcastStateRequest) {
@@ -1106,7 +1119,9 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   };
 
   return (
-    <div className="flex-1 bg-[#0a0d14] flex flex-col p-6 overflow-y-auto select-none relative">
+    <div className={`flex-1 bg-[#0a0d14] flex flex-col select-none relative ${
+      selectedCampaignId ? 'p-2 sm:p-3 overflow-hidden h-full min-h-0' : 'p-4 sm:p-6 overflow-y-auto'
+    }`}>
 
       {/* ==================== 1. MODAL: ADICIONAR CAMPANHA VIA CÓDIGO ==================== */}
       {isJoinModalOpen && (
@@ -1367,13 +1382,13 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
         </div>
       ) : (
         /* ==================== 3. VISÃO 2: COCKPIT DO JOGADOR (CENTRAL DE JOGO) ==================== */
-        <div className="flex-1 flex flex-col h-[calc(100vh-100px)] min-h-[650px] space-y-3 animate-fade-in">
+        <div className="flex-1 min-h-0 flex flex-col h-full space-y-2 sm:space-y-3 overflow-hidden animate-fade-in">
           {/* TOP HEADER UNIFICADO (BARRA SUPERIOR) */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-[#141a26] border border-[#2a3449] p-3 rounded-2xl shadow-xl shrink-0">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 bg-[#141a26] border border-[#2a3449] p-2 sm:p-3 rounded-xl sm:rounded-2xl shadow-xl shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={handleBackToHub}
-                className="flex items-center gap-1.5 bg-[#0a0d14] hover:bg-[#2a3449] border border-[#2a3449] text-slate-300 hover:text-amber-400 font-bold px-3 py-1.5 rounded-xl text-xs transition-all"
+                className="flex items-center gap-1.5 bg-[#0a0d14] hover:bg-[#2a3449] border border-[#2a3449] text-slate-300 hover:text-amber-400 font-bold px-2.5 sm:px-3 py-1.5 rounded-xl text-xs transition-all"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Minhas Campanhas</span>
@@ -1564,9 +1579,9 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
           </div>
 
           {/* MAIN WORKSPACE BODY (CANVAS + SIDEBAR) */}
-          <div className="flex-1 flex gap-3 overflow-hidden">
+          <div className="flex-1 min-h-0 flex gap-2 sm:gap-3 overflow-hidden">
             {/* CENTER CANVAS (80% da tela: Grid 3D, Mapa 2D ou Arte da Cena) */}
-            <div className="flex-1 bg-[#05070a] border border-[#2a3449] rounded-2xl flex flex-col justify-between relative overflow-hidden shadow-2xl">
+            <div className="flex-1 min-h-0 bg-[#05070a] border border-[#2a3449] rounded-xl sm:rounded-2xl flex flex-col justify-between relative overflow-hidden shadow-2xl">
               {/* TOP BAR: COMBAT INITIATIVE HUD (Apenas exibido quando uma batalha foi de fato iniciada no Grid) */}
               {(() => {
                 const currentScene = projectedScene || activeScene;
@@ -1775,7 +1790,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                 const isMyTurn = isCombat && combatants[currentTurnIndex]?.name.toLowerCase().includes(charName.toLowerCase());
 
                 return (
-                  <div className="absolute bottom-3 left-3 right-3 z-20 pointer-events-none flex justify-center">
+                  <div className="absolute bottom-2 left-2 right-2 sm:bottom-3 sm:left-3 sm:right-3 z-20 pointer-events-none flex justify-center">
                     <div className="pointer-events-auto w-full max-w-4xl">
                       <PlayerTokenActionDock
                         activeSheet={activeSheet}
@@ -1823,7 +1838,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             </div>
 
             {/* RIGHT SIDEBAR INTEGRADA (INICIATIVA / LOG / CHAT) */}
-            <div className="w-80 bg-[#141a26] border border-[#2a3449] rounded-2xl flex flex-col justify-between overflow-hidden shadow-xl shrink-0">
+            <div className="w-72 lg:w-80 bg-[#141a26] border border-[#2a3449] rounded-xl sm:rounded-2xl flex flex-col justify-between overflow-hidden shadow-xl shrink-0">
               {/* Tab Navigation */}
               <div className="flex border-b border-[#2a3449] bg-[#0c1018] p-1.5 gap-1 shrink-0">
                 <button
