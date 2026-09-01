@@ -92,23 +92,23 @@ const ChromaKeyStandee: React.FC<ChromaKeyStandeeProps> = ({ imageUrl, character
               isActive ? 'scale-105' : 'scale-95 opacity-80'
             }`}
             style={{
-              transform: 'rotateX(15deg) rotateY(-15deg)',
+              transform: 'rotateX(10deg) rotateY(-10deg)',
               transformStyle: 'preserve-3d',
-              filter: 'drop-shadow(0 8px 12px rgba(0,0,0,0.75))'
+              filter: 'drop-shadow(0 12px 20px rgba(0,0,0,0.85))'
             }}
           >
             <img
               src={processedUrl}
               alt={characterName || 'Token 2D'}
-              className="max-h-[160px] sm:max-h-[190px] w-auto object-contain block mx-auto"
+              className="max-h-[320px] sm:max-h-[380px] w-auto object-contain block mx-auto transition-all duration-300"
             />
           </div>
         ) : (
-          <div className="relative z-10 flex flex-col items-center justify-center mb-6 text-center space-y-1">
-            <div className="w-16 h-16 rounded-full border border-amber-500/30 bg-amber-950/20 flex items-center justify-center text-amber-400">
-              <ImageIcon className="w-8 h-8 opacity-70" />
+          <div className="relative z-10 flex flex-col items-center justify-center mb-8 text-center space-y-2">
+            <div className="w-20 h-20 rounded-full border border-amber-500/40 bg-amber-950/30 flex items-center justify-center text-amber-400 shadow-lg">
+              <ImageIcon className="w-10 h-10 opacity-80" />
             </div>
-            <p className="text-[10px] text-slate-400 font-serif">
+            <p className="text-xs text-slate-300 font-serif font-semibold">
               Standee 2D do Personagem
             </p>
           </div>
@@ -116,10 +116,10 @@ const ChromaKeyStandee: React.FC<ChromaKeyStandeeProps> = ({ imageUrl, character
 
         {/* Base 3D do Pino (Grid de Combate) */}
         <div
-          className={`absolute bottom-0 w-32 h-7 rounded-full transition-all duration-300 ${
+          className={`absolute bottom-0 w-48 h-10 rounded-full transition-all duration-300 ${
             isActive
-              ? 'border-2 border-amber-500/80 bg-amber-950/20 shadow-[0_6px_14px_rgba(245,158,11,0.5)]'
-              : 'border-2 border-slate-700/60 bg-slate-900/40 shadow-[0_3px_6px_rgba(0,0,0,0.6)]'
+              ? 'border-2 border-amber-500/90 bg-amber-950/30 shadow-[0_8px_20px_rgba(245,158,11,0.6)]'
+              : 'border-2 border-slate-700/60 bg-slate-900/40 shadow-[0_4px_10px_rgba(0,0,0,0.7)]'
           }`}
           style={{
             transform: 'rotateX(75deg) translateY(4px)',
@@ -128,7 +128,7 @@ const ChromaKeyStandee: React.FC<ChromaKeyStandeeProps> = ({ imageUrl, character
         >
           <div 
             className={`absolute inset-0.5 rounded-full border transition-colors ${
-              isActive ? 'border-amber-400/40 animate-pulse' : 'border-slate-800/40'
+              isActive ? 'border-amber-400/50 animate-pulse' : 'border-slate-800/40'
             }`} 
           />
         </div>
@@ -362,13 +362,13 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
                   </button>
                 </div>
 
-                {/* CANVAS 3D */}
-                <div className="flex-1 min-h-0 flex items-center justify-center relative overflow-hidden rounded-lg bg-[#070a10]/50 border border-slate-800/60">
-                  <Model3DViewer modelUrl={activeModel.modelUrl} height={210} />
+                {/* CANVAS 3D EXPANDIDO */}
+                <div className="flex-1 min-h-[320px] sm:min-h-[380px] w-full flex items-center justify-center relative overflow-hidden rounded-xl bg-[#070a10]/70 border border-slate-800/80 shadow-inner">
+                  <Model3DViewer modelUrl={activeModel.modelUrl} />
                 </div>
               </div>
             ) : (
-              <div className="flex-1 min-h-0 flex flex-col items-center justify-center mt-1.5 bg-[#070a10]/50 border border-slate-800/60 rounded-lg p-2">
+              <div className="flex-1 min-h-[320px] sm:min-h-[380px] w-full flex flex-col items-center justify-end mt-1.5 bg-[#070a10]/70 border border-slate-800/80 rounded-xl p-3 relative overflow-hidden shadow-inner">
                 <ChromaKeyStandee 
                   imageUrl={sheet.avatarUrl} 
                   characterName={sheet.characterName} 

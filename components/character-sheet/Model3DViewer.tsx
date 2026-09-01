@@ -16,7 +16,7 @@ const gltfLoader = new GLTFLoader();
 
 export const Model3DViewer: React.FC<Model3DViewerProps> = ({
   modelUrl,
-  height = 200,
+  height,
   autoRotate = true,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -34,18 +34,19 @@ export const Model3DViewer: React.FC<Model3DViewerProps> = ({
 
     const container = containerRef.current;
     const width = container.clientWidth || 300;
+    const effectiveHeight = height || container.clientHeight || 340;
 
     setIsLoading(true);
     setHasError(false);
 
     // Cena, Câmera e Renderizador
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    camera.position.set(0, 1.2, 3.2);
+    const camera = new THREE.PerspectiveCamera(40, width / effectiveHeight, 0.1, 100);
+    camera.position.set(0, 0.78, 2.75);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     patchWebGLContext(renderer);
-    renderer.setSize(width, height);
+    renderer.setSize(width, effectiveHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     const gl = renderer.getContext();
     const extension = gl ? gl.getExtension('WEBGL_lose_context') : null;
@@ -57,41 +58,41 @@ export const Model3DViewer: React.FC<Model3DViewerProps> = ({
     container.appendChild(renderer.domElement);
 
     // Iluminação Profissional para Miniatura
-    const ambientLight = new THREE.AmbientLight(0xffffff, 2.2);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2.4);
     scene.add(ambientLight);
 
-    const keyLight = new THREE.DirectionalLight(0xfff5ea, 2.8);
+    const keyLight = new THREE.DirectionalLight(0xfff5ea, 3.0);
     keyLight.position.set(3, 4, 3);
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0x38bdf8, 1.8);
+    const fillLight = new THREE.DirectionalLight(0x38bdf8, 2.0);
     fillLight.position.set(-3, 2, -2);
     scene.add(fillLight);
 
-    const rimLight = new THREE.DirectionalLight(0xf59e0b, 1.5);
+    const rimLight = new THREE.DirectionalLight(0xf59e0b, 1.8);
     rimLight.position.set(0, -2, -3);
     scene.add(rimLight);
 
     // Pedestal para o Boneco (Base Circular RPG)
     const baseGroup = new THREE.Group();
-    const ringGeo = new THREE.RingGeometry(0.7, 0.78, 32);
+    const ringGeo = new THREE.RingGeometry(0.55, 0.62, 36);
     const ringMat = new THREE.MeshBasicMaterial({
       color: 0xf59e0b,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.85,
     });
     const ringMesh = new THREE.Mesh(ringGeo, ringMat);
     ringMesh.rotation.x = Math.PI / 2;
     ringMesh.position.y = 0.01;
     baseGroup.add(ringMesh);
 
-    const discGeo = new THREE.CircleGeometry(0.7, 32);
+    const discGeo = new THREE.CircleGeometry(0.55, 36);
     const discMat = new THREE.MeshBasicMaterial({
       color: 0x0f172a,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.65,
+      opacity: 0.75,
     });
     const discMesh = new THREE.Mesh(discGeo, discMat);
     discMesh.rotation.x = Math.PI / 2;
@@ -119,7 +120,7 @@ export const Model3DViewer: React.FC<Model3DViewerProps> = ({
         const size = new THREE.Vector3();
         box.getSize(size);
 
-        const targetHeight = 1.6;
+        const targetHeight = 1.38;
         const naturalHeight = size.y || Math.max(size.x, size.z);
 
         if (naturalHeight > 0) {
@@ -140,8 +141,8 @@ export const Model3DViewer: React.FC<Model3DViewerProps> = ({
         rootGroup.add(modelScene);
         setIsLoading(false);
 
-        // Apontar câmera levemente para o peito da miniatura
-        camera.lookAt(0, 0.8, 0);
+        // Apontar câmera para o tronco da miniatura
+        camera.lookAt(0, 0.68, 0);
       },
       undefined,
       (err) => {
@@ -176,9 +177,10 @@ export const Model3DViewer: React.FC<Model3DViewerProps> = ({
     const handleResize = () => {
       if (!containerRef.current) return;
       const w = containerRef.current.clientWidth;
-      camera.aspect = w / height;
+      const h = height || containerRef.current.clientHeight || 340;
+      camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(w, height);
+      renderer.setSize(w, h);
     };
     window.addEventListener('resize', handleResize);
 
@@ -232,36 +234,36 @@ export const Model3DViewer: React.FC<Model3DViewerProps> = ({
 
   return (
     <div
-      className="relative w-full overflow-hidden rounded-xl bg-[#0b0f19] border border-amber-500/20 shadow-inner group select-none cursor-grab active:cursor-grabbing"
-      style={{ height: `${height}px` }}
+      className="relative w-full h-full min-h-[300px] flex-1 overflow-hidden rounded-xl bg-transparent select-none cursor-grab active:cursor-grabbing flex items-center justify-center group"
+      style={height ? { height: `${height}px` } : undefined}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
     >
       {/* Canvas Container */}
-      <div ref={containerRef} className="w-full h-full" />
+      <div ref={containerRef} className="w-full h-full min-h-[300px] flex items-center justify-center" />
 
       {/* Loading Overlay */}
       {isLoading && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0b0f19]/80 backdrop-blur-xs text-amber-400 text-xs font-semibold gap-2 transition-opacity">
-          <Loader2 className="w-6 h-6 animate-spin text-amber-400" />
-          <span>Carregando miniatura 3D...</span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0b0f19]/80 backdrop-blur-xs text-amber-400 text-xs font-semibold gap-2 transition-opacity z-10">
+          <Loader2 className="w-7 h-7 animate-spin text-amber-400" />
+          <span className="font-serif">Carregando miniatura 3D...</span>
         </div>
       )}
 
       {/* Error Fallback */}
       {hasError && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0b0f19] text-slate-400 text-xs gap-1 p-4 text-center">
-          <span className="text-xl">🎲</span>
-          <span className="text-rose-400 font-semibold">Modelo 3D indisponível</span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0b0f19] text-slate-400 text-xs gap-1 p-4 text-center z-10">
+          <span className="text-2xl">🎲</span>
+          <span className="text-rose-400 font-semibold font-serif">Modelo 3D indisponível</span>
           <span className="text-[10px] text-slate-500">Usando miniatura genérica no jogo</span>
         </div>
       )}
 
       {/* Helper Tag */}
       {!isLoading && !hasError && (
-        <div className="absolute bottom-2 left-2 text-[9px] font-mono text-slate-400 bg-slate-950/70 px-2 py-0.5 rounded border border-slate-800 pointer-events-none opacity-60 group-hover:opacity-100 transition-opacity">
+        <div className="absolute bottom-2.5 left-2.5 text-[9px] font-mono text-slate-300 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-700/80 pointer-events-none opacity-70 group-hover:opacity-100 transition-opacity z-10 shadow-md">
           🖱️ Arraste para girar em 360°
         </div>
       )}
