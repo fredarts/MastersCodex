@@ -270,6 +270,7 @@ export interface GameScene {
   tokenElevations?: Record<string, number>;
   isBattleStarted?: boolean;
   battleStartSnapshot?: Combatant[];
+  isDungeonExplorationStarted?: boolean;
   associatedMapId?: string; // ID do mapa da campanha vinculado a esta cena
   associatedMapIds?: string[]; // IDs de múltiplos mapas de masmorras vinculados a esta cena
   createdAt?: string;

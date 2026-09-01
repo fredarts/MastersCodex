@@ -27,8 +27,13 @@ export function useSceneProjection() {
   }, [liveDisplayMode, setProjectionMode]);
 
   const projectSceneToPlayerView = useCallback((scene: GameScene) => {
+    const hasMap = Boolean((scene.associatedMapIds && scene.associatedMapIds.length > 0) || scene.associatedMapId);
+    const targetMode: 'artwork' | 'map' | 'combat' = scene.isBattleStarted ? 'combat' : hasMap ? 'map' : 'artwork';
+    setLiveDisplayMode(targetMode);
+
     broadcastToPlayerView({
       type: 'SET_ACTIVE_SCENE',
+      mode: targetMode,
       sceneId: scene.id,
       title: scene.title,
       imageUrl: scene.imageUrl,
@@ -42,9 +47,11 @@ export function useSceneProjection() {
       floorTextureUrl: scene.floorTextureUrl,
       associatedMapId: scene.associatedMapId,
       associatedMapIds: scene.associatedMapIds,
+      isBattleStarted: Boolean(scene.isBattleStarted),
+      dungeonExplorationStarted: Boolean(scene.isDungeonExplorationStarted),
       payload: scene,
     });
-  }, [broadcastToPlayerView]);
+  }, [broadcastToPlayerView, setLiveDisplayMode]);
 
   return {
     liveDisplayMode,

@@ -114,12 +114,18 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   );
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
 
-  // Solicita o snapshot atual do Mestre ao carregar o lobby
+  // Solicita o snapshot atual do Mestre ao carregar o lobby com retentativas automáticas
   useEffect(() => {
     if (broadcastStateRequest) {
       broadcastStateRequest();
+      const t1 = setTimeout(() => broadcastStateRequest(), 600);
+      const t2 = setTimeout(() => broadcastStateRequest(), 1800);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
     }
-  }, [broadcastStateRequest, activeCampaign?.id]);
+  }, [broadcastStateRequest, activeCampaign?.id, selectedCampaignId]);
 
   // Se a cena ativa possui combatentes e o estado local está vazio, inicializa os tokens
   useEffect(() => {
@@ -223,7 +229,14 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
         if (gridData && gridData.grid && gridData.grid.length > 0) {
           console.log('[PlayerLobby] Map loaded successfully. Grid size:', gridData.grid.length, 'x', gridData.grid[0]?.length);
-          setMapData({
+          const isExplStarted = 
+            savedData?.isExplorationStarted === true || 
+            (activeId && savedData?.maps?.[activeId]?.isExplorationStarted === true) || 
+            currentScene.isDungeonExplorationStarted === true ||
+            (mapData as any)?.dungeonExplorationStarted === true;
+
+          setMapData((prev: any) => ({
+            ...(prev || {}),
             grid: gridData.grid || [],
             bgImageUrl: gridData.bgImageUrl || null,
             gridScale: gridData.gridScale || 40,
@@ -232,8 +245,9 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             vectorWalls: gridData.vectorWalls || [],
             lightSources: gridData.lightSources || [],
             activeMapId: activeId,
-            sceneId: currentScene.id
-          });
+            sceneId: currentScene.id,
+            dungeonExplorationStarted: isExplStarted,
+          }));
         } else {
           console.warn('[PlayerLobby] No grid data found for scene:', currentScene.id);
         }
@@ -1553,22 +1567,30 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
           <div className="flex-1 flex gap-3 overflow-hidden">
             {/* CENTER CANVAS (80% da tela: Grid 3D, Mapa 2D ou Arte da Cena) */}
             <div className="flex-1 bg-[#05070a] border border-[#2a3449] rounded-2xl flex flex-col justify-between relative overflow-hidden shadow-2xl">
-              {/* TOP BAR: COMBAT INITIATIVE HUD */}
-              {liveDisplayMode === 'combat' && (
-                <div className="w-full shrink-0 z-20">
-                  <PlayerCombatTrackerHUD
-                    combatants={combatants}
-                    currentTurnIndex={currentTurnIndex}
-                    roundCount={roundCount}
-                    playerCharName={resolveCharName(currentCampaign)}
-                    isCombatActive={true}
-                    characterSheets={characterSheets}
-                    activeSheet={activeSheet}
-                    campaignMembers={campaignMembers}
-                    onEndTurn={handlePlayerNextTurn}
-                  />
-                </div>
-              )}
+              {/* TOP BAR: COMBAT INITIATIVE HUD (Apenas exibido quando uma batalha foi de fato iniciada no Grid) */}
+              {(() => {
+                const currentScene = projectedScene || activeScene;
+                const activeView = playerCanvasView === 'auto' ? liveDisplayMode : playerCanvasView;
+                const isBattleActive = Boolean(currentScene?.isBattleStarted) && (activeView === 'grid' || activeView === 'combat');
+
+                if (!isBattleActive) return null;
+
+                return (
+                  <div className="w-full shrink-0 z-20">
+                    <PlayerCombatTrackerHUD
+                      combatants={combatants}
+                      currentTurnIndex={currentTurnIndex}
+                      roundCount={roundCount}
+                      playerCharName={resolveCharName(currentCampaign)}
+                      isCombatActive={isBattleActive}
+                      characterSheets={characterSheets}
+                      activeSheet={activeSheet}
+                      campaignMembers={campaignMembers}
+                      onEndTurn={handlePlayerNextTurn}
+                    />
+                  </div>
+                );
+              })()}
 
               {/* CANVAS CONTENT AREA */}
               <div className="flex-1 relative w-full h-full flex items-center justify-center overflow-hidden">
@@ -1604,6 +1626,69 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
                   if (activeView === 'map') {
                     const typedMap = mapData as any;
+                    const currentMapId = typedMap?.activeMapId || 
+                      (currentScene?.associatedMapIds && currentScene.associatedMapIds[0]) || 
+                      currentScene?.associatedMapId || 
+                      (campaignMaps.find(m => currentScene?.associatedMapIds?.includes(m.id))?.id) || 
+                      campaignMaps[0]?.id;
+
+                    const activeCampaignMap = campaignMaps.find((m) => m.id === currentMapId) || campaignMaps[0] || null;
+                    const dungeonCover = activeCampaignMap?.gridData?.coverImageUrl || activeCampaignMap?.gridData?.levels?.[0]?.bgImageUrl || activeCampaignMap?.gridData?.bgImageUrl;
+                    const dungeonLore = activeCampaignMap?.gridData?.description;
+                    const dungeonCR = activeCampaignMap?.gridData?.challengeRating || 'Nível Recomendado';
+                    const isExplorationStarted = 
+                      typedMap?.dungeonExplorationStarted === true || 
+                      (mapData as any)?.dungeonExplorationStarted === true ||
+                      currentScene?.isDungeonExplorationStarted === true;
+
+                    // Se a exploração ainda não foi iniciada pelo Mestre, mostra a Capa Cinemática
+                    if (!isExplorationStarted && (dungeonCover || dungeonLore || activeCampaignMap)) {
+                      return (
+                        <div className="w-full h-full relative flex items-center justify-center p-3 sm:p-4 pb-20 sm:pb-24 bg-[#06080e] overflow-hidden select-none animate-fade-in">
+                          {dungeonCover && (
+                            <div
+                              className="absolute inset-0 bg-cover bg-center opacity-30 scale-105 filter blur-sm pointer-events-none"
+                              style={{ backgroundImage: `url(${normalizeImageUrl(dungeonCover)})` }}
+                            />
+                          )}
+                          <div className="relative z-10 max-w-md sm:max-w-lg w-full max-h-full bg-[#0d121c]/95 border-2 border-amber-500/50 rounded-2xl p-3 sm:p-4 shadow-2xl shadow-black flex flex-col gap-2 text-center items-center overflow-hidden">
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-amber-500/15 border border-amber-500/40 rounded-full text-amber-300 text-[10.5px] font-mono font-bold uppercase shrink-0">
+                              <span>🏰 {dungeonCR}</span>
+                            </div>
+
+                            {dungeonCover && (
+                              <div className="w-full max-h-36 sm:max-h-40 aspect-[16/9] rounded-xl overflow-hidden border border-amber-500/40 shadow-xl bg-black shrink-0">
+                                <img
+                                  src={normalizeImageUrl(dungeonCover)}
+                                  alt="Capa da Masmorra"
+                                  className="w-full h-full object-cover animate-fade-in"
+                                />
+                              </div>
+                            )}
+
+                            <div className="space-y-0.5 shrink-0">
+                              <h2 className="text-sm sm:text-base font-black text-amber-200 uppercase tracking-wide font-serif drop-shadow">
+                                {activeCampaignMap?.title || 'Exploração de Masmorra'}
+                              </h2>
+                              <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-transparent mx-auto mt-0.5" />
+                            </div>
+
+                            {dungeonLore && (
+                              <div className="w-full max-h-24 sm:max-h-28 overflow-y-auto custom-scrollbar p-2 bg-[#080b12] rounded-xl border border-amber-500/20 text-left flex-1 min-h-0">
+                                <p className="text-[11px] text-amber-100 font-serif leading-relaxed italic">
+                                  "{dungeonLore}"
+                                </p>
+                              </div>
+                            )}
+
+                            <p className="text-[10px] text-amber-400/80 font-mono animate-pulse tracking-wider shrink-0">
+                              ⚔️ Aguardando o Mestre iniciar a exploração...
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+
                     if (typedMap && typedMap.grid && typedMap.grid.length > 0) {
                       return (
                         <DysonCanvas
@@ -1684,7 +1769,9 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                 const meCombatant = combatants.find(
                   (c) => c.name.toLowerCase().includes(charName.toLowerCase()) || charName.toLowerCase().includes(c.name.toLowerCase())
                 );
-                const isCombat = liveDisplayMode === 'combat';
+                const currentScene = projectedScene || activeScene;
+                const activeView = playerCanvasView === 'auto' ? liveDisplayMode : playerCanvasView;
+                const isCombat = Boolean(currentScene?.isBattleStarted) && (activeView === 'grid' || activeView === 'combat');
                 const isMyTurn = isCombat && combatants[currentTurnIndex]?.name.toLowerCase().includes(charName.toLowerCase());
 
                 return (

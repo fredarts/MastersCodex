@@ -252,15 +252,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     };
   }, [tokenPositions3D, tokenRotations3D, updateScene]);
 
-  // Sync active scene properties to live environment states
-  // IMPORTANT: Depends on activeScene?.id (not full object) to prevent infinite loop.
-  // The cycle was: updateScene → new activeScene ref → effect re-fires →
-  // setCombatants → initializeFromCombatants → tokenPositions3D change →
-  // save effect → updateScene → loop. Using the ref for reads breaks this cycle.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Synchronize dynamic environment / combatants when activeScene changes
   useEffect(() => {
+    if (!activeScene) return;
+
     const scene = activeScene;
-    if (!scene) return;
 
     if (scene.bgmCategory) {
       setActiveBgmCategory(scene.bgmCategory);
@@ -304,10 +300,16 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
           setCombatants(sorted);
           setCurrentTurnIndex(0);
           setRoundCount(1);
-          setIsCombatActive(true);
+          setIsCombatActive(Boolean(scene.isBattleStarted));
+          
+          const hasMap = Boolean((scene.associatedMapIds && scene.associatedMapIds.length > 0) || scene.associatedMapId);
+          const defaultMode = scene.isBattleStarted ? 'combat' : hasMap ? 'map' : 'artwork';
+          setLiveDisplayMode(defaultMode);
+
           broadcastToPlayerView({ 
             payload: scene,
-            combatants: sorted 
+            combatants: sorted,
+            mode: defaultMode,
           });
           initializeFromCombatants(sorted);
         } else {
@@ -316,10 +318,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         }
       }
     }
-  }, [activeScene?.id, activeScene?.combatants, activeScene?.isBattleStarted, setCombatants, initializeFromCombatants, setCurrentTurnIndex, setRoundCount, setIsCombatActive, setActiveBgmCategory, setLiveTimeOfDayHour, setLiveHasFog, setLiveHasRain, setLiveFloorTextureUrl, setLiveEnvironmentSettings, setSelectedTimeOfDay, setIsBattleStarted, broadcastToPlayerView]);
-
-
-
+  }, [activeScene?.id, activeScene?.combatants, activeScene?.isBattleStarted, setCombatants, initializeFromCombatants, setCurrentTurnIndex, setRoundCount, setIsCombatActive, setActiveBgmCategory, setLiveTimeOfDayHour, setLiveHasFog, setLiveHasRain, setLiveFloorTextureUrl, setLiveEnvironmentSettings, setSelectedTimeOfDay, setIsBattleStarted, broadcastToPlayerView, setLiveDisplayMode]);
 
   // Listen to Character Model cross-tab broadcasts
   useEffect(() => {
@@ -1223,9 +1222,11 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     };
 
     setCombatants(resetCombatants);
-    broadcastToPlayerView({ combatants: resetCombatants, isBattleStarted: true });
-
+    setIsCombatActive(true);
     setIsBattleStarted(true);
+    setLiveDisplayMode('combat');
+    broadcastToPlayerView({ combatants: resetCombatants, isBattleStarted: true, mode: 'combat' });
+
     setCurrentTurnIndex(0);
     setRoundCount(1);
     await updateScene(updatedScene);
@@ -1235,12 +1236,18 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const handleEndCombat = async () => {
     lastInitializedSceneIdRef.current = null;
     combatEngine.endCombat();
+    setIsCombatActive(false);
     setIsBattleStarted(false);
+    
+    const hasMap = Boolean((activeScene?.associatedMapIds && activeScene.associatedMapIds.length > 0) || activeScene?.associatedMapId);
+    const returnMode: 'artwork' | 'map' | 'combat' = hasMap ? 'map' : 'artwork';
+    setLiveDisplayMode(returnMode);
+
     if (activeScene) {
       const updated = { ...activeScene, isBattleStarted: false };
       await updateScene(updated);
     }
-    broadcastToPlayerView({ isBattleStarted: false });
+    broadcastToPlayerView({ isBattleStarted: false, mode: returnMode });
     onGenerateLoot();
   };
 

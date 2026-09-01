@@ -71,7 +71,7 @@ interface MultiMapState {
 }
 
 export const CockpitDungeonMap: React.FC = () => {
-  const { activeScene, fetchSceneMap, saveSceneMap, campaignMaps } = useSession();
+  const { activeScene, updateScene, fetchSceneMap, saveSceneMap, campaignMaps } = useSession();
   const { combatants, broadcastToPlayerView, drawings, broadcastDrawingAction } = useLiveCockpit();
   const { activeCampaign } = useCampaign();
 
@@ -127,6 +127,19 @@ export const CockpitDungeonMap: React.FC = () => {
 
   const handleStartExploration = () => {
     setIsExplorationStarted(true);
+
+    if (activeScene && updateScene) {
+      updateScene({ ...activeScene, isDungeonExplorationStarted: true });
+    }
+    if (currentMapId && activeScene) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`masters_codex_dungeon_started_${activeScene.id}_${currentMapId}`, 'true');
+      }
+      if (multiMapStateRef.current?.maps[currentMapId]) {
+        (multiMapStateRef.current.maps[currentMapId] as any).isExplorationStarted = true;
+      }
+    }
+
     const activeLevelName = activeLevels.find((l) => l.id === activeLevelId)?.name;
     const mapPayload = {
       grid,
@@ -148,7 +161,120 @@ export const CockpitDungeonMap: React.FC = () => {
       activeMapId: currentMapId,
       mapData: mapPayload,
     });
+
+    if (activeScene) {
+      saveSceneMap(activeScene.id, multiMapStateRef.current).catch(console.error);
+    }
     toast.success('Exploração da masmorra iniciada! O mapa tático foi revelado aos jogadores.');
+  };
+
+  const handleRestartExploration = () => {
+    if (!window.confirm('Deseja reiniciar a exploração da masmorra? Isso cobrirá a área com névoa e retornará a capa cinemática para os jogadores.')) return;
+    
+    setIsExplorationStarted(false);
+
+    if (activeScene && updateScene) {
+      updateScene({ ...activeScene, isDungeonExplorationStarted: false });
+    }
+    if (currentMapId && activeScene) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(`masters_codex_dungeon_started_${activeScene.id}_${currentMapId}`);
+      }
+      if (multiMapStateRef.current?.maps[currentMapId]) {
+        (multiMapStateRef.current.maps[currentMapId] as any).isExplorationStarted = false;
+      }
+    }
+
+    // Re-cover fog with initial line of sight for active tokens
+    const coveredGrid = grid.map((row) =>
+      row.map((cell) => ({
+        ...cell,
+        fog: true,
+      }))
+    );
+    for (let r = 0; r < coveredGrid.length; r++) {
+      for (let c = 0; c < coveredGrid[r].length; c++) {
+        if (coveredGrid[r][c].tokenName) {
+          const radius = getTokenVisionRadius(coveredGrid[r][c].tokenName, combatants);
+          revealVisionWithLOS(coveredGrid, r, c, radius);
+        }
+      }
+    }
+    setGrid(coveredGrid);
+
+    const activeLevelName = activeLevels.find((l) => l.id === activeLevelId)?.name;
+    const mapPayload = {
+      grid: coveredGrid,
+      bgImageUrl,
+      gridScale,
+      gridOffsetX,
+      gridOffsetY,
+      vectorWalls,
+      lightSources,
+      activeMapId: currentMapId,
+      activeLevelId,
+      currentLevelName: activeLevelName,
+      sceneId: activeScene?.id,
+      dungeonExplorationStarted: false,
+    };
+    lastBroadcast.current = JSON.stringify(mapPayload);
+
+    broadcastToPlayerView({
+      dungeonExplorationStarted: false,
+      activeMapId: currentMapId,
+      mapData: mapPayload,
+    });
+
+    if (activeScene) {
+      saveSceneMap(activeScene.id, multiMapStateRef.current).catch(console.error);
+    }
+    toast.success('Exploração reiniciada! A capa e lore da masmorra foram restauradas.');
+  };
+
+  const handleEndExploration = () => {
+    if (!window.confirm('Deseja finalizar a exploração desta masmorra?')) return;
+    
+    setIsExplorationStarted(false);
+
+    if (activeScene && updateScene) {
+      updateScene({ ...activeScene, isDungeonExplorationStarted: false });
+    }
+    if (currentMapId && activeScene) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(`masters_codex_dungeon_started_${activeScene.id}_${currentMapId}`);
+      }
+      if (multiMapStateRef.current?.maps[currentMapId]) {
+        (multiMapStateRef.current.maps[currentMapId] as any).isExplorationStarted = false;
+      }
+    }
+
+    const activeLevelName = activeLevels.find((l) => l.id === activeLevelId)?.name;
+    const mapPayload = {
+      grid,
+      bgImageUrl,
+      gridScale,
+      gridOffsetX,
+      gridOffsetY,
+      vectorWalls,
+      lightSources,
+      activeMapId: currentMapId,
+      activeLevelId,
+      currentLevelName: activeLevelName,
+      sceneId: activeScene?.id,
+      dungeonExplorationStarted: false,
+    };
+    lastBroadcast.current = JSON.stringify(mapPayload);
+
+    broadcastToPlayerView({
+      dungeonExplorationStarted: false,
+      activeMapId: currentMapId,
+      mapData: mapPayload,
+    });
+
+    if (activeScene) {
+      saveSceneMap(activeScene.id, multiMapStateRef.current).catch(console.error);
+    }
+    toast.success('Exploração da masmorra finalizada com sucesso!');
   };
 
   // Collapsible HUD states - All collapsed by default
@@ -441,6 +567,14 @@ export const CockpitDungeonMap: React.FC = () => {
         multiState.activeMapId = activeId;
       }
 
+      const persistedStarted = 
+        activeScene.isDungeonExplorationStarted === true ||
+        (multiState as any)?.isExplorationStarted === true ||
+        (activeId && (multiState.maps[activeId] as any)?.isExplorationStarted === true) ||
+        (typeof window !== 'undefined' && localStorage.getItem(`masters_codex_dungeon_started_${activeScene.id}_${activeId}`) === 'true');
+
+      setIsExplorationStarted(Boolean(persistedStarted));
+
       setCurrentMapId(activeId);
       loadMapFromMultiState(multiState, activeId);
       setIsLoading(false);
@@ -462,11 +596,11 @@ export const CockpitDungeonMap: React.FC = () => {
           activeLevelId: lvlId,
           currentLevelName: currentLvlState?.name || 'Andar',
           sceneId: activeScene.id,
-          dungeonExplorationStarted: isExplorationStarted,
+          dungeonExplorationStarted: Boolean(persistedStarted),
         };
         lastBroadcast.current = JSON.stringify(payload);
         broadcastToPlayerView({
-          dungeonExplorationStarted: isExplorationStarted,
+          dungeonExplorationStarted: Boolean(persistedStarted),
           activeMapId: activeId,
           mapData: payload
         });
@@ -1257,6 +1391,41 @@ export const CockpitDungeonMap: React.FC = () => {
           )}
         </div>
 
+        {/* Center / Status: Dungeon Exploration Controls (Always visible when in exploration) */}
+        {isExplorationStarted && (
+          <div className="pointer-events-auto bg-[#0d121c]/95 border-2 border-amber-500/50 rounded-2xl px-3 py-1.5 shadow-2xl shadow-black flex items-center gap-2 text-xs backdrop-blur-xl animate-in fade-in slide-in-from-top-2 shrink-0">
+            <div className="flex items-center gap-1.5 text-amber-300 font-mono font-bold text-[11px]">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="hidden sm:inline uppercase tracking-wider">Explorando</span>
+            </div>
+
+            <div className="h-4 w-[1px] bg-slate-700 mx-1" />
+
+            <button
+              type="button"
+              onClick={handleRestartExploration}
+              className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all shadow cursor-pointer active:scale-95"
+              title="Reiniciar a Masmorra (Cobre o mapa com névoa e restaura a tela de capa com imagem, texto e botão de iniciar)"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+              <span>Reiniciar Masmorra</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleEndExploration}
+              className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all shadow cursor-pointer active:scale-95"
+              title="Finalizar e Encerrar a Exploração da Masmorra"
+            >
+              <Swords className="w-3.5 h-3.5 text-rose-400" />
+              <span>Finalizar Masmorra</span>
+            </button>
+          </div>
+        )}
+
         {/* Right Side: Tactical Action Bar (Collapsible) */}
         <div className="flex items-center gap-1 pointer-events-auto bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-2xl p-1 shadow-2xl shrink-0">
           {!isToolsBarCollapsed ? (
@@ -1344,6 +1513,30 @@ export const CockpitDungeonMap: React.FC = () => {
                 <BookOpen className="w-3.5 h-3.5 text-amber-400" />
                 <span className="hidden sm:inline">Capa & Lore</span>
               </button>
+
+              {isExplorationStarted && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleRestartExploration}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 bg-amber-950/50 hover:bg-amber-900/70 text-amber-300 border border-amber-500/40 cursor-pointer shadow-sm ml-1"
+                    title="Reiniciar Exploração da Masmorra (Volta para a tela de capa com imagem, lore e botão de iniciar)"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="hidden xl:inline">Reiniciar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleEndExploration}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 bg-rose-950/50 hover:bg-rose-900/70 text-rose-300 border border-rose-500/40 cursor-pointer shadow-sm ml-1"
+                    title="Finalizar Exploração da Masmorra"
+                  >
+                    <Swords className="w-3.5 h-3.5 text-rose-400" />
+                    <span className="hidden xl:inline">Finalizar</span>
+                  </button>
+                </>
+              )}
 
               <button
                 type="button"

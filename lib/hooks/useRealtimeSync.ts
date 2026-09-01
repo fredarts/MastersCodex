@@ -65,6 +65,7 @@ export interface RealtimeSyncPayloads {
     currentTurnIndex?: number;
     roundCount?: number;
     mapData?: any;
+    dungeonExplorationStarted?: boolean;
     selectedTargetId?: string | null;
     drawings?: any[];
   };

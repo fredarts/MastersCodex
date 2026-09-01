@@ -237,11 +237,24 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     
     if (payload.mapData !== undefined) {
       const data = payload.mapData;
+      const explorationFlag = data?.dungeonExplorationStarted !== undefined 
+        ? data.dungeonExplorationStarted 
+        : payload.dungeonExplorationStarted;
+
       if (data && data.grid && Array.isArray(data.grid) && data.grid.length > 0) {
-        setMapData(data);
+        setMapData((prev: any) => ({
+          ...(prev || {}),
+          ...data,
+          dungeonExplorationStarted: explorationFlag !== undefined ? explorationFlag : prev?.dungeonExplorationStarted,
+        }));
       } else if (data && data.fogMatrix) {
         setMapData((prev: any) => {
-          if (!prev || prev.activeMapId !== data.activeMapId || !prev.grid) return data;
+          if (!prev || prev.activeMapId !== data.activeMapId || !prev.grid) {
+            return {
+              ...data,
+              dungeonExplorationStarted: explorationFlag !== undefined ? explorationFlag : prev?.dungeonExplorationStarted,
+            };
+          }
           const gridCopy = prev.grid.map((row: any[]) => row.map(cell => ({ ...cell })));
           
           // 1. Clear old tokens from gridCopy
@@ -278,16 +291,18 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
             gridScale: data.gridScale !== undefined ? data.gridScale : prev.gridScale,
             gridOffsetX: data.gridOffsetX !== undefined ? data.gridOffsetX : prev.gridOffsetX,
             gridOffsetY: data.gridOffsetY !== undefined ? data.gridOffsetY : prev.gridOffsetY,
-            dungeonExplorationStarted: data.dungeonExplorationStarted !== undefined ? data.dungeonExplorationStarted : prev.dungeonExplorationStarted,
+            dungeonExplorationStarted: explorationFlag !== undefined ? explorationFlag : prev.dungeonExplorationStarted,
             activeMapId: data.activeMapId !== undefined ? data.activeMapId : prev.activeMapId,
           };
         });
       } else {
-        setMapData(data);
+        setMapData((prev: any) => ({
+          ...(prev || {}),
+          ...data,
+          dungeonExplorationStarted: explorationFlag !== undefined ? explorationFlag : prev?.dungeonExplorationStarted,
+        }));
       }
-    }
-
-    if (payload.dungeonExplorationStarted !== undefined) {
+    } else if (payload.dungeonExplorationStarted !== undefined) {
       setMapData((prev: any) => ({
         ...(prev || {}),
         dungeonExplorationStarted: payload.dungeonExplorationStarted,
@@ -328,6 +343,8 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
           environmentSettings: sceneData.environmentSettings !== undefined ? sceneData.environmentSettings : base.environmentSettings,
           associatedMapId: sceneData.associatedMapId !== undefined ? sceneData.associatedMapId : base.associatedMapId,
           associatedMapIds: sceneData.associatedMapIds !== undefined ? sceneData.associatedMapIds : base.associatedMapIds,
+          isBattleStarted: sceneData.isBattleStarted !== undefined ? sceneData.isBattleStarted : (payload.isBattleStarted !== undefined ? payload.isBattleStarted : base.isBattleStarted),
+          isDungeonExplorationStarted: sceneData.isDungeonExplorationStarted !== undefined ? sceneData.isDungeonExplorationStarted : (payload.dungeonExplorationStarted !== undefined ? payload.dungeonExplorationStarted : base.isDungeonExplorationStarted),
         };
       });
     }
@@ -568,15 +585,22 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setVoiceSignal(payload);
     },
     onStateRequest: () => {
-      // Quando um jogador pede snapshot, se eu for Mestre (ou tiver estado), envio o snapshot atual
-      if (activeCampaign?.role === 'dm') {
+      // Quando um jogador pede snapshot, se for o Mestre (ou tiver dados ativos), envia o snapshot completo
+      const isDm = activeCampaign?.role === 'dm' || !activeCampaign?.role || !user || user.id === 'user-demo';
+      if (isDm) {
+        const isExploration = 
+          (mapData as any)?.dungeonExplorationStarted === true || 
+          activeScene?.isDungeonExplorationStarted === true ||
+          projectedScene?.isDungeonExplorationStarted === true;
+
         broadcastStateSnapshot({
           mode: liveDisplayMode,
-          projectedScene,
+          projectedScene: activeScene || projectedScene,
           combatants,
           currentTurnIndex,
           roundCount,
-          mapData,
+          mapData: mapData ? { ...mapData, dungeonExplorationStarted: isExploration } : mapData,
+          dungeonExplorationStarted: isExploration,
           selectedTargetId,
           drawings,
         });
@@ -590,15 +614,32 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     onStateSnapshot: (snapshot) => {
       // Quando recebo o snapshot do Mestre, atualizo o estado local
       if (snapshot) {
-        if (snapshot.mode) setLiveDisplayModeState(snapshot.mode);
-        if (snapshot.projectedScene !== undefined) setProjectedScene(snapshot.projectedScene);
+        if (snapshot.mode) {
+          setLiveDisplayModeState(snapshot.mode);
+        }
+        if (snapshot.projectedScene !== undefined) {
+          setProjectedScene(snapshot.projectedScene);
+        }
         if (snapshot.combatants) {
           setCombatants(snapshot.combatants);
           storeInitializeFromCombatants(snapshot.combatants);
         }
         if (snapshot.currentTurnIndex !== undefined) setCurrentTurnIndex(snapshot.currentTurnIndex);
         if (snapshot.roundCount !== undefined) setRoundCount(snapshot.roundCount);
-        if (snapshot.mapData !== undefined) setMapData(snapshot.mapData);
+        if (snapshot.mapData !== undefined) {
+          setMapData((prev: any) => ({
+            ...(prev || {}),
+            ...snapshot.mapData,
+            dungeonExplorationStarted: snapshot.dungeonExplorationStarted !== undefined
+              ? snapshot.dungeonExplorationStarted
+              : (snapshot.mapData?.dungeonExplorationStarted ?? prev?.dungeonExplorationStarted),
+          }));
+        } else if (snapshot.dungeonExplorationStarted !== undefined) {
+          setMapData((prev: any) => ({
+            ...(prev || {}),
+            dungeonExplorationStarted: snapshot.dungeonExplorationStarted,
+          }));
+        }
         if (snapshot.selectedTargetId !== undefined) setSelectedTargetId(snapshot.selectedTargetId);
         if (snapshot.drawings !== undefined) setDrawings(snapshot.drawings);
       }
@@ -745,16 +786,32 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return () => setGlobalBroadcaster(() => {});
   }, [sendBroadcast]);
 
-  const setLiveDisplayMode = useCallback((mode: 'artwork' | 'map' | 'combat') => {
-    setLiveDisplayModeState(mode);
-    broadcastLiveProjection({ mode });
-  }, [broadcastLiveProjection]);
-
   const broadcastToPlayerView = useCallback((payload: any) => {
     // Apply locally for same-tab PlayerViewModal (broadcasts don't reach same tab)
     handleLiveProjectionChange(payload);
     broadcastLiveProjection(payload);
   }, [broadcastLiveProjection, handleLiveProjectionChange]);
+
+  const setLiveDisplayMode = useCallback((mode: 'artwork' | 'map' | 'combat') => {
+    setLiveDisplayModeState(mode);
+    if (typeof window !== 'undefined' && campaignId) {
+      try {
+        localStorage.setItem(`masters_codex_display_mode_${campaignId}`, mode);
+        localStorage.setItem(`masters_codex_global_display_mode`, mode);
+      } catch (e) {}
+    }
+    const isExploration = 
+      (mapData as any)?.dungeonExplorationStarted === true || 
+      activeScene?.isDungeonExplorationStarted === true ||
+      projectedScene?.isDungeonExplorationStarted === true;
+
+    broadcastToPlayerView({
+      mode,
+      sceneId: activeScene?.id || projectedScene?.id,
+      payload: activeScene || projectedScene,
+      dungeonExplorationStarted: isExploration,
+    });
+  }, [broadcastToPlayerView, campaignId, activeScene, projectedScene, mapData]);
 
   const setActiveSpellTargeting = useCallback((targeting: any) => {
     setActiveSpellTargetingState(targeting);

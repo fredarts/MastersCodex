@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Tv, Swords, Shield, Heart, Sparkles, Map, ScrollText, ListOrdered, FileText, MessageSquare, Layers, Mic, MicOff, PhoneCall } from 'lucide-react';
+import { X, Tv, Swords, Shield, Heart, Sparkles, Map, ScrollText, ListOrdered, FileText, MessageSquare, Layers, Mic, MicOff, PhoneCall, BookOpen } from 'lucide-react';
 import { Combatant, CharacterSheet } from '@/lib/types';
 import { useSession } from '@/context/SessionContext';
 import { useCampaign } from '@/context/CampaignContext';
@@ -444,7 +444,14 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
         }
 
         if (gridData) {
-          setMapData({
+          const isExplStarted = 
+            savedData?.isExplorationStarted === true || 
+            (activeId && savedData?.maps?.[activeId]?.isExplorationStarted === true) || 
+            currentScene.isDungeonExplorationStarted === true ||
+            (mapData as any)?.dungeonExplorationStarted === true;
+
+          setMapData((prev: any) => ({
+            ...(prev || {}),
             grid: gridData.grid || [],
             bgImageUrl: gridData.bgImageUrl || null,
             gridScale: gridData.gridScale || 40,
@@ -453,8 +460,9 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
             vectorWalls: gridData.vectorWalls || [],
             lightSources: gridData.lightSources || [],
             activeMapId: activeId,
-            sceneId: currentScene.id
-          });
+            sceneId: currentScene.id,
+            dungeonExplorationStarted: isExplStarted,
+          }));
           setLastLoadedSceneMapKey(fetchKey);
         }
         setIsMapLoading(false);
@@ -469,10 +477,11 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
 
   const isCombatMode = liveDisplayMode === 'combat';
   const currentScene = projectedScene || activeScene;
+  const isBattleActive = Boolean(currentScene?.isBattleStarted) && isCombatMode;
 
   const currentTurnCombatant = combatants[currentTurnIndex];
   const isMyTurn =
-    isCombatMode &&
+    isBattleActive &&
     Boolean(
       currentTurnCombatant &&
         (currentTurnCombatant.name.toLowerCase().includes(playerCharName.toLowerCase()) ||
@@ -540,13 +549,11 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 className={`p-1.5 rounded-lg text-xs transition-all ${
                   isMuted
                     ? 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30'
-                    : isSpeaking
-                    ? 'bg-emerald-500/20 text-emerald-300 animate-pulse'
-                    : 'text-slate-300 hover:text-white hover:bg-[#1f2738]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
                 title={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
               >
-                {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                {isMuted ? <MicOff className="w-4 h-4 text-rose-400" /> : <Mic className="w-4 h-4" />}
               </button>
             </div>
           ) : (
@@ -554,37 +561,35 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               type="button"
               onClick={() => joinCall()}
               disabled={isConnecting}
-              className="flex items-center gap-1.5 bg-[#161c28] hover:bg-[#1f2738] text-slate-300 hover:text-emerald-400 border border-[#2a3449] hover:border-emerald-500/50 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
-              title="Conectar à Chamada de Voz da Mesa"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#121824] hover:bg-emerald-500/20 border border-slate-700 hover:border-emerald-500/50 rounded-xl text-xs font-bold text-slate-300 hover:text-emerald-300 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+              title="Entrar na Chamada de Voz da Sessão"
             >
-              <PhoneCall className={`w-3.5 h-3.5 text-emerald-400 ${isConnecting ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{isConnecting ? 'Conectando...' : 'Entrar na Call'}</span>
+              <PhoneCall className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{isConnecting ? 'Conectando...' : 'Entrar na Call'}</span>
             </button>
           )}
 
-          <XCardButton
-            campaignId={activeCampaign?.id}
-            playerName={playerCharName}
-            safetySettings={activeCampaign?.safetySettings}
-            onSendAlert={(alert) => broadcastXCardAlert({ alert })}
-          />
-
           <button
+            type="button"
             onClick={() => setIsSheetModalOpen(true)}
-            className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-lg shadow-amber-500/20 transition-all active:scale-95 cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 rounded-xl text-xs font-bold text-amber-300 transition-all shadow-sm cursor-pointer"
+            title="Abrir Ficha de Personagem Completa"
           >
-            <FileText className="w-4 h-4" />
-            <span>Ficha de Personagem</span>
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Ficha do Herói</span>
           </button>
 
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-100 hover:bg-[#161c28] rounded-lg transition-colors">
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-200 bg-slate-800/60 hover:bg-slate-750 p-2 rounded-xl border border-slate-700/60 transition-colors cursor-pointer"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
       </div>
 
-      {/* Banner de Turno Animado com Alerta sonoro + Vibração */}
-      {isCombatMode && (
+      {/* Banner de Turno Animado com Alerta sonoro + Vibração (Apenas se batalha estiver ativa) */}
+      {isBattleActive && (
         <PlayerTurnBanner
           isMyTurn={isMyTurn}
           characterName={playerCharName}
@@ -634,7 +639,10 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               const dungeonCover = activeCampaignMap?.gridData?.coverImageUrl || activeCampaignMap?.gridData?.levels?.[0]?.bgImageUrl || activeCampaignMap?.gridData?.bgImageUrl;
               const dungeonLore = activeCampaignMap?.gridData?.description;
               const dungeonCR = activeCampaignMap?.gridData?.challengeRating || 'Recomendado';
-              const isExplorationStarted = typedMapData?.dungeonExplorationStarted === true || (mapData as any)?.dungeonExplorationStarted === true;
+              const isExplorationStarted = 
+                typedMapData?.dungeonExplorationStarted === true || 
+                (mapData as any)?.dungeonExplorationStarted === true ||
+                currentScene?.isDungeonExplorationStarted === true;
 
               // Se a exploração ainda não foi iniciada pelo Mestre, mostra a Capa Cinemática
               if (!isExplorationStarted && (dungeonCover || dungeonLore || activeCampaignMap)) {
@@ -844,7 +852,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                   activeSheet={activeSheet}
                   playerCombatant={meCombatant}
                   isMyTurn={isMyTurn}
-                  isCombatActive={isCombatMode}
+                  isCombatActive={isBattleActive}
                   onExecuteRoll={(rollEvent) => {
                     const fullRoll = {
                       id: `roll-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
