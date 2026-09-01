@@ -55,6 +55,39 @@ export const HARPTOS_CALENDAR: CampaignCalendarConfig = {
     { id: 'h_highharvest', name: 'Festa da Alta Colheita', monthIndex: 11, day: 1, isRecurring: true, description: 'Comemoração dos celeiros cheios e agradecimento da terra.' },
     { id: 'h_feastmoon', name: 'O Banquete da Lua', monthIndex: 15, day: 1, isRecurring: true, description: 'Contação de lendas e honras aos mortos com tochas acesas.' },
   ],
+  celestialEvents: [
+    {
+      id: 'cel_solar_eleint',
+      name: 'O Olho Negro de Cyric (Eclipse Solar Total)',
+      type: 'solar_eclipse',
+      monthIndex: 12, // Eleint
+      day: 28,
+      durationHours: 3,
+      description: 'A lua oculta totalmente a luz solar ao meio-dia, cobrindo a terra em uma penumbra mística e revelando a coroa solar flamejante.',
+      omenEffect: 'Magias de Ilusão, Sombras e Necromancia ganham +2 na CD de Resistência. Tochas e fontes de luz mundana têm seu raio reduzido pela metade.',
+      clues: [
+        'Antigos pergaminhos do Observatório de Candlekeep falam de um manto negro sobre o 28º dia de Eleint.',
+        'Os astrólogos da corte notaram que os pássaros migratórios se desorientam na última semana do mês.',
+      ],
+      isDiscoveredByPlayers: false,
+      revealedTelescopeClue: 'Alinhamento crítico detectado: O disco da Lua coincide perfeitamente com a rota meridiana solar!',
+    },
+    {
+      id: 'cel_blood_moon',
+      name: 'Ascensão da Lua Carmesim (Eclipse Lunar de Sangue)',
+      type: 'blood_moon',
+      monthIndex: 13, // Marpenoth
+      day: 15,
+      durationHours: 4,
+      description: 'Selûne mergulha na sombra do mundo e se transforma em um orbe vermelho sangue vívido.',
+      omenEffect: 'Criaturas com maldição de Licantropia não conseguem reverter sua forma feral e ganham Vantagem em testes de Percepção e Ataques.',
+      clues: [
+        'Relatos de pescadores na Costa da Espada mencionam marés com reflexos avermelhados na metade do outono.',
+      ],
+      isDiscoveredByPlayers: false,
+      revealedTelescopeClue: 'A refração da atmosfera projeta um halo escarlate sobre a face ocidental de Selûne.',
+    },
+  ],
   startingYear: 1492,
   startingMonthIndex: 12, // Eleint
   startingDay: 14,

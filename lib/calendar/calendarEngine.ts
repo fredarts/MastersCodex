@@ -251,6 +251,126 @@ export function calculateInGameDateTime(
   };
 }
 
+export function getCelestialEventForDate(
+  config: CampaignCalendarConfig,
+  year: number,
+  monthIndex: number,
+  day: number
+): import('@/lib/types/calendar').CelestialEvent | undefined {
+  if (!config.celestialEvents || config.celestialEvents.length === 0) return undefined;
+  return config.celestialEvents.find((evt) => {
+    const monthMatch = evt.monthIndex === monthIndex;
+    const dayMatch = evt.day === day;
+    const yearMatch = evt.year === undefined || evt.year === null || evt.year === year;
+    return monthMatch && dayMatch && yearMatch;
+  });
+}
+
+export interface OrreryBodyPosition {
+  id: string;
+  name: string;
+  type: 'sun' | 'moon' | 'planet';
+  angleDegrees: number; // 0 a 360 no astrolábio
+  radiusPercent: number; // Distância do centro
+  color: string;
+  sizePx: number;
+  phaseLabel?: string;
+  illuminationPercentage?: number;
+  isEclipseActive?: boolean;
+}
+
+export interface OrrerySystemState {
+  worldRotationDegrees: number;
+  sun: OrreryBodyPosition;
+  moons: OrreryBodyPosition[];
+  zodiacConstellationIndex: number;
+  zodiacConstellationName: string;
+  skyLightLevel: number; // 0.0 (noite cerrada) até 1.0 (sol a pino)
+  activeCelestialEvent?: import('@/lib/types/calendar').CelestialEvent;
+}
+
+export function calculateOrrerySystem(
+  config: CampaignCalendarConfig,
+  year: number,
+  monthIndex: number,
+  day: number,
+  hour: number = 12,
+  minute: number = 0
+): OrrerySystemState {
+  const totalDays = dateToAbsoluteDays(config, year, monthIndex, day);
+  const totalDaysInYear = getTotalDaysInYear(config) || 365;
+  const hoursInDay = config.hoursInDay || 24;
+
+  // Rotação diária do mundo (360 graus por dia)
+  const timeFraction = (hour + minute / 60) / hoursInDay;
+  const worldRotationDegrees = (timeFraction * 360) % 360;
+
+  // Posição do Sol na eclíptica anual
+  const yearFraction = ((totalDays % totalDaysInYear) + totalDaysInYear) % totalDaysInYear / totalDaysInYear;
+  const sunEclipticAngle = (yearFraction * 360) % 360;
+
+  // Nível de iluminação do céu
+  // Meio-dia = 1.0, Meia-noite = 0.0
+  const normalizedHour = (hour + minute / 60) % 24;
+  let skyLightLevel = 0.1;
+  if (normalizedHour >= 6 && normalizedHour <= 18) {
+    // Pico ao meio-dia (12h)
+    skyLightLevel = Math.sin(((normalizedHour - 6) / 12) * Math.PI);
+  }
+
+  const sun: OrreryBodyPosition = {
+    id: 'sun',
+    name: 'O Sol Radiante (Aman)',
+    type: 'sun',
+    angleDegrees: sunEclipticAngle,
+    radiusPercent: 78,
+    color: '#fbbf24',
+    sizePx: 30,
+  };
+
+  const moonPhases = calculateMoonPhases(config, totalDays);
+  const moons: OrreryBodyPosition[] = (config.moons || []).map((moonConfig, idx) => {
+    const phaseInfo = moonPhases.find((m) => m.moonId === moonConfig.id);
+    const cycle = moonConfig.cycleInDays > 0 ? moonConfig.cycleInDays : 29.5;
+    const offset = moonConfig.phaseShiftDays || 0;
+    const moonProgress = (((totalDays + offset) % cycle + cycle) % cycle) / cycle;
+    
+    // Ângulo da órbita lunar relativa ao centro
+    const moonAngle = (moonProgress * 360) % 360;
+    const baseRadius = 45 + idx * 16;
+
+    return {
+      id: moonConfig.id,
+      name: moonConfig.name,
+      type: 'moon',
+      angleDegrees: moonAngle,
+      radiusPercent: baseRadius,
+      color: moonConfig.color || '#e0f2fe',
+      sizePx: 18 - idx * 2,
+      phaseLabel: phaseInfo?.phaseLabel,
+      illuminationPercentage: phaseInfo?.illuminationPercentage,
+    };
+  });
+
+  // Constelações do Zodíaco
+  const totalMonths = config.months.length || 12;
+  const zodiacConstellationIndex = monthIndex % totalMonths;
+  const currentMonth = config.months[monthIndex];
+  const zodiacConstellationName = `Signo de ${currentMonth?.name || 'Astra'}`;
+
+  const activeCelestialEvent = getCelestialEventForDate(config, year, monthIndex, day);
+
+  return {
+    worldRotationDegrees,
+    sun,
+    moons,
+    zodiacConstellationIndex,
+    zodiacConstellationName,
+    skyLightLevel,
+    activeCelestialEvent,
+  };
+}
+
 export function advanceInGameTime(
   config: CampaignCalendarConfig,
   state: CampaignCalendarState,
@@ -290,3 +410,5 @@ export function advanceInGameTime(
     currentWeather: state.currentWeather,
   };
 }
+
+

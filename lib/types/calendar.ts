@@ -40,6 +40,29 @@ export interface CalendarHoliday {
   isRecurring: boolean;
 }
 
+export type CelestialEventType = 
+  | 'solar_eclipse' 
+  | 'lunar_eclipse' 
+  | 'lunar_conjunction' 
+  | 'grand_alignment' 
+  | 'blood_moon' 
+  | 'comet_omen';
+
+export interface CelestialEvent {
+  id: string;
+  name: string;
+  type: CelestialEventType;
+  year?: number;              // Se omitido, ocorre anualmente no mesmo dia/mês
+  monthIndex: number;         // 0-indexed
+  day: number;                // 1-indexed
+  durationHours?: number;     // Ex: 3 horas de eclipse
+  description: string;
+  omenEffect?: string;        // Efeitos mágicos e mecânicos no RPG (ex: "+2 DC para magias de Ilusão e Trevas")
+  clues?: string[];           // Pistas para investigação da party (ex: "Registros antigos dos monges de Oghma...")
+  isDiscoveredByPlayers?: boolean; // Se a party já desvendou esta data ou se é uma surpresa
+  revealedTelescopeClue?: string;  // Mensagem revelada ao espiar pelo telescópio/astrolábio nesta data
+}
+
 export interface CampaignCalendarConfig {
   id: string;
   presetKey?: 'harptos' | 'greyhawk' | 'gregorian' | 'custom';
@@ -51,6 +74,7 @@ export interface CampaignCalendarConfig {
   months: CalendarMonth[];
   moons: CalendarMoon[];
   holidays: CalendarHoliday[];
+  celestialEvents?: CelestialEvent[];
   startingYear: number;
   startingMonthIndex: number;
   startingDay: number;

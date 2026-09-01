@@ -61,6 +61,7 @@ import { PlayerTokenActionDock } from './player-view/PlayerTokenActionDock';
 import { PresenceIndicator } from './live-cockpit/PresenceIndicator';
 import { SharedGameLog } from './live-cockpit/SharedGameLog';
 import { LiveChatPanel } from './live-cockpit/LiveChatPanel';
+import { LiveCalendarWidget } from './live-cockpit/LiveCalendarWidget';
 import { BattleGrid3D } from './BattleGrid3D';
 import { ThreeErrorBoundary } from './ThreeErrorBoundary';
 import { XCardButton } from './safety/XCardButton';
@@ -1417,6 +1418,9 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                 </h2>
               </div>
             </div>
+
+            {/* Campaign In-Game Calendar & Celestial Orrery Widget (Player Perspective) */}
+            <LiveCalendarWidget />
 
             {/* Controles de Visualização / Projeção do Jogador (Estilo Cockpit DM) */}
             {(() => {
