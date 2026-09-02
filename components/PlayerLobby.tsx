@@ -776,6 +776,49 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
       });
     }
 
+    const combatPinUrl = updatedWithTimestamp.combatImageUrl || (updatedWithTimestamp.modelUrl && !updatedWithTimestamp.modelUrl.endsWith('.glb') ? updatedWithTimestamp.modelUrl : undefined);
+    const targetModelUrl = updatedWithTimestamp.modelUrl || getModelUrlByNameOrPath(updatedWithTimestamp.className || updatedWithTimestamp.characterName);
+    const targetTokenType = updatedWithTimestamp.tokenType || (combatPinUrl ? 'billboard' : '3d');
+    const targetAvatarUrl = updatedWithTimestamp.faceImageUrl || updatedWithTimestamp.avatarUrl;
+    const targetCombatImg = combatPinUrl || (targetTokenType === 'billboard' ? targetModelUrl : undefined);
+
+    // Atualiza combatentes locais imediatamente para refletir no grid 3D
+    setCombatants((prev) => {
+      let hasChanges = false;
+      const next = prev.map((c) => {
+        const cClean = c.name.split('(')[0].trim().toLowerCase();
+        const sheetClean = (updatedWithTimestamp.characterName || '').split('(')[0].trim().toLowerCase();
+        const isMatch =
+          cClean === sheetClean ||
+          c.name.toLowerCase().includes(sheetClean) ||
+          (updatedWithTimestamp.id && c.id.includes(updatedWithTimestamp.id));
+
+        if (isMatch) {
+          hasChanges = true;
+          return {
+            ...c,
+            name: updatedWithTimestamp.characterName || c.name,
+            modelUrl: targetModelUrl,
+            tokenType: targetTokenType,
+            tokenImageUrl: targetTokenType === 'billboard' ? targetCombatImg : undefined,
+            combatImageUrl: targetCombatImg,
+            avatarUrl: targetAvatarUrl,
+          };
+        }
+        return c;
+      });
+
+      if (hasChanges) {
+        if (broadcastCombatUpdate) {
+          broadcastCombatUpdate({ combatants: next });
+        }
+        if (initializeFromCombatants) {
+          initializeFromCombatants(next);
+        }
+      }
+      return hasChanges ? next : prev;
+    });
+
     // Sincroniza a ficha com o banco de dados Supabase para acesso do Mestre e de outros usuários
     if (isSupabaseConfigured()) {
       const uId = user?.id || updatedWithTimestamp.userId || 'player-1';
@@ -800,8 +843,9 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
         if (cId && isValidUuid(cId)) {
            supabase.from('campaign_members').update({
              character_name: updatedWithTimestamp.characterName || 'Sem Nome',
-             avatar_url: updatedWithTimestamp.avatarUrl || null,
-             token_type: updatedWithTimestamp.tokenType || '3d',
+             avatar_url: targetAvatarUrl || null,
+             model_url: targetCombatImg || targetModelUrl || null,
+             token_type: targetTokenType,
            })
            .eq('campaign_id', cId)
            .ilike('character_name', updatedWithTimestamp.characterName || 'Sem Nome')
@@ -819,9 +863,8 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
     // Sincroniza modelUrl no Supabase e no codex_members para que o DM veja o modelo correto
     try {
-      const targetModelUrl = updatedWithTimestamp.modelUrl || getModelUrlByNameOrPath(updatedWithTimestamp.className || updatedWithTimestamp.characterName);
       const targetCampId = updatedWithTimestamp.campaignId || activeCampaign?.id || '';
-      updateCampaignMemberModelUrl(targetCampId, updatedWithTimestamp.characterName, targetModelUrl);
+      updateCampaignMemberModelUrl(targetCampId, updatedWithTimestamp.characterName, targetCombatImg || targetModelUrl);
 
       const memsStr = localStorage.getItem('codex_members');
       if (memsStr) {
@@ -832,9 +875,15 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             m.characterName &&
             m.characterName.toLowerCase() === updatedWithTimestamp.characterName.toLowerCase()
           ) {
-            if (m.modelUrl !== targetModelUrl) {
+            if (m.modelUrl !== (targetCombatImg || targetModelUrl) || m.tokenType !== targetTokenType || m.avatarUrl !== targetAvatarUrl) {
               changed = true;
-              return { ...m, modelUrl: targetModelUrl };
+              return { 
+                ...m, 
+                modelUrl: targetCombatImg || targetModelUrl,
+                tokenType: targetTokenType,
+                avatarUrl: targetAvatarUrl,
+                combatImageUrl: targetCombatImg,
+              };
             }
           }
           return m;
@@ -915,6 +964,102 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     window.addEventListener('masters_codex_loot_received', handleLootReceived);
     return () => window.removeEventListener('masters_codex_loot_received', handleLootReceived);
   }, []);
+
+  // Escuta atualizações de modelo/pino de combate de personagens para sincronizar o grid 3D e a ficha ativa imediatamente
+  useEffect(() => {
+    const handleModelUpdate = (sheet: any) => {
+      if (!sheet || !sheet.characterName) return;
+
+      const combatPinUrl = sheet.combatImageUrl || (sheet.modelUrl && !sheet.modelUrl.endsWith('.glb') ? sheet.modelUrl : undefined);
+      const updatedModelUrl = sheet.modelUrl || getModelUrlByNameOrPath(sheet.className || sheet.characterName);
+      const updatedTokenType: 'billboard' | '3d' = sheet.tokenType || (combatPinUrl ? 'billboard' : '3d');
+      const updatedAvatarUrl: string | undefined = sheet.faceImageUrl || sheet.avatarUrl;
+      const updatedCombatImg: string | undefined = combatPinUrl || (updatedTokenType === 'billboard' ? updatedModelUrl : undefined);
+
+      setCombatants((prev) => {
+        let hasChanges = false;
+        const next = prev.map((c) => {
+          const cClean = c.name.split('(')[0].trim().toLowerCase();
+          const sheetClean = (sheet.characterName || '').split('(')[0].trim().toLowerCase();
+          const isMatch =
+            cClean === sheetClean ||
+            c.name.toLowerCase().includes(sheetClean) ||
+            sheet.characterName?.toLowerCase().includes(cClean) ||
+            (sheet.id && c.id.includes(sheet.id));
+
+          if (isMatch) {
+            if (
+              c.modelUrl !== updatedModelUrl ||
+              c.tokenType !== updatedTokenType ||
+              c.tokenImageUrl !== updatedCombatImg ||
+              c.combatImageUrl !== combatPinUrl ||
+              c.avatarUrl !== updatedAvatarUrl
+            ) {
+              hasChanges = true;
+              return {
+                ...c,
+                modelUrl: updatedModelUrl,
+                tokenType: updatedTokenType,
+                tokenImageUrl: updatedTokenType === 'billboard' ? updatedCombatImg : undefined,
+                combatImageUrl: combatPinUrl || updatedCombatImg,
+                avatarUrl: updatedAvatarUrl,
+              };
+            }
+          }
+          return c;
+        });
+
+        if (hasChanges && initializeFromCombatants) {
+          initializeFromCombatants(next);
+        }
+        return hasChanges ? next : prev;
+      });
+
+      // Atualiza activeSheet se corresponder
+      setActiveSheet((prev) => {
+        if (!prev) return prev;
+        if (
+          prev.id === sheet.id ||
+          prev.characterName.toLowerCase() === sheet.characterName.toLowerCase()
+        ) {
+          return {
+            ...prev,
+            ...sheet,
+            faceImageUrl: updatedAvatarUrl,
+            combatImageUrl: combatPinUrl,
+            avatarUrl: updatedAvatarUrl,
+            modelUrl: updatedModelUrl,
+            tokenType: updatedTokenType,
+          };
+        }
+        return prev;
+      });
+    };
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('masters_codex_sync');
+      bc.onmessage = (event) => {
+        if (event.data?.type === 'CHARACTER_MODEL_UPDATED' && event.data?.sheet) {
+          handleModelUpdate(event.data.sheet);
+        }
+      };
+    } catch (e) {}
+
+    const handleLocalEvent = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      if (customEvt.detail) {
+        handleModelUpdate(customEvt.detail);
+      }
+    };
+
+    window.addEventListener('masters_codex_character_model_updated', handleLocalEvent);
+
+    return () => {
+      if (bc) bc.close();
+      window.removeEventListener('masters_codex_character_model_updated', handleLocalEvent);
+    };
+  }, [setCombatants, initializeFromCombatants, setActiveSheet]);
 
   // Sincronização direta com Supabase Realtime para manter as fichas atualizadas ao vivo quando o Mestre ou outro jogador alterar dados no banco
   useEffect(() => {
@@ -1392,10 +1537,11 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={handleBackToHub}
-                className="flex items-center gap-1.5 bg-[#0a0d14] hover:bg-[#2a3449] border border-[#2a3449] text-slate-300 hover:text-amber-400 font-bold px-2.5 sm:px-3 py-1.5 rounded-xl text-xs transition-all"
+                className="flex items-center justify-center bg-[#0a0d14] hover:bg-[#2a3449] border border-[#2a3449] hover:border-amber-500/40 text-slate-300 hover:text-amber-400 font-bold p-1.5 sm:p-2 rounded-xl transition-all shadow-sm cursor-pointer"
+                title="Voltar para Minhas Campanhas"
+                aria-label="Voltar para Minhas Campanhas"
               >
                 <ArrowLeft className="w-4 h-4" />
-                <span>Minhas Campanhas</span>
               </button>
 
               <div className="h-6 w-[1px] bg-[#2a3449]" />
@@ -2062,6 +2208,8 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
         isOpen={isSheetModalOpen}
         onClose={() => setIsSheetModalOpen(false)}
         onSave={handleSaveSheet}
+        broadcastRoll={broadcastPlayerRoll}
+        playerName={user?.user_metadata?.display_name || user?.email || characterNameInput}
       />
 
       {/* ==================== VIEWER MODAL: FICHA DE OUTRO JOGADOR (SOMENTE LEITURA) ==================== */}

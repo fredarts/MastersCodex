@@ -65,6 +65,7 @@ function MainApp() {
     setCurrentTurnIndex,
     roundCount,
     setRoundCount,
+    broadcastPlayerRoll,
   } = useLiveCockpit();
   
   const [isCompendiumOpen, setIsCompendiumOpen] = useState(false);
@@ -145,6 +146,12 @@ function MainApp() {
 
   const handleSaveSheet = (updatedSheet: CharacterSheet) => {
     saveSheet(updatedSheet);
+    const combatPinUrl = updatedSheet.combatImageUrl || (updatedSheet.modelUrl && !updatedSheet.modelUrl.endsWith('.glb') ? updatedSheet.modelUrl : undefined);
+    const targetModelUrl = updatedSheet.modelUrl || getModelUrlByNameOrPath(updatedSheet.className || updatedSheet.characterName);
+    const targetTokenType = updatedSheet.tokenType || (combatPinUrl ? 'billboard' : '3d');
+    const targetAvatarUrl = updatedSheet.faceImageUrl || updatedSheet.avatarUrl;
+    const targetCombatImg = combatPinUrl || (targetTokenType === 'billboard' ? targetModelUrl : undefined);
+
     // Also sync combatant if this sheet belongs to an active combatant in the battle
     setCombatants((prev) =>
       prev.map((c) => {
@@ -158,6 +165,11 @@ function MainApp() {
             ac: updatedSheet.armorClass,
             speed: updatedSheet.speed,
             characterSheet: updatedSheet,
+            modelUrl: targetModelUrl,
+            tokenType: targetTokenType,
+            tokenImageUrl: targetTokenType === 'billboard' ? targetCombatImg : undefined,
+            combatImageUrl: targetCombatImg,
+            avatarUrl: targetAvatarUrl,
             actions: updatedSheet.attacks && updatedSheet.attacks.length > 0 ? updatedSheet.attacks.map((atk: CharacterWeaponAttack) => ({
               name: atk.name,
               desc: `Ataque: ${atk.atkBonus} para acertar. Dano: ${atk.damage} (${atk.type}).`
@@ -171,7 +183,12 @@ function MainApp() {
 
   useEffect(() => {
     const handleModelUpdate = (sheet: any) => {
+      const combatPinUrl = sheet.combatImageUrl || (sheet.modelUrl && !sheet.modelUrl.endsWith('.glb') ? sheet.modelUrl : undefined);
       const updatedModelUrl = sheet.modelUrl || getModelUrlByNameOrPath(sheet.className || sheet.characterName);
+      const updatedTokenType: 'billboard' | '3d' = sheet.tokenType || (combatPinUrl ? 'billboard' : '3d');
+      const updatedAvatarUrl = sheet.faceImageUrl || sheet.avatarUrl;
+      const updatedCombatImg = combatPinUrl || (updatedTokenType === 'billboard' ? updatedModelUrl : undefined);
+
       setCombatants((prev) => {
         let hasChanges = false;
         const next = prev.map((c) => {
@@ -182,9 +199,24 @@ function MainApp() {
             c.name.toLowerCase().includes(sheetClean) ||
             sheetClean.includes(cClean);
 
-          if (isMatch && c.modelUrl !== updatedModelUrl) {
-            hasChanges = true;
-            return { ...c, modelUrl: updatedModelUrl };
+          if (isMatch) {
+            if (
+              c.modelUrl !== updatedModelUrl ||
+              c.tokenType !== updatedTokenType ||
+              c.tokenImageUrl !== updatedCombatImg ||
+              c.combatImageUrl !== combatPinUrl ||
+              c.avatarUrl !== updatedAvatarUrl
+            ) {
+              hasChanges = true;
+              return {
+                ...c,
+                modelUrl: updatedModelUrl,
+                tokenType: updatedTokenType,
+                tokenImageUrl: updatedTokenType === 'billboard' ? updatedCombatImg : undefined,
+                combatImageUrl: combatPinUrl || updatedCombatImg,
+                avatarUrl: updatedAvatarUrl,
+              };
+            }
           }
           return c;
         });
@@ -485,6 +517,7 @@ function MainApp() {
                   onClose={() => closeSheet(sheetState.id)}
                   onMinimize={() => minimizeSheet(sheetState.id)}
                   onSave={handleSaveSheet}
+                  broadcastRoll={broadcastPlayerRoll}
                 />
               );
             })}

@@ -427,14 +427,66 @@ export const SharedGameLog: React.FC<SharedGameLogProps> = ({
                   )}
                   {entry.isCrit && (
                     <span className="text-[9px] font-black text-amber-400 bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.2 rounded shadow-sm">
-                      ✨ CRÍTICO!
+                      ✨ CRÍTICO (SUCESSO)
                     </span>
                   )}
                   {entry.isFail && (
                     <span className="text-[9px] font-black text-rose-400 bg-rose-500/20 border border-rose-500/40 px-1.5 py-0.2 rounded">
-                      💀 FALHA!
+                      💀 FALHA CRÍTICA
                     </span>
                   )}
+                  {!entry.isCrit && !entry.isFail && (() => {
+                    if (entry.isSuccess !== undefined) {
+                      return (
+                        <span className={`text-[9px] font-black px-1.5 py-0.2 rounded border ${
+                          entry.isSuccess
+                            ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/40'
+                            : 'text-rose-400 bg-rose-500/20 border-rose-500/40'
+                        }`}>
+                          {entry.isSuccess ? '✅ SUCESSO' : '❌ FRACASSO'}
+                        </span>
+                      );
+                    }
+                    if (entry.isHit !== undefined) {
+                      return (
+                        <span className={`text-[9px] font-black px-1.5 py-0.2 rounded border ${
+                          entry.isHit
+                            ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/40'
+                            : 'text-rose-400 bg-rose-500/20 border-rose-500/40'
+                        }`}>
+                          {entry.isHit ? '🎯 ACERTO' : '🛡️ ERROU'}
+                        </span>
+                      );
+                    }
+                    if (entry.content?.includes('Passou') || entry.content?.includes('Sucesso')) {
+                      return (
+                        <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 px-1.5 py-0.2 rounded">
+                          ✅ SUCESSO
+                        </span>
+                      );
+                    }
+                    if (entry.content?.includes('Falhou') || entry.content?.includes('Fracasso')) {
+                      return (
+                        <span className="text-[9px] font-black text-rose-400 bg-rose-500/20 border border-rose-500/40 px-1.5 py-0.2 rounded">
+                          ❌ FRACASSO
+                        </span>
+                      );
+                    }
+                    if (entry.totalRoll !== undefined || entry.d20Roll !== undefined) {
+                      const total = entry.totalRoll ?? (entry.d20Roll ?? 10);
+                      const passed = total >= 10;
+                      return (
+                        <span className={`text-[9px] font-black px-1.5 py-0.2 rounded border ${
+                          passed
+                            ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/40'
+                            : 'text-rose-400 bg-rose-500/20 border-rose-500/40'
+                        }`}>
+                          {passed ? '✅ SUCESSO' : '❌ FRACASSO'}
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
                 {/* Content description / Roll formula details */}
@@ -460,6 +512,20 @@ export const SharedGameLog: React.FC<SharedGameLogProps> = ({
                       <span>→</span>
                       <span>Total: <strong className="text-amber-300 font-bold">{entry.totalRoll}</strong></span>
                     </span>
+                    {/* Status pill */}
+                    {(() => {
+                      const isPassed = entry.isSuccess ?? (entry.isHit ?? (entry.content?.includes('Passou') || entry.content?.includes('Sucesso') || (entry.totalRoll >= 10)));
+                      const isFailed = entry.isFail || (entry.isSuccess === false) || (entry.isHit === false) || entry.content?.includes('Falhou') || (!isPassed);
+                      return (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black font-mono border ${
+                          !isFailed
+                            ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/40 shadow-sm'
+                            : 'bg-rose-950/70 text-rose-300 border-rose-500/40 shadow-sm'
+                        }`}>
+                          {!isFailed ? '✅ Sucesso' : '❌ Fracasso'}
+                        </span>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

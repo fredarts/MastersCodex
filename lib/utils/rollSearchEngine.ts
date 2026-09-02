@@ -23,6 +23,10 @@ export interface UnifiedLogEntry {
   content: string;
   isCrit?: boolean;
   isFail?: boolean;
+  isHit?: boolean;
+  isSuccess?: boolean;
+  targetAc?: number;
+  dc?: number;
   d20Roll?: number;
   totalRoll?: number;
   eventType?: string;
@@ -71,6 +75,10 @@ export function unifyLogEntries(
       content: log.description,
       isCrit: log.isCrit,
       isFail: log.isFail,
+      isHit: log.isHit,
+      isSuccess: log.isSuccess,
+      targetAc: log.targetAc,
+      dc: log.dc,
       d20Roll: log.d20Roll,
       totalRoll: log.totalRoll,
       eventType: log.eventType,

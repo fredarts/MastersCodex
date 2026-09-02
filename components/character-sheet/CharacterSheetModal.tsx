@@ -49,6 +49,7 @@ interface CharacterSheetModalProps {
   broadcastRoll?: (roll: PlayerRollEvent) => void;
   lockBaseAttributes?: boolean;
   readOnly?: boolean;
+  playerName?: string;
 }
 
 type TabType = 'general' | 'combat' | 'skills' | 'abilities' | 'equipment' | 'spells' | 'rp' | 'journal';
@@ -74,6 +75,7 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
   broadcastRoll,
   lockBaseAttributes = false,
   readOnly = false,
+  playerName,
 }) => {
   const { showAlert } = useCustomDialog();
   const [sheet, setSheet] = useState<CharacterSheet>(initialSheet);
@@ -250,16 +252,23 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
     setLastRoll(event);
     if (onRollEvent) onRollEvent(event);
     if (broadcastRoll) {
+      const heroAvatar = sheet.faceImageUrl || sheet.avatarUrl || (Array.isArray(sheet.images) && sheet.images.length > 0 ? sheet.images[0] : undefined);
       broadcastRoll({
         id: event.id,
-        characterName: event.characterName || sheet.characterName,
+        characterName: event.characterName || sheet.characterName || 'Personagem',
+        playerName: playerName || sheet.playerName || undefined,
+        avatarUrl: heroAvatar,
         rollType: event.rollType === 'attack' ? 'attack' : event.rollType === 'skill' ? 'skill' : event.rollType === 'saving_throw' ? 'save' : 'custom',
         label: event.label,
         d20Roll: event.selectedD20 || event.d20Roll1 || 10,
+        d20Roll1: event.d20Roll1,
+        d20Roll2: event.d20Roll2,
         modifier: event.modifier,
         total: event.total,
         isCrit: event.isCrit,
         isFail: event.isFail,
+        dc: event.dc,
+        isSuccess: event.isSuccess,
         advantageMode: event.advantageMode,
         timestamp: event.timestamp || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       });
@@ -318,27 +327,33 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
         </button>
 
         {/* DETALHES RÁPIDOS DO PERSONAGEM */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="relative w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/40 overflow-hidden flex items-center justify-center shrink-0 shadow-sm">
-            {sheet.avatarUrl || sheet.faceImageUrl ? (
-              <img 
-                 src={sheet.faceImageUrl || sheet.avatarUrl} 
-                 alt={sheet.characterName} 
-                 className="w-full h-full object-cover object-center" 
-              />
-            ) : (
-              <User className="w-4 h-4 text-amber-400/80" />
-            )}
-          </div>
-          <div className="flex flex-col whitespace-nowrap">
-            <h2 className="text-xs font-black text-amber-400 font-serif leading-tight">
-              {sheet.characterName || 'Sem Nome'}
-            </h2>
-            <span className="text-[9px] font-semibold text-slate-400 leading-tight">
-              {sheet.race} {sheet.className} (Nív. {sheet.level})
-            </span>
-          </div>
-        </div>
+        {(() => {
+          const heroAvatar = sheet.faceImageUrl || sheet.avatarUrl || (Array.isArray(sheet.images) && sheet.images.length > 0 ? (sheet.images.length > 1 ? sheet.images[1] : sheet.images[0]) : undefined);
+          return (
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="relative w-8 h-8 rounded-lg bg-[#0a0e17] border border-amber-500/40 overflow-hidden flex items-center justify-center shrink-0 shadow-sm">
+                {heroAvatar ? (
+                  <img 
+                     key={heroAvatar}
+                     src={heroAvatar} 
+                     alt={sheet.characterName || 'Avatar'} 
+                     className="w-full h-full object-cover object-center" 
+                  />
+                ) : (
+                  <User className="w-4 h-4 text-amber-400/80" />
+                )}
+              </div>
+              <div className="flex flex-col whitespace-nowrap">
+                <h2 className="text-xs font-black text-amber-400 font-serif leading-tight">
+                  {sheet.characterName || 'Sem Nome'}
+                </h2>
+                <span className="text-[9px] font-semibold text-slate-400 leading-tight">
+                  {sheet.race} {sheet.className} (Nív. {sheet.level})
+                </span>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* NAVEGAÇÃO DE ABAS SUPERIORES - DESKTOP / TABLET */}
         <nav className="hidden lg:flex items-center gap-1 bg-[#12100e] border border-amber-500/25 px-1.5 py-0.5 rounded-xl shadow-inner mx-1">

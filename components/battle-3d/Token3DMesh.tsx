@@ -187,8 +187,18 @@ export function createTokenMesh(
   group.add(flameMesh);
 
   // 3. Determine Token Mode & URLs
-  const tokenType = options.combatant.tokenType || (options.combatant.tokenImageUrl ? 'billboard' : '3d');
-  const imageUrl = options.combatant.tokenImageUrl || options.combatant.avatarUrl;
+  const is2DModel = options.combatant.modelUrl && !options.combatant.modelUrl.endsWith('.glb');
+  const tokenType = options.combatant.tokenType || ((options.combatant.tokenImageUrl || options.combatant.combatImageUrl || is2DModel) ? 'billboard' : '3d');
+  
+  // Prioridade rigorosa para o PINO DE COMBATE (corpo inteiro):
+  // 1. combatImageUrl (definido pelo usuário na galeria)
+  // 2. tokenImageUrl (imagem de token da criatura/monstro/ficha)
+  // 3. modelUrl (caso seja uma imagem 2D em vez de arquivo .glb)
+  // 4. avatarUrl (último recurso se nenhuma outra imagem existir)
+  const imageUrl = options.combatant.combatImageUrl ||
+    options.combatant.tokenImageUrl ||
+    (is2DModel ? options.combatant.modelUrl : undefined) ||
+    options.combatant.avatarUrl;
 
   let modelUrl = options.combatant.modelUrl;
   if (!modelUrl && tokenType === '3d') {

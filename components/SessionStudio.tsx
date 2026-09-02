@@ -65,6 +65,8 @@ interface CharacterSheetMinimal {
   characterName?: string;
   className?: string;
   modelUrl?: string;
+  combatImageUrl?: string;
+  faceImageUrl?: string;
   tokenType?: 'billboard' | '3d';
   avatarUrl?: string;
   maxHp?: number;
@@ -738,6 +740,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
     let resolvedAc = 10;
     let resolvedTokenType: 'billboard' | '3d' = mem.tokenType || '3d';
     let resolvedAvatarUrl: string | undefined = mem.avatarUrl;
+    let resolvedCombatImageUrl: string | undefined = (mem as any).combatImageUrl || (mem.modelUrl && !mem.modelUrl.endsWith('.glb') ? mem.modelUrl : undefined);
 
     try {
       const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
@@ -756,13 +759,16 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
             if (found.modelUrl) resolvedModelUrl = found.modelUrl;
             else if (found.className) resolvedModelUrl = getModelUrlByNameOrPath(found.className);
           }
+          if (found.combatImageUrl) resolvedCombatImageUrl = found.combatImageUrl;
+          else if (found.modelUrl && !found.modelUrl.endsWith('.glb')) resolvedCombatImageUrl = found.modelUrl;
+          
           // HP e AC reais da ficha
           if (found.maxHp) resolvedMaxHp = found.maxHp;
           resolvedHp = (found.currentHp != null) ? found.currentHp : resolvedMaxHp;
           if (found.armorClass) resolvedAc = found.armorClass;
           // Token type preference (3D vs 2D billboard)
           if (found.tokenType) resolvedTokenType = found.tokenType;
-          if (found.avatarUrl) resolvedAvatarUrl = found.avatarUrl;
+          if (found.avatarUrl) resolvedAvatarUrl = (found as any).faceImageUrl || found.avatarUrl;
         }
       }
     } catch (e) {}
@@ -771,6 +777,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
     if (!resolvedModelUrl) {
       resolvedModelUrl = getModelUrlByNameOrPath(pName);
     }
+
+    const finalCombatImg = resolvedCombatImageUrl || (resolvedTokenType === 'billboard' ? resolvedModelUrl : undefined);
 
     const newP: Combatant = {
       id: `c-pl-${Date.now()}-${Math.random()}`,
@@ -783,7 +791,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       conditions: [],
       modelUrl: resolvedModelUrl,
       tokenType: resolvedTokenType,
-      tokenImageUrl: resolvedTokenType === 'billboard' ? resolvedAvatarUrl : undefined,
+      tokenImageUrl: resolvedTokenType === 'billboard' ? (finalCombatImg || resolvedAvatarUrl) : undefined,
+      combatImageUrl: finalCombatImg,
       avatarUrl: resolvedAvatarUrl,
     };
     setSceneCombatants((prev) => [...prev, newP]);
@@ -807,6 +816,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
         let resolvedAc = 10;
         let resolvedTokenType: 'billboard' | '3d' = mem.tokenType || '3d';
         let resolvedAvatarUrl: string | undefined = mem.avatarUrl;
+        let resolvedCombatImageUrl: string | undefined = (mem as any).combatImageUrl || (mem.modelUrl && !mem.modelUrl.endsWith('.glb') ? mem.modelUrl : undefined);
 
         try {
           const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
@@ -824,11 +834,14 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                 if (found.modelUrl) resolvedModelUrl = found.modelUrl;
                 else if (found.className) resolvedModelUrl = getModelUrlByNameOrPath(found.className);
               }
+              if (found.combatImageUrl) resolvedCombatImageUrl = found.combatImageUrl;
+              else if (found.modelUrl && !found.modelUrl.endsWith('.glb')) resolvedCombatImageUrl = found.modelUrl;
+
               if (found.maxHp) resolvedMaxHp = found.maxHp;
               resolvedHp = (found.currentHp != null) ? found.currentHp : resolvedMaxHp;
               if (found.armorClass) resolvedAc = found.armorClass;
               if (found.tokenType) resolvedTokenType = found.tokenType;
-              if (found.avatarUrl) resolvedAvatarUrl = found.avatarUrl;
+              if (found.avatarUrl) resolvedAvatarUrl = (found as any).faceImageUrl || found.avatarUrl;
             }
           }
         } catch (e) {}
@@ -836,6 +849,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
         if (!resolvedModelUrl) {
           resolvedModelUrl = getModelUrlByNameOrPath(pName);
         }
+
+        const finalCombatImg = resolvedCombatImageUrl || (resolvedTokenType === 'billboard' ? resolvedModelUrl : undefined);
 
         newCombatants.push({
           id: `c-pl-${Date.now()}-${Math.random()}`,
@@ -848,7 +863,8 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
           conditions: [],
           modelUrl: resolvedModelUrl,
           tokenType: resolvedTokenType,
-          tokenImageUrl: resolvedTokenType === 'billboard' ? resolvedAvatarUrl : undefined,
+          tokenImageUrl: resolvedTokenType === 'billboard' ? (finalCombatImg || resolvedAvatarUrl) : undefined,
+          combatImageUrl: finalCombatImg,
           avatarUrl: resolvedAvatarUrl,
         });
       }

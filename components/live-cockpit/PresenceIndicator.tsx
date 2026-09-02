@@ -44,19 +44,7 @@ const PresenceAvatar: React.FC<{ user: PresenceUser }> = ({ user }) => {
       <img
         src={user.avatarUrl}
         alt={user.displayName}
-        onLoad={(e) => setAspect(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)}
-        className="absolute max-w-none transition-all duration-300"
-        style={{
-          width: aspect >= 1 ? 'auto' : '100%',
-          height: aspect >= 1 ? '100%' : 'auto',
-          minWidth: aspect >= 1 ? '100%' : 'auto',
-          minHeight: aspect >= 1 ? 'auto' : '100%',
-          top: '50%',
-          left: '50%',
-          transform: user.avatarSettings
-            ? `translate(calc(-50% + ${user.avatarSettings.offsetX * (24 / 256)}px), calc(-50% + ${user.avatarSettings.offsetY * (24 / 256)}px)) scale(${user.avatarSettings.zoom})`
-            : `translate(-50%, calc(-50% - 15%)) scale(1.7)`,
-        }}
+        className="w-full h-full object-cover object-center"
       />
     </div>
   );

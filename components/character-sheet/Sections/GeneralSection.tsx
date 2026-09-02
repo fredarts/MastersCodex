@@ -370,7 +370,12 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ sheet, onChange 
             ) : (
               <div className="flex-1 min-h-[320px] sm:min-h-[380px] w-full flex flex-col items-center justify-end mt-1.5 bg-[#070a10]/70 border border-slate-800/80 rounded-xl p-3 relative overflow-hidden shadow-inner">
                 <ChromaKeyStandee 
-                  imageUrl={sheet.avatarUrl} 
+                  imageUrl={
+                    sheet.combatImageUrl ||
+                    (sheet.modelUrl && !sheet.modelUrl.endsWith('.glb') ? sheet.modelUrl : undefined) ||
+                    (Array.isArray(sheet.images) && sheet.images.length > 1 ? sheet.images[0] : sheet.images?.[0]) ||
+                    sheet.avatarUrl
+                  } 
                   characterName={sheet.characterName} 
                   isActive={true}
                 />

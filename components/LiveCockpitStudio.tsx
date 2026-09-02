@@ -19,6 +19,7 @@ import { LiveVisualMirror } from '@/components/live-cockpit/LiveVisualMirror';
 import { CombatInitiativePanel } from '@/components/live-cockpit/CombatInitiativePanel';
 import { FloatingDiceRollerHUD } from '@/components/live-cockpit/FloatingDiceRollerHUD';
 import { LiveCockpitModalManager } from '@/components/live-cockpit/LiveCockpitModalManager';
+import { MasterRollAlertModal } from '@/components/live-cockpit/MasterRollAlertModal';
 import { DMNotebookDrawer } from '@/components/live-cockpit/DMNotebookDrawer';
 import { AudioMaestro } from '@/components/AudioMaestro';
 import { XCardAlertBanner } from '@/components/safety/XCardAlertBanner';
@@ -81,6 +82,8 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     broadcastCombatUpdate,
     activeXCardAlert,
     setActiveXCardAlert,
+    rollAlertQueue,
+    dismissRollAlert,
   } = useLiveCockpit();
 
   const { user } = useAuth();
@@ -325,10 +328,12 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     const handleModelUpdate = (sheet: any) => {
       if (!sheet || !sheet.characterName) return;
 
+      const combatPinUrl = sheet.combatImageUrl || (sheet.modelUrl && !sheet.modelUrl.endsWith('.glb') ? sheet.modelUrl : undefined);
       const updatedModelUrl =
         sheet.modelUrl || getModelUrlByNameOrPath(sheet.className || sheet.characterName);
-      const updatedTokenType: 'billboard' | '3d' = sheet.tokenType || '3d';
-      const updatedAvatarUrl: string | undefined = sheet.avatarUrl;
+      const updatedTokenType: 'billboard' | '3d' = sheet.tokenType || (combatPinUrl ? 'billboard' : '3d');
+      const updatedAvatarUrl: string | undefined = sheet.faceImageUrl || sheet.avatarUrl;
+      const updatedCombatImg: string | undefined = combatPinUrl || (updatedTokenType === 'billboard' ? updatedModelUrl : undefined);
 
       setCombatants((prev) => {
         let hasChanges = false;
@@ -342,13 +347,20 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
             (sheet.id && c.id.includes(sheet.id));
 
           if (isMatch) {
-            if (c.modelUrl !== updatedModelUrl || c.tokenType !== updatedTokenType || c.avatarUrl !== updatedAvatarUrl) {
+            if (
+              c.modelUrl !== updatedModelUrl ||
+              c.tokenType !== updatedTokenType ||
+              c.tokenImageUrl !== updatedCombatImg ||
+              c.combatImageUrl !== combatPinUrl ||
+              c.avatarUrl !== updatedAvatarUrl
+            ) {
               hasChanges = true;
               return {
                 ...c,
                 modelUrl: updatedModelUrl,
                 tokenType: updatedTokenType,
-                tokenImageUrl: updatedTokenType === 'billboard' ? updatedAvatarUrl : undefined,
+                tokenImageUrl: updatedTokenType === 'billboard' ? updatedCombatImg : undefined,
+                combatImageUrl: combatPinUrl || updatedCombatImg,
                 avatarUrl: updatedAvatarUrl,
               };
             }
@@ -363,6 +375,9 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
               currentTurnIndex,
               roundCount,
             });
+          }
+          if (initializeFromCombatants) {
+            initializeFromCombatants(next);
           }
           if (activeScene && updateScene) {
             updateScene({
@@ -1361,6 +1376,13 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         isOpen={showStreamerOverlayModal}
         onClose={() => setShowStreamerOverlayModal(false)}
         campaignId={activeCampaign?.id || ''}
+      />
+
+      {/* Master Roll Alert Modal (Queue-based alert for DM) */}
+      <MasterRollAlertModal
+        isOpen={rollAlertQueue.length > 0}
+        alerts={rollAlertQueue}
+        onDismiss={dismissRollAlert}
       />
 
       {/* 5. Modals Controller */}

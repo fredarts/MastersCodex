@@ -72,6 +72,9 @@ interface LiveCockpitContextType {
   setCombatLogs: React.Dispatch<React.SetStateAction<CombatLogEntry[]>>;
   broadcastCombatLogEntry: (entry: CombatLogEntry) => void;
   broadcastPlayerRoll: (roll: PlayerRollEvent) => void;
+  rollAlertQueue: PlayerRollEvent[];
+  dismissRollAlert: () => void;
+  triggerRollAlert: (roll: PlayerRollEvent) => void;
   chatMessages: ChatMessage[];
   broadcastChatMessage: (message: ChatMessage) => void;
   onlineUsers: { userId: string; displayName: string; avatarUrl?: string; status: string; timestamp?: number }[];
@@ -128,6 +131,15 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<{ userId: string; displayName: string; avatarUrl?: string; status: string; timestamp?: number }[]>([]);
+  const [rollAlertQueue, setRollAlertQueue] = useState<PlayerRollEvent[]>([]);
+
+  const dismissRollAlert = useCallback(() => {
+    setRollAlertQueue((prev) => prev.slice(1));
+  }, []);
+
+  const triggerRollAlert = useCallback((roll: PlayerRollEvent) => {
+    setRollAlertQueue((prev) => [...prev, roll]);
+  }, []);
   const [dmCursor, setDmCursor] = useState<DmCursorPayload | null>(null);
   const [pings, setPings] = useState<PingLocationPayload[]>([]);
   const [voiceSignal, setVoiceSignal] = useState<VoiceSignalPayload | null>(null);
@@ -375,10 +387,12 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (payload.type === 'CHARACTER_MODEL_UPDATED' && payload.characterModelUpdated !== undefined) {
       const sheet = payload.characterModelUpdated;
       if (sheet && sheet.characterName) {
+        const combatPinUrl = sheet.combatImageUrl || (sheet.modelUrl && !sheet.modelUrl.endsWith('.glb') ? sheet.modelUrl : undefined);
         const updatedModelUrl =
           sheet.modelUrl || getModelUrlByNameOrPath(sheet.className || sheet.characterName);
-        const updatedTokenType: 'billboard' | '3d' = sheet.tokenType || '3d';
-        const updatedAvatarUrl: string | undefined = sheet.avatarUrl;
+        const updatedTokenType: 'billboard' | '3d' = sheet.tokenType || (combatPinUrl ? 'billboard' : '3d');
+        const updatedAvatarUrl: string | undefined = sheet.faceImageUrl || sheet.avatarUrl;
+        const updatedCombatImg: string | undefined = combatPinUrl || (updatedTokenType === 'billboard' ? updatedModelUrl : undefined);
 
         setCombatants((prev) => {
           let hasChanges = false;
@@ -392,13 +406,20 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
               (sheet.id && c.id.includes(sheet.id));
 
             if (isMatch) {
-              if (c.modelUrl !== updatedModelUrl || c.tokenType !== updatedTokenType || c.avatarUrl !== updatedAvatarUrl) {
+              if (
+                c.modelUrl !== updatedModelUrl ||
+                c.tokenType !== updatedTokenType ||
+                c.tokenImageUrl !== updatedCombatImg ||
+                c.combatImageUrl !== combatPinUrl ||
+                c.avatarUrl !== updatedAvatarUrl
+              ) {
                 hasChanges = true;
                 return {
                   ...c,
                   modelUrl: updatedModelUrl,
                   tokenType: updatedTokenType,
-                  tokenImageUrl: updatedTokenType === 'billboard' ? updatedAvatarUrl : undefined,
+                  tokenImageUrl: updatedTokenType === 'billboard' ? updatedCombatImg : undefined,
+                  combatImageUrl: combatPinUrl || updatedCombatImg,
                   avatarUrl: updatedAvatarUrl,
                 };
               }
@@ -413,17 +434,17 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 ...activeScene,
                 combatants: next,
               });
-              if (broadcastCombatUpdateRef.current) {
-                broadcastCombatUpdateRef.current({
-                  combatants: next,
-                  currentTurnIndex,
-                  roundCount,
-                });
-              }
             }
-            return next;
+            if (broadcastCombatUpdateRef.current) {
+              broadcastCombatUpdateRef.current({
+                combatants: next,
+                currentTurnIndex,
+                roundCount,
+              });
+            }
+            storeInitializeFromCombatants(next);
           }
-          return prev;
+          return hasChanges ? next : prev;
         });
       }
     }
@@ -519,6 +540,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       if (payload.roll) {
         const r = payload.roll as any;
         const d20Val = r.d20Roll1 ?? r.d20Roll ?? r.roll;
+        const playerPrefix = r.playerName ? `[${r.playerName}] ` : '';
         const entry: CombatLogEntry = {
           id: r.id || `roll-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
           timestamp: r.timestamp || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
@@ -530,12 +552,13 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
           totalRoll: r.total,
           isCrit: r.isCrit,
           isFail: r.isFail,
-          description: `[JOGADOR] ${r.characterName} rolou ${r.label}${d20Val !== undefined ? `: d20(${d20Val}) ${r.modifier >= 0 ? '+' : ''}${r.modifier} = Total ${r.total}` : ''}${r.damageDice ? ` [Dano: ${r.damageDice}]` : ''}`,
+          description: `${playerPrefix}${r.characterName} rolou ${r.label}${d20Val !== undefined ? `: d20(${d20Val}) ${r.modifier >= 0 ? '+' : ''}${r.modifier} = Total ${r.total}` : ''}${r.dc !== undefined ? ` (CD ${r.dc}: ${r.total >= r.dc ? 'Passou' : 'Falhou'})` : ''}${r.damageDice ? ` [Dano: ${r.damageDice}]` : ''}`,
         };
         setCombatLogs((prev) => {
           if (prev.some((l) => l.id === entry.id)) return prev;
           return [...prev, entry];
         });
+        setRollAlertQueue((prev) => [...prev, payload.roll]);
       }
     },
     onChatMessage: (payload) => {
@@ -1274,6 +1297,7 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const broadcastPlayerRoll = useCallback((roll: PlayerRollEvent) => {
     const r = roll as any;
     const d20Val = r.d20Roll1 ?? r.d20Roll ?? r.roll;
+    const playerPrefix = r.playerName ? `[${r.playerName}] ` : '';
     const entry: CombatLogEntry = {
       id: r.id || `roll-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       timestamp: r.timestamp || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
@@ -1285,12 +1309,13 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       totalRoll: r.total,
       isCrit: r.isCrit,
       isFail: r.isFail,
-      description: `[JOGADOR] ${r.characterName} rolou ${r.label}${d20Val !== undefined ? `: d20(${d20Val}) ${r.modifier >= 0 ? '+' : ''}${r.modifier} = Total ${r.total}` : ''}${r.damageDice ? ` [Dano: ${r.damageDice}]` : ''}`,
+      description: `${playerPrefix}${r.characterName} rolou ${r.label}${d20Val !== undefined ? `: d20(${d20Val}) ${r.modifier >= 0 ? '+' : ''}${r.modifier} = Total ${r.total}` : ''}${r.dc !== undefined ? ` (CD ${r.dc}: ${r.total >= r.dc ? 'Passou' : 'Falhou'})` : ''}${r.damageDice ? ` [Dano: ${r.damageDice}]` : ''}`,
     };
     setCombatLogs((prev) => {
       if (prev.some((l) => l.id === entry.id)) return prev;
       return [...prev, entry];
     });
+    setRollAlertQueue((prev) => [...prev, roll]);
     syncBroadcastPlayerRoll({ roll });
   }, [roundCount, syncBroadcastPlayerRoll]);
 
@@ -1394,6 +1419,9 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setCombatLogs,
         broadcastCombatLogEntry,
         broadcastPlayerRoll,
+        rollAlertQueue,
+        dismissRollAlert,
+        triggerRollAlert,
         chatMessages,
         broadcastChatMessage,
         onlineUsers,

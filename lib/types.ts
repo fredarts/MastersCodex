@@ -466,6 +466,8 @@ export interface Combatant {
   speed?: string;
   size?: string;
   avatarUrl?: string;
+  faceImageUrl?: string;
+  combatImageUrl?: string;
   modelUrl?: string;
   tokenImageUrl?: string;
   tokenType?: 'billboard' | '3d';
@@ -572,6 +574,8 @@ export interface CombatLogEntry {
   isHit?: boolean;
   isCrit?: boolean;
   isFail?: boolean;
+  isSuccess?: boolean;
+  dc?: number;
   amount?: number;
   damageType?: string;
   description: string;
@@ -580,14 +584,21 @@ export interface CombatLogEntry {
 export interface PlayerRollEvent {
   id: string;
   characterName: string;
-  rollType: 'skill' | 'save' | 'attack' | 'spell' | 'custom';
+  playerName?: string;
+  avatarUrl?: string;
+  rollType: 'skill' | 'save' | 'attack' | 'spell' | 'attribute' | 'custom';
   label: string;
   d20Roll: number;
+  d20Roll1?: number;
+  d20Roll2?: number;
   modifier: number;
   total: number;
+  dc?: number;
+  isSuccess?: boolean;
   isCrit?: boolean;
   isFail?: boolean;
   advantageMode?: AdvantageMode;
+  diceFormula?: string;
   timestamp: string;
 }
 
@@ -880,6 +891,8 @@ export interface DiceRollEvent {
   isSecret?: boolean;
   damageDice?: string;
   damageType?: string;
+  dc?: number;
+  isSuccess?: boolean;
   diceBreakdown?: {
     numDice: number;
     faces: number;

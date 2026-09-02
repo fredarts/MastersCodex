@@ -1189,8 +1189,9 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
         if (existingGroup) {
           const ud = existingGroup.userData || {};
-          const currentType = c.tokenType || (c.tokenImageUrl ? 'billboard' : '3d');
-          const currentImg = c.tokenImageUrl || c.avatarUrl;
+          const is2D = c.modelUrl && !c.modelUrl.endsWith('.glb');
+          const currentType = c.tokenType || ((c.tokenImageUrl || c.combatImageUrl || is2D) ? 'billboard' : '3d');
+          const currentImg = c.combatImageUrl || c.tokenImageUrl || (is2D ? c.modelUrl : undefined) || c.avatarUrl;
           let currentModel = c.modelUrl;
           if (!currentModel && currentType === '3d') {
             currentModel = c.type === 'player'

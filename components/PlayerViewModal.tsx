@@ -157,6 +157,26 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
         }
         localStorage.setItem('masters_codex_character_sheets_v1', JSON.stringify(parsed));
       } catch (err) {}
+
+      try {
+        const bc = new BroadcastChannel('masters_codex_sync');
+        bc.postMessage({
+          type: 'CHARACTER_MODEL_UPDATED',
+          sheet: updatedSheet,
+        });
+        bc.close();
+      } catch (e) {}
+
+      window.dispatchEvent(
+        new CustomEvent('masters_codex_character_model_updated', {
+          detail: updatedSheet,
+        })
+      );
+      window.dispatchEvent(
+        new CustomEvent('character_sheet_updated', {
+          detail: updatedSheet,
+        })
+      );
     }
   };
 
@@ -1020,6 +1040,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
         onClose={() => setIsSheetModalOpen(false)}
         onSave={handleSaveSheet}
         broadcastRoll={broadcastPlayerRoll}
+        playerName={user?.user_metadata?.display_name || user?.email || activeSheet.characterName}
         lockBaseAttributes={isCombatMode}
       />
     </div>
