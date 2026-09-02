@@ -227,23 +227,46 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
   const maxHpVal = playerCombatant ? playerCombatant.maxHp : activeSheet.maxHp;
   const hpPercent = Math.max(0, Math.min(100, Math.round((currentHpVal / (maxHpVal || 1)) * 100)));
 
+  const heroAvatar = activeSheet.avatarUrl || activeSheet.faceImageUrl || activeSheet.modelUrl;
+
   return (
     <div className={`w-full bg-[#0c1017] text-slate-100 flex flex-col transition-all duration-200 ${
       layout === 'sidebar' 
-        ? 'border-t border-[#2a3449]' 
+        ? 'border-b border-[#2a3449]' 
         : 'max-w-4xl mx-auto backdrop-blur-xl border border-amber-500/30 rounded-2xl shadow-2xl overflow-hidden'
     }`}>
       {/* Top Header */}
       <div className="bg-gradient-to-r from-[#111722] via-[#161f2e] to-[#101520] p-2.5 flex flex-col gap-2 border-b border-[#232d40]">
         <div className="flex items-center justify-between gap-2">
-          {/* Character Identity */}
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold shrink-0">
-              <Swords className="w-3.5 h-3.5" />
+          {/* Character Identity with Avatar */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div 
+              onClick={onOpenFullSheet}
+              className="w-9 h-9 rounded-xl overflow-hidden border-2 border-amber-500/60 bg-[#06080e] flex items-center justify-center text-amber-400 font-bold shrink-0 relative cursor-pointer hover:border-amber-400 transition-all shadow-md group"
+              title="Clique para abrir a ficha completa do personagem"
+            >
+              {heroAvatar ? (
+                <img 
+                  src={heroAvatar} 
+                  alt={activeSheet.characterName} 
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform" 
+                />
+              ) : (
+                <Swords className="w-4 h-4 text-amber-400" />
+              )}
+              {activeSheet.level && (
+                <span className="absolute -bottom-0.5 -right-0.5 bg-amber-500 text-slate-950 text-[7.5px] font-black px-1 rounded-sm font-mono leading-tight shadow">
+                  {activeSheet.level}
+                </span>
+              )}
             </div>
+
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <h4 className="text-xs font-bold text-slate-100 truncate font-mono">
+                <h4 
+                  onClick={onOpenFullSheet}
+                  className="text-xs font-bold text-slate-100 truncate font-mono cursor-pointer hover:text-amber-300 transition-colors"
+                >
                   {activeSheet.characterName || 'Personagem'}
                 </h4>
                 {isCombatActive && (
@@ -256,10 +279,16 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                <span className="text-amber-400 font-semibold">CA {activeSheet.armorClass || 10}</span>
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono truncate">
+                <span className="text-amber-400 font-semibold shrink-0">CA {activeSheet.armorClass || 10}</span>
                 <span>•</span>
-                <span className="text-emerald-400 font-semibold">PV {currentHpVal}/{maxHpVal}</span>
+                <span className="text-emerald-400 font-semibold shrink-0">PV {currentHpVal}/{maxHpVal}</span>
+                {activeSheet.className && (
+                  <>
+                    <span>•</span>
+                    <span className="text-slate-400 truncate text-[9px] font-serif">{activeSheet.className}</span>
+                  </>
+                )}
               </div>
             </div>
           </div>

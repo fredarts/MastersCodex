@@ -1862,7 +1862,64 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             {/* RIGHT SIDEBAR INTEGRADA (INICIATIVA / LOG / CHAT + DOCK DE AÇÕES) */}
             {!isSidebarCollapsed && (
               <div className="w-80 lg:w-96 bg-[#141a26] border border-[#2a3449] rounded-xl sm:rounded-2xl flex flex-col justify-between overflow-hidden shadow-2xl shrink-0 transition-all duration-300 animate-fade-in">
-                {/* Tab Navigation + Collapse Toggle */}
+                {/* 1. TOP PRIORITY: PLAYER TOKEN ACTION DOCK (Hero Controls & Actions) */}
+                {(() => {
+                  const charName = resolveCharName(currentCampaign);
+                  const meCombatant = combatants.find(
+                    (c) => c.name.toLowerCase().includes(charName.toLowerCase()) || charName.toLowerCase().includes(c.name.toLowerCase())
+                  );
+                  const currentScene = projectedScene || activeScene;
+                  const activeView = playerCanvasView === 'auto' ? (liveDisplayMode === 'artwork' ? 'art' : liveDisplayMode) : playerCanvasView;
+                  const isCombat = Boolean(currentScene?.isBattleStarted) && (activeView === 'grid' || activeView === 'combat');
+                  const isMyTurn = isCombat && combatants[currentTurnIndex]?.name.toLowerCase().includes(charName.toLowerCase());
+
+                  return (
+                    <div className="shrink-0">
+                      <PlayerTokenActionDock
+                        activeSheet={activeSheet}
+                        playerCombatant={meCombatant}
+                        isMyTurn={isMyTurn}
+                        isCombatActive={isCombat}
+                        layout="sidebar"
+                        onStartAttackTargeting={(attack) => {
+                          const cleanBonus = parseInt(attack.atkBonus.replace(/[^0-9-]/g, '')) || 0;
+                          const rangeText = attack.rangeText || attack.range || attack.name;
+                          const rangeInfo = parseRangeString(rangeText, attack.name);
+                          setPendingAttack({
+                            title: `Ataque: ${attack.name}`,
+                            mod: cleanBonus,
+                            actorCombatant: meCombatant,
+                            actionDesc: attack.damage,
+                            rangeText,
+                            rangeInfo,
+                          });
+                          setPendingAttackPayload(attack);
+                          toast.info(`Mirando Ataque: ${attack.name}. Clique na criatura alvo no Grid 3D!`);
+                        }}
+                        onExecuteRoll={(rollEvent) => {
+                          const fullRoll = {
+                            id: `roll-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                            characterId: activeSheet.id,
+                            characterName: activeSheet.characterName || charName,
+                            avatarUrl: activeSheet.avatarUrl,
+                            timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                            ...rollEvent
+                          };
+                          broadcastPlayerRoll(fullRoll as any);
+                        }}
+                        onUpdateCombatantActionState={(update) => {
+                          if (meCombatant && updateCombatantState) {
+                            updateCombatantState(meCombatant.id, update);
+                          }
+                        }}
+                        onOpenFullSheet={() => handleOpenSheetForCampaign(currentCampaign || undefined)}
+                        onEndTurn={handlePlayerNextTurn}
+                      />
+                    </div>
+                  );
+                })()}
+
+                {/* 2. MIDDLE HEADER: TABS NAVIGATION (Membros, Log, Chat) & Collapse Button */}
                 <div className="flex items-center justify-between border-b border-[#2a3449] bg-[#0c1018] p-1.5 gap-1 shrink-0">
                   <div className="flex items-center gap-1 flex-1">
                     <button
@@ -1910,7 +1967,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                   </button>
                 </div>
 
-                {/* TAB CONTENT (Scrollable Upper Section) */}
+                {/* 3. SCROLLABLE LOWER SECTION: TAB CONTENT (Party Members / Combat Logs / Live Chat) */}
                 <div className="flex-1 overflow-y-auto">
                   {sidebarTab === 'init' ? (
                     <div className="p-3 space-y-4">
@@ -1982,63 +2039,6 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                     />
                   )}
                 </div>
-
-                {/* FIXED BOTTOM: PLAYER TOKEN ACTION DOCK */}
-                {(() => {
-                  const charName = resolveCharName(currentCampaign);
-                  const meCombatant = combatants.find(
-                    (c) => c.name.toLowerCase().includes(charName.toLowerCase()) || charName.toLowerCase().includes(c.name.toLowerCase())
-                  );
-                  const currentScene = projectedScene || activeScene;
-                  const activeView = playerCanvasView === 'auto' ? (liveDisplayMode === 'artwork' ? 'art' : liveDisplayMode) : playerCanvasView;
-                  const isCombat = Boolean(currentScene?.isBattleStarted) && (activeView === 'grid' || activeView === 'combat');
-                  const isMyTurn = isCombat && combatants[currentTurnIndex]?.name.toLowerCase().includes(charName.toLowerCase());
-
-                  return (
-                    <div className="shrink-0">
-                      <PlayerTokenActionDock
-                        activeSheet={activeSheet}
-                        playerCombatant={meCombatant}
-                        isMyTurn={isMyTurn}
-                        isCombatActive={isCombat}
-                        layout="sidebar"
-                        onStartAttackTargeting={(attack) => {
-                          const cleanBonus = parseInt(attack.atkBonus.replace(/[^0-9-]/g, '')) || 0;
-                          const rangeText = attack.rangeText || attack.range || attack.name;
-                          const rangeInfo = parseRangeString(rangeText, attack.name);
-                          setPendingAttack({
-                            title: `Ataque: ${attack.name}`,
-                            mod: cleanBonus,
-                            actorCombatant: meCombatant,
-                            actionDesc: attack.damage,
-                            rangeText,
-                            rangeInfo,
-                          });
-                          setPendingAttackPayload(attack);
-                          toast.info(`Mirando Ataque: ${attack.name}. Clique na criatura alvo no Grid 3D!`);
-                        }}
-                        onExecuteRoll={(rollEvent) => {
-                          const fullRoll = {
-                            id: `roll-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                            characterId: activeSheet.id,
-                            characterName: activeSheet.characterName || charName,
-                            avatarUrl: activeSheet.avatarUrl,
-                            timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-                            ...rollEvent
-                          };
-                          broadcastPlayerRoll(fullRoll as any);
-                        }}
-                        onUpdateCombatantActionState={(update) => {
-                          if (meCombatant && updateCombatantState) {
-                            updateCombatantState(meCombatant.id, update);
-                          }
-                        }}
-                        onOpenFullSheet={() => handleOpenSheetForCampaign(currentCampaign || undefined)}
-                        onEndTurn={handlePlayerNextTurn}
-                      />
-                    </div>
-                  );
-                })()}
               </div>
             )}
           </div>

@@ -319,24 +319,12 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
 
         {/* DETALHES RÁPIDOS DO PERSONAGEM */}
         <div className="flex items-center gap-2 shrink-0">
-          <div className="relative w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 overflow-hidden flex items-center justify-center shrink-0">
-            {sheet.avatarUrl ? (
+          <div className="relative w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/40 overflow-hidden flex items-center justify-center shrink-0 shadow-sm">
+            {sheet.avatarUrl || sheet.faceImageUrl ? (
               <img 
-                 src={sheet.avatarUrl} 
+                 src={sheet.faceImageUrl || sheet.avatarUrl} 
                  alt={sheet.characterName} 
-                 onLoad={(e) => setHeaderAvatarAspect(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)}
-                 className="absolute max-w-none transition-all duration-300" 
-                 style={{
-                   width: headerAvatarAspect >= 1 ? 'auto' : '100%',
-                   height: headerAvatarAspect >= 1 ? '100%' : 'auto',
-                   minWidth: headerAvatarAspect >= 1 ? '100%' : 'auto',
-                   minHeight: headerAvatarAspect >= 1 ? 'auto' : '100%',
-                   top: '50%',
-                   left: '50%',
-                   transform: sheet.avatarSettings 
-                     ? `translate(calc(-50% + ${sheet.avatarSettings.offsetX * (32/256)}px), calc(-50% + ${sheet.avatarSettings.offsetY * (32/256)}px)) scale(${sheet.avatarSettings.zoom})`
-                     : `translate(-50%, calc(-50% - 15%)) scale(1.7)`,
-                 }}
+                 className="w-full h-full object-cover object-center" 
               />
             ) : (
               <User className="w-4 h-4 text-amber-400/80" />

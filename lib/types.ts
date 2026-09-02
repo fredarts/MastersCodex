@@ -1077,6 +1077,9 @@ export interface CharacterSheet {
   avatarUrl?: string;
   avatarSettings?: { zoom: number; offsetX: number; offsetY: number };
   modelUrl?: string;
+  combatImageUrl?: string;
+  faceImageUrl?: string;
+  images?: string[];
   tokenType?: 'billboard' | '3d';
 
   // Atributos & Inspiração

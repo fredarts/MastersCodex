@@ -26,26 +26,15 @@ interface CharacterManagerModalProps {
 }
 
 const CharacterCardAvatar = ({ sheet }: { sheet: CharacterSheet }) => {
-  const [aspect, setAspect] = React.useState(1);
+  const avatarSrc = sheet.faceImageUrl || sheet.avatarUrl;
+
   return (
-    <div className="relative w-14 h-14 rounded-2xl bg-[#0b0f19] border border-amber-500/30 overflow-hidden flex items-center justify-center shrink-0 shadow-inner">
-      {sheet.avatarUrl ? (
+    <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border-2 border-amber-500/30 overflow-hidden flex items-center justify-center shrink-0 shadow-inner group-hover:border-amber-400 transition-colors">
+      {avatarSrc ? (
         <img 
-          src={sheet.avatarUrl} 
+          src={avatarSrc} 
           alt={sheet.characterName} 
-          onLoad={(e) => setAspect(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight)}
-          className="absolute max-w-none transition-all duration-300" 
-          style={{
-            width: aspect >= 1 ? 'auto' : '100%',
-            height: aspect >= 1 ? '100%' : 'auto',
-            minWidth: aspect >= 1 ? '100%' : 'auto',
-            minHeight: aspect >= 1 ? 'auto' : '100%',
-            top: '50%',
-            left: '50%',
-            transform: sheet.avatarSettings 
-              ? `translate(calc(-50% + ${sheet.avatarSettings.offsetX * (56/256)}px), calc(-50% + ${sheet.avatarSettings.offsetY * (56/256)}px)) scale(${sheet.avatarSettings.zoom})`
-              : `translate(-50%, calc(-50% - 15%)) scale(1.7)`,
-          }}
+          className="w-full h-full object-cover object-center" 
         />
       ) : (
         <User className="w-7 h-7 text-amber-400/60" />
