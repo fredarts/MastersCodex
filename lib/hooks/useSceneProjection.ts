@@ -4,6 +4,8 @@ import { useCallback } from 'react';
 import { useLiveCockpit } from '@/lib/hooks/useLiveCockpit';
 import { GameScene } from '@/lib/types';
 
+import { resolveCurrentSceneImage } from '@/lib/imageUtils';
+
 export function useSceneProjection() {
   const {
     liveDisplayMode,
@@ -27,19 +29,24 @@ export function useSceneProjection() {
   }, [liveDisplayMode, setProjectionMode]);
 
   const projectSceneToPlayerView = useCallback((scene: GameScene) => {
-    const hasMap = Boolean((scene.associatedMapIds && scene.associatedMapIds.length > 0) || scene.associatedMapId);
-    const targetMode: 'artwork' | 'map' | 'combat' = scene.isBattleStarted ? 'combat' : hasMap ? 'map' : 'artwork';
+    const targetMode: 'artwork' | 'map' | 'combat' = scene.isBattleStarted ? 'combat' : (liveDisplayMode || 'artwork');
     setLiveDisplayMode(targetMode);
+
+    const resolved = resolveCurrentSceneImage(scene);
+    const rawImageUrl = resolved?.imageUrl || scene.imageUrl || '';
 
     broadcastToPlayerView({
       type: 'SET_ACTIVE_SCENE',
       mode: targetMode,
       sceneId: scene.id,
       title: scene.title,
-      imageUrl: scene.imageUrl,
+      imageUrl: rawImageUrl,
+      currentImageUrl: rawImageUrl,
       sensoryText: scene.sensoryText,
       sceneImages: scene.sceneImages,
-      activeImageIndex: scene.activeImageIndex,
+      slidePacks: scene.slidePacks || scene.environmentSettings?.slide_packs,
+      activeSlidePackId: scene.activeSlidePackId || scene.environmentSettings?.active_slide_pack_id,
+      activeImageIndex: scene.activeImageIndex ?? 0,
       timeOfDay: scene.timeOfDay,
       timeOfDayHour: scene.timeOfDayHour,
       hasFog: scene.hasFog,
@@ -47,11 +54,16 @@ export function useSceneProjection() {
       floorTextureUrl: scene.floorTextureUrl,
       associatedMapId: scene.associatedMapId,
       associatedMapIds: scene.associatedMapIds,
+      environmentSettings: scene.environmentSettings,
       isBattleStarted: Boolean(scene.isBattleStarted),
       dungeonExplorationStarted: Boolean(scene.isDungeonExplorationStarted),
-      payload: scene,
+      payload: {
+        ...scene,
+        imageUrl: rawImageUrl,
+        currentImageUrl: rawImageUrl,
+      },
     });
-  }, [broadcastToPlayerView, setLiveDisplayMode]);
+  }, [broadcastToPlayerView, setLiveDisplayMode, liveDisplayMode]);
 
   return {
     liveDisplayMode,

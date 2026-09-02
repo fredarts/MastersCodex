@@ -9,6 +9,8 @@ import { useSession } from '@/context/SessionContext';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { setGlobalBroadcaster } from '@/lib/dnd5e-dice';
 import { CRDTSolver } from '@/lib/sync/CRDTSolver';
+import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
+import { resolveCurrentSceneImage } from '@/lib/imageUtils';
 import { toast } from 'sonner';
 
 import { useBattleGridStore } from '@/lib/stores/useBattleGridStore';
@@ -316,25 +318,35 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (
       sceneId !== undefined ||
       sceneData.imageUrl !== undefined ||
+      sceneData.currentImageUrl !== undefined ||
+      payload.currentImageUrl !== undefined ||
+      payload.imageUrl !== undefined ||
       sceneData.title !== undefined ||
       sceneData.timeOfDayHour !== undefined ||
       sceneData.timeOfDay !== undefined ||
       sceneData.hasFog !== undefined ||
       sceneData.hasRain !== undefined ||
       sceneData.floorTextureUrl !== undefined ||
-      sceneData.environmentSettings !== undefined
+      sceneData.environmentSettings !== undefined ||
+      payload.activeImageIndex !== undefined ||
+      sceneData.activeImageIndex !== undefined
     ) {
       setProjectedScene((prev: any) => {
         if (sceneId === null) return null;
-        const base = (prev && prev.id === sceneId) ? prev : {};
+        const base = (prev && (prev.id === sceneId || !sceneId)) ? prev : (prev || {});
+        const resolvedImageUrl = payload.currentImageUrl || sceneData.currentImageUrl || sceneData.imageUrl || payload.imageUrl || base.currentImageUrl || base.imageUrl;
         return {
           ...base,
+          ...sceneData,
           id: sceneId !== undefined ? sceneId : base.id,
           title: sceneData.title !== undefined ? sceneData.title : base.title,
-          imageUrl: sceneData.imageUrl !== undefined ? sceneData.imageUrl : base.imageUrl,
+          imageUrl: resolvedImageUrl,
+          currentImageUrl: resolvedImageUrl,
           sensoryText: sceneData.sensoryText !== undefined ? sceneData.sensoryText : base.sensoryText,
-          sceneImages: sceneData.sceneImages !== undefined ? sceneData.sceneImages : base.sceneImages || [],
-          activeImageIndex: sceneData.activeImageIndex !== undefined ? sceneData.activeImageIndex : base.activeImageIndex ?? 0,
+          sceneImages: sceneData.sceneImages !== undefined ? sceneData.sceneImages : (payload.sceneImages !== undefined ? payload.sceneImages : (base.sceneImages || [])),
+          slidePacks: sceneData.slidePacks !== undefined ? sceneData.slidePacks : (sceneData.environmentSettings?.slide_packs || base.slidePacks),
+          activeSlidePackId: sceneData.activeSlidePackId !== undefined ? sceneData.activeSlidePackId : (sceneData.environmentSettings?.active_slide_pack_id || base.activeSlidePackId),
+          activeImageIndex: payload.activeImageIndex !== undefined ? payload.activeImageIndex : (sceneData.activeImageIndex !== undefined ? sceneData.activeImageIndex : (base.activeImageIndex ?? 0)),
           timeOfDay: sceneData.timeOfDay !== undefined ? sceneData.timeOfDay : base.timeOfDay,
           timeOfDayHour: sceneData.timeOfDayHour !== undefined ? sceneData.timeOfDayHour : base.timeOfDayHour,
           hasFog: sceneData.hasFog !== undefined ? sceneData.hasFog : base.hasFog,
@@ -593,9 +605,17 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
           activeScene?.isDungeonExplorationStarted === true ||
           projectedScene?.isDungeonExplorationStarted === true;
 
+        const currentSceneData = activeScene || projectedScene;
+        const resolved = resolveCurrentSceneImage(currentSceneData);
+        const rawImageUrl = resolved?.imageUrl || currentSceneData?.imageUrl || '';
+
         broadcastStateSnapshot({
           mode: liveDisplayMode,
-          projectedScene: activeScene || projectedScene,
+          projectedScene: currentSceneData ? {
+            ...currentSceneData,
+            imageUrl: rawImageUrl,
+            currentImageUrl: rawImageUrl,
+          } : null,
           combatants,
           currentTurnIndex,
           roundCount,
@@ -604,6 +624,28 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
           selectedTargetId,
           drawings,
         });
+
+        // Broadcast adicional direto da projeção ao vivo para garantia de sincronia instantânea
+        if (currentSceneData) {
+          broadcastLiveProjection({
+            type: 'SET_ACTIVE_SCENE',
+            mode: liveDisplayMode,
+            sceneId: currentSceneData.id,
+            title: currentSceneData.title,
+            imageUrl: rawImageUrl,
+            currentImageUrl: rawImageUrl,
+            sensoryText: currentSceneData.sensoryText,
+            sceneImages: currentSceneData.sceneImages,
+            slidePacks: currentSceneData.slidePacks || currentSceneData.environmentSettings?.slide_packs,
+            activeSlidePackId: currentSceneData.activeSlidePackId || currentSceneData.environmentSettings?.active_slide_pack_id,
+            activeImageIndex: currentSceneData.activeImageIndex ?? 0,
+            payload: {
+              ...currentSceneData,
+              imageUrl: rawImageUrl,
+              currentImageUrl: rawImageUrl,
+            },
+          });
+        }
       }
       // Broadcast da presença para que quem solicitou nos veja imediatamente online
       const myPresence = getMyPresence();
@@ -699,6 +741,98 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   }, [combatants, currentTurnIndex, roundCount, activeCampaign?.role, broadcastCombatUpdate, isCombatStateEqual]);
 
+  // ========================================================================
+  // AUTO-BROADCAST: Quando o Mestre troca de cena ou slide, projeta automaticamente
+  // para todos os jogadores e persiste o active_scene_id no banco.
+  // ========================================================================
+  const lastAutoBroadcastKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeCampaign?.role !== 'dm' || !activeScene?.id) return;
+    
+    const resolved = resolveCurrentSceneImage(activeScene);
+    const rawImageUrl = resolved?.imageUrl || activeScene.imageUrl || '';
+
+    const syncKey = `${activeScene.id}_${activeScene.activeImageIndex ?? 0}_${activeScene.activeSlidePackId ?? ''}_${rawImageUrl}_${activeScene.sensoryText ?? ''}_${activeScene.sceneImages?.length ?? 0}_${liveDisplayMode}_${Boolean(activeScene.isBattleStarted)}_${Boolean(activeScene.isDungeonExplorationStarted)}`;
+    if (lastAutoBroadcastKeyRef.current === syncKey) return;
+    lastAutoBroadcastKeyRef.current = syncKey;
+
+    // Broadcast a cena ativa para todos os jogadores sem forçar 'map' indevidamente
+    const targetMode: 'artwork' | 'map' | 'combat' = activeScene.isBattleStarted ? 'combat' : (liveDisplayMode || 'artwork');
+    const currentMapId = (mapData as any)?.activeMapId || 
+      activeScene.associatedMapId || 
+      activeScene.associatedMapIds?.[0] || null;
+
+    broadcastLiveProjection({
+      type: 'SET_ACTIVE_SCENE',
+      mode: targetMode,
+      sceneId: activeScene.id,
+      title: activeScene.title,
+      imageUrl: rawImageUrl,
+      currentImageUrl: rawImageUrl,
+      sensoryText: activeScene.sensoryText,
+      sceneImages: activeScene.sceneImages,
+      slidePacks: activeScene.slidePacks || activeScene.environmentSettings?.slide_packs,
+      activeSlidePackId: activeScene.activeSlidePackId || activeScene.environmentSettings?.active_slide_pack_id,
+      activeImageIndex: activeScene.activeImageIndex ?? 0,
+      timeOfDay: activeScene.timeOfDay as 'day' | 'sunset' | 'night' | 'fog' | 'storm' | undefined,
+      timeOfDayHour: activeScene.timeOfDayHour,
+      hasFog: activeScene.hasFog,
+      hasRain: activeScene.hasRain,
+      floorTextureUrl: activeScene.floorTextureUrl,
+      associatedMapId: activeScene.associatedMapId,
+      associatedMapIds: activeScene.associatedMapIds,
+      environmentSettings: activeScene.environmentSettings,
+      payload: {
+        ...activeScene,
+        imageUrl: rawImageUrl,
+        currentImageUrl: rawImageUrl,
+        isBattleStarted: Boolean(activeScene.isBattleStarted),
+        isDungeonExplorationStarted: Boolean(activeScene.isDungeonExplorationStarted),
+      },
+    });
+
+    // Aplica localmente também (para PlayerViewModal na mesma aba)
+    handleLiveProjectionChange({
+      mode: targetMode,
+      sceneId: activeScene.id,
+      imageUrl: rawImageUrl,
+      currentImageUrl: rawImageUrl,
+      payload: {
+        ...activeScene,
+        imageUrl: rawImageUrl,
+        currentImageUrl: rawImageUrl,
+      },
+      activeImageIndex: activeScene.activeImageIndex ?? 0,
+    });
+
+    // Persistir active_scene_id e live_state no banco para que jogadores em qualquer conta sincronizem
+    if (campaignId && isSupabaseConfigured() && isValidUuid(campaignId) && isValidUuid(activeScene.id)) {
+      supabase
+        .from('campaigns')
+        .update({ 
+          active_scene_id: activeScene.id,
+          live_state: {
+            displayMode: targetMode,
+            activeMapId: currentMapId,
+            activeSceneId: activeScene.id,
+            activeSlidePackId: activeScene.activeSlidePackId || activeScene.environmentSettings?.active_slide_pack_id || null,
+            activeImageIndex: activeScene.activeImageIndex ?? 0,
+            currentImageUrl: rawImageUrl,
+            title: activeScene.title,
+            overlayText: resolved?.overlayText || activeScene.sensoryText || null,
+            transitionType: resolved?.transitionType || 'magical_dissolve',
+            aspectRatio: resolved?.aspectRatio || '16:9',
+            dungeonExplorationStarted: Boolean(activeScene.isDungeonExplorationStarted),
+            updatedAt: Date.now(),
+          },
+        })
+        .eq('id', campaignId)
+        .then(({ error }) => {
+          if (error) console.warn('[LiveCockpit] Falha ao salvar active_scene_id:', error.message);
+        });
+    }
+  }, [activeScene, liveDisplayMode, activeCampaign?.role, campaignId, broadcastLiveProjection, handleLiveProjectionChange, mapData]);
+
   // Sincroniza target selecionado
   useEffect(() => {
     if (activeCampaign?.role === 'dm') {
@@ -780,6 +914,93 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
     };
   }, [campaignId, getMyPresence, syncBroadcastPresenceUpdate, user?.id, activeCampaign?.role]);
 
+  // Sincronização direta via Supabase Postgres Changes para a tabela campaigns (Persistência Cross-Account)
+  useEffect(() => {
+    if (!campaignId || !isSupabaseConfigured() || !isValidUuid(campaignId)) return;
+
+    let isMounted = true;
+
+    // 1. Consulta inicial do banco para obter o estado mais recente da campanha
+    supabase
+      .from('campaigns')
+      .select('active_scene_id, live_state')
+      .eq('id', campaignId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!isMounted || error || !data) return;
+        if (data.live_state?.displayMode) {
+          setLiveDisplayModeState(data.live_state.displayMode);
+        }
+        if (data.live_state?.currentImageUrl || data.live_state?.activeSceneId) {
+          setProjectedScene((prev: any) => ({
+            ...(prev || {}),
+            id: data.live_state?.activeSceneId || data.active_scene_id || prev?.id,
+            imageUrl: data.live_state?.currentImageUrl || prev?.imageUrl,
+            currentImageUrl: data.live_state?.currentImageUrl || prev?.currentImageUrl,
+            title: data.live_state?.title || prev?.title,
+            sensoryText: data.live_state?.overlayText || prev?.sensoryText,
+            activeImageIndex: data.live_state?.activeImageIndex !== undefined ? data.live_state.activeImageIndex : (prev?.activeImageIndex ?? 0),
+            activeSlidePackId: data.live_state?.activeSlidePackId || prev?.activeSlidePackId,
+            defaultTransition: data.live_state?.transitionType || prev?.defaultTransition,
+            defaultAspectRatio: data.live_state?.aspectRatio || prev?.defaultAspectRatio,
+          }));
+        }
+        if (data.live_state?.activeMapId !== undefined || data.live_state?.dungeonExplorationStarted !== undefined) {
+          setMapData((prev: any) => ({
+            ...(prev || {}),
+            activeMapId: data.live_state.activeMapId !== undefined ? data.live_state.activeMapId : prev?.activeMapId,
+            dungeonExplorationStarted: data.live_state.dungeonExplorationStarted !== undefined 
+              ? data.live_state.dungeonExplorationStarted 
+              : prev?.dungeonExplorationStarted,
+          }));
+        }
+      });
+
+    // 2. Ouvinte de mudanças na tabela campaigns via Supabase Realtime CDC (Postgres Changes)
+    const subChannel = supabase
+      .channel(`campaign_db_live_state_${campaignId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaignId}` },
+        (payload) => {
+          const newRow = payload.new as any;
+          if (!isMounted || !newRow) return;
+          if (newRow.live_state?.displayMode) {
+            setLiveDisplayModeState(newRow.live_state.displayMode);
+          }
+          if (newRow.live_state?.currentImageUrl || newRow.live_state?.activeSceneId) {
+            setProjectedScene((prev: any) => ({
+              ...(prev || {}),
+              id: newRow.live_state?.activeSceneId || newRow.active_scene_id || prev?.id,
+              imageUrl: newRow.live_state?.currentImageUrl || prev?.imageUrl,
+              currentImageUrl: newRow.live_state?.currentImageUrl || prev?.currentImageUrl,
+              title: newRow.live_state?.title || prev?.title,
+              sensoryText: newRow.live_state?.overlayText || prev?.sensoryText,
+              activeImageIndex: newRow.live_state?.activeImageIndex !== undefined ? newRow.live_state.activeImageIndex : (prev?.activeImageIndex ?? 0),
+              activeSlidePackId: newRow.live_state?.activeSlidePackId || prev?.activeSlidePackId,
+              defaultTransition: newRow.live_state?.transitionType || prev?.defaultTransition,
+              defaultAspectRatio: newRow.live_state?.aspectRatio || prev?.defaultAspectRatio,
+            }));
+          }
+          if (newRow.live_state?.activeMapId !== undefined || newRow.live_state?.dungeonExplorationStarted !== undefined) {
+            setMapData((prev: any) => ({
+              ...(prev || {}),
+              activeMapId: newRow.live_state.activeMapId !== undefined ? newRow.live_state.activeMapId : prev?.activeMapId,
+              dungeonExplorationStarted: newRow.live_state.dungeonExplorationStarted !== undefined
+                ? newRow.live_state.dungeonExplorationStarted
+                : prev?.dungeonExplorationStarted,
+            }));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(subChannel);
+    };
+  }, [campaignId]);
+
   // Register global broadcaster so pure TS modules (dnd5e-dice.ts) can reach Supabase
   useEffect(() => {
     setGlobalBroadcaster(sendBroadcast);
@@ -805,13 +1026,39 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
       activeScene?.isDungeonExplorationStarted === true ||
       projectedScene?.isDungeonExplorationStarted === true;
 
+    const currentMapId = (mapData as any)?.activeMapId || 
+      activeScene?.associatedMapId || 
+      projectedScene?.associatedMapId || 
+      activeScene?.associatedMapIds?.[0] || 
+      projectedScene?.associatedMapIds?.[0] || null;
+
     broadcastToPlayerView({
       mode,
       sceneId: activeScene?.id || projectedScene?.id,
       payload: activeScene || projectedScene,
       dungeonExplorationStarted: isExploration,
+      mapData: { activeMapId: currentMapId, dungeonExplorationStarted: isExploration },
     });
-  }, [broadcastToPlayerView, campaignId, activeScene, projectedScene, mapData]);
+
+    // Persistir live_state no Supabase para sincronização cross-account via DB
+    if (campaignId && isSupabaseConfigured() && isValidUuid(campaignId) && activeCampaign?.role === 'dm') {
+      supabase
+        .from('campaigns')
+        .update({
+          active_scene_id: activeScene?.id || projectedScene?.id || null,
+          live_state: {
+            displayMode: mode,
+            activeMapId: currentMapId,
+            dungeonExplorationStarted: isExploration,
+            updatedAt: Date.now(),
+          },
+        })
+        .eq('id', campaignId)
+        .then(({ error }) => {
+          if (error) console.warn('[LiveCockpit] Error updating campaign live_state:', error.message);
+        });
+    }
+  }, [broadcastToPlayerView, campaignId, activeCampaign?.role, activeScene, projectedScene, mapData]);
 
   const setActiveSpellTargeting = useCallback((targeting: any) => {
     setActiveSpellTargetingState(targeting);

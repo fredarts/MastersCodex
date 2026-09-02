@@ -33,6 +33,7 @@ import { Combatant, CharacterSheet, CharacterSpell, CombatLogEntry, ConditionTyp
 import { BattleSetupMode } from '@/components/live-cockpit/BattleSetupModal';
 import { parseDamageInfo, calculateEffectiveDamage } from '@/lib/dnd5e-damage-resolver';
 import { parseRangeString } from '@/lib/utils/dndRangeUtils';
+import { resolveCurrentSceneImage } from '@/lib/imageUtils';
 
 interface LiveCockpitStudioProps {
   onGenerateLoot: () => void;
@@ -302,8 +303,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
           setRoundCount(1);
           setIsCombatActive(Boolean(scene.isBattleStarted));
           
-          const hasMap = Boolean((scene.associatedMapIds && scene.associatedMapIds.length > 0) || scene.associatedMapId);
-          const defaultMode = scene.isBattleStarted ? 'combat' : hasMap ? 'map' : 'artwork';
+          const defaultMode = scene.isBattleStarted ? 'combat' : (liveDisplayMode || 'artwork');
           setLiveDisplayMode(defaultMode);
 
           broadcastToPlayerView({ 
@@ -1255,7 +1255,18 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     if (!activeScene) return;
     const updated = { ...activeScene, activeImageIndex: index };
     await updateScene(updated);
-    sceneProjection.projectSceneToPlayerView(updated);
+    const resolved = resolveCurrentSceneImage(updated);
+    broadcastToPlayerView({
+      type: 'SET_ACTIVE_SCENE',
+      activeImageIndex: index,
+      imageUrl: resolved?.imageUrl,
+      currentImageUrl: resolved?.imageUrl,
+      payload: {
+        ...updated,
+        imageUrl: resolved?.imageUrl,
+        currentImageUrl: resolved?.imageUrl,
+      },
+    });
   };
 
   const handleFireSceneLive = (scene: any) => {

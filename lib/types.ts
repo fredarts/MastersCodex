@@ -431,6 +431,13 @@ export interface UserCampaign {
   calendarConfig?: import('./types/calendar').CampaignCalendarConfig;
   calendarState?: import('./types/calendar').CampaignCalendarState;
   documents?: CampaignDocumentItem[];
+  activeSceneId?: string; // ID da cena que o mestre está projetando ativamente
+  liveState?: {
+    displayMode?: 'artwork' | 'map' | 'combat';
+    activeMapId?: string | null;
+    dungeonExplorationStarted?: boolean;
+    updatedAt?: number;
+  };
 }
 
 export interface StatusDuration {

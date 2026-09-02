@@ -14,7 +14,7 @@ import { SlideTextOverlayRenderer } from '@/components/session/SlideTextOverlayR
 import { LiveCockpitAudioController } from '@/components/live-cockpit/LiveCockpitAudioController';
 import { CockpitDungeonMap } from '@/components/live-cockpit/CockpitDungeonMap';
 import { GameScene, Combatant, SlidePack } from '@/lib/types';
-import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from '@/lib/imageUtils';
+import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl, getYouTubeThumbnailUrl, resolveCurrentSceneImage } from '@/lib/imageUtils';
 import { useCustomDialog } from '@/context/CustomDialogContext';
 
 interface LiveVisualMirrorProps {
@@ -159,9 +159,18 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
     };
 
     await updateScene(updatedScene);
+    const resolved = resolveCurrentSceneImage(updatedScene);
     broadcastToPlayerView({
-      payload: updatedScene,
+      type: 'SET_ACTIVE_SCENE',
+      payload: {
+        ...updatedScene,
+        imageUrl: resolved?.imageUrl,
+        currentImageUrl: resolved?.imageUrl,
+      },
       activeImageIndex: 0,
+      activeSlidePackId: packId,
+      imageUrl: resolved?.imageUrl,
+      currentImageUrl: resolved?.imageUrl,
     });
     toast.success(`Pack de Slides alterado: ${targetPack.title}`);
   };

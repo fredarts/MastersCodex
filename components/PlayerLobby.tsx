@@ -68,7 +68,7 @@ import { XCardButton } from './safety/XCardButton';
 import { DysonCanvas } from './map/DysonCanvas';
 import { MagicShaderSlideshow } from './MagicShaderSlideshow';
 import { SlideTextOverlayRenderer } from '@/components/session/SlideTextOverlayRenderer';
-import { normalizeImageUrl, getYouTubeEmbedUrl } from '@/lib/imageUtils';
+import { normalizeImageUrl, getYouTubeEmbedUrl, resolveCurrentSceneImage } from '@/lib/imageUtils';
 import { revealVisionWithLOS, getTokenVisionRadius } from '@/components/map/visionCore';
 
 interface PlayerLobbyProps {
@@ -1424,18 +1424,18 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
             {/* Controles de Visualização / Projeção do Jogador (Estilo Cockpit DM) */}
             {(() => {
-              const resolvedView = playerCanvasView === 'auto' ? liveDisplayMode : playerCanvasView;
-              const isArt = resolvedView === 'artwork' || resolvedView === 'art';
+              const resolvedView = playerCanvasView === 'auto' ? (liveDisplayMode === 'artwork' ? 'art' : liveDisplayMode) : playerCanvasView;
+              const isArt = resolvedView === 'art';
               const isMap = resolvedView === 'map';
               const isGrid = resolvedView === 'grid' || resolvedView === 'combat';
               return (
                 <div className="flex items-center gap-1.5 bg-[#0a0d14] p-1.5 rounded-xl border border-[#2a3449]">
-                  {/* Botão Auto (Seguir) */}
+                  {/* Botão Auto (Seguir Mestre) */}
                   <button
                     onClick={() => setPlayerCanvasView('auto')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 cursor-pointer ${
                       playerCanvasView === 'auto'
-                        ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md shadow-blue-500/20'
+                        ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md shadow-blue-500/20 ring-1 ring-cyan-400/40'
                         : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
                     }`}
                     title="Seguir visualização projetada pelo Mestre automaticamente"
@@ -1449,11 +1449,11 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                   {/* Botão Ilustração */}
                   <button
                     onClick={() => setPlayerCanvasView('art')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 cursor-pointer ${
                       playerCanvasView === 'art'
                         ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                        : isArt
-                        ? 'border border-amber-500/40 text-amber-400 bg-amber-950/20 hover:bg-[#161f30]'
+                        : isArt && playerCanvasView === 'auto'
+                        ? 'border border-amber-500/50 text-amber-400 bg-amber-950/40 hover:bg-[#161f30]'
                         : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
                     }`}
                     title="Modo Ilustração / Arte da Cena"
@@ -1465,11 +1465,11 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                   {/* Botão Dungeon Map */}
                   <button
                     onClick={() => setPlayerCanvasView('map')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 cursor-pointer ${
                       playerCanvasView === 'map'
                         ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'
-                        : isMap
-                        ? 'border border-indigo-500/40 text-indigo-400 bg-indigo-950/20 hover:bg-[#161f30]'
+                        : isMap && playerCanvasView === 'auto'
+                        ? 'border border-indigo-500/50 text-indigo-400 bg-indigo-950/40 hover:bg-[#161f30]'
                         : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
                     }`}
                     title="Modo Dungeon Map 2D"
@@ -1481,11 +1481,11 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                   {/* Botão Grid 3D / Combate */}
                   <button
                     onClick={() => setPlayerCanvasView('grid')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 cursor-pointer ${
                       playerCanvasView === 'grid'
                         ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20'
-                        : isGrid
-                        ? 'border border-rose-500/40 text-rose-400 bg-rose-950/20 hover:bg-[#161f30]'
+                        : isGrid && playerCanvasView === 'auto'
+                        ? 'border border-rose-500/50 text-rose-400 bg-rose-950/40 hover:bg-[#161f30]'
                         : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
                     }`}
                     title="Modo Grid 3D / Combate"
@@ -1589,7 +1589,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
               {/* TOP BAR: COMBAT INITIATIVE HUD (Apenas exibido quando uma batalha foi de fato iniciada no Grid) */}
               {(() => {
                 const currentScene = projectedScene || activeScene;
-                const activeView = playerCanvasView === 'auto' ? liveDisplayMode : playerCanvasView;
+                const activeView = playerCanvasView === 'auto' ? (liveDisplayMode === 'artwork' ? 'art' : liveDisplayMode) : playerCanvasView;
                 const isBattleActive = Boolean(currentScene?.isBattleStarted) && (activeView === 'grid' || activeView === 'combat');
 
                 if (!isBattleActive) return null;
@@ -1614,7 +1614,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
               {/* CANVAS CONTENT AREA */}
               <div className="flex-1 relative w-full h-full flex items-center justify-center overflow-hidden">
                 {(() => {
-                  const activeView = playerCanvasView === 'auto' ? liveDisplayMode : playerCanvasView;
+                  const activeView = playerCanvasView === 'auto' ? (liveDisplayMode === 'artwork' ? 'art' : liveDisplayMode) : playerCanvasView;
                   const currentScene = projectedScene || activeScene;
 
                   if (activeView === 'grid' || activeView === 'combat') {
@@ -1738,10 +1738,8 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                   }
 
                   // Default Scene Artwork View
-                  const sceneImages = currentScene?.sceneImages || [];
-                  const rawUrl = sceneImages.length > 0
-                    ? sceneImages[currentScene?.activeImageIndex ?? 0]?.imageUrl
-                    : currentScene?.imageUrl;
+                  const resolved = resolveCurrentSceneImage(currentScene);
+                  const rawUrl = resolved?.imageUrl || (projectedScene as any)?.currentImageUrl || (currentScene as any)?.currentImageUrl || currentScene?.imageUrl;
 
                   if (rawUrl) {
                     const ytEmbed = getYouTubeEmbedUrl(rawUrl);
@@ -1755,19 +1753,41 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                         />
                       );
                     }
+                    const isVid = resolved?.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(rawUrl);
+                    if (isVid) {
+                      return (
+                        <div className="relative w-full h-full flex items-center justify-center bg-black">
+                          <video
+                            src={normalizeImageUrl(rawUrl)}
+                            className="w-full h-full object-contain"
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            controls={false}
+                          />
+                          <SlideTextOverlayRenderer
+                            overlays={resolved?.textOverlays}
+                            fallbackOverlayText={resolved?.overlayText || currentScene?.sensoryText}
+                            fallbackTitle={resolved?.title || currentScene?.title}
+                            triggerKey={`${rawUrl}-${resolved?.activeImageIndex ?? 0}`}
+                          />
+                        </div>
+                      );
+                    }
                     return (
                       <div className="relative w-full h-full">
                         <MagicShaderSlideshow
                           imageUrl={normalizeImageUrl(rawUrl)}
-                          transitionType={currentScene?.defaultTransition || 'magical_dissolve'}
-                          aspectRatio={currentScene?.sceneImages?.[currentScene?.activeImageIndex ?? 0]?.aspectRatio || currentScene?.defaultAspectRatio || '16:9'}
+                          transitionType={resolved?.transitionType || currentScene?.defaultTransition || 'magical_dissolve'}
+                          aspectRatio={resolved?.aspectRatio || currentScene?.defaultAspectRatio || '16:9'}
                           className="w-full h-full"
                         />
                         <SlideTextOverlayRenderer
-                          overlays={currentScene?.sceneImages?.[currentScene?.activeImageIndex ?? 0]?.textOverlays}
-                          fallbackOverlayText={currentScene?.sceneImages?.[currentScene?.activeImageIndex ?? 0]?.overlayText || currentScene?.sensoryText}
-                          fallbackTitle={currentScene?.title}
-                          triggerKey={`${rawUrl}-${currentScene?.activeImageIndex}`}
+                          overlays={resolved?.textOverlays}
+                          fallbackOverlayText={resolved?.overlayText || currentScene?.sensoryText}
+                          fallbackTitle={resolved?.title || currentScene?.title}
+                          triggerKey={`${rawUrl}-${resolved?.activeImageIndex ?? 0}`}
                         />
                       </div>
                     );
@@ -1789,7 +1809,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                   (c) => c.name.toLowerCase().includes(charName.toLowerCase()) || charName.toLowerCase().includes(c.name.toLowerCase())
                 );
                 const currentScene = projectedScene || activeScene;
-                const activeView = playerCanvasView === 'auto' ? liveDisplayMode : playerCanvasView;
+                const activeView = playerCanvasView === 'auto' ? (liveDisplayMode === 'artwork' ? 'art' : liveDisplayMode) : playerCanvasView;
                 const isCombat = Boolean(currentScene?.isBattleStarted) && (activeView === 'grid' || activeView === 'combat');
                 const isMyTurn = isCombat && combatants[currentTurnIndex]?.name.toLowerCase().includes(charName.toLowerCase());
 

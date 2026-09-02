@@ -64,3 +64,76 @@ export const getYouTubeThumbnailUrl = (url: string): string | null => {
   if (!videoId) return null;
   return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 };
+
+import { SlideTransitionType, SlideAspectRatio } from '@/lib/types';
+
+export interface ResolvedSceneImage {
+  imageUrl: string;
+  overlayText?: string;
+  secretNotes?: string;
+  mediaType?: 'image' | 'video';
+  aspectRatio?: SlideAspectRatio;
+  transitionType?: SlideTransitionType;
+  textOverlays?: any[];
+  title?: string;
+  activeImageIndex?: number;
+}
+
+/**
+ * Universal resolver to extract the currently active image/video/slide for any GameScene.
+ * Inspects slidePacks, environmentSettings.slide_packs, sceneImages, and fallback imageUrl.
+ */
+export const resolveCurrentSceneImage = (scene: any): ResolvedSceneImage | null => {
+  if (!scene) return null;
+
+  const slidePacks = (scene.slidePacks && Array.isArray(scene.slidePacks) && scene.slidePacks.length > 0)
+    ? scene.slidePacks
+    : (scene.environmentSettings?.slide_packs && Array.isArray(scene.environmentSettings.slide_packs) && scene.environmentSettings.slide_packs.length > 0)
+    ? scene.environmentSettings.slide_packs
+    : (scene.sceneImages && Array.isArray(scene.sceneImages) && scene.sceneImages.length > 0)
+    ? [
+        {
+          id: 'pack-main',
+          title: scene.title || '🌟 Cena Principal',
+          category: 'principal',
+          transitionType: scene.defaultTransition || 'magical_dissolve',
+          aspectRatio: scene.defaultAspectRatio || '16:9',
+          images: scene.sceneImages,
+          activeImageIndex: scene.activeImageIndex || 0,
+        }
+      ]
+    : [];
+
+  const activePackId = scene.activeSlidePackId || scene.environmentSettings?.active_slide_pack_id || slidePacks[0]?.id || 'pack-main';
+  const currentPack = slidePacks.find((p: any) => p.id === activePackId) || slidePacks[0];
+  const currentPackImages = (currentPack?.images && Array.isArray(currentPack.images) && currentPack.images.length > 0)
+    ? currentPack.images
+    : (scene.sceneImages && Array.isArray(scene.sceneImages) && scene.sceneImages.length > 0)
+    ? scene.sceneImages
+    : [];
+
+  const activeImageIndex = currentPackImages.length > 0
+    ? Math.min(
+        Math.max(0, scene.activeImageIndex ?? 0),
+        Math.max(0, currentPackImages.length - 1)
+      )
+    : (scene.activeImageIndex ?? 0);
+
+  const activeSlideImage = currentPackImages[activeImageIndex];
+
+  const rawUrl = activeSlideImage?.imageUrl || scene.currentImageUrl || scene.imageUrl || (currentPackImages[0]?.imageUrl) || '';
+  if (!rawUrl) return null;
+
+  return {
+    imageUrl: rawUrl,
+    overlayText: activeSlideImage?.overlayText || scene.overlayText || scene.sensoryText || '',
+    secretNotes: activeSlideImage?.secretNotes || scene.secretNotes || '',
+    mediaType: activeSlideImage?.mediaType || (/\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(rawUrl) ? 'video' : 'image'),
+    aspectRatio: activeSlideImage?.aspectRatio || currentPack?.aspectRatio || scene.defaultAspectRatio || '16:9',
+    transitionType: currentPack?.transitionType || scene.defaultTransition || 'magical_dissolve',
+    textOverlays: activeSlideImage?.textOverlays,
+    title: currentPack?.title || scene.title,
+    activeImageIndex,
+  };
+};
+

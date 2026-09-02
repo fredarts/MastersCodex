@@ -10,7 +10,7 @@ import { useVoiceCall } from '@/context/VoiceCallContext';
 import { useAuth } from '@/context/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl } from '@/lib/imageUtils';
+import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl, resolveCurrentSceneImage } from '@/lib/imageUtils';
 import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
 import { SlideTextOverlayRenderer } from '@/components/session/SlideTextOverlayRenderer';
 import { BattleGrid3D } from '@/components/BattleGrid3D';
@@ -742,108 +742,59 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 </div>
               );
             })()
-          ) : (currentScene?.sceneImages && currentScene.sceneImages.length > 0) || currentScene?.imageUrl ? (
-            <div className="w-full h-full relative flex items-center justify-center">
-              {currentScene.sceneImages && currentScene.sceneImages.length > 0 ? (
-                (() => {
-                  const currentSlide = currentScene.sceneImages[currentScene.activeImageIndex ?? 0];
-                  const rawUrl = currentSlide?.imageUrl || '';
-                  const ytEmbed = getYouTubeEmbedUrl(rawUrl);
-                  
-                  if (ytEmbed) {
-                    return (
-                      <iframe
-                        src={ytEmbed}
-                        className="w-full h-full border-0 bg-black"
-                        allow="autoplay; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    );
-                  }
-                  
-                  const isVideo = currentSlide?.mediaType === 'video' ||
-                    (/\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(rawUrl));
-                  
-                  if (isVideo) {
-                    return (
-                      <video
-                        src={normalizeImageUrl(rawUrl)}
-                        className="w-full h-full object-contain bg-black"
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        controls={false}
-                      />
-                    );
-                  }
-                  return (
+          ) : (() => {
+              const resolved = resolveCurrentSceneImage(currentScene);
+              const rawUrl = resolved?.imageUrl || (projectedScene as any)?.currentImageUrl || (currentScene as any)?.currentImageUrl || currentScene?.imageUrl;
+              if (!rawUrl) {
+                return (
+                  <div className="text-center p-8 text-slate-600">
+                    <Map className="w-16 h-16 mx-auto mb-3 opacity-40" />
+                    <h3 className="text-slate-400 font-bold text-base">Aguardando Transmissão de Imagem pelo Mestre...</h3>
+                  </div>
+                );
+              }
+
+              const ytEmbed = getYouTubeEmbedUrl(rawUrl);
+              const isVid = resolved?.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(rawUrl);
+
+              return (
+                <div className="w-full h-full relative flex items-center justify-center">
+                  {ytEmbed ? (
+                    <iframe
+                      src={ytEmbed}
+                      className="w-full h-full border-0 bg-black"
+                      allow="autoplay; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  ) : isVid ? (
+                    <video
+                      src={normalizeImageUrl(rawUrl)}
+                      className="w-full h-full object-contain bg-black"
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      controls={false}
+                    />
+                  ) : (
                     <MagicShaderSlideshow
                       imageUrl={normalizeImageUrl(rawUrl)}
-                      transitionType={currentScene.defaultTransition || 'magical_dissolve'}
-                      aspectRatio={currentSlide?.aspectRatio || currentScene.defaultAspectRatio || '16:9'}
+                      transitionType={resolved?.transitionType || currentScene?.defaultTransition || 'magical_dissolve'}
+                      aspectRatio={resolved?.aspectRatio || currentScene?.defaultAspectRatio || '16:9'}
                       className="w-full h-full"
                     />
-                  );
-                })()
-              ) : (
-                (() => {
-                  const rawUrl = currentScene.imageUrl || '';
-                  const ytEmbed = getYouTubeEmbedUrl(rawUrl);
-                  
-                  if (ytEmbed) {
-                    return (
-                      <iframe
-                        src={ytEmbed}
-                        className="w-full h-full border-0 bg-black"
-                        allow="autoplay; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    );
-                  }
-                  
-                  const isVideo = /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(rawUrl);
-                  if (isVideo) {
-                    return (
-                      <video
-                        src={normalizeImageUrl(rawUrl)}
-                        className="w-full h-full object-contain bg-black"
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        controls={false}
-                      />
-                    );
-                  }
-                  return (
-                    <img
-                      src={normalizeImageUrl(rawUrl)}
-                      alt="Arte da cena"
-                      className="w-full h-full object-cover animate-fade-in"
-                    />
-                  );
-                })()
-              )}
-              {/* Legenda e Overlays Cinemáticos para Jogadores */}
-              {(() => {
-                const activeImgObj = currentScene.sceneImages?.[currentScene.activeImageIndex ?? 0];
-                return (
+                  )}
+
+                  {/* Legenda e Overlays Cinemáticos para Jogadores */}
                   <SlideTextOverlayRenderer
-                    overlays={activeImgObj?.textOverlays}
-                    fallbackOverlayText={activeImgObj?.overlayText || currentScene.sensoryText}
-                    fallbackTitle={currentScene.title}
-                    triggerKey={`${activeImgObj?.imageUrl || currentScene.imageUrl}-${currentScene.activeImageIndex}`}
+                    overlays={resolved?.textOverlays}
+                    fallbackOverlayText={resolved?.overlayText || currentScene?.sensoryText}
+                    fallbackTitle={resolved?.title || currentScene?.title}
+                    triggerKey={`${rawUrl}-${resolved?.activeImageIndex ?? 0}`}
                   />
-                );
-              })()}
-            </div>
-          ) : (
-            <div className="text-center p-8 text-slate-600">
-              <Map className="w-16 h-16 mx-auto mb-3 opacity-40" />
-              <h3 className="text-slate-400 font-bold text-base">Aguardando Transmissão de Imagem pelo Mestre...</h3>
-            </div>
-          )}
+                </div>
+              );
+            })()}
 
           {/* Overlay de Ações Rápidas do Jogador */}
           {(() => {

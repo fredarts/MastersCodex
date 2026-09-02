@@ -70,6 +70,8 @@ export function mapCampaignRowToDomain(row: CampaignRow, role: 'dm' | 'player' =
     characterName: characterName || undefined,
     partyMembers: Array.isArray(row.party_members) ? row.party_members : undefined,
     documents: Array.isArray(row.documents) ? row.documents : (Array.isArray((row as any).documents) ? (row as any).documents : undefined),
+    activeSceneId: row.active_scene_id || undefined,
+    liveState: row.live_state || undefined,
   };
 }
 

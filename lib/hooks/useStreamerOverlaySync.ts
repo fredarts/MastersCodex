@@ -132,12 +132,15 @@ export function useStreamerOverlaySync({
 
       channel.subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          // Request initial state snapshot
-          channel?.send({
-            type: 'broadcast',
-            event: 'STATE_REQUEST',
-            payload: { requesterId: 'obs_overlay' },
-          });
+          setTimeout(() => {
+            try {
+              channel?.send({
+                type: 'broadcast',
+                event: 'STATE_REQUEST',
+                payload: { requesterId: 'obs_overlay' },
+              });
+            } catch (err) {}
+          }, 300);
         }
       });
     }

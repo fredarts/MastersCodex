@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { GameSession, GameScene, CampaignMap } from '@/lib/types';
 import { sessionService } from '@/lib/services/sessionService';
 import { useCampaign } from '@/context/CampaignContext';
+import { supabase, isSupabaseConfigured, isValidUuid } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 interface SessionContextType {
@@ -56,7 +57,32 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return;
     }
 
-    sessionService.fetchSessions(campaignId).then((res) => {
+    let isMounted = true;
+
+    const loadCampaignAndScenes = async () => {
+      // 1. Fetch fresh active_scene_id directly from campaigns table in Supabase
+      let activeSceneIdFromDb: string | undefined = activeCampaign?.activeSceneId;
+      if (isSupabaseConfigured() && isValidUuid(campaignId)) {
+        try {
+          const { data: campRow } = await supabase
+            .from('campaigns')
+            .select('active_scene_id')
+            .eq('id', campaignId)
+            .maybeSingle();
+          if (campRow?.active_scene_id) {
+            activeSceneIdFromDb = campRow.active_scene_id;
+          }
+        } catch (e) {
+          console.warn('[SessionContext] Error querying active_scene_id from db:', e);
+        }
+      }
+
+      const dmActiveSceneId = activeSceneIdFromDb;
+      const isPlayer = activeCampaign?.role === 'player';
+
+      const res = await sessionService.fetchSessions(campaignId);
+      if (!isMounted) return;
+
       if (res.ok) {
         const fetchedSessions = res.value;
         if (fetchedSessions.length > 0) {
@@ -66,22 +92,62 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const target = found || fetchedSessions[0];
           setActiveSessionState(target);
 
-          sessionService.fetchScenes(target.id, campaignId).then((scenesRes) => {
-            if (scenesRes.ok) {
-              const fetchedScenes = scenesRes.value;
-              if (fetchedScenes.length > 0) {
-                setScenes(fetchedScenes);
-                const savedSceneId = typeof window !== 'undefined' ? localStorage.getItem(`codex_activeSceneId_${target.id}`) : null;
-                const foundScene = savedSceneId ? fetchedScenes.find((sc) => sc.id === savedSceneId) : null;
-                setActiveSceneState(foundScene || fetchedScenes[0]);
-              } else {
-                setScenes([]);
-                setActiveSceneState(null);
+          // Fetch scenes across all sessions if active scene is specified
+          if (dmActiveSceneId) {
+            const allScenesPromises = fetchedSessions.map((s) => sessionService.fetchScenes(s.id, campaignId));
+            const allResults = await Promise.all(allScenesPromises);
+            if (!isMounted) return;
+
+            let matchedScene: GameScene | null = null;
+            let matchedSession: GameSession | null = null;
+            let targetSessionScenes: GameScene[] = [];
+
+            allResults.forEach((sRes, idx) => {
+              if (sRes.ok) {
+                const sList = sRes.value;
+                if (fetchedSessions[idx].id === target.id) {
+                  targetSessionScenes = sList;
+                }
+                const match = sList.find((sc) => sc.id === dmActiveSceneId);
+                if (match) {
+                  matchedScene = match;
+                  matchedSession = fetchedSessions[idx];
+                }
               }
-            } else {
-              toast.error(scenesRes.error.message);
+            });
+
+            if (matchedScene) {
+              if (matchedSession) {
+                setActiveSessionState(matchedSession);
+                const matchRes = allResults.find((_, idx) => fetchedSessions[idx].id === matchedSession?.id);
+                if (matchRes && matchRes.ok) {
+                  setScenes(matchRes.value);
+                } else {
+                  setScenes([matchedScene]);
+                }
+              }
+              setActiveSceneState(matchedScene);
+              return;
             }
-          });
+          }
+
+          // Fallback to target session scenes
+          const scenesRes = await sessionService.fetchScenes(target.id, campaignId);
+          if (!isMounted) return;
+
+          if (scenesRes.ok) {
+            const fetchedScenes = scenesRes.value;
+            setScenes(fetchedScenes);
+            if (fetchedScenes.length > 0) {
+              const savedSceneId = typeof window !== 'undefined' ? localStorage.getItem(`codex_activeSceneId_${target.id}`) : null;
+              const foundScene = savedSceneId ? fetchedScenes.find((sc) => sc.id === savedSceneId) : null;
+              setActiveSceneState(foundScene || fetchedScenes[0]);
+            } else {
+              setActiveSceneState(null);
+            }
+          } else {
+            toast.error(scenesRes.error.message);
+          }
         } else {
           setSessions([]);
           setActiveSessionState(null);
@@ -95,8 +161,51 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setActiveSceneState(null);
         toast.error(res.error.message);
       }
-    });
-  }, [campaignId]);
+    };
+
+    loadCampaignAndScenes();
+
+    // Subscribe to active_scene_id changes in Supabase Realtime Postgres Changes
+    let postgresChannel: any = null;
+    if (isSupabaseConfigured() && isValidUuid(campaignId)) {
+      postgresChannel = supabase
+        .channel(`campaign_active_scene_sync_${campaignId}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaignId}` },
+          async (payload) => {
+            const newActiveSceneId = payload.new?.active_scene_id;
+            if (!newActiveSceneId || !isMounted) return;
+
+            // Fetch sessions and scenes to find the scene across all sessions
+            const sRes = await sessionService.fetchSessions(campaignId);
+            if (!isMounted || !sRes.ok) return;
+
+            setSessions(sRes.value);
+            for (const sess of sRes.value) {
+              const scRes = await sessionService.fetchScenes(sess.id, campaignId);
+              if (scRes.ok) {
+                const match = scRes.value.find((s) => s.id === newActiveSceneId);
+                if (match) {
+                  setActiveSessionState(sess);
+                  setScenes(scRes.value);
+                  setActiveSceneState(match);
+                  break;
+                }
+              }
+            }
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      isMounted = false;
+      if (postgresChannel) {
+        supabase.removeChannel(postgresChannel);
+      }
+    };
+  }, [campaignId, activeCampaign?.activeSceneId, activeCampaign?.role]);
 
   useEffect(() => {
     if (!campaignId) {

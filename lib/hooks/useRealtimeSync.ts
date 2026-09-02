@@ -20,8 +20,11 @@ export interface RealtimeSyncPayloads {
     sceneId?: string;
     title?: string;
     imageUrl?: string;
+    currentImageUrl?: string;
     sensoryText?: string;
     sceneImages?: any[];
+    slidePacks?: any[];
+    activeSlidePackId?: string;
     activeImageIndex?: number;
     combatants?: any[];
     timeOfDay?: 'day' | 'sunset' | 'night' | 'fog' | 'storm';
@@ -29,6 +32,7 @@ export interface RealtimeSyncPayloads {
     hasFog?: boolean;
     hasRain?: boolean;
     floorTextureUrl?: string;
+    environmentSettings?: any;
     associatedMapId?: string;
     associatedMapIds?: string[];
     activeSpellTargeting?: { name: string; range: number; shape: 'circle' | 'cone' | 'line' | 'fan' | 'target' | 'multi-target'; size: number } | null;
@@ -109,6 +113,15 @@ export interface UseRealtimeSyncOptions {
   onInvestigationBoardUpdate?: (payload: RealtimeSyncPayloads['INVESTIGATION_BOARD_UPDATE']) => void;
 }
 
+interface RealtimeChannelEntry {
+  channel: RealtimeChannel;
+  refCount: number;
+  isSubscribed: boolean;
+  listeners: Set<React.MutableRefObject<UseRealtimeSyncOptions>>;
+}
+
+const activeRealtimeChannels = new Map<string, RealtimeChannelEntry>();
+
 export function useRealtimeSync({
   campaignId,
   onTokenMove,
@@ -134,9 +147,6 @@ export function useRealtimeSync({
   onSafetySettingsUpdated,
   onInvestigationBoardUpdate,
 }: UseRealtimeSyncOptions) {
-  const channelRef = useRef<RealtimeChannel | null>(null);
-  const isSubscribedRef = useRef<boolean>(false);
-
   // Store latest callbacks in refs to prevent constant re-subscriptions when references change
   const callbacksRef = useRef<UseRealtimeSyncOptions>({
     onTokenMove,
@@ -275,170 +285,189 @@ export function useRealtimeSync({
     };
   }, [campaignId]);
 
-  // Supabase Realtime Channel
+  // Supabase Realtime Singleton Channel Manager
   useEffect(() => {
     if (!isSupabaseConfigured() || !campaignId) return;
 
-    const channelName = `masters_codex_campaign_${campaignId}`;
-    const channel = supabase.channel(channelName, {
-      config: {
-        broadcast: { self: false },
-      },
-    });
-
-    channel
-      .on('broadcast', { event: 'TOKEN_MOVE_3D' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onTokenMove) cb.onTokenMove(payload);
-      })
-      .on('broadcast', { event: 'TOKEN_ROTATE_3D' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onTokenRotate) cb.onTokenRotate(payload);
-      })
-      .on('broadcast', { event: 'LIVE_PROJECTION_UPDATE' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onLiveProjectionChange) cb.onLiveProjectionChange(payload);
-      })
-      .on('broadcast', { event: 'DICE_ROLL' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onDiceRoll) cb.onDiceRoll(payload);
-      })
-      .on('broadcast', { event: 'DICE_3D_BURST' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onDice3DBurst) cb.onDice3DBurst(payload);
-      })
-      .on('broadcast', { event: 'COMBAT_UPDATE' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onCombatUpdate) cb.onCombatUpdate(payload);
-      })
-      .on('broadcast', { event: 'COMBAT_LOG_ENTRY' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onCombatLogEntry) cb.onCombatLogEntry(payload);
-      })
-      .on('broadcast', { event: 'PLAYER_ROLL' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onPlayerRoll) cb.onPlayerRoll(payload);
-      })
-      .on('broadcast', { event: 'PARTY_LOOT_UPDATE' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onPartyLootUpdate) cb.onPartyLootUpdate(payload);
-      })
-      .on('broadcast', { event: 'PARTY_LOOT_CLOSE' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onPartyLootClose) cb.onPartyLootClose(payload);
-      })
-      .on('broadcast', { event: 'DIRECT_TRANSFER' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onDirectTransfer) cb.onDirectTransfer(payload);
-      })
-      .on('broadcast', { event: 'CHAT_MESSAGE' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onChatMessage) cb.onChatMessage(payload);
-      })
-      .on('broadcast', { event: 'DM_CURSOR' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onDmCursor) cb.onDmCursor(payload);
-      })
-      .on('broadcast', { event: 'PING_LOCATION' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onPingLocation) cb.onPingLocation(payload);
-      })
-      .on('broadcast', { event: 'VOICE_SIGNAL' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onVoiceSignal) cb.onVoiceSignal(payload);
-      })
-      .on('broadcast', { event: 'PRESENCE_UPDATE' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onPresenceUpdate) cb.onPresenceUpdate(payload);
-      })
-      .on('broadcast', { event: 'STATE_REQUEST' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onStateRequest) cb.onStateRequest(payload);
-      })
-      .on('broadcast', { event: 'STATE_SNAPSHOT' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onStateSnapshot) cb.onStateSnapshot(payload);
-      })
-      .on('broadcast', { event: 'DRAWING_ACTION' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onDrawingAction) cb.onDrawingAction(payload);
-      })
-      .on('broadcast', { event: 'SAFETY_X_CARD_TRIGGERED' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onXCardAlert) cb.onXCardAlert(payload);
-      })
-      .on('broadcast', { event: 'SAFETY_SETTINGS_UPDATED' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onSafetySettingsUpdated) cb.onSafetySettingsUpdated(payload);
-      })
-      .on('broadcast', { event: 'INVESTIGATION_BOARD_UPDATE' }, ({ payload }) => {
-        const cb = callbacksRef.current;
-        if (cb.onInvestigationBoardUpdate) cb.onInvestigationBoardUpdate(payload);
-        if (typeof window !== 'undefined' && payload?.board) {
-          window.dispatchEvent(
-            new CustomEvent('codex_investigation_board_sync', {
-              detail: { board: payload.board }
-            })
-          );
-        }
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          isSubscribedRef.current = true;
-          console.log(`📡 Supabase Realtime conectado ao canal: ${channelName}`);
-
-          // Reconciliação Offline (CRDT LWW)
-          const queue = await offlineQueue.getQueue();
-          if (queue.length > 0) {
-            console.log(`📡 Sincronizando ${queue.length} eventos offline...`);
-            for (const ev of queue) {
-              channel.send({
-                type: 'broadcast',
-                event: ev.eventType,
-                payload: ev.payload,
-              });
-              await offlineQueue.dequeueEvent(ev.id);
-            }
-          }
-
-          // Ao conectar com sucesso, solicita o snapshot de estado do Mestre
-          try {
-            channel.send({
-              type: 'broadcast',
-              event: 'STATE_REQUEST',
-              payload: { requesterId: 'connected_client' },
-            });
-          } catch (err) {}
-        } else {
-          isSubscribedRef.current = false;
-        }
+    let entry = activeRealtimeChannels.get(campaignId);
+    if (!entry) {
+      const channelName = `masters_codex_campaign_${campaignId}`;
+      const channel = supabase.channel(channelName, {
+        config: {
+          broadcast: { self: false },
+        },
       });
 
-    channelRef.current = channel;
+      const newEntry: RealtimeChannelEntry = {
+        channel,
+        refCount: 0,
+        isSubscribed: false,
+        listeners: new Set(),
+      };
+
+      // Register master broadcast dispatcher forwarding to all active listeners
+      channel
+        .on('broadcast', { event: 'TOKEN_MOVE_3D' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onTokenMove?.(payload));
+        })
+        .on('broadcast', { event: 'TOKEN_ROTATE_3D' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onTokenRotate?.(payload));
+        })
+        .on('broadcast', { event: 'LIVE_PROJECTION_UPDATE' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onLiveProjectionChange?.(payload));
+        })
+        .on('broadcast', { event: 'DICE_ROLL' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onDiceRoll?.(payload));
+        })
+        .on('broadcast', { event: 'DICE_3D_BURST' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onDice3DBurst?.(payload));
+        })
+        .on('broadcast', { event: 'COMBAT_UPDATE' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onCombatUpdate?.(payload));
+        })
+        .on('broadcast', { event: 'COMBAT_LOG_ENTRY' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onCombatLogEntry?.(payload));
+        })
+        .on('broadcast', { event: 'PLAYER_ROLL' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onPlayerRoll?.(payload));
+        })
+        .on('broadcast', { event: 'PARTY_LOOT_UPDATE' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onPartyLootUpdate?.(payload));
+        })
+        .on('broadcast', { event: 'PARTY_LOOT_CLOSE' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onPartyLootClose?.(payload));
+        })
+        .on('broadcast', { event: 'DIRECT_TRANSFER' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onDirectTransfer?.(payload));
+        })
+        .on('broadcast', { event: 'CHAT_MESSAGE' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onChatMessage?.(payload));
+        })
+        .on('broadcast', { event: 'DM_CURSOR' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onDmCursor?.(payload));
+        })
+        .on('broadcast', { event: 'PING_LOCATION' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onPingLocation?.(payload));
+        })
+        .on('broadcast', { event: 'VOICE_SIGNAL' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onVoiceSignal?.(payload));
+        })
+        .on('broadcast', { event: 'PRESENCE_UPDATE' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onPresenceUpdate?.(payload));
+        })
+        .on('broadcast', { event: 'STATE_REQUEST' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onStateRequest?.(payload));
+        })
+        .on('broadcast', { event: 'STATE_SNAPSHOT' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onStateSnapshot?.(payload));
+        })
+        .on('broadcast', { event: 'DRAWING_ACTION' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onDrawingAction?.(payload));
+        })
+        .on('broadcast', { event: 'SAFETY_X_CARD_TRIGGERED' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onXCardAlert?.(payload));
+        })
+        .on('broadcast', { event: 'SAFETY_SETTINGS_UPDATED' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onSafetySettingsUpdated?.(payload));
+        })
+        .on('broadcast', { event: 'INVESTIGATION_BOARD_UPDATE' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onInvestigationBoardUpdate?.(payload));
+          if (typeof window !== 'undefined' && payload?.board) {
+            window.dispatchEvent(
+              new CustomEvent('codex_investigation_board_sync', {
+                detail: { board: payload.board }
+              })
+            );
+          }
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            newEntry.isSubscribed = true;
+            console.log(`📡 Supabase Realtime conectado ao canal singleton: ${channelName}`);
+
+            // Reconciliação Offline (CRDT LWW)
+            const queue = await offlineQueue.getQueue();
+            if (queue.length > 0) {
+              console.log(`📡 Sincronizando ${queue.length} eventos offline...`);
+              for (const ev of queue) {
+                channel.send({
+                  type: 'broadcast',
+                  event: ev.eventType,
+                  payload: ev.payload,
+                });
+                await offlineQueue.dequeueEvent(ev.id);
+              }
+            }
+
+            // Ao conectar com sucesso, solicita o snapshot de estado do Mestre
+            try {
+              channel.send({
+                type: 'broadcast',
+                event: 'STATE_REQUEST',
+                payload: { requesterId: 'connected_client' },
+              });
+              setTimeout(() => {
+                if (newEntry.isSubscribed) {
+                  channel.send({
+                    type: 'broadcast',
+                    event: 'STATE_REQUEST',
+                    payload: { requesterId: 'connected_client_retry' },
+                  });
+                }
+              }, 600);
+            } catch (err) {}
+          } else {
+            newEntry.isSubscribed = false;
+          }
+        });
+
+      activeRealtimeChannels.set(campaignId, newEntry);
+      entry = newEntry;
+    }
+
+    entry.listeners.add(callbacksRef);
+    entry.refCount++;
 
     return () => {
-      isSubscribedRef.current = false;
-      supabase.removeChannel(channel);
+      if (!campaignId) return;
+      const currentEntry = activeRealtimeChannels.get(campaignId);
+      if (currentEntry) {
+        currentEntry.listeners.delete(callbacksRef);
+        currentEntry.refCount--;
+        if (currentEntry.refCount <= 0) {
+          supabase.removeChannel(currentEntry.channel);
+          activeRealtimeChannels.delete(campaignId);
+        }
+      }
     };
   }, [campaignId]);
 
   const sendBroadcast = useCallback((event: string, payload: any) => {
     if (!campaignId) return;
 
-    // 1. Send via Supabase Realtime WebSocket if connected and subscribed
-    if (channelRef.current) {
-      if (isSubscribedRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event,
-          payload: { ...payload, campaignId },
-        });
+    // 1. Send via Supabase Realtime WebSocket (Singleton Channel)
+    const entry = activeRealtimeChannels.get(campaignId);
+    if (entry?.channel) {
+      if (entry.isSubscribed) {
+        try {
+          entry.channel.send({
+            type: 'broadcast',
+            event,
+            payload: { ...payload, campaignId },
+          }).catch?.((err: any) => {
+            console.warn('Realtime channel send error, queuing offline:', err);
+            const entityId = payload.combatantId || payload.sceneId || 'global';
+            offlineQueue.enqueueEvent(entityId, event, { ...payload, campaignId }).catch(() => {});
+          });
+        } catch (err) {
+          console.warn('Sync send broadcast exception:', err);
+          const entityId = payload.combatantId || payload.sceneId || 'global';
+          offlineQueue.enqueueEvent(entityId, event, { ...payload, campaignId }).catch(() => {});
+        }
       } else {
-        // Fallback: Queue offline event for CRDT
+        // Channel is still connecting/subscribing: queue event to be sent on SUBSCRIBED
         const entityId = payload.combatantId || payload.sceneId || 'global';
-        offlineQueue.enqueueEvent(entityId, event, { ...payload, campaignId }).catch(err => {
-          console.error('Failed to enqueue offline event:', err);
-        });
+        offlineQueue.enqueueEvent(entityId, event, { ...payload, campaignId }).catch(() => {});
       }
     }
 
