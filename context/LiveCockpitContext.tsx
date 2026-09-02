@@ -609,17 +609,35 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const resolved = resolveCurrentSceneImage(currentSceneData);
         const rawImageUrl = resolved?.imageUrl || currentSceneData?.imageUrl || '';
 
+        const activeMapId = (mapData as any)?.activeMapId || 
+          currentSceneData?.associatedMapId || 
+          currentSceneData?.associatedMapIds?.[0] || null;
+
+        const snapshotMapData = mapData ? { 
+          ...(mapData as any), 
+          activeMapId: (mapData as any)?.activeMapId || activeMapId,
+          dungeonExplorationStarted: isExploration 
+        } : (activeMapId ? { 
+          activeMapId, 
+          dungeonExplorationStarted: isExploration,
+          sceneId: currentSceneData?.id 
+        } : null);
+
         broadcastStateSnapshot({
           mode: liveDisplayMode,
           projectedScene: currentSceneData ? {
             ...currentSceneData,
             imageUrl: rawImageUrl,
             currentImageUrl: rawImageUrl,
+            associatedMapId: currentSceneData.associatedMapId,
+            associatedMapIds: currentSceneData.associatedMapIds,
+            environmentSettings: currentSceneData.environmentSettings,
+            isDungeonExplorationStarted: isExploration,
           } : null,
           combatants,
           currentTurnIndex,
           roundCount,
-          mapData: mapData ? { ...mapData, dungeonExplorationStarted: isExploration } : mapData,
+          mapData: snapshotMapData,
           dungeonExplorationStarted: isExploration,
           selectedTargetId,
           drawings,
@@ -639,10 +657,18 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
             slidePacks: currentSceneData.slidePacks || currentSceneData.environmentSettings?.slide_packs,
             activeSlidePackId: currentSceneData.activeSlidePackId || currentSceneData.environmentSettings?.active_slide_pack_id,
             activeImageIndex: currentSceneData.activeImageIndex ?? 0,
+            associatedMapId: currentSceneData.associatedMapId,
+            associatedMapIds: currentSceneData.associatedMapIds,
+            environmentSettings: currentSceneData.environmentSettings,
+            dungeonExplorationStarted: isExploration,
+            mapData: snapshotMapData,
             payload: {
               ...currentSceneData,
               imageUrl: rawImageUrl,
               currentImageUrl: rawImageUrl,
+              associatedMapId: currentSceneData.associatedMapId,
+              associatedMapIds: currentSceneData.associatedMapIds,
+              isDungeonExplorationStarted: isExploration,
             },
           });
         }

@@ -326,11 +326,9 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
       fetchSceneMap(currentScene.id).then((savedData) => {
         let activeId = savedData?.activeMapId;
         let gridData = null;
-        
-        const associatedIds = (currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []))
-          .filter((id: string) => campaignMaps.some(m => m.id === id));
-        if (!activeId || !associatedIds.includes(activeId)) {
-          activeId = associatedIds[0] || null;
+        const associatedIds = currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []);
+        if (!activeId) {
+          activeId = (associatedIds.length > 0 ? (campaignMaps.find(m => associatedIds.includes(m.id))?.id || associatedIds[0]) : null);
         }
         const templateMap = campaignMaps.find(m => m.id === activeId);
 
@@ -633,16 +631,36 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
           ) : liveDisplayMode === 'map' ? (
             (() => {
               const typedMapData = mapData as any;
-              const currentMapId = typedMapData?.activeMapId || 
-                (currentScene?.associatedMapIds && currentScene.associatedMapIds[0]) || 
-                currentScene?.associatedMapId || 
-                (campaignMaps.find(m => currentScene?.associatedMapIds?.includes(m.id))?.id) || 
-                campaignMaps[0]?.id;
+              const sceneAssocIds = currentScene?.associatedMapIds || (currentScene?.associatedMapId ? [currentScene.associatedMapId] : []);
+              const currentMapId = 
+                typedMapData?.activeMapId || 
+                (sceneAssocIds.length > 0 ? (campaignMaps.find(m => sceneAssocIds.includes(m.id))?.id || sceneAssocIds[0]) : null) ||
+                (campaignMaps.length > 0 ? campaignMaps[0]?.id : null);
 
-              const activeCampaignMap = campaignMaps.find((m) => m.id === currentMapId) || campaignMaps[0] || null;
-              const dungeonCover = activeCampaignMap?.gridData?.coverImageUrl || activeCampaignMap?.gridData?.levels?.[0]?.bgImageUrl || activeCampaignMap?.gridData?.bgImageUrl;
-              const dungeonLore = activeCampaignMap?.gridData?.description;
-              const dungeonCR = activeCampaignMap?.gridData?.challengeRating || 'Recomendado';
+              let activeCampaignMap = currentMapId ? (campaignMaps.find((m) => m.id === currentMapId) || null) : null;
+              if (!activeCampaignMap && typedMapData && (typedMapData.mapTitle || typedMapData.title || typedMapData.coverImageUrl || typedMapData.bgImageUrl)) {
+                activeCampaignMap = {
+                  id: currentMapId || 'active-synced-map',
+                  campaignId: activeCampaign?.id || '',
+                  title: typedMapData.mapTitle || typedMapData.title || currentScene?.title || 'Masmorra Ativa',
+                  gridData: {
+                    description: typedMapData.description || typedMapData.dungeonLore || '',
+                    challengeRating: typedMapData.challengeRating || typedMapData.dungeonCR || 'Nível Recomendado',
+                    coverImageUrl: typedMapData.coverImageUrl || typedMapData.bgImageUrl,
+                    bgImageUrl: typedMapData.bgImageUrl,
+                    gridScale: typedMapData.gridScale || 40,
+                    grid: typedMapData.grid || [],
+                  }
+                };
+              }
+              if (!activeCampaignMap && sceneAssocIds.length === 0) {
+                activeCampaignMap = campaignMaps[0] || null;
+              }
+
+              const dungeonCover = typedMapData?.coverImageUrl || activeCampaignMap?.gridData?.coverImageUrl || activeCampaignMap?.gridData?.levels?.[0]?.bgImageUrl || activeCampaignMap?.gridData?.bgImageUrl || typedMapData?.bgImageUrl;
+              const dungeonLore = typedMapData?.description || activeCampaignMap?.gridData?.description;
+              const dungeonCR = typedMapData?.challengeRating || activeCampaignMap?.gridData?.challengeRating || 'Recomendado';
+              const dungeonTitle = typedMapData?.mapTitle || typedMapData?.title || activeCampaignMap?.title || currentScene?.title || 'Exploração de Masmorra';
               const isExplorationStarted = 
                 typedMapData?.dungeonExplorationStarted === true || 
                 (mapData as any)?.dungeonExplorationStarted === true ||
@@ -675,7 +693,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
 
                       <div className="space-y-0.5 shrink-0">
                         <h2 className="text-sm sm:text-base font-black text-amber-200 uppercase tracking-wide font-serif drop-shadow">
-                          {activeCampaignMap?.title || 'Exploração de Masmorra'}
+                          {dungeonTitle}
                         </h2>
                         <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-transparent mx-auto mt-0.5" />
                       </div>
@@ -743,8 +761,22 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               );
             })()
           ) : (() => {
+              // Helper to resolve Tailwind aspect ratio class
+              const getAspectClass = (aspect?: string) => {
+                switch (aspect) {
+                  case '4:3': return 'aspect-[4/3]';
+                  case '1:1': return 'aspect-square';
+                  case '9:16': return 'aspect-[9/16]';
+                  case '16:9':
+                  default:
+                    return 'aspect-video';
+                }
+              };
+
               const resolved = resolveCurrentSceneImage(currentScene);
               const rawUrl = resolved?.imageUrl || (projectedScene as any)?.currentImageUrl || (currentScene as any)?.currentImageUrl || currentScene?.imageUrl;
+              const activeAspectRatio = resolved?.aspectRatio || currentScene?.defaultAspectRatio || '16:9';
+
               if (!rawUrl) {
                 return (
                   <div className="text-center p-8 text-slate-600">
@@ -758,40 +790,42 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
               const isVid = resolved?.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(rawUrl);
 
               return (
-                <div className="w-full h-full relative flex items-center justify-center">
-                  {ytEmbed ? (
-                    <iframe
-                      src={ytEmbed}
-                      className="w-full h-full border-0 bg-black"
-                      allow="autoplay; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  ) : isVid ? (
-                    <video
-                      src={normalizeImageUrl(rawUrl)}
-                      className="w-full h-full object-contain bg-black"
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      controls={false}
-                    />
-                  ) : (
-                    <MagicShaderSlideshow
-                      imageUrl={normalizeImageUrl(rawUrl)}
-                      transitionType={resolved?.transitionType || currentScene?.defaultTransition || 'magical_dissolve'}
-                      aspectRatio={resolved?.aspectRatio || currentScene?.defaultAspectRatio || '16:9'}
-                      className="w-full h-full"
-                    />
-                  )}
+                <div className="w-full h-full flex items-center justify-center p-2 sm:p-4 overflow-hidden select-none">
+                  <div className={`h-full max-w-full w-auto ${getAspectClass(activeAspectRatio)} bg-black rounded-2xl border border-[#2a3449] overflow-hidden relative shadow-2xl flex items-center justify-center`}>
+                    {ytEmbed ? (
+                      <iframe
+                        src={ytEmbed}
+                        className="w-full h-full border-0 bg-black"
+                        allow="autoplay; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    ) : isVid ? (
+                      <video
+                        src={normalizeImageUrl(rawUrl)}
+                        className="w-full h-full object-contain bg-black"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        controls={false}
+                      />
+                    ) : (
+                      <MagicShaderSlideshow
+                        imageUrl={normalizeImageUrl(rawUrl)}
+                        transitionType={resolved?.transitionType || currentScene?.defaultTransition || 'magical_dissolve'}
+                        aspectRatio={activeAspectRatio as any}
+                        className="w-full h-full"
+                      />
+                    )}
 
-                  {/* Legenda e Overlays Cinemáticos para Jogadores */}
-                  <SlideTextOverlayRenderer
-                    overlays={resolved?.textOverlays}
-                    fallbackOverlayText={resolved?.overlayText || currentScene?.sensoryText}
-                    fallbackTitle={resolved?.title || currentScene?.title}
-                    triggerKey={`${rawUrl}-${resolved?.activeImageIndex ?? 0}`}
-                  />
+                    {/* Legenda e Overlays Cinemáticos para Jogadores */}
+                    <SlideTextOverlayRenderer
+                      overlays={resolved?.textOverlays}
+                      fallbackOverlayText={resolved?.overlayText || currentScene?.sensoryText}
+                      fallbackTitle={resolved?.title || currentScene?.title}
+                      triggerKey={`${rawUrl}-${resolved?.activeImageIndex ?? 0}`}
+                    />
+                  </div>
                 </div>
               );
             })()}
@@ -808,6 +842,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                   playerCombatant={meCombatant}
                   isMyTurn={isMyTurn}
                   isCombatActive={isBattleActive}
+                  layout="dock"
                   onExecuteRoll={(rollEvent) => {
                     const fullRoll = {
                       id: `roll-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,

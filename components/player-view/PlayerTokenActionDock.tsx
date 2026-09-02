@@ -40,6 +40,7 @@ interface PlayerTokenActionDockProps {
   onOpenFullSheet: () => void;
   onStartAttackTargeting?: (attack: any) => void;
   onEndTurn?: () => void;
+  layout?: 'sidebar' | 'dock';
 }
 
 export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
@@ -52,9 +53,10 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
   onOpenFullSheet,
   onStartAttackTargeting,
   onEndTurn,
+  layout = 'sidebar',
 }) => {
   const [activeTab, setActiveTab] = useState<'attacks' | 'spells' | 'features' | 'saves'>('attacks');
-  const [isExpanded, setIsExpanded] = useState<boolean>(!isCombatActive || isMyTurn);
+  const [isExpanded, setIsExpanded] = useState<boolean>(true);
 
   // Auto-colapsa quando encerra o turno e auto-expande quando inicia a vez do jogador no combate
   React.useEffect(() => {
@@ -221,347 +223,375 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
   // Extrair magias
   const spellsList = activeSheet.spells || [];
 
+  const currentHpVal = playerCombatant ? playerCombatant.hp : activeSheet.currentHp;
+  const maxHpVal = playerCombatant ? playerCombatant.maxHp : activeSheet.maxHp;
+  const hpPercent = Math.max(0, Math.min(100, Math.round((currentHpVal / (maxHpVal || 1)) * 100)));
+
   return (
-    <div className={`w-full max-w-4xl mx-auto backdrop-blur-xl border rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 ${
-      isCombatActive && !isMyTurn 
-        ? 'bg-[#0b0e14]/90 border-slate-700/50 opacity-85' 
-        : 'bg-[#0f141d]/95 border-amber-500/30'
+    <div className={`w-full bg-[#0c1017] text-slate-100 flex flex-col transition-all duration-200 ${
+      layout === 'sidebar' 
+        ? 'border-t border-[#2a3449]' 
+        : 'max-w-4xl mx-auto backdrop-blur-xl border border-amber-500/30 rounded-2xl shadow-2xl overflow-hidden'
     }`}>
-      {/* Dock Bar Top Header & Resource Counters */}
-      <div className="bg-gradient-to-r from-[#141a26] via-[#1b2333] to-[#121723] p-2 sm:p-2.5 md:p-3 flex flex-wrap items-center justify-between gap-2 border-b border-[#2a3449]">
-        {/* Turn Status Badge */}
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold shadow-inner">
-            <Swords className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h4 className="text-xs font-bold text-slate-100 uppercase tracking-wider font-mono">
-                DOCK DE AÇÕES DO JOGADOR
-              </h4>
-              {isCombatActive && (
-                <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-full uppercase ${
-                  isMyTurn 
-                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30 animate-pulse'
-                    : 'bg-slate-800 text-slate-400 border border-[#2a3449]'
-                }`}>
-                  {isMyTurn ? '⚡ SEU TURNO!' : 'Aguardando Turno'}
-                </span>
-              )}
+      {/* Top Header */}
+      <div className="bg-gradient-to-r from-[#111722] via-[#161f2e] to-[#101520] p-2.5 flex flex-col gap-2 border-b border-[#232d40]">
+        <div className="flex items-center justify-between gap-2">
+          {/* Character Identity */}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold shrink-0">
+              <Swords className="w-3.5 h-3.5" />
             </div>
-            <p className="text-[10px] text-slate-400">
-              Personagem: <strong className="text-cyan-300 font-semibold">{activeSheet.characterName}</strong> (CA {activeSheet.armorClass || 10} • HP {playerCombatant ? playerCombatant.hp : activeSheet.currentHp}/{playerCombatant ? playerCombatant.maxHp : activeSheet.maxHp})
-            </p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <h4 className="text-xs font-bold text-slate-100 truncate font-mono">
+                  {activeSheet.characterName || 'Personagem'}
+                </h4>
+                {isCombatActive && (
+                  <span className={`text-[8px] font-mono font-black px-1.5 py-0.2 rounded uppercase shrink-0 ${
+                    isMyTurn 
+                      ? 'bg-amber-500 text-slate-950 shadow-sm animate-pulse' 
+                      : 'bg-slate-800 text-slate-400 border border-[#2a3449]'
+                  }`}>
+                    {isMyTurn ? 'SEU TURNO' : 'ESPERA'}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                <span className="text-amber-400 font-semibold">CA {activeSheet.armorClass || 10}</span>
+                <span>•</span>
+                <span className="text-emerald-400 font-semibold">PV {currentHpVal}/{maxHpVal}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="flex items-center gap-1 shrink-0">
+            {isCombatActive && isMyTurn && onEndTurn && (
+              <button
+                onClick={onEndTurn}
+                className="px-2 py-1 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-black text-[10px] rounded-lg shadow-sm flex items-center gap-1 transition-all active:scale-95 animate-pulse cursor-pointer border border-emerald-400/50"
+                title="Encerrar seu turno"
+              >
+                <CheckCircle2 className="w-3 h-3" />
+                <span>Passar</span>
+              </button>
+            )}
+
+            <button
+              onClick={onOpenFullSheet}
+              className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/60 text-amber-300 text-[10px] font-bold rounded-lg transition-all"
+              title="Abrir Ficha Completa do Personagem"
+            >
+              Ficha
+            </button>
+
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="p-1 text-slate-400 hover:text-slate-100 hover:bg-[#232d40] rounded-md transition-colors"
+              title={isExpanded ? 'Recolher Painel de Ações' : 'Expandir Painel de Ações'}
+            >
+              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+            </button>
           </div>
         </div>
 
-        {/* Action Budget Badges (Standard, Bonus, Reaction, Movement) */}
+        {/* HP Bar */}
+        <div className="w-full bg-[#080b10] h-1.5 rounded-full overflow-hidden border border-[#232d40]">
+          <div 
+            className={`h-full transition-all duration-300 ${
+              hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 20 ? 'bg-amber-500' : 'bg-rose-500'
+            }`}
+            style={{ width: `${hpPercent}%` }}
+          />
+        </div>
+
+        {/* Combat Resource Budget Badges */}
         {isCombatActive && (
-          <div className="flex items-center gap-2">
-            {/* Ação Padrão */}
+          <div className="flex flex-wrap items-center gap-1 pt-1 border-t border-[#232d40]/60">
             <button
               onClick={() => onUpdateCombatantActionState?.({ actionUsed: !actionUsed })}
-              className={`px-2.5 py-1 rounded-xl text-[10px] font-mono font-bold flex items-center gap-1.5 border transition-all ${
+              className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold flex items-center gap-1 border transition-all ${
                 actionUsed
                   ? 'bg-rose-950/60 text-rose-400 border-rose-500/40 line-through opacity-70'
-                  : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40 hover:border-emerald-400'
+                  : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
               }`}
-              title="Ação Padrão (Ataque, Magia, Correr, etc). Clique para alternar estado."
+              title="Ação Padrão"
             >
-              <span className={`w-2 h-2 rounded-full ${actionUsed ? 'bg-rose-500' : 'bg-emerald-400 animate-pulse'}`} />
-              <span>Ação Padrão</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${actionUsed ? 'bg-rose-500' : 'bg-emerald-400 animate-pulse'}`} />
+              <span>Ação</span>
             </button>
 
-            {/* Ação Bônus */}
             <button
               onClick={() => onUpdateCombatantActionState?.({ bonusActionUsed: !bonusActionUsed })}
-              className={`px-2.5 py-1 rounded-xl text-[10px] font-mono font-bold flex items-center gap-1.5 border transition-all ${
+              className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold flex items-center gap-1 border transition-all ${
                 bonusActionUsed
                   ? 'bg-rose-950/60 text-rose-400 border-rose-500/40 line-through opacity-70'
-                  : 'bg-amber-950/60 text-amber-300 border-amber-500/40 hover:border-amber-400'
+                  : 'bg-amber-950/60 text-amber-300 border-amber-500/40'
               }`}
-              title="Ação Bônus (Magias Bônus, Habilidades de Classe). Clique para alternar estado."
+              title="Ação Bônus"
             >
-              <span className={`w-2 h-2 rounded-full ${bonusActionUsed ? 'bg-rose-500' : 'bg-amber-400'}`} />
-              <span>Ação Bônus</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${bonusActionUsed ? 'bg-rose-500' : 'bg-amber-400'}`} />
+              <span>Bônus</span>
             </button>
 
-            {/* Reação */}
             <button
               onClick={() => onUpdateCombatantActionState?.({ reactionUsed: !reactionUsed })}
-              className={`px-2.5 py-1 rounded-xl text-[10px] font-mono font-bold flex items-center gap-1.5 border transition-all ${
+              className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold flex items-center gap-1 border transition-all ${
                 reactionUsed
                   ? 'bg-rose-950/60 text-rose-400 border-rose-500/40 line-through opacity-70'
-                  : 'bg-cyan-950/60 text-cyan-300 border-cyan-500/40 hover:border-cyan-400'
+                  : 'bg-cyan-950/60 text-cyan-300 border-cyan-500/40'
               }`}
-              title="Reação (Ataque de Oportunidade, Escudo Arcano). Clique para alternar estado."
+              title="Reação"
             >
-              <span className={`w-2 h-2 rounded-full ${reactionUsed ? 'bg-rose-500' : 'bg-cyan-400'}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${reactionUsed ? 'bg-rose-500' : 'bg-cyan-400'}`} />
               <span>Reação</span>
             </button>
 
-            {/* Deslocamento */}
-            <span className="px-2.5 py-1 rounded-xl text-[10px] font-mono font-bold bg-[#0a0d14] text-slate-300 border border-[#2a3449] flex items-center gap-1.5">
-              <Footprints className="w-3 h-3 text-emerald-400" />
-              <span>{movementRemaining} / {speedFeet} ft</span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#0a0d14] text-slate-300 border border-[#2a3449] flex items-center gap-1">
+              <Footprints className="w-2.5 h-2.5 text-emerald-400" />
+              <span>{movementRemaining}/{speedFeet}ft</span>
             </span>
           </div>
         )}
-
-        {/* Toggle Expand / Full Sheet / End Turn */}
-        <div className="flex items-center gap-2">
-          {isCombatActive && isMyTurn && onEndTurn && (
-            <button
-              onClick={onEndTurn}
-              className="px-3 py-1 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-950/40 flex items-center gap-1.5 transition-all active:scale-95 animate-pulse cursor-pointer border border-emerald-400/50"
-              title="Encerrar seu turno e passar a vez para o próximo combatente"
-            >
-              <CheckCircle2 className="w-4 h-4 text-slate-950" />
-              <span>Encerrar Turno</span>
-            </button>
-          )}
-
-          <button
-            onClick={onOpenFullSheet}
-            className="px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold rounded-xl transition-all"
-          >
-            Abrir Ficha
-          </button>
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 text-slate-400 hover:text-slate-100 hover:bg-[#2a3449] rounded-lg transition-colors"
-          >
-            {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
-          </button>
-        </div>
       </div>
 
       {/* Action Content Panel */}
       {isExpanded && (
-        <div className="p-3 space-y-3">
+        <div className="p-2 space-y-2 flex flex-col">
           {/* Navigation Tabs */}
-          <div className="flex items-center gap-2 border-b border-[#2a3449]/60 pb-2">
+          <div className="grid grid-cols-4 gap-1 p-0.5 bg-[#090d14] rounded-lg border border-[#232d40]">
             <button
               onClick={() => setActiveTab('attacks')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-1.5 ${
+              className={`py-1 text-[10px] font-bold font-mono rounded transition-all flex flex-col items-center justify-center gap-0.5 ${
                 activeTab === 'attacks'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
+              title="Ataques & Armas"
             >
-              <Swords className="w-3.5 h-3.5" />
-              <span>Ataques & Armas ({attacksList.length})</span>
+              <Swords className="w-3 h-3" />
+              <span className="truncate">Armas ({attacksList.length})</span>
             </button>
 
             <button
               onClick={() => setActiveTab('spells')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-1.5 ${
+              className={`py-1 text-[10px] font-bold font-mono rounded transition-all flex flex-col items-center justify-center gap-0.5 ${
                 activeTab === 'spells'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
+              title="Magias e Truques"
             >
-              <Wand2 className="w-3.5 h-3.5" />
-              <span>Magias ({spellsList.length})</span>
+              <Wand2 className="w-3 h-3" />
+              <span className="truncate">Magias ({spellsList.length})</span>
             </button>
 
             <button
               onClick={() => setActiveTab('features')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-1.5 ${
+              className={`py-1 text-[10px] font-bold font-mono rounded transition-all flex flex-col items-center justify-center gap-0.5 ${
                 activeTab === 'features'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
+              title="Ações Bônus e Habilidades"
             >
-              <Zap className="w-3.5 h-3.5" />
-              <span>Ações Bônus & Classe</span>
+              <Zap className="w-3 h-3" />
+              <span className="truncate">Habil.</span>
             </button>
 
             <button
               onClick={() => setActiveTab('saves')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-1.5 ${
+              className={`py-1 text-[10px] font-bold font-mono rounded transition-all flex flex-col items-center justify-center gap-0.5 ${
                 activeTab === 'saves'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
+              title="Salvaguardas de Atributo"
             >
-              <ShieldAlert className="w-3.5 h-3.5" />
-              <span>Salvaguardas</span>
+              <ShieldAlert className="w-3 h-3" />
+              <span className="truncate">Saves</span>
             </button>
           </div>
 
-          {/* TAB 1: ATAQUES COM ARMAS */}
-          {activeTab === 'attacks' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-              {attacksList.map((atk, idx) => (
-                <div
-                  key={atk.id || idx}
-                  className="p-3 bg-[#141a26] border border-[#2a3449] hover:border-amber-500/50 rounded-xl transition-all flex flex-col justify-between space-y-2 group shadow-lg"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h5 className="text-xs font-bold text-slate-100 group-hover:text-amber-300 transition-colors">
-                        {atk.name}
-                      </h5>
-                      <span className="text-[10px] text-slate-400 font-mono">Dano: {atk.damage} ({atk.type || 'Físico'})</span>
-                    </div>
-                    <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded">
-                      {atk.atkBonus}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => handleWeaponAttackRoll(atk)}
-                    className="w-full py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-lg shadow-md shadow-amber-500/20 transition-all active:scale-95 flex items-center justify-center gap-1.5"
+          {/* TAB CONTENT (Scrollable list) */}
+          <div className="max-h-56 overflow-y-auto pr-0.5 space-y-1.5 custom-scrollbar">
+            {/* TAB 1: ATAQUES COM ARMAS */}
+            {activeTab === 'attacks' && (
+              <div className="space-y-1.5">
+                {attacksList.map((atk, idx) => (
+                  <div
+                    key={atk.id || idx}
+                    className="p-2 bg-[#121824] border border-[#232d40] hover:border-amber-500/40 rounded-xl transition-all flex items-center justify-between gap-2 group"
                   >
-                    <Dices className="w-3.5 h-3.5" />
-                    <span>Atacar com {atk.name}</span>
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <h5 className="text-[11px] font-bold text-slate-100 group-hover:text-amber-300 transition-colors truncate">
+                          {atk.name}
+                        </h5>
+                        <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-1 rounded shrink-0">
+                          {atk.atkBonus}
+                        </span>
+                      </div>
+                      <span className="text-[9px] text-slate-400 font-mono block truncate">
+                        {atk.damage} ({atk.type || 'Físico'})
+                      </span>
+                    </div>
 
-          {/* TAB 2: MAGIAS & TRUQUES */}
-          {activeTab === 'spells' && (
-            <div>
-              {spellsList.length === 0 ? (
-                <div className="text-center py-4 text-slate-500 bg-[#141a26] rounded-xl border border-dashed border-[#2a3449]">
-                  <p className="text-xs">Nenhuma magia adicionada à ficha de personagem.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                  {spellsList.map((spell, idx) => (
+                    <button
+                      onClick={() => handleWeaponAttackRoll(atk)}
+                      className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-[10px] rounded-lg shadow transition-all active:scale-95 flex items-center gap-1 shrink-0"
+                    >
+                      <Dices className="w-3 h-3" />
+                      <span>Atacar</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* TAB 2: MAGIAS & TRUQUES */}
+            {activeTab === 'spells' && (
+              <div className="space-y-1.5">
+                {spellsList.length === 0 ? (
+                  <div className="text-center py-3 text-slate-500 bg-[#121824] rounded-xl border border-dashed border-[#232d40]">
+                    <p className="text-[10px]">Nenhuma magia adicionada à ficha.</p>
+                  </div>
+                ) : (
+                  spellsList.map((spell, idx) => (
                     <div
                       key={spell.id || idx}
-                      className="p-3 bg-[#141a26] border border-[#2a3449] hover:border-cyan-500/50 rounded-xl transition-all flex flex-col justify-between space-y-2 group shadow-lg"
+                      className="p-2 bg-[#121824] border border-[#232d40] hover:border-cyan-500/40 rounded-xl transition-all flex items-center justify-between gap-2 group"
                     >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h5 className="text-xs font-bold text-slate-100 group-hover:text-cyan-300 transition-colors">
-                            {spell.name}
-                          </h5>
-                          <span className="text-[10px] text-cyan-400 font-mono">
-                            {spell.level === 0 ? 'Truque (Nível 0)' : `Nível ${spell.level}`}
-                          </span>
+                      <div className="min-w-0 flex-1">
+                        <h5 className="text-[11px] font-bold text-slate-100 group-hover:text-cyan-300 transition-colors truncate">
+                          {spell.name}
+                        </h5>
+                        <div className="flex items-center gap-1.5 text-[9px] text-cyan-400 font-mono">
+                          <span>{spell.level === 0 ? 'Truque' : `Nv. ${spell.level}`}</span>
+                          {spell.isBonus && (
+                            <span className="text-amber-300 bg-amber-950/60 px-1 rounded border border-amber-500/30">
+                              Bônus
+                            </span>
+                          )}
                         </div>
-                        {spell.isBonus && (
-                          <span className="text-[9px] font-mono text-amber-300 bg-amber-950/60 border border-amber-500/30 px-1.5 py-0.2 rounded">
-                            Bônus
-                          </span>
-                        )}
                       </div>
 
                       <button
                         onClick={() => handleCastSpell(spell)}
-                        className="w-full py-1.5 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 text-slate-950 font-bold text-xs rounded-lg shadow-md shadow-cyan-900/30 transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                        className="px-2.5 py-1.5 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 text-slate-950 font-bold text-[10px] rounded-lg shadow transition-all active:scale-95 flex items-center gap-1 shrink-0"
                       >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Conjurar {spell.name}</span>
+                        <Sparkles className="w-3 h-3" />
+                        <span>Conjurar</span>
                       </button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 3: AÇÕES BÔNUS & HABILIDADES */}
-          {activeTab === 'features' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-              <div className="p-3 bg-[#141a26] border border-[#2a3449] rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <h5 className="text-xs font-bold text-amber-300">Retomar Fôlego</h5>
-                  <span className="text-[9px] font-mono bg-amber-950/60 text-amber-400 px-1.5 py-0.5 rounded">1x/Descanso</span>
-                </div>
-                <p className="text-[10px] text-slate-400">Recupere 1d10 + Nível de PV como Ação Bônus.</p>
-                <button
-                  onClick={() => {
-                    const heal = Math.floor(Math.random() * 10) + 1 + activeSheet.level;
-                    onExecuteRoll({
-                      characterName: activeSheet.characterName,
-                      rollType: 'custom',
-                      label: `Retomar Fôlego (Recuperou +${heal} HP)`,
-                      total: heal
-                    });
-                    if (onUpdateCombatantActionState) onUpdateCombatantActionState({ bonusActionUsed: true });
-                  }}
-                  className="w-full py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold rounded-lg transition-all"
-                >
-                  Usar Retomar Fôlego
-                </button>
+                  ))
+                )}
               </div>
+            )}
 
-              <div className="p-3 bg-[#141a26] border border-[#2a3449] rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <h5 className="text-xs font-bold text-rose-300">Entrar em Fúria</h5>
-                  <span className="text-[9px] font-mono bg-rose-950/60 text-rose-400 px-1.5 py-0.5 rounded">Bônus</span>
+            {/* TAB 3: AÇÕES BÔNUS & HABILIDADES */}
+            {activeTab === 'features' && (
+              <div className="space-y-1.5">
+                <div className="p-2 bg-[#121824] border border-[#232d40] rounded-xl flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1">
+                      <h5 className="text-[11px] font-bold text-amber-300 truncate">Retomar Fôlego</h5>
+                      <span className="text-[8px] font-mono bg-amber-950/60 text-amber-400 px-1 rounded">1x</span>
+                    </div>
+                    <p className="text-[9px] text-slate-400 truncate">1d10 + Nv PV</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const heal = Math.floor(Math.random() * 10) + 1 + activeSheet.level;
+                      onExecuteRoll({
+                        characterName: activeSheet.characterName,
+                        rollType: 'custom',
+                        label: `Retomar Fôlego (Recuperou +${heal} HP)`,
+                        total: heal
+                      });
+                      if (onUpdateCombatantActionState) onUpdateCombatantActionState({ bonusActionUsed: true });
+                    }}
+                    className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[10px] font-bold rounded-lg transition-all shrink-0"
+                  >
+                    Usar
+                  </button>
                 </div>
-                <p className="text-[10px] text-slate-400">+2 no Dano de Força & Resistência a Dano Físico.</p>
-                <button
-                  onClick={() => {
-                    onExecuteRoll({
-                      characterName: activeSheet.characterName,
-                      rollType: 'custom',
-                      label: '🔥 Ativou FÚRIA do Bárbaro!',
-                      total: 0
-                    });
-                    if (onUpdateCombatantActionState) onUpdateCombatantActionState({ bonusActionUsed: true });
-                  }}
-                  className="w-full py-1 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-xs font-bold rounded-lg transition-all"
-                >
-                  Ativar Fúria
-                </button>
-              </div>
 
-              <div className="p-3 bg-[#141a26] border border-[#2a3449] rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <h5 className="text-xs font-bold text-emerald-300">Disparar (Dash)</h5>
-                  <span className="text-[9px] font-mono bg-emerald-950/60 text-emerald-400 px-1.5 py-0.5 rounded">Ação</span>
+                <div className="p-2 bg-[#121824] border border-[#232d40] rounded-xl flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1">
+                      <h5 className="text-[11px] font-bold text-rose-300 truncate">Entrar em Fúria</h5>
+                      <span className="text-[8px] font-mono bg-rose-950/60 text-rose-400 px-1 rounded">Bônus</span>
+                    </div>
+                    <p className="text-[9px] text-slate-400 truncate">+2 Dano & Resistência</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      onExecuteRoll({
+                        characterName: activeSheet.characterName,
+                        rollType: 'custom',
+                        label: '🔥 Ativou FÚRIA do Bárbaro!',
+                        total: 0
+                      });
+                      if (onUpdateCombatantActionState) onUpdateCombatantActionState({ bonusActionUsed: true });
+                    }}
+                    className="px-2 py-1 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-[10px] font-bold rounded-lg transition-all shrink-0"
+                  >
+                    Ativar
+                  </button>
                 </div>
-                <p className="text-[10px] text-slate-400">Dobra seu deslocamento no turno (+{speedFeet}ft).</p>
-                <button
-                  onClick={() => {
-                    onExecuteRoll({
-                      characterName: activeSheet.characterName,
-                      rollType: 'custom',
-                      label: `🏃 Usou DISPARADA (Movimento total: ${speedFeet * 2}ft)`,
-                      total: speedFeet * 2
-                    });
-                    if (onUpdateCombatantActionState) onUpdateCombatantActionState({ actionUsed: true });
-                  }}
-                  className="w-full py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold rounded-lg transition-all"
-                >
-                  Usar Disparada
-                </button>
-              </div>
-            </div>
-          )}
 
-          {/* TAB 4: SALVAGUARDAS */}
-          {activeTab === 'saves' && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-              {[
-                { key: 'str', label: 'Força' },
-                { key: 'dex', label: 'Destreza' },
-                { key: 'con', label: 'Constituição' },
-                { key: 'int', label: 'Inteligência' },
-                { key: 'wis', label: 'Sabedoria' },
-                { key: 'cha', label: 'Carisma' },
-              ].map((save) => (
-                <button
-                  key={save.key}
-                  onClick={() => handleSaveRoll(save.key as any, save.label)}
-                  className="p-2.5 bg-[#141a26] hover:bg-[#1a2334] border border-[#2a3449] hover:border-amber-500/50 rounded-xl transition-all text-center space-y-1 group"
-                >
-                  <span className="text-[10px] text-slate-400 block font-mono uppercase">{save.label}</span>
-                  <span className="text-xs font-bold text-amber-300 group-hover:text-amber-200 block">
-                    Rolar D20
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+                <div className="p-2 bg-[#121824] border border-[#232d40] rounded-xl flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1">
+                      <h5 className="text-[11px] font-bold text-emerald-300 truncate">Disparada (Dash)</h5>
+                      <span className="text-[8px] font-mono bg-emerald-950/60 text-emerald-400 px-1 rounded">Ação</span>
+                    </div>
+                    <p className="text-[9px] text-slate-400 truncate">+{speedFeet}ft movimento</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      onExecuteRoll({
+                        characterName: activeSheet.characterName,
+                        rollType: 'custom',
+                        label: `🏃 Usou DISPARADA (Movimento total: ${speedFeet * 2}ft)`,
+                        total: speedFeet * 2
+                      });
+                      if (onUpdateCombatantActionState) onUpdateCombatantActionState({ actionUsed: true });
+                    }}
+                    className="px-2 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold rounded-lg transition-all shrink-0"
+                  >
+                    Disparar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: SALVAGUARDAS */}
+            {activeTab === 'saves' && (
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { key: 'str', label: 'FOR' },
+                  { key: 'dex', label: 'DES' },
+                  { key: 'con', label: 'CON' },
+                  { key: 'int', label: 'INT' },
+                  { key: 'wis', label: 'SAB' },
+                  { key: 'cha', label: 'CAR' },
+                ].map((save) => (
+                  <button
+                    key={save.key}
+                    onClick={() => handleSaveRoll(save.key as any, save.label)}
+                    className="p-1.5 bg-[#121824] hover:bg-[#1a2334] border border-[#232d40] hover:border-amber-500/50 rounded-lg transition-all text-center group"
+                  >
+                    <span className="text-[9px] text-slate-400 block font-mono font-bold uppercase">{save.label}</span>
+                    <span className="text-[10px] font-bold text-amber-300 group-hover:text-amber-200 block">
+                      D20
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

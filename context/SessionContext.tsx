@@ -66,19 +66,27 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
           const { data: campRow } = await supabase
             .from('campaigns')
-            .select('active_scene_id')
+            .select('active_scene_id, live_state')
             .eq('id', campaignId)
             .maybeSingle();
           if (campRow?.active_scene_id) {
             activeSceneIdFromDb = campRow.active_scene_id;
+          } else if (campRow?.live_state?.activeSceneId) {
+            activeSceneIdFromDb = campRow.live_state.activeSceneId;
           }
         } catch (e) {
           console.warn('[SessionContext] Error querying active_scene_id from db:', e);
         }
       }
 
-      const dmActiveSceneId = activeSceneIdFromDb;
       const isPlayer = activeCampaign?.role === 'player';
+      const savedCampaignSceneId = typeof window !== 'undefined' ? localStorage.getItem(`codex_activeSceneId_${campaignId}`) : null;
+      // If DM, give top priority to current in-memory ref or campaign-level saved scene to prevent resetting on tab switch/refocus
+      const preferredSceneId = (!isPlayer && activeSceneIdRef.current)
+        ? activeSceneIdRef.current
+        : (!isPlayer && savedCampaignSceneId)
+        ? savedCampaignSceneId
+        : (activeSceneIdFromDb || savedCampaignSceneId);
 
       const res = await sessionService.fetchSessions(campaignId);
       if (!isMounted) return;
@@ -93,7 +101,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setActiveSessionState(target);
 
           // Fetch scenes across all sessions if active scene is specified
-          if (dmActiveSceneId) {
+          if (preferredSceneId) {
             const allScenesPromises = fetchedSessions.map((s) => sessionService.fetchScenes(s.id, campaignId));
             const allResults = await Promise.all(allScenesPromises);
             if (!isMounted) return;
@@ -108,7 +116,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 if (fetchedSessions[idx].id === target.id) {
                   targetSessionScenes = sList;
                 }
-                const match = sList.find((sc) => sc.id === dmActiveSceneId);
+                const match = sList.find((sc) => sc.id === preferredSceneId);
                 if (match) {
                   matchedScene = match;
                   matchedSession = fetchedSessions[idx];
@@ -127,6 +135,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
               }
               setActiveSceneState(matchedScene);
+              activeSceneIdRef.current = (matchedScene as GameScene).id;
               return;
             }
           }
@@ -139,9 +148,13 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const fetchedScenes = scenesRes.value;
             setScenes(fetchedScenes);
             if (fetchedScenes.length > 0) {
-              const savedSceneId = typeof window !== 'undefined' ? localStorage.getItem(`codex_activeSceneId_${target.id}`) : null;
+              const savedSceneId = (!isPlayer && activeSceneIdRef.current) 
+                ? activeSceneIdRef.current 
+                : (typeof window !== 'undefined' ? (localStorage.getItem(`codex_activeSceneId_${campaignId}`) || localStorage.getItem(`codex_activeSceneId_${target.id}`)) : null);
               const foundScene = savedSceneId ? fetchedScenes.find((sc) => sc.id === savedSceneId) : null;
-              setActiveSceneState(foundScene || fetchedScenes[0]);
+              const sceneToSet = foundScene || (activeSceneIdRef.current ? (fetchedScenes.find(s => s.id === activeSceneIdRef.current) || fetchedScenes[0]) : fetchedScenes[0]);
+              setActiveSceneState(sceneToSet);
+              activeSceneIdRef.current = sceneToSet?.id || null;
             } else {
               setActiveSceneState(null);
             }
@@ -174,7 +187,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaignId}` },
           async (payload) => {
-            const newActiveSceneId = payload.new?.active_scene_id;
+            // Only update for players so DM never gets their active scene overridden by background events
+            if (activeCampaign?.role === 'dm') return;
+
+            const newActiveSceneId = payload.new?.active_scene_id || payload.new?.live_state?.activeSceneId;
             if (!newActiveSceneId || !isMounted) return;
 
             // Fetch sessions and scenes to find the scene across all sessions
@@ -190,6 +206,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
                   setActiveSessionState(sess);
                   setScenes(scRes.value);
                   setActiveSceneState(match);
+                  activeSceneIdRef.current = match.id;
                   break;
                 }
               }
@@ -213,14 +230,41 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return;
     }
 
-    sessionService.fetchCampaignMaps(campaignId).then((res) => {
-      if (res.ok) {
-        setCampaignMaps(res.value);
-      } else {
-        setCampaignMaps([]);
-        toast.error(res.error.message);
+    let isMounted = true;
+    const loadMaps = () => {
+      sessionService.fetchCampaignMaps(campaignId).then((res) => {
+        if (!isMounted) return;
+        if (res.ok) {
+          setCampaignMaps(res.value);
+        } else {
+          setCampaignMaps([]);
+        }
+      });
+    };
+
+    loadMaps();
+
+    // Subscribe to campaign_maps changes in Supabase Realtime Postgres Changes
+    let mapsChannel: any = null;
+    if (isSupabaseConfigured() && isValidUuid(campaignId)) {
+      mapsChannel = supabase
+        .channel(`campaign_maps_sync_${campaignId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'campaign_maps', filter: `campaign_id=eq.${campaignId}` },
+          () => {
+            loadMaps();
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      isMounted = false;
+      if (mapsChannel) {
+        supabase.removeChannel(mapsChannel);
       }
-    });
+    };
   }, [campaignId]);
 
   const setActiveSession = (session: GameSession | null) => {
@@ -244,12 +288,38 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const setActiveScene = (scene: GameScene | null) => {
     setActiveSceneState(scene);
+    activeSceneIdRef.current = scene?.id ?? null;
     try {
       if (scene) {
-        localStorage.setItem(`codex_activeSceneId_${scene.sessionId}`, scene.id);
+        if (scene.sessionId) {
+          localStorage.setItem(`codex_activeSceneId_${scene.sessionId}`, scene.id);
+        }
+        if (campaignId) {
+          localStorage.setItem(`codex_activeSceneId_${campaignId}`, scene.id);
+          localStorage.setItem(`codex_activeSceneId_campaign_${campaignId}`, scene.id);
+        }
+        if (campaignId && isSupabaseConfigured() && isValidUuid(campaignId) && activeCampaign?.role === 'dm') {
+          supabase
+            .from('campaigns')
+            .update({
+              active_scene_id: isValidUuid(scene.id) ? scene.id : null,
+              live_state: {
+                activeSceneId: scene.id,
+                updatedAt: Date.now(),
+              }
+            })
+            .eq('id', campaignId)
+            .then(({ error }) => {
+              if (error) console.warn('[SessionContext] Error updating active_scene_id in campaign:', error.message);
+            });
+        }
       } else {
         if (activeSession) {
           localStorage.removeItem(`codex_activeSceneId_${activeSession.id}`);
+        }
+        if (campaignId) {
+          localStorage.removeItem(`codex_activeSceneId_${campaignId}`);
+          localStorage.removeItem(`codex_activeSceneId_campaign_${campaignId}`);
         }
       }
     } catch (e) {}

@@ -13,6 +13,9 @@ import {
   ArrowLeft, 
   X, 
   ChevronRight, 
+  ChevronLeft,
+  PanelRightClose,
+  PanelRightOpen,
   ScrollText, 
   Users,
   Compass,
@@ -169,10 +172,9 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
         let activeId = savedData?.activeMapId;
         let gridData = null;
 
-        const associatedIds = (currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []))
-          .filter((id: string) => campaignMaps.some(m => m.id === id));
-        if (!activeId || !associatedIds.includes(activeId)) {
-          activeId = associatedIds[0] || null;
+        const associatedIds = currentScene.associatedMapIds || (currentScene.associatedMapId ? [currentScene.associatedMapId] : []);
+        if (!activeId) {
+          activeId = (associatedIds.length > 0 ? (campaignMaps.find(m => associatedIds.includes(m.id))?.id || associatedIds[0]) : null);
         }
         const templateMap = campaignMaps.find(m => m.id === activeId);
         console.log('[PlayerLobby] savedData:', !!savedData, 'activeId:', activeId, 'templateMap:', !!templateMap, 'associatedIds:', associatedIds);
@@ -277,6 +279,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
   // VTT Player Cockpit UI States
   const [sidebarTab, setSidebarTab] = useState<'init' | 'log' | 'chat'>('init');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [macroDisplayMode, setMacroDisplayMode] = useState<MacroBarDisplayMode>('both');
   const [secretRollMode, setSecretRollMode] = useState<SecretRollNotificationMode>('subtle_notice');
@@ -1645,16 +1648,36 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
                   if (activeView === 'map') {
                     const typedMap = mapData as any;
-                    const currentMapId = typedMap?.activeMapId || 
-                      (currentScene?.associatedMapIds && currentScene.associatedMapIds[0]) || 
-                      currentScene?.associatedMapId || 
-                      (campaignMaps.find(m => currentScene?.associatedMapIds?.includes(m.id))?.id) || 
-                      campaignMaps[0]?.id;
+                    const sceneAssocIds = currentScene?.associatedMapIds || (currentScene?.associatedMapId ? [currentScene.associatedMapId] : []);
+                    const currentMapId = 
+                      typedMap?.activeMapId || 
+                      (sceneAssocIds.length > 0 ? (campaignMaps.find(m => sceneAssocIds.includes(m.id))?.id || sceneAssocIds[0]) : null) ||
+                      (campaignMaps.length > 0 ? campaignMaps[0]?.id : null);
 
-                    const activeCampaignMap = campaignMaps.find((m) => m.id === currentMapId) || campaignMaps[0] || null;
-                    const dungeonCover = activeCampaignMap?.gridData?.coverImageUrl || activeCampaignMap?.gridData?.levels?.[0]?.bgImageUrl || activeCampaignMap?.gridData?.bgImageUrl;
-                    const dungeonLore = activeCampaignMap?.gridData?.description;
-                    const dungeonCR = activeCampaignMap?.gridData?.challengeRating || 'Nível Recomendado';
+                    let activeCampaignMap = currentMapId ? (campaignMaps.find((m) => m.id === currentMapId) || null) : null;
+                    if (!activeCampaignMap && typedMap && (typedMap.mapTitle || typedMap.title || typedMap.coverImageUrl || typedMap.bgImageUrl)) {
+                      activeCampaignMap = {
+                        id: currentMapId || 'active-synced-map',
+                        campaignId: activeCampaign?.id || '',
+                        title: typedMap.mapTitle || typedMap.title || currentScene?.title || 'Masmorra Ativa',
+                        gridData: {
+                          description: typedMap.description || typedMap.dungeonLore || '',
+                          challengeRating: typedMap.challengeRating || typedMap.dungeonCR || 'Nível Recomendado',
+                          coverImageUrl: typedMap.coverImageUrl || typedMap.bgImageUrl,
+                          bgImageUrl: typedMap.bgImageUrl,
+                          gridScale: typedMap.gridScale || 40,
+                          grid: typedMap.grid || [],
+                        }
+                      };
+                    }
+                    if (!activeCampaignMap && sceneAssocIds.length === 0) {
+                      activeCampaignMap = campaignMaps[0] || null;
+                    }
+
+                    const dungeonCover = typedMap?.coverImageUrl || activeCampaignMap?.gridData?.coverImageUrl || activeCampaignMap?.gridData?.levels?.[0]?.bgImageUrl || activeCampaignMap?.gridData?.bgImageUrl || typedMap?.bgImageUrl;
+                    const dungeonLore = typedMap?.description || activeCampaignMap?.gridData?.description;
+                    const dungeonCR = typedMap?.challengeRating || activeCampaignMap?.gridData?.challengeRating || 'Nível Recomendado';
+                    const dungeonTitle = typedMap?.mapTitle || typedMap?.title || activeCampaignMap?.title || currentScene?.title || 'Exploração de Masmorra';
                     const isExplorationStarted = 
                       typedMap?.dungeonExplorationStarted === true || 
                       (mapData as any)?.dungeonExplorationStarted === true ||
@@ -1687,7 +1710,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
                             <div className="space-y-0.5 shrink-0">
                               <h2 className="text-sm sm:text-base font-black text-amber-200 uppercase tracking-wide font-serif drop-shadow">
-                                {activeCampaignMap?.title || 'Exploração de Masmorra'}
+                                {dungeonTitle}
                               </h2>
                               <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-transparent mx-auto mt-0.5" />
                             </div>
@@ -1737,34 +1760,71 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                     );
                   }
 
+                  // Helper to resolve Tailwind aspect ratio class
+                  const getAspectClass = (aspect?: string) => {
+                    switch (aspect) {
+                      case '4:3': return 'aspect-[4/3]';
+                      case '1:1': return 'aspect-square';
+                      case '9:16': return 'aspect-[9/16]';
+                      case '16:9':
+                      default:
+                        return 'aspect-video';
+                    }
+                  };
+
                   // Default Scene Artwork View
                   const resolved = resolveCurrentSceneImage(currentScene);
                   const rawUrl = resolved?.imageUrl || (projectedScene as any)?.currentImageUrl || (currentScene as any)?.currentImageUrl || currentScene?.imageUrl;
+                  const activeAspectRatio = resolved?.aspectRatio || currentScene?.defaultAspectRatio || '16:9';
 
                   if (rawUrl) {
                     const ytEmbed = getYouTubeEmbedUrl(rawUrl);
                     if (ytEmbed) {
                       return (
-                        <iframe
-                          src={ytEmbed}
-                          className="w-full h-full border-0 bg-black"
-                          allow="autoplay; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
+                        <div className="w-full h-full flex items-center justify-center p-2 sm:p-4 overflow-hidden select-none">
+                          <div className={`h-full max-w-full w-auto ${getAspectClass(activeAspectRatio)} bg-black rounded-2xl border border-[#2a3449] overflow-hidden relative shadow-2xl flex items-center justify-center`}>
+                            <iframe
+                              src={ytEmbed}
+                              className="w-full h-full border-0 bg-black"
+                              allow="autoplay; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
+                          </div>
+                        </div>
                       );
                     }
                     const isVid = resolved?.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(rawUrl);
                     if (isVid) {
                       return (
-                        <div className="relative w-full h-full flex items-center justify-center bg-black">
-                          <video
-                            src={normalizeImageUrl(rawUrl)}
-                            className="w-full h-full object-contain"
-                            autoPlay
-                            loop
-                            muted
-                            playsInline
-                            controls={false}
+                        <div className="w-full h-full flex items-center justify-center p-2 sm:p-4 overflow-hidden select-none">
+                          <div className={`h-full max-w-full w-auto ${getAspectClass(activeAspectRatio)} bg-black rounded-2xl border border-[#2a3449] overflow-hidden relative shadow-2xl flex items-center justify-center`}>
+                            <video
+                              src={normalizeImageUrl(rawUrl)}
+                              className="w-full h-full object-contain bg-black"
+                              autoPlay
+                              loop
+                              muted
+                              playsInline
+                              controls={false}
+                            />
+                            <SlideTextOverlayRenderer
+                              overlays={resolved?.textOverlays}
+                              fallbackOverlayText={resolved?.overlayText || currentScene?.sensoryText}
+                              fallbackTitle={resolved?.title || currentScene?.title}
+                              triggerKey={`${rawUrl}-${resolved?.activeImageIndex ?? 0}`}
+                            />
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="w-full h-full flex items-center justify-center p-2 sm:p-4 overflow-hidden select-none">
+                        <div className={`h-full max-w-full w-auto ${getAspectClass(activeAspectRatio)} bg-black rounded-2xl border border-[#2a3449] overflow-hidden relative shadow-2xl flex items-center justify-center`}>
+                          <MagicShaderSlideshow
+                            imageUrl={normalizeImageUrl(rawUrl)}
+                            transitionType={resolved?.transitionType || currentScene?.defaultTransition || 'magical_dissolve'}
+                            aspectRatio={activeAspectRatio as any}
+                            className="w-full h-full"
                           />
                           <SlideTextOverlayRenderer
                             overlays={resolved?.textOverlays}
@@ -1773,22 +1833,6 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                             triggerKey={`${rawUrl}-${resolved?.activeImageIndex ?? 0}`}
                           />
                         </div>
-                      );
-                    }
-                    return (
-                      <div className="relative w-full h-full">
-                        <MagicShaderSlideshow
-                          imageUrl={normalizeImageUrl(rawUrl)}
-                          transitionType={resolved?.transitionType || currentScene?.defaultTransition || 'magical_dissolve'}
-                          aspectRatio={resolved?.aspectRatio || currentScene?.defaultAspectRatio || '16:9'}
-                          className="w-full h-full"
-                        />
-                        <SlideTextOverlayRenderer
-                          overlays={resolved?.textOverlays}
-                          fallbackOverlayText={resolved?.overlayText || currentScene?.sensoryText}
-                          fallbackTitle={resolved?.title || currentScene?.title}
-                          triggerKey={`${rawUrl}-${resolved?.activeImageIndex ?? 0}`}
-                        />
                       </div>
                     );
                   }
@@ -1802,25 +1846,162 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                 })()}
               </div>
 
-              {/* BOTTOM OVERLAY: PLAYER TOKEN ACTION DOCK */}
-              {(() => {
-                const charName = resolveCharName(currentCampaign);
-                const meCombatant = combatants.find(
-                  (c) => c.name.toLowerCase().includes(charName.toLowerCase()) || charName.toLowerCase().includes(c.name.toLowerCase())
-                );
-                const currentScene = projectedScene || activeScene;
-                const activeView = playerCanvasView === 'auto' ? (liveDisplayMode === 'artwork' ? 'art' : liveDisplayMode) : playerCanvasView;
-                const isCombat = Boolean(currentScene?.isBattleStarted) && (activeView === 'grid' || activeView === 'combat');
-                const isMyTurn = isCombat && combatants[currentTurnIndex]?.name.toLowerCase().includes(charName.toLowerCase());
+              {/* FLOATING TOGGLE BUTTON TO RE-OPEN SIDEBAR WHEN COLLAPSED */}
+              {isSidebarCollapsed && (
+                <button
+                  onClick={() => setIsSidebarCollapsed(false)}
+                  className="absolute top-3 right-3 z-30 flex items-center gap-1.5 px-3 py-1.5 bg-[#141a26]/90 hover:bg-[#1a2334] border border-amber-500/40 text-amber-300 font-bold text-xs rounded-xl shadow-2xl backdrop-blur-md transition-all active:scale-95 animate-fade-in cursor-pointer"
+                  title="Expandir Painel Lateral & Ações"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Painel Lateral & Ações</span>
+                </button>
+              )}
+            </div>
 
-                return (
-                  <div className="absolute bottom-2 left-2 right-2 sm:bottom-3 sm:left-3 sm:right-3 z-20 pointer-events-none flex justify-center">
-                    <div className="pointer-events-auto w-full max-w-4xl">
+            {/* RIGHT SIDEBAR INTEGRADA (INICIATIVA / LOG / CHAT + DOCK DE AÇÕES) */}
+            {!isSidebarCollapsed && (
+              <div className="w-80 lg:w-96 bg-[#141a26] border border-[#2a3449] rounded-xl sm:rounded-2xl flex flex-col justify-between overflow-hidden shadow-2xl shrink-0 transition-all duration-300 animate-fade-in">
+                {/* Tab Navigation + Collapse Toggle */}
+                <div className="flex items-center justify-between border-b border-[#2a3449] bg-[#0c1018] p-1.5 gap-1 shrink-0">
+                  <div className="flex items-center gap-1 flex-1">
+                    <button
+                      onClick={() => setSidebarTab('init')}
+                      className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
+                        sidebarTab === 'init'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Membros ({campaignMembers.length})</span>
+                    </button>
+                    <button
+                      onClick={() => setSidebarTab('log')}
+                      className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
+                        sidebarTab === 'log'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <ScrollText className="w-3.5 h-3.5" />
+                      <span>Log ({combatLogs.length})</span>
+                    </button>
+                    <button
+                      onClick={() => setSidebarTab('chat')}
+                      className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
+                        sidebarTab === 'chat'
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>Chat ({chatMessages.length})</span>
+                    </button>
+                  </div>
+
+                  {/* Collapse Button */}
+                  <button
+                    onClick={() => setIsSidebarCollapsed(true)}
+                    className="p-1.5 text-slate-400 hover:text-amber-300 hover:bg-[#1a2334] border border-transparent hover:border-amber-500/30 rounded-lg transition-all ml-1 cursor-pointer"
+                    title="Recolher Painel Lateral (Foco Total na Cena/Dungeon)"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* TAB CONTENT (Scrollable Upper Section) */}
+                <div className="flex-1 overflow-y-auto">
+                  {sidebarTab === 'init' ? (
+                    <div className="p-3 space-y-4">
+                      {/* Widget: Membros do Grupo */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between pb-1 border-b border-[#2a3449]">
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono flex items-center gap-1.5">
+                            <Users className="w-3.5 h-3.5 text-cyan-400" /> Membros Conectados
+                          </span>
+                        </div>
+
+                        {campaignMembers.map((member) => {
+                          const isMe = member.characterName?.toLowerCase() === currentCampaign?.characterName?.toLowerCase();
+                          const initials = (member.characterName || '?').slice(0, 2).toUpperCase();
+                          const isDM = member.role === 'dm';
+                          return (
+                            <div
+                              key={member.id}
+                              className={`flex items-center justify-between gap-2 p-2 rounded-xl border transition-all ${
+                                isMe ? 'bg-cyan-950/30 border-cyan-500/40' : isDM ? 'bg-amber-950/20 border-amber-500/30' : 'bg-[#0a0d14] border-[#2a3449]'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                {member.avatarUrl ? (
+                                  <img src={member.avatarUrl} alt={member.characterName} className="w-7 h-7 rounded-lg object-cover border border-[#2a3449]" />
+                                ) : (
+                                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold font-mono border ${isDM ? 'bg-amber-500/20 text-amber-300' : 'bg-cyan-500/20 text-cyan-300'}`}>
+                                    {initials}
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="text-xs font-bold text-slate-200 leading-tight">
+                                    {member.characterName || 'Aventureiro'}
+                                    {isMe && <span className="ml-1 text-[8px] bg-cyan-900/60 text-cyan-300 border border-cyan-500/30 px-1 rounded font-mono">VOCÊ</span>}
+                                  </p>
+                                  <p className="text-[8px] font-mono text-slate-500 uppercase">
+                                    {isDM ? '🎲 Dungeon Master' : '⚔️ Jogador'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {!isMe && !isDM && (
+                                <button
+                                  onClick={() => handleViewMemberSheet(member)}
+                                  disabled={loadingMemberSheet === member.id}
+                                  className="px-2 py-1 bg-[#161c28] hover:bg-cyan-950/40 border border-[#2a3449] hover:border-cyan-500/40 text-slate-400 hover:text-cyan-300 rounded-lg text-[9px] font-bold transition-all disabled:opacity-50 cursor-pointer"
+                                  title="Ver Ficha deste Jogador"
+                                >
+                                  {loadingMemberSheet === member.id ? '...' : 'Ficha'}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : sidebarTab === 'log' ? (
+                    <SharedGameLog
+                      combatLogs={combatLogs}
+                      chatMessages={chatMessages}
+                      currentUserId={user?.id}
+                      isDm={activeCampaign?.dmId === user?.id}
+                    />
+                  ) : (
+                    <LiveChatPanel
+                      activeSheet={activeSheet}
+                      displayMode={macroDisplayMode}
+                      secretMode={secretRollMode}
+                    />
+                  )}
+                </div>
+
+                {/* FIXED BOTTOM: PLAYER TOKEN ACTION DOCK */}
+                {(() => {
+                  const charName = resolveCharName(currentCampaign);
+                  const meCombatant = combatants.find(
+                    (c) => c.name.toLowerCase().includes(charName.toLowerCase()) || charName.toLowerCase().includes(c.name.toLowerCase())
+                  );
+                  const currentScene = projectedScene || activeScene;
+                  const activeView = playerCanvasView === 'auto' ? (liveDisplayMode === 'artwork' ? 'art' : liveDisplayMode) : playerCanvasView;
+                  const isCombat = Boolean(currentScene?.isBattleStarted) && (activeView === 'grid' || activeView === 'combat');
+                  const isMyTurn = isCombat && combatants[currentTurnIndex]?.name.toLowerCase().includes(charName.toLowerCase());
+
+                  return (
+                    <div className="shrink-0">
                       <PlayerTokenActionDock
                         activeSheet={activeSheet}
                         playerCombatant={meCombatant}
                         isMyTurn={isMyTurn}
                         isCombatActive={isCombat}
+                        layout="sidebar"
                         onStartAttackTargeting={(attack) => {
                           const cleanBonus = parseInt(attack.atkBonus.replace(/[^0-9-]/g, '')) || 0;
                           const rangeText = attack.rangeText || attack.range || attack.name;
@@ -1856,146 +2037,10 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                         onEndTurn={handlePlayerNextTurn}
                       />
                     </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* RIGHT SIDEBAR INTEGRADA (INICIATIVA / LOG / CHAT) */}
-            <div className="w-72 lg:w-80 bg-[#141a26] border border-[#2a3449] rounded-xl sm:rounded-2xl flex flex-col justify-between overflow-hidden shadow-xl shrink-0">
-              {/* Tab Navigation */}
-              <div className="flex border-b border-[#2a3449] bg-[#0c1018] p-1.5 gap-1 shrink-0">
-                <button
-                  onClick={() => setSidebarTab('init')}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
-                    sidebarTab === 'init'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>Membros ({campaignMembers.length})</span>
-                </button>
-                <button
-                  onClick={() => setSidebarTab('log')}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
-                    sidebarTab === 'log'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <ScrollText className="w-3.5 h-3.5" />
-                  <span>Log ({combatLogs.length})</span>
-                </button>
-                <button
-                  onClick={() => setSidebarTab('chat')}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
-                    sidebarTab === 'chat'
-                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>Chat ({chatMessages.length})</span>
-                </button>
+                  );
+                })()}
               </div>
-
-              {/* TAB CONTENT */}
-              <div className="flex-1 overflow-y-auto">
-                {sidebarTab === 'init' ? (
-                  <div className="p-3 space-y-4">
-                    {/* Widget: Membros do Grupo */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between pb-1 border-b border-[#2a3449]">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono flex items-center gap-1.5">
-                          <Users className="w-3.5 h-3.5 text-cyan-400" /> Membros Conectados
-                        </span>
-                      </div>
-
-                      {campaignMembers.map((member) => {
-                        const isMe = member.characterName?.toLowerCase() === currentCampaign?.characterName?.toLowerCase();
-                        const initials = (member.characterName || '?').slice(0, 2).toUpperCase();
-                        const isDM = member.role === 'dm';
-                        return (
-                          <div
-                            key={member.id}
-                            className={`flex items-center justify-between gap-2 p-2 rounded-xl border transition-all ${
-                              isMe ? 'bg-cyan-950/30 border-cyan-500/40' : isDM ? 'bg-amber-950/20 border-amber-500/30' : 'bg-[#0a0d14] border-[#2a3449]'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              {member.avatarUrl ? (
-                                <img src={member.avatarUrl} alt={member.characterName} className="w-7 h-7 rounded-lg object-cover border border-[#2a3449]" />
-                              ) : (
-                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold font-mono border ${isDM ? 'bg-amber-500/20 text-amber-300' : 'bg-cyan-500/20 text-cyan-300'}`}>
-                                  {initials}
-                                </div>
-                              )}
-                              <div>
-                                <p className="text-xs font-bold text-slate-200 leading-tight">
-                                  {member.characterName || 'Aventureiro'}
-                                  {isMe && <span className="ml-1 text-[8px] bg-cyan-900/60 text-cyan-300 border border-cyan-500/30 px-1 rounded font-mono">VOCÊ</span>}
-                                </p>
-                                <p className="text-[8px] font-mono text-slate-500 uppercase">
-                                  {isDM ? '🎲 Dungeon Master' : '⚔️ Jogador'}
-                                </p>
-                              </div>
-                            </div>
-
-                            {!isMe && !isDM && (
-                              <button
-                                onClick={() => handleViewMemberSheet(member)}
-                                disabled={loadingMemberSheet === member.id}
-                                className="px-2 py-1 bg-[#161c28] hover:bg-cyan-950/40 border border-[#2a3449] hover:border-cyan-500/40 text-slate-400 hover:text-cyan-300 rounded-lg text-[9px] font-bold transition-all disabled:opacity-50"
-                                title="Ver Ficha deste Jogador"
-                              >
-                                {loadingMemberSheet === member.id ? '...' : 'Ficha'}
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Feed da Aventura resumido */}
-                    {/*
-                    <div className="space-y-2 pt-2 border-t border-[#2a3449]">
-                      <h4 className="text-xs font-bold text-slate-300 uppercase font-mono flex items-center gap-1.5">
-                        <BookOpen className="w-3.5 h-3.5 text-amber-400" /> Diário de Bordo
-                      </h4>
-                      {campaignFeed.length === 0 ? (
-                        <p className="text-[11px] text-slate-500 italic bg-[#0a0d14] p-2.5 rounded-xl border border-[#2a3449]">
-                          Nenhum registro público no feed da campanha até o momento.
-                        </p>
-                      ) : (
-                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                          {campaignFeed.slice(0, 3).map((ev) => (
-                            <div key={ev.id} className="p-2.5 rounded-xl bg-[#0a0d14] border border-[#2a3449] space-y-1">
-                              <h5 className="text-[11px] font-bold text-amber-300">{ev.title}</h5>
-                              <p className="text-[10px] text-slate-300 leading-tight">{ev.summary}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    */}
-                  </div>
-                ) : sidebarTab === 'log' ? (
-                  <SharedGameLog
-                    combatLogs={combatLogs}
-                    chatMessages={chatMessages}
-                    currentUserId={user?.id}
-                    isDm={activeCampaign?.dmId === user?.id}
-                  />
-                ) : (
-                  <LiveChatPanel
-                    activeSheet={activeSheet}
-                    displayMode={macroDisplayMode}
-                    secretMode={secretRollMode}
-                  />
-                )}
-              </div>
-            </div>
+            )}
           </div>
         </div>
       )}

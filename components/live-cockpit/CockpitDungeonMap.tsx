@@ -620,6 +620,9 @@ export const CockpitDungeonMap: React.FC = () => {
         const m = multiState.maps[activeId];
         const lvlId = m.activeLevelId;
         const currentLvlState: LevelRuntimeState | undefined = (lvlId && m.levels ? m.levels[lvlId] : undefined) || (m.levels ? Object.values(m.levels)[0] : undefined);
+        const mapTemplate = campaignMaps.find(cmap => cmap.id === activeId);
+        const coverImg = mapTemplate?.gridData?.coverImageUrl || mapTemplate?.gridData?.levels?.[0]?.bgImageUrl || mapTemplate?.gridData?.bgImageUrl || currentLvlState?.bgImageUrl || m.bgImageUrl || null;
+
         const payload = {
           grid: currentLvlState?.grid || m.grid || [],
           bgImageUrl: currentLvlState?.bgImageUrl ?? m.bgImageUrl ?? null,
@@ -633,6 +636,10 @@ export const CockpitDungeonMap: React.FC = () => {
           currentLevelName: currentLvlState?.name || 'Andar',
           sceneId: activeScene.id,
           dungeonExplorationStarted: Boolean(persistedStarted),
+          mapTitle: mapTemplate?.title || activeScene.title,
+          coverImageUrl: coverImg,
+          description: mapTemplate?.gridData?.description || '',
+          challengeRating: mapTemplate?.gridData?.challengeRating || 'Nível Recomendado',
         };
         lastBroadcast.current = JSON.stringify(payload);
         broadcastToPlayerView({
@@ -711,6 +718,9 @@ export const CockpitDungeonMap: React.FC = () => {
       }
 
       const activeLevelName = activeLevels.find(l => l.id === activeLevelId)?.name;
+      const associatedMap = campaignMaps.find(m => m.id === currentMapId);
+      const coverImg = associatedMap?.gridData?.coverImageUrl || associatedMap?.gridData?.levels?.[0]?.bgImageUrl || associatedMap?.gridData?.bgImageUrl || bgImageUrl || null;
+
       const mapPayload = {
         grid,
         bgImageUrl,
@@ -726,6 +736,10 @@ export const CockpitDungeonMap: React.FC = () => {
         fogMatrix,
         tokens,
         dungeonExplorationStarted: isExplorationStarted,
+        mapTitle: associatedMap?.title || activeScene.title,
+        coverImageUrl: coverImg,
+        description: associatedMap?.gridData?.description || '',
+        challengeRating: associatedMap?.gridData?.challengeRating || 'Nível Recomendado',
       };
 
       saveSceneMap(activeScene.id, multiMapStateRef.current).catch((e: any) => {
