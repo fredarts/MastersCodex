@@ -1998,9 +1998,9 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                             ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-600/30 ring-1 ring-cyan-400 animate-pulse'
                             : 'bg-[#161c28] hover:bg-cyan-950 text-cyan-300 border border-cyan-500/40 hover:border-cyan-400'
                         }`}
-                        title="Gera close-up do rosto do personagem (1:1), ideal para foto de perfil em lojas, mural de pistas, árvore genealógica e fichas"
+                        title="Gera close-up do retrato do personagem (1:1), ideal para perfil em lojas, mural de pistas, árvore genealógica e fichas"
                       >
-                        👤 Porta-retrato
+                        👤 Retrato
                       </button>
                     </div>
 
@@ -2029,10 +2029,10 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                         </div>
                         <div className="min-w-0">
                           <span className="text-xs font-bold text-cyan-200 block">
-                            Modo Porta-retrato / Foto de Rosto Ativo (1:1)
+                            Modo Retrato Ativo (1:1)
                           </span>
                           <span className="text-[10px] text-slate-400 block">
-                            Gera um close-up focado no rosto e traços do personagem (1:1). Usado automaticamente em Lojas, Mural de Pistas, Árvore Genealógica e Fichas.
+                            Gera um close-up focado no retrato e traços do personagem (1:1). Usado automaticamente em Lojas, Mural de Pistas, Árvore Genealógica e Fichas.
                           </span>
                         </div>
                       </div>
@@ -2193,7 +2193,7 @@ export const WorldEntityModal: React.FC<WorldEntityModalProps> = ({
                                   ? 'bg-cyan-500 text-slate-950 ring-1 ring-cyan-300'
                                   : 'bg-cyan-950/90 hover:bg-cyan-600 hover:text-white text-cyan-300 border border-cyan-500/60'
                               }`}
-                              title={portraitIndex === idx ? 'Desmarcar como Porta-retrato' : 'Definir como Porta-retrato (Foto de Rosto 1:1)'}
+                              title={portraitIndex === idx ? 'Desmarcar como Retrato' : 'Definir como Retrato do Personagem (1:1)'}
                             >
                               <Camera className="w-3.5 h-3.5" />
                             </button>

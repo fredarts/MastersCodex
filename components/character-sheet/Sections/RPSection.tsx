@@ -126,10 +126,12 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
       } else if (isPortraitMode) {
         updatedSheet.avatarUrl = finalUrl;
         updatedSheet.faceImageUrl = finalUrl;
+        updatedSheet.portraitUrl = finalUrl;
       } else {
         if (!sheet.avatarUrl) {
           updatedSheet.avatarUrl = finalUrl;
           updatedSheet.faceImageUrl = finalUrl;
+          updatedSheet.portraitUrl = finalUrl;
         }
         if (!sheet.modelUrl) {
           updatedSheet.modelUrl = finalUrl;
@@ -220,6 +222,7 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
       ...sheet,
       avatarUrl: imgUrl,
       faceImageUrl: imgUrl,
+      portraitUrl: imgUrl,
       images: galleryImages.includes(imgUrl) ? galleryImages : [imgUrl, ...galleryImages],
     };
     // Se esta imagem estava como combate e temos outra imagem na galeria, passa o combate para a outra
@@ -240,12 +243,13 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
       combatImageUrl: imgUrl,
       images: galleryImages.includes(imgUrl) ? galleryImages : [imgUrl, ...galleryImages],
     };
-    // Se esta imagem estava como rosto e temos outra imagem na galeria, passa o rosto para a outra
-    if (sheet.faceImageUrl === imgUrl || sheet.avatarUrl === imgUrl) {
+    // Se esta imagem estava como retrato e temos outra imagem na galeria, passa o retrato para a outra
+    if (sheet.faceImageUrl === imgUrl || sheet.avatarUrl === imgUrl || sheet.portraitUrl === imgUrl) {
       const otherImg = galleryImages.find((img) => img !== imgUrl);
       if (otherImg) {
         updated.avatarUrl = otherImg;
         updated.faceImageUrl = otherImg;
+        updated.portraitUrl = otherImg;
       }
     }
     onChange(updated);
@@ -257,9 +261,10 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
       ...sheet,
       images: nextImages,
     };
-    if (sheet.avatarUrl === imgUrl || sheet.faceImageUrl === imgUrl) {
+    if (sheet.avatarUrl === imgUrl || sheet.faceImageUrl === imgUrl || sheet.portraitUrl === imgUrl) {
       updatedSheet.avatarUrl = nextImages[0] || undefined;
       updatedSheet.faceImageUrl = nextImages[0] || undefined;
+      updatedSheet.portraitUrl = nextImages[0] || undefined;
     }
     if (sheet.modelUrl === imgUrl || sheet.combatImageUrl === imgUrl) {
       updatedSheet.modelUrl = nextImages[1] || nextImages[0] || undefined;
@@ -284,6 +289,7 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
     if (editingImageUrl === sheet.avatarUrl || (!sheet.avatarUrl && mode === 'add_new')) {
       updatedSheet.avatarUrl = newUrl;
       updatedSheet.faceImageUrl = newUrl;
+      updatedSheet.portraitUrl = newUrl;
     }
     if (editingImageUrl === sheet.modelUrl) {
       updatedSheet.modelUrl = newUrl;
@@ -441,10 +447,10 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
                         ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow ring-1 ring-cyan-400'
                         : 'bg-[#101624] text-cyan-300 border-cyan-500/30 hover:bg-cyan-950/40'
                     }`}
-                    title="Gera close-up focado no rosto para avatar, ficha e HUD"
+                    title="Gera close-up focado no retrato do personagem para avatar, ficha e HUD"
                   >
                     <Camera className="w-2.5 h-2.5" />
-                    Foto de Rosto
+                    Retrato
                   </button>
                 </div>
               </div>
@@ -568,7 +574,7 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
                         {/* Hover Overlay com Ações */}
                         <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 p-1 backdrop-blur-[1px] z-20">
                           <div className="flex items-center gap-1">
-                            {/* Definir como Rosto */}
+                            {/* Definir como Retrato */}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -580,10 +586,10 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
                                   ? 'bg-cyan-500 text-slate-950 font-black shadow'
                                   : 'bg-cyan-950/90 hover:bg-cyan-900 text-cyan-200 border border-cyan-500/40'
                               }`}
-                              title="Definir como Foto de Rosto (Avatar/HUD)"
+                              title="Definir como Retrato do Personagem (Avatar/HUD/Party)"
                             >
                               <Camera className="w-2.5 h-2.5" />
-                              <span>Rosto</span>
+                              <span>Retrato</span>
                             </button>
 
                             {/* Definir como Combate */}
@@ -682,19 +688,19 @@ export const RPSection: React.FC<RPSectionProps> = ({ sheet, onChange }) => {
               >
                 <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden border-2 border-cyan-500/70 bg-black shrink-0 relative shadow-lg group-hover:scale-105 transition-transform">
                   {activeAvatar ? (
-                    <img src={activeAvatar} alt="Rosto" className="w-full h-full object-cover" />
+                    <img src={activeAvatar} alt="Retrato" className="w-full h-full object-cover object-[center_18%]" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-slate-600 text-[10px] font-serif">
-                      Sem Rosto
+                      Sem Retrato
                     </div>
                   )}
                   <span className="absolute bottom-0 inset-x-0 bg-cyan-950/95 text-cyan-300 text-[7.5px] font-mono font-black text-center py-0.5 border-t border-cyan-500/40">
-                    👤 ROSTO / HUD
+                    👤 RETRATO / HUD
                   </span>
                 </div>
                 <div className="min-w-0">
                   <span className="text-[10px] font-bold text-cyan-200 block truncate font-serif">
-                    Foto de Perfil
+                    Retrato Oficial
                   </span>
                   <span className="text-[8.5px] text-slate-400 block truncate">
                     HUD, Ficha & Party

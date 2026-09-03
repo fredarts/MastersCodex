@@ -102,7 +102,7 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
 
     const handleLootReceived = (e: Event) => {
       const customEvent = e as CustomEvent;
-      const { characterName, userId: targetUserId, item, currency, sourceName } = customEvent.detail || {};
+      const { characterName, userId: targetUserId, item, items, currency, sourceName } = customEvent.detail || {};
 
       const normalize = (s?: string) =>
         (s || '')

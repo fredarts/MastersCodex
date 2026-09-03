@@ -43,6 +43,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { CampaignFeedEventType, CampaignMember, WorldEntity } from '@/lib/types';
+import { getEntityPortraitUrl } from '@/lib/world/entityHelpers';
 import { worldService } from '@/lib/services/worldService';
 import { CreateCampaignModal } from '@/components/CreateCampaignModal';
 import { EditCampaignDetailsModal } from '@/components/modals/EditCampaignDetailsModal';
@@ -1456,8 +1457,8 @@ export const CampaignSettingsStudio: React.FC<CampaignSettingsStudioProps> = ({ 
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
                               <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
-                                {npc.images?.[0] ? (
-                                  <img src={npc.images[0]} alt={npc.name} className="w-full h-full object-cover" />
+                                {getEntityPortraitUrl(npc) ? (
+                                  <img src={getEntityPortraitUrl(npc)} alt={npc.name} className="w-full h-full object-cover object-[center_18%]" />
                                 ) : (
                                   <span>{npc.name.charAt(0).toUpperCase()}</span>
                                 )}
@@ -1477,13 +1478,14 @@ export const CampaignSettingsStudio: React.FC<CampaignSettingsStudioProps> = ({ 
 
                             <button
                               onClick={async () => {
+                                const npcPortrait = getEntityPortraitUrl(npc);
                                 const newParty = [
                                   ...(activeCampaign?.partyMembers || []),
                                   {
                                     id: npc.id,
                                     name: npc.name,
                                     type: 'npc' as const,
-                                    avatarUrl: npc.images?.[0] || undefined,
+                                    avatarUrl: npcPortrait || undefined,
                                   },
                                 ];
                                 await updateCampaign({ ...activeCampaign, partyMembers: newParty });

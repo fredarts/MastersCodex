@@ -21,17 +21,25 @@ export function getEntityPortraitUrl(entity?: WorldEntity | null): string | unde
   const attrs = entity.attributes || {};
   const images = entity.images || [];
 
-  // 1. Índice de porta-retrato definido
-  if (typeof attrs.portraitIndex === 'number' && images[attrs.portraitIndex]) {
-    return images[attrs.portraitIndex];
-  }
-
-  // 2. URL direta de portrait salva nos atributos
+  // 1. URL direta de portrait salva nos atributos
   if (attrs.portraitUrl && typeof attrs.portraitUrl === 'string' && attrs.portraitUrl.trim()) {
     return attrs.portraitUrl.trim();
   }
 
-  // 3. Fallback para a primeira imagem (Capa)
+  // 2. Índice de portrait definido
+  if (typeof attrs.portraitIndex === 'number' && images[attrs.portraitIndex]) {
+    return images[attrs.portraitIndex];
+  }
+
+  // 3. Ficha de personagem do NPC vinculada
+  const cs = entity.characterSheet || attrs.characterSheet;
+  if (cs) {
+    if (cs.portraitUrl && typeof cs.portraitUrl === 'string' && cs.portraitUrl.trim()) return cs.portraitUrl.trim();
+    if (cs.faceImageUrl && typeof cs.faceImageUrl === 'string' && cs.faceImageUrl.trim()) return cs.faceImageUrl.trim();
+    if (cs.avatarUrl && typeof cs.avatarUrl === 'string' && cs.avatarUrl.trim()) return cs.avatarUrl.trim();
+  }
+
+  // 4. Fallback para a primeira imagem (Capa)
   if (images.length > 0 && images[0]) {
     return images[0];
   }

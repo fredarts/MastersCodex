@@ -40,13 +40,18 @@ import {
   MicOff,
   PhoneCall,
   PhoneOff,
-  Package
+  Package,
+  Crown,
+  Play
 } from 'lucide-react';
 import { useCampaign } from '@/lib/hooks/useCampaign';
+import { useWorld } from '@/lib/hooks/useWorld';
+import { getEntityPortraitUrl } from '@/lib/world/entityHelpers';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { useSession } from '@/context/SessionContext';
 import { useVoiceCall } from '@/context/VoiceCallContext';
-import { UserCampaign, CharacterSheet, MacroBarDisplayMode, SecretRollNotificationMode, TransactionEntry } from '@/lib/types';
+import { UserCampaign, CharacterSheet, CharacterEquipmentItem, MacroBarDisplayMode, SecretRollNotificationMode, TransactionEntry, WorldEntity } from '@/lib/types';
+import { mapWorldEntityRowToDomain } from '@/lib/mappers';
 import { CharacterSheetModal } from './character-sheet/CharacterSheetModal';
 import { CharacterManagerModal } from './character-sheet/CharacterManagerModal';
 import { createEmptyCharacterSheet, generateUuid } from '@/lib/dnd5e-data';
@@ -125,6 +130,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     broadcastXCardAlert,
   } = useLiveCockpit();
   const { activeScene, fetchSceneMap, campaignMaps } = useSession();
+  const { worldEntities } = useWorld();
   const { user } = useAuth();
   const { showAlert, showConfirm } = useCustomDialog();
   const { 
@@ -840,9 +846,52 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
   // Group members state
   const [campaignMembers, setCampaignMembers] = useState<{id: string; userId: string; characterName?: string; avatarUrl?: string; role: string}[]>([]);
+  const [allPartySheets, setAllPartySheets] = useState<CharacterSheet[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) return JSON.parse(saved);
+      } catch (_) {}
+    }
+    return [];
+  });
+  const [allWorldEntities, setAllWorldEntities] = useState<WorldEntity[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('codex_entities');
+        if (saved) return JSON.parse(saved);
+      } catch (_) {}
+    }
+    return [];
+  });
   const [viewingSheet, setViewingSheet] = useState<CharacterSheet | null>(null);
   const [isViewingSheetOpen, setIsViewingSheetOpen] = useState(false);
   const [loadingMemberSheet, setLoadingMemberSheet] = useState<string | null>(null);
+
+  // Carrega todas as entidades do mundo (incluindo NPCs e seus retratos) do Supabase
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+
+    const fetchEntities = async () => {
+      try {
+        const { data, error } = await supabase.from('world_entities').select('*');
+        if (!error && data && data.length > 0) {
+          const domainEntities = data.map(mapWorldEntityRowToDomain);
+          setAllWorldEntities((prev) => {
+            const map = new Map<string, WorldEntity>();
+            prev.forEach((e) => map.set(e.id, e));
+            (worldEntities || []).forEach((e) => map.set(e.id, e));
+            domainEntities.forEach((e) => map.set(e.id, e));
+            return Array.from(map.values());
+          });
+        }
+      } catch (err) {
+        console.warn('Erro ao buscar world_entities no PlayerLobby:', err);
+      }
+    };
+
+    fetchEntities();
+  }, [worldEntities]);
 
   // Solicita snapshot de estado ao Mestre ao entrar no Lobby da Campanha
   useEffect(() => {
@@ -861,22 +910,21 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   // We track currentCampaignId for the member fetch effect
   const currentCampaignIdForMembers = selectedCampaignId || activeCampaign?.id || null;
 
-  // Carrega as fichas do Supabase vinculadas ao usuário conectado, mesclando com o localStorage
+  // Carrega as fichas do Supabase (do próprio jogador e de todas as campanhas autorizadas pelo RLS), mesclando com o localStorage
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
     
     const fetchSheetsFromDb = async () => {
       const uId = user?.id;
-      if (!uId || !isValidUuid(uId)) return;
       
       try {
+        // Busca todas as fichas acessíveis via RLS (fichas do usuário e das mesas de jogo que ele participa)
         const { data, error } = await supabase
           .from('character_sheets')
-          .select('*')
-          .eq('user_id', uId);
+          .select('*');
           
-        if (!error && data) {
-          const dbSheets = data.map((row) => ({
+        if (!error && data && data.length > 0) {
+          const dbSheets: CharacterSheet[] = data.map((row) => ({
             ...row.data,
             id: row.id,
             userId: row.user_id,
@@ -885,47 +933,55 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             updatedAt: row.updated_at,
           }));
 
-          const dbSheetIds = new Set(dbSheets.map((s) => s.id));
-          
-          setCharacterSheets((prev) => {
-            // Remove local sheets that have a UUID ID but were deleted in Supabase,
-            // and filter out any sheets that belong to other users to prevent leaks.
-            const validLocalSheets = prev.filter(
-              (s) => (!isValidUuid(s.id) || dbSheetIds.has(s.id)) && (!s.userId || s.userId === uId)
-            );
-
-            const merged = [...validLocalSheets];
-            dbSheets.forEach((dbS) => {
-              const idx = merged.findIndex((s) => s.id === dbS.id);
-              if (idx >= 0) {
-                const localTime = new Date(merged[idx].updatedAt || 0).getTime();
-                const dbTime = new Date(dbS.updatedAt || 0).getTime();
-                if (dbTime > localTime) {
-                  merged[idx] = dbS;
-                }
-              } else {
-                merged.push(dbS);
-              }
-            });
-            
-            const filtered = merged.filter((s) => {
-              const isDefaultMock = s.characterName === 'Novo Aventureiro' && !dbSheets.some((dbS) => dbS.id === s.id);
-              const isOtherUser = s.userId && s.userId !== uId;
-              return !isDefaultMock && !isOtherUser;
-            });
-            const finalSheets = filtered.length > 0 ? filtered : (merged.length > 0 ? merged : []);
-            
-            try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(finalSheets));
-            } catch (e) {}
-
-            const targetActive = finalSheets.find((s) => s.userId === uId && s.characterName !== 'Novo Aventureiro') || finalSheets.find((s) => s.userId === uId) || finalSheets[0] || createEmptyCharacterSheet('player-1');
-            if (targetActive) {
-              setActiveSheet(targetActive);
-            }
-
-            return finalSheets;
+          // Atualiza repositório compartilhado de fichas de toda a party
+          setAllPartySheets((prev) => {
+            const map = new Map<string, CharacterSheet>();
+            prev.forEach((s) => map.set(s.id, s));
+            dbSheets.forEach((s) => map.set(s.id, s));
+            return Array.from(map.values());
           });
+
+          if (uId && isValidUuid(uId)) {
+            const myDbSheets = dbSheets.filter((s) => s.userId === uId);
+            const myDbSheetIds = new Set(myDbSheets.map((s) => s.id));
+            
+            setCharacterSheets((prev) => {
+              const validLocalSheets = prev.filter(
+                (s) => (!isValidUuid(s.id) || myDbSheetIds.has(s.id)) && (!s.userId || s.userId === uId)
+              );
+
+              const merged = [...validLocalSheets];
+              myDbSheets.forEach((dbS) => {
+                const idx = merged.findIndex((s) => s.id === dbS.id);
+                if (idx >= 0) {
+                  const localTime = new Date(merged[idx].updatedAt || 0).getTime();
+                  const dbTime = new Date(dbS.updatedAt || 0).getTime();
+                  if (dbTime > localTime) {
+                    merged[idx] = dbS;
+                  }
+                } else {
+                  merged.push(dbS);
+                }
+              });
+              
+              const filtered = merged.filter((s) => {
+                const isDefaultMock = s.characterName === 'Novo Aventureiro' && !myDbSheets.some((dbS) => dbS.id === s.id);
+                return !isDefaultMock;
+              });
+              const finalSheets = filtered.length > 0 ? filtered : (merged.length > 0 ? merged : []);
+              
+              try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(finalSheets));
+              } catch (e) {}
+
+              const targetActive = finalSheets.find((s) => s.userId === uId && s.characterName !== 'Novo Aventureiro') || finalSheets.find((s) => s.userId === uId) || finalSheets[0] || createEmptyCharacterSheet('player-1');
+              if (targetActive) {
+                setActiveSheet(targetActive);
+              }
+
+              return finalSheets;
+            });
+          }
         }
       } catch (err) {
         console.warn('Erro ao buscar fichas do Supabase:', err);
@@ -1501,7 +1557,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
 
-    const channelId = `player_lobby_sheets_${user?.id || 'anon'}_${Math.random().toString(36).substring(2, 7)}`;
+    const channelId = `player_lobby_sheets_all_${user?.id || 'anon'}_${Math.random().toString(36).substring(2, 7)}`;
     const channel = supabase
       .channel(channelId)
       .on(
@@ -1514,41 +1570,61 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
         (payload) => {
           if (payload.new && (payload.new as any).data) {
             const row = payload.new as any;
-            const remoteData = row.data as CharacterSheet;
+            const remoteData = {
+              ...row.data,
+              id: row.id,
+              userId: row.user_id,
+              campaignId: row.campaign_id,
+              characterName: row.character_name || row.data?.characterName,
+              updatedAt: row.updated_at,
+            } as CharacterSheet;
+
             if (remoteData) {
-              setCharacterSheets((prev) => {
-                const idx = prev.findIndex(
-                  (s) =>
-                    s.id === remoteData.id ||
-                    (s.characterName &&
-                      remoteData.characterName &&
-                      s.characterName.toLowerCase() === remoteData.characterName.toLowerCase())
-                );
-                let next;
+              setAllPartySheets((prev) => {
+                const idx = prev.findIndex((s) => s.id === remoteData.id);
                 if (idx >= 0) {
-                  next = [...prev];
+                  const next = [...prev];
                   next[idx] = { ...prev[idx], ...remoteData };
-                } else {
-                  next = [remoteData, ...prev];
+                  return next;
                 }
-                try {
-                  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-                } catch (e) {}
-                return next;
+                return [remoteData, ...prev];
               });
 
-              setActiveSheet((prev) => {
-                if (
-                  prev &&
-                  (prev.id === remoteData.id ||
-                    (prev.characterName &&
-                      remoteData.characterName &&
-                      prev.characterName.toLowerCase() === remoteData.characterName.toLowerCase()))
-                ) {
-                  return { ...prev, ...remoteData };
-                }
-                return prev;
-              });
+              if (user?.id && remoteData.userId === user.id) {
+                setCharacterSheets((prev) => {
+                  const idx = prev.findIndex(
+                    (s) =>
+                      s.id === remoteData.id ||
+                      (s.characterName &&
+                        remoteData.characterName &&
+                        s.characterName.toLowerCase() === remoteData.characterName.toLowerCase())
+                  );
+                  let next;
+                  if (idx >= 0) {
+                    next = [...prev];
+                    next[idx] = { ...prev[idx], ...remoteData };
+                  } else {
+                    next = [remoteData, ...prev];
+                  }
+                  try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+                  } catch (e) {}
+                  return next;
+                });
+
+                setActiveSheet((prev) => {
+                  if (
+                    prev &&
+                    (prev.id === remoteData.id ||
+                      (prev.characterName &&
+                        remoteData.characterName &&
+                        prev.characterName.toLowerCase() === remoteData.characterName.toLowerCase()))
+                  ) {
+                    return { ...prev, ...remoteData };
+                  }
+                  return prev;
+                });
+              }
             }
           }
         }
@@ -1566,8 +1642,12 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   const [isJoining, setIsJoining] = useState(false);
   const [joinSuccessMsg, setJoinSuccessMsg] = useState<string | null>(null);
   const [joinErrorMsg, setJoinErrorMsg] = useState<string | null>(null);
+  const [copiedCampaignCode, setCopiedCampaignCode] = useState<string | null>(null);
 
   const handleOpenJoinModal = () => {
+    setInviteCodeInput('');
+    setJoinSuccessMsg(null);
+    setJoinErrorMsg(null);
     if (characterSheets.length > 0 && !characterNameInput) {
       setCharacterNameInput(characterSheets[0].characterName);
     }
@@ -1583,6 +1663,172 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
     return [...directPlayerCamps, ...dmCampsAsPlayer];
   }, [userCampaigns]);
+
+  // Helper para extrair o retrato com máxima prioridade (portraitUrl -> faceImageUrl -> avatarUrl -> images[0] -> combatImageUrl)
+  const extractCharacterFaceImage = (sheet?: CharacterSheet | null, fallbackAvatar?: string | null): string | null => {
+    if (!sheet) return fallbackAvatar || null;
+    if (sheet.portraitUrl) return sheet.portraitUrl;
+    if (sheet.faceImageUrl) return sheet.faceImageUrl;
+    if (sheet.avatarUrl) return sheet.avatarUrl;
+    if (Array.isArray(sheet.images) && sheet.images.length > 0) return sheet.images[0];
+    if (sheet.combatImageUrl) return sheet.combatImageUrl;
+    return fallbackAvatar || null;
+  };
+
+  // Helper para resolver os dados visuais completos do card da campanha (Mestre Google, Personagens, Rostos e Classes)
+  const resolveCampaignCardData = (camp: UserCampaign) => {
+    // 1. Resolve o nome do Mestre (obtido do perfil Google ou da campanha)
+    let dmName = 'Mestre da Mesa';
+    let dmAvatarUrl: string | null = null;
+
+    if (camp.role === 'dm' || camp.dmId === user?.id) {
+      dmName = user?.displayName || user?.email?.split('@')[0] || 'Mestre';
+      dmAvatarUrl = user?.avatarUrl || null;
+    } else if ((camp as any).dmName) {
+      dmName = (camp as any).dmName;
+      dmAvatarUrl = (camp as any).dmAvatarUrl || null;
+    } else {
+      const dmMember = campaignMembers.find((m: any) => m.campaignId === camp.id && m.role === 'dm') as any;
+      if (dmMember?.displayName || dmMember?.characterName) {
+        dmName = dmMember.displayName || dmMember.characterName;
+        dmAvatarUrl = dmMember.avatarUrl || null;
+      } else if (user?.displayName) {
+        dmName = user.displayName;
+        dmAvatarUrl = user.avatarUrl || null;
+      } else {
+        dmName = 'Mestre da Mesa';
+      }
+    }
+
+    // 2. Resolve a lista de Aventureiros com Ficha, Rosto e Nome do Jogador
+    const adventurers: Array<{
+      id: string;
+      playerName: string;
+      characterName: string;
+      className: string;
+      level: number;
+      faceImageUrl: string | null;
+      isCurrentUser: boolean;
+    }> = [];
+
+    // 2.1 Personagem do próprio jogador ativo
+    const linkedSheet = camp.id ? (characterSheets.find((s) => s.campaignId === camp.id) || allPartySheets.find((s) => s.campaignId === camp.id && s.userId === user?.id)) : null;
+    const mySheet =
+      linkedSheet ||
+      (camp.characterName
+        ? (characterSheets.find((s) => s.characterName && s.characterName.toLowerCase() === camp.characterName?.toLowerCase()) ||
+           allPartySheets.find((s) => s.characterName && s.characterName.toLowerCase() === camp.characterName?.toLowerCase() && s.userId === user?.id))
+        : null) ||
+      (camp.partyMembers && camp.partyMembers.length > 0
+        ? (characterSheets.find((s) => camp.partyMembers?.some((p) => p.name && s.characterName && p.name.toLowerCase() === s.characterName.toLowerCase())) ||
+           allPartySheets.find((s) => camp.partyMembers?.some((p) => p.name && s.characterName && p.name.toLowerCase() === s.characterName.toLowerCase() && s.userId === user?.id)))
+        : null) ||
+      (characterSheets.length > 0
+        ? characterSheets.find((s) => s.characterName && s.characterName !== 'Novo Aventureiro' && !s.characterName.startsWith('Aventureiro ')) || characterSheets[0]
+        : null);
+
+    const myCharName = mySheet?.characterName || camp.characterName || resolveCharName(camp);
+    const myPlayerName = mySheet?.playerName || user?.displayName?.split(' ')[0] || user?.displayName || 'Você';
+    const myClass = mySheet?.className || 'Aventureiro';
+    const myLevel = mySheet?.level || 1;
+    const myFace = extractCharacterFaceImage(mySheet, null);
+
+    adventurers.push({
+      id: mySheet?.id || `my-char-${camp.id}`,
+      playerName: myPlayerName,
+      characterName: myCharName,
+      className: myClass,
+      level: myLevel,
+      faceImageUrl: myFace,
+      isCurrentUser: true,
+    });
+
+    // 2.2 Outros membros da party registrados na campanha
+    if (camp.partyMembers && camp.partyMembers.length > 0) {
+      camp.partyMembers.forEach((pm, idx) => {
+        if (pm.name && pm.name.toLowerCase() === myCharName.toLowerCase()) return;
+
+        // Tenta encontrar entidade correspondente em allWorldEntities ou worldEntities (para NPCs com retrato selecionado)
+        const combinedEntities = [...allWorldEntities, ...(worldEntities || [])];
+        const normPm = (pm.name || '').trim().toLowerCase();
+        const basePm = normPm.split('"')[0].split('(')[0].trim();
+
+        const matchingNpcEntity =
+          combinedEntities.find((e) => e.id === pm.id) ||
+          combinedEntities.find((e) => {
+            const eName = (e.name || '').trim().toLowerCase();
+            const baseEName = eName.split('"')[0].split('(')[0].trim();
+            return (
+              eName === normPm ||
+              (basePm && baseEName && (basePm === baseEName || basePm.includes(baseEName) || baseEName.includes(basePm))) ||
+              (normPm && eName && (normPm.includes(eName) || eName.includes(normPm)))
+            );
+          });
+
+        // Tenta encontrar ficha correspondente em allPartySheets ou characterSheets
+        const matchingSavedSheet =
+          allPartySheets.find((s) => s.id === pm.id) ||
+          allPartySheets.find(
+            (s) =>
+              s.campaignId === camp.id &&
+              s.characterName &&
+              pm.name &&
+              s.characterName.trim().toLowerCase() === pm.name.trim().toLowerCase()
+          ) ||
+          allPartySheets.find(
+            (s) =>
+              s.characterName &&
+              pm.name &&
+              s.characterName.trim().toLowerCase() === pm.name.trim().toLowerCase()
+          ) ||
+          characterSheets.find(
+            (s) =>
+              s.characterName &&
+              pm.name &&
+              s.characterName.trim().toLowerCase() === pm.name.trim().toLowerCase()
+          );
+
+        const npcPortrait = matchingNpcEntity ? getEntityPortraitUrl(matchingNpcEntity) : null;
+        const pmFace = npcPortrait || extractCharacterFaceImage(matchingSavedSheet, pm.avatarUrl);
+
+        const pmPlayerName =
+          matchingSavedSheet?.playerName ||
+          (pm as any).playerName ||
+          (pm.type === 'npc' || matchingNpcEntity ? pm.name.split(' ')[0] : pm.name.split(' ')[0]) ||
+          `Aliado ${idx + 1}`;
+
+        const pmCharName = matchingNpcEntity?.name || matchingSavedSheet?.characterName || pm.name || 'Aventureiro';
+        const pmClass =
+          matchingSavedSheet?.className ||
+          (pm as any).className ||
+          matchingNpcEntity?.subType ||
+          (matchingNpcEntity?.attributes as any)?.dndClass ||
+          (pm.type === 'npc' ? 'Guerreira' : 'Aventureiro');
+        const pmLevel =
+          matchingSavedSheet?.level ||
+          (pm as any).level ||
+          (matchingNpcEntity?.attributes as any)?.level ||
+          1;
+
+        adventurers.push({
+          id: pm.id || `pm-${idx}`,
+          playerName: pmPlayerName,
+          characterName: pmCharName,
+          className: pmClass,
+          level: pmLevel,
+          faceImageUrl: pmFace,
+          isCurrentUser: false,
+        });
+      });
+    }
+
+    return {
+      dmName,
+      dmAvatarUrl,
+      adventurers,
+      myAdventurer: adventurers[0],
+    };
+  };
 
   // Find currently selected campaign (only among player campaigns)
   const currentCampaign =
@@ -1705,7 +1951,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
   return (
     <div className={`flex-1 bg-[#0a0d14] flex flex-col select-none relative ${
-      selectedCampaignId ? 'p-2 sm:p-3 overflow-hidden h-full min-h-0' : 'p-4 sm:p-6 overflow-y-auto'
+      selectedCampaignId ? 'p-2 sm:p-3 overflow-hidden h-full min-h-0' : 'p-3 sm:p-5 lg:p-6 h-full min-h-0 overflow-y-auto custom-scrollbar'
     }`}>
 
       {/* ==================== 1. MODAL: ADICIONAR CAMPANHA VIA CÓDIGO ==================== */}
@@ -1819,30 +2065,47 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
       {/* ==================== 2. VISÃO 1: HUB DE CAMPANHAS DO JOGADOR ==================== */}
       {!selectedCampaignId ? (
-        <div className="space-y-6">
-          {/* Header Banner */}
-          <div className="bg-gradient-to-r from-[#161c28] via-[#1a2234] to-[#0f141d] border border-amber-500/30 p-6 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-inner">
-                <Shield className="w-6 h-6" />
+        <div className={`flex flex-col space-y-4 sm:space-y-5 ${playerCampaigns.length <= 3 ? 'h-full justify-between sm:justify-start' : ''}`}>
+          {/* Header Banner with Fantasy Art */}
+          <div className="relative overflow-hidden rounded-2xl shadow-2xl border border-amber-500/30 p-4 sm:p-5 lg:p-6 flex flex-wrap items-center justify-between gap-4 group shrink-0">
+            {/* Background Image & Atmospheric Gradients */}
+            <div className="absolute inset-0 z-0">
+              <img
+                src="/assets/player-hub-banner.jpg"
+                alt="Mesa de RPG e Aventureiros"
+                className="w-full h-full object-cover object-[center_35%] scale-105 group-hover:scale-100 transition-transform duration-1000 ease-out"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#07090e] via-[#0a0d14]/90 via-40% to-[#0a0d14]/40 to-90%" />
+              <div className="absolute inset-0 ring-1 ring-inset ring-amber-500/25 rounded-2xl pointer-events-none" />
+            </div>
+
+            {/* Foreground Content */}
+            <div className="relative z-10 flex items-center gap-3.5 sm:gap-4 max-w-xl">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/10 backdrop-blur-md shrink-0">
+                <Shield className="w-6 h-6 sm:w-7 sm:h-7 drop-shadow-md" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-widest text-amber-400 bg-amber-950/60 border border-amber-500/30 px-2.5 py-0.5 rounded">
+                  <span className="text-[10px] sm:text-xs font-extrabold uppercase tracking-widest text-amber-300 bg-amber-950/80 border border-amber-500/40 px-2.5 py-0.5 rounded-md shadow-sm backdrop-blur-sm">
                     MODO JOGADOR
                   </span>
+                  <span className="text-[10px] font-mono text-slate-400 hidden sm:inline-block">
+                    D&D 5e • Diário & Cockpit
+                  </span>
                 </div>
-                <h2 className="text-xl font-bold text-slate-100 mt-1">Minhas Campanhas & Mesas de Jogo</h2>
-                <p className="text-xs text-slate-400 mt-0.5 max-w-xl">
+                <h2 className="text-lg sm:text-xl lg:text-2xl font-black text-slate-100 mt-1 tracking-tight drop-shadow-md">
+                  Minhas Campanhas & Mesas de Jogo
+                </h2>
+                <p className="text-xs text-slate-300/90 mt-0.5 font-medium drop-shadow leading-relaxed line-clamp-2 sm:line-clamp-none">
                   Selecione um card para acessar o Diário de Bordo e o Feed da Aventura, ou adicione uma nova mesa via código.
                 </p>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="relative z-10 flex flex-wrap items-center gap-2.5 sm:gap-3">
               <button
                 onClick={() => setIsManagerModalOpen(true)}
-                className="flex items-center gap-2 bg-[#141b2d] border border-amber-500/50 hover:border-amber-400 text-amber-400 hover:text-amber-300 font-bold px-4 py-2.5 rounded-xl text-xs shadow-lg shadow-amber-500/10 transition-all active:scale-95"
+                className="flex items-center gap-2 bg-[#101522]/90 hover:bg-[#182032] border border-amber-500/40 hover:border-amber-400 text-amber-300 hover:text-amber-200 font-bold px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs shadow-lg shadow-black/40 backdrop-blur-md transition-all active:scale-95 cursor-pointer"
               >
                 <FileText className="w-4 h-4 text-amber-400" />
                 <span>Minhas Fichas ({characterSheets.length})</span>
@@ -1850,17 +2113,17 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
               <button
                 onClick={handleOpenJoinModal}
-                className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-xs shadow-lg shadow-amber-500/20 transition-all active:scale-95"
+                className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs shadow-xl shadow-amber-500/25 transition-all active:scale-95 hover:scale-[1.02] cursor-pointer"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-4 h-4 stroke-[3]" />
                 <span>Entrar em Mesa (Código)</span>
               </button>
             </div>
           </div>
 
           {/* Cards Grid Header */}
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-2">
+          <div className="flex items-center justify-between shrink-0">
+            <h3 className="text-xs sm:text-sm font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-2">
               <Compass className="w-4 h-4 text-amber-400" /> Suas Campanhas Ativas ({playerCampaigns.length})
             </h3>
           </div>
@@ -1879,39 +2142,67 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
               </div>
               <button
                 onClick={() => setIsJoinModalOpen(true)}
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs shadow-lg shadow-amber-500/20 transition-all"
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Adicionar Primeira Campanha</span>
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5 ${
+              playerCampaigns.length <= 3 ? 'flex-1 min-h-0' : ''
+            }`}>
               {playerCampaigns.map((camp) => {
                 const isActive = activeCampaign?.id === camp.id;
+                const cardData = resolveCampaignCardData(camp);
+                const coverUrl = camp.coverImageUrl ? normalizeImageUrl(camp.coverImageUrl) : null;
+                const isCopied = copiedCampaignCode === camp.id;
+
                 return (
                   <div
                     key={camp.id}
                     onClick={() => handleSelectCampaign(camp)}
-                    className={`group relative rounded-2xl p-5 border transition-all duration-300 cursor-pointer flex flex-col justify-between space-y-4 shadow-xl hover:-translate-y-1 ${
+                    className={`group relative rounded-2xl border transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden shadow-xl hover:-translate-y-1 ${
                       isActive
-                        ? 'bg-gradient-to-b from-[#1c2436] to-[#121722] border-amber-500/60 shadow-amber-500/10'
-                        : 'bg-[#161c28] border-[#2a3449] hover:border-slate-400 hover:bg-[#1a2233]'
+                        ? 'bg-gradient-to-b from-[#1c2438] to-[#10141f] border-amber-500/70 shadow-amber-500/10 ring-1 ring-amber-500/30'
+                        : 'bg-[#141a27] border-[#253046] hover:border-amber-500/50 hover:bg-[#182030]'
                     }`}
                   >
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <span className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-widest bg-amber-950/40 border border-amber-500/30 px-2 py-0.5 rounded">
+                    {/* 1. Capa / Banner da Campanha */}
+                    <div className="w-full h-32 sm:h-36 relative overflow-hidden bg-[#0a0d14] border-b border-[#253046]/80 shrink-0">
+                      {coverUrl ? (
+                        <img
+                          src={coverUrl}
+                          alt={camp.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-[#162032] via-[#0d131f] to-[#080b12] flex items-center justify-center relative overflow-hidden">
+                          <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#f59e0b_1px,transparent_1px)] [background-size:16px_16px]" />
+                          <Compass className="w-12 h-12 text-amber-500/30 group-hover:text-amber-500/50 group-hover:scale-110 transition-all duration-500" />
+                        </div>
+                      )}
+
+                      {/* Gradiente escuro inferior para transição suave com o corpo */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#141a27] via-transparent to-black/40" />
+
+                      {/* Badges superiores na capa */}
+                      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
+                        <div className="flex items-center gap-1.5 pointer-events-auto">
+                          <span className="text-[9px] font-mono font-bold text-amber-300 uppercase tracking-wider bg-black/70 backdrop-blur-md border border-amber-500/40 px-2 py-0.5 rounded shadow">
                             MESA DE JOGO
                           </span>
-                          <h4 className="text-lg font-bold text-slate-100 mt-1.5 group-hover:text-amber-300 transition-colors">
-                            {camp.title}
-                          </h4>
+                          {camp.themeTone && (
+                            <span className="text-[9px] font-mono font-medium text-slate-300 bg-black/60 backdrop-blur-md border border-slate-600/40 px-1.5 py-0.5 rounded">
+                              {camp.themeTone}
+                            </span>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1.5">
+
+                        <div className="flex items-center gap-1.5 pointer-events-auto">
                           {isActive && (
-                            <span className="text-[9px] font-bold bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full font-mono shadow-md">
+                            <span className="text-[9px] font-black bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 px-2 py-0.5 rounded-full font-mono shadow-md flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-950 inline-block animate-ping" />
                               ATIVA
                             </span>
                           )}
@@ -1920,43 +2211,149 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                               e.stopPropagation();
                               handleLeaveCampaign(camp);
                             }}
-                            className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 rounded-lg transition-all"
+                            className="p-1 text-slate-400 hover:text-rose-400 bg-black/60 hover:bg-rose-950/60 border border-slate-700/50 hover:border-rose-500/50 rounded-lg backdrop-blur-md transition-all cursor-pointer"
                             title="Sair desta Campanha"
                           >
-                            <LogOut className="w-4 h-4" />
+                            <LogOut className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
 
-                      {camp.description && (
-                        <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                          {camp.description}
-                        </p>
-                      )}
+                      {/* Código da mesa na capa (canto inferior direito) */}
+                      <div className="absolute bottom-2 right-2.5 pointer-events-auto">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(camp.inviteCode);
+                            setCopiedCampaignCode(camp.id);
+                            setTimeout(() => setCopiedCampaignCode(null), 2000);
+                            toast.success(`Código ${camp.inviteCode} copiado!`);
+                          }}
+                          className="flex items-center gap-1 text-[10px] font-mono font-bold text-amber-300 bg-black/80 hover:bg-amber-950/80 border border-amber-500/40 px-2 py-0.5 rounded shadow backdrop-blur-md transition-all active:scale-95 cursor-pointer"
+                          title="Copiar Código de Convite da Mesa"
+                        >
+                          <span>{camp.inviteCode}</span>
+                          {isCopied ? (
+                            <Check className="w-3 h-3 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3 h-3 text-slate-400 hover:text-amber-300" />
+                          )}
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="pt-3 border-t border-[#2a3449] space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-400 flex items-center gap-1.5">
-                          <UserCheck className="w-3.5 h-3.5 text-cyan-400" />
-                          <span>Personagem:</span>
-                        </span>
-                        <strong className="text-cyan-300 font-semibold">{resolveCharName(camp)}</strong>
+                    {/* 2. Conteúdo do Card */}
+                    <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-3.5">
+                      <div className="space-y-2">
+                        {/* Título da Campanha */}
+                        <h4 className="text-base sm:text-lg font-black text-slate-100 group-hover:text-amber-300 transition-colors line-clamp-1 leading-snug">
+                          {camp.title}
+                        </h4>
+
+                        {/* Sinopse da Campanha */}
+                        {camp.description ? (
+                          <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                            {camp.description}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-slate-500 italic">
+                            Sem sinopse fornecida pelo Mestre.
+                          </p>
+                        )}
                       </div>
 
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-400 flex items-center gap-1.5">
-                          <LogIn className="w-3.5 h-3.5 text-slate-500" />
-                          <span>Código da Mesa:</span>
-                        </span>
-                        <span className="font-mono text-amber-400 font-bold bg-[#0a0d14] px-2 py-0.5 rounded border border-[#2a3449]">
-                          {camp.inviteCode}
-                        </span>
+                      {/* 3. Seção de Informações da Mesa: Mestre & Aventureiros */}
+                      <div className="pt-3 border-t border-[#253046] space-y-3">
+                        {/* Mestre da Mesa (Google Account Name) */}
+                        <div className="flex items-center justify-between bg-[#0a0d14]/80 border border-amber-500/25 px-3 py-2 rounded-xl">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-sm">
+                              <Crown className="w-3.5 h-3.5" />
+                            </div>
+                            <span className="text-[11px] text-slate-400 font-medium">Dungeon Master:</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {cardData.dmAvatarUrl && (
+                              <img
+                                src={normalizeImageUrl(cardData.dmAvatarUrl)}
+                                alt={cardData.dmName}
+                                className="w-5 h-5 rounded-full object-cover border border-amber-400/50 shadow-sm"
+                              />
+                            )}
+                            <span className="font-bold text-amber-300 text-xs truncate max-w-[170px]">
+                              {cardData.dmName}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Aventureiros da Mesa (Galeria com Rosto, Nome do Jogador, Personagem e Classe) */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 font-mono">
+                              <Users className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>Aventureiros Conectados ({cardData.adventurers.length}):</span>
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {cardData.adventurers.map((adv) => (
+                              <div
+                                key={adv.id}
+                                className={`flex flex-col items-center text-center p-2 rounded-xl border transition-all duration-200 ${
+                                  adv.isCurrentUser
+                                    ? 'bg-gradient-to-b from-cyan-950/40 to-[#0a0d14] border-cyan-500/50 shadow-md shadow-cyan-500/10'
+                                    : 'bg-[#0a0d14]/70 border-[#253046] hover:border-slate-500'
+                                }`}
+                              >
+                                {/* Nome do Jogador (acima da imagem) */}
+                                <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider truncate max-w-full mb-1">
+                                  {adv.playerName}
+                                </span>
+
+                                {/* Imagem do Rosto do Personagem */}
+                                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden bg-slate-900 border-2 border-cyan-400/60 shadow-md flex items-center justify-center shrink-0 mb-1.5 relative group-hover:border-amber-400 transition-colors">
+                                  {adv.faceImageUrl ? (
+                                    <img
+                                      src={normalizeImageUrl(adv.faceImageUrl)}
+                                      alt={adv.characterName}
+                                      className="w-full h-full object-cover object-[center_18%]"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-[#162032] to-[#0d131f] flex items-center justify-center text-base font-black text-cyan-300">
+                                      {adv.characterName.charAt(0).toUpperCase()}
+                                    </div>
+                                  )}
+                                  {adv.isCurrentUser && (
+                                    <span className="absolute bottom-0 inset-x-0 bg-cyan-600/90 text-slate-950 text-[8px] font-black uppercase py-0.2 text-center tracking-tighter">
+                                      VOCÊ
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Nome do Personagem */}
+                                <strong className="text-xs font-bold text-slate-100 truncate max-w-full leading-tight">
+                                  {adv.characterName}
+                                </strong>
+
+                                {/* Classe e Nível */}
+                                <span className="text-[9px] font-mono text-cyan-300 bg-cyan-950/80 border border-cyan-500/30 px-1.5 py-0.5 rounded-md mt-1 truncate max-w-full font-semibold">
+                                  {adv.className} {adv.level ? `Nvl ${adv.level}` : ''}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="pt-2 flex items-center justify-end text-xs font-bold text-amber-400 group-hover:translate-x-1 transition-transform gap-1">
-                        <span>Acessar Feed da Campanha</span>
-                        <ChevronRight className="w-4 h-4" />
+                      {/* 4. Ação Principal */}
+                      <div className="pt-3 pb-1 border-t border-[#253046] flex items-center justify-between text-xs font-bold text-amber-400 group-hover:text-amber-300">
+                        <span className="text-[11px] text-slate-400 font-medium group-hover:text-slate-300 transition-colors">
+                          {isActive ? 'Mesa Ativa Conectada' : 'Acessar Central'}
+                        </span>
+                        <div className="flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                          <span>Acessar Feed & Diário</span>
+                          <ChevronRight className="w-4 h-4 text-amber-400" />
+                        </div>
                       </div>
                     </div>
                   </div>

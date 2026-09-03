@@ -42,7 +42,7 @@ export function extractTransferableItems(sheet: CharacterSheet): CharacterEquipm
     : [];
 
   const seenIds = new Set<string>();
-  const existingItems: CharacterEquipmentItem[] = rawList.map((it, idx) => {
+  const existingItems: CharacterEquipmentItem[] = rawList.map((it: CharacterEquipmentItem, idx: number) => {
     let safeId = it.id || `item_${idx}_${Date.now()}`;
     if (seenIds.has(safeId)) {
       safeId = `${safeId}_dup_${idx}_${Math.random().toString(36).substring(2, 6)}`;
@@ -51,7 +51,7 @@ export function extractTransferableItems(sheet: CharacterSheet): CharacterEquipm
     return { ...it, id: safeId };
   });
 
-  const existingNames = new Set(existingItems.map((it) => (it.name || '').trim().toLowerCase()));
+  const existingNames = new Set(existingItems.map((it: CharacterEquipmentItem) => (it.name || '').trim().toLowerCase()));
 
   // Se tiver armas cadastradas em sheet.attacks que não constam em equipment/items, adiciona como item transferível
   if (sheet.attacks && sheet.attacks.length > 0) {
@@ -91,7 +91,7 @@ export function executeItemTransfer(
     : (senderSheet.items && senderSheet.items.length > 0)
     ? senderSheet.items
     : [];
-  const senderItems: CharacterEquipmentItem[] = senderRaw.map((it) => ({ ...it }));
+  const senderItems: CharacterEquipmentItem[] = senderRaw.map((it: CharacterEquipmentItem) => ({ ...it }));
   const senderAttacks: CharacterWeaponAttack[] = [...(senderSheet.attacks || [])];
 
   const receiverRaw = (receiverSheet.equipment && receiverSheet.equipment.length > 0)
@@ -99,7 +99,7 @@ export function executeItemTransfer(
     : (receiverSheet.items && receiverSheet.items.length > 0)
     ? receiverSheet.items
     : [];
-  const receiverItems: CharacterEquipmentItem[] = receiverRaw.map((it) => ({ ...it }));
+  const receiverItems: CharacterEquipmentItem[] = receiverRaw.map((it: CharacterEquipmentItem) => ({ ...it }));
   const receiverAttacks: CharacterWeaponAttack[] = [...(receiverSheet.attacks || [])];
 
   const transferredItemsSummary: string[] = [];

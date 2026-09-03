@@ -489,6 +489,7 @@ export interface Combatant {
   size?: string;
   avatarUrl?: string;
   faceImageUrl?: string;
+  portraitUrl?: string;
   combatImageUrl?: string;
   modelUrl?: string;
   tokenImageUrl?: string;
@@ -1114,6 +1115,7 @@ export interface CharacterSheet {
   modelUrl?: string;
   combatImageUrl?: string;
   faceImageUrl?: string;
+  portraitUrl?: string;
   images?: string[];
   tokenType?: 'billboard' | '3d';
 
@@ -1170,6 +1172,7 @@ export interface CharacterSheet {
   otherFeatures?: string;
   treasure?: string;
   equipment?: CharacterEquipmentItem[];
+  items?: CharacterEquipmentItem[];
   currency?: CharacterCurrency;
   startingWealthRolled?: boolean;
   transactionHistory?: TransactionEntry[];
@@ -1346,10 +1349,13 @@ export interface ChatDiceResult {
 
 export interface ChatMessage {
   id: string;
+  campaignId?: string;
   senderId: string;
   senderName: string;
   senderAvatar?: string;
-  channel: ChatChannel;
+  senderRole?: 'player' | 'dm' | 'system';
+  channel?: ChatChannel;
+  type?: 'general' | 'whisper' | 'ic' | 'system' | 'roll';
   whisperTo?: string;
   whisperToName?: string;
   content: string;
