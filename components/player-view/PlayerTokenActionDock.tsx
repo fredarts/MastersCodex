@@ -18,7 +18,8 @@ import {
   ShieldAlert,
   Crosshair,
   RotateCcw,
-  CheckCircle2
+  CheckCircle2,
+  FileText
 } from 'lucide-react';
 import { CharacterSheet, Combatant, DiceRollEvent } from '@/lib/types';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
@@ -236,99 +237,136 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
         : 'max-w-4xl mx-auto backdrop-blur-xl border border-amber-500/30 rounded-2xl shadow-2xl overflow-hidden'
     }`}>
       {/* Top Header */}
-      <div className="bg-gradient-to-r from-[#111722] via-[#161f2e] to-[#101520] p-2.5 flex flex-col gap-2 border-b border-[#232d40]">
-        <div className="flex items-center justify-between gap-2">
-          {/* Character Identity with Avatar */}
-          <div className="flex items-center gap-2.5 min-w-0">
+      <div className="bg-gradient-to-b from-[#161f30] via-[#101724] to-[#0a0e17] p-3 flex flex-col gap-2.5 border-b border-[#232d40] shadow-md">
+        <div className="flex items-center justify-between gap-3">
+          {/* Character Identity with Enlarged Avatar */}
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            {/* 64x64 Avatar (~2x) with glowing RPG border */}
             <div 
               onClick={onOpenFullSheet}
-              className="w-9 h-9 rounded-xl overflow-hidden border-2 border-amber-500/60 bg-[#06080e] flex items-center justify-center text-amber-400 font-bold shrink-0 relative cursor-pointer hover:border-amber-400 transition-all shadow-md group"
+              className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-amber-500/70 bg-[#06080e] flex items-center justify-center text-amber-400 font-bold shrink-0 relative cursor-pointer hover:border-amber-400 hover:shadow-[0_0_16px_rgba(245,158,11,0.35)] transition-all shadow-lg group ring-1 ring-amber-500/30"
               title="Clique para abrir a ficha completa do personagem"
             >
               {heroAvatar ? (
                 <img 
                   src={heroAvatar} 
                   alt={activeSheet.characterName} 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform" 
+                  className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300" 
                 />
               ) : (
-                <Swords className="w-4 h-4 text-amber-400" />
+                <Swords className="w-7 h-7 text-amber-400/80" />
               )}
-              {activeSheet.level && (
-                <span className="absolute -bottom-0.5 -right-0.5 bg-amber-500 text-slate-950 text-[7.5px] font-black px-1 rounded-sm font-mono leading-tight shadow">
-                  {activeSheet.level}
-                </span>
-              )}
+              {/* Level Crest Badge */}
+              <span className="absolute bottom-0 right-0 bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 text-[9.5px] font-black px-1.5 py-0.5 rounded-tl-lg font-mono leading-tight shadow-md border-t border-l border-amber-300/50 flex items-center gap-0.5">
+                <span className="text-[7.5px] opacity-75">NV</span>{activeSheet.level || 1}
+              </span>
             </div>
 
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
+            {/* Character Info Details */}
+            <div className="min-w-0 flex-1 flex flex-col justify-center gap-0.5">
+              {/* Line 1: Character Name & Turn status badge */}
+              <div className="flex items-center gap-2 min-w-0">
                 <h4 
                   onClick={onOpenFullSheet}
-                  className="text-xs font-bold text-slate-100 truncate font-mono cursor-pointer hover:text-amber-300 transition-colors"
+                  className="text-sm sm:text-base font-black text-slate-100 truncate font-serif tracking-wide cursor-pointer hover:text-amber-300 transition-colors drop-shadow-sm"
+                  title={activeSheet.characterName || 'Personagem'}
                 >
                   {activeSheet.characterName || 'Personagem'}
                 </h4>
                 {isCombatActive && (
-                  <span className={`text-[8px] font-mono font-black px-1.5 py-0.2 rounded uppercase shrink-0 ${
+                  <span className={`text-[8.5px] font-mono font-black px-1.5 py-0.5 rounded uppercase shrink-0 shadow-sm ${
                     isMyTurn 
-                      ? 'bg-amber-500 text-slate-950 shadow-sm animate-pulse' 
+                      ? 'bg-amber-500 text-slate-950 animate-pulse ring-1 ring-amber-400' 
                       : 'bg-slate-800 text-slate-400 border border-[#2a3449]'
                   }`}>
                     {isMyTurn ? 'SEU TURNO' : 'ESPERA'}
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono truncate">
-                <span className="text-amber-400 font-semibold shrink-0">CA {activeSheet.armorClass || 10}</span>
-                <span>•</span>
-                <span className="text-emerald-400 font-semibold shrink-0">PV {currentHpVal}/{maxHpVal}</span>
-                {activeSheet.className && (
+
+              {/* Line 2: Class Name and Subclass / Race below Character Name */}
+              <div className="flex items-center gap-1.5 text-xs text-amber-400/90 font-medium truncate">
+                <span className="truncate font-semibold tracking-wide">
+                  {activeSheet.className || 'Aventureiro'}
+                  {activeSheet.subclass ? ` (${activeSheet.subclass})` : ''}
+                </span>
+                {activeSheet.race && (
                   <>
-                    <span>•</span>
-                    <span className="text-slate-400 truncate text-[9px] font-serif">{activeSheet.className}</span>
+                    <span className="text-slate-600 text-[10px]">•</span>
+                    <span className="text-slate-400 text-[11px] truncate font-sans">{activeSheet.race}</span>
                   </>
                 )}
+              </div>
+
+              {/* Line 3: Prominent Combat Stat Chips (CA, PV) */}
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                {/* CA Chip */}
+                <div 
+                  className="flex items-center gap-1 bg-[#0d131f] border border-amber-500/40 px-2 py-0.5 rounded-md text-[11px] font-mono font-bold text-amber-300 shadow-sm"
+                  title="Classe de Armadura (CA)"
+                >
+                  <Shield className="w-3 h-3 text-amber-400 shrink-0" />
+                  <span>CA {activeSheet.armorClass || 10}</span>
+                </div>
+
+                {/* PV Chip */}
+                <div 
+                  className="flex items-center gap-1 bg-[#0d131f] border border-emerald-500/40 px-2 py-0.5 rounded-md text-[11px] font-mono font-bold text-emerald-300 shadow-sm"
+                  title="Pontos de Vida (PV)"
+                >
+                  <Heart className="w-3 h-3 text-emerald-400 fill-emerald-400/20 shrink-0" />
+                  <span>PV {currentHpVal}/{maxHpVal}</span>
+                  {activeSheet.tempHp ? (
+                    <span className="text-cyan-300 text-[10px] font-normal" title="PV Temporário">+{activeSheet.tempHp}</span>
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="flex items-center gap-1 shrink-0">
+          {/* Quick Actions (Right Column) */}
+          <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1.5 shrink-0">
             {isCombatActive && isMyTurn && onEndTurn && (
               <button
                 onClick={onEndTurn}
-                className="px-2 py-1 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-black text-[10px] rounded-lg shadow-sm flex items-center gap-1 transition-all active:scale-95 animate-pulse cursor-pointer border border-emerald-400/50"
+                className="px-2.5 py-1.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all active:scale-95 animate-pulse cursor-pointer border border-emerald-400/50"
                 title="Encerrar seu turno"
               >
-                <CheckCircle2 className="w-3 h-3" />
+                <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>Passar</span>
               </button>
             )}
 
-            <button
-              onClick={onOpenFullSheet}
-              className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/60 text-amber-300 text-[10px] font-bold rounded-lg transition-all"
-              title="Abrir Ficha Completa do Personagem"
-            >
-              Ficha
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={onOpenFullSheet}
+                className="px-2.5 py-1.5 bg-gradient-to-b from-amber-500/20 to-amber-600/10 hover:from-amber-500/30 hover:to-amber-600/20 border border-amber-500/40 hover:border-amber-400 text-amber-300 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-sm hover:shadow-[0_0_12px_rgba(245,158,11,0.25)] active:scale-95 cursor-pointer"
+                title="Abrir Ficha Completa do Personagem"
+              >
+                <FileText className="w-3.5 h-3.5 text-amber-400" />
+                <span>Ficha</span>
+              </button>
 
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="p-1 text-slate-400 hover:text-slate-100 hover:bg-[#232d40] rounded-md transition-colors"
-              title={isExpanded ? 'Recolher Painel de Ações' : 'Expandir Painel de Ações'}
-            >
-              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-            </button>
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-[#232d40] rounded-xl transition-colors border border-transparent hover:border-[#2a3449]"
+                title={isExpanded ? 'Recolher Painel de Ações' : 'Expandir Painel de Ações'}
+              >
+                {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* HP Bar */}
-        <div className="w-full bg-[#080b10] h-1.5 rounded-full overflow-hidden border border-[#232d40]">
+        {/* Enhanced HP Bar */}
+        <div className="w-full bg-[#080b10] h-2 rounded-full overflow-hidden border border-[#232d40] shadow-inner relative">
           <div 
-            className={`h-full transition-all duration-300 ${
-              hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 20 ? 'bg-amber-500' : 'bg-rose-500'
+            className={`h-full transition-all duration-300 shadow-sm ${
+              hpPercent > 50 
+                ? 'bg-gradient-to-r from-emerald-600 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' 
+                : hpPercent > 20 
+                ? 'bg-gradient-to-r from-amber-600 to-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.5)]' 
+                : 'bg-gradient-to-r from-rose-600 to-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]'
             }`}
             style={{ width: `${hpPercent}%` }}
           />

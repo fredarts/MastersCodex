@@ -152,10 +152,38 @@ export const CharacterSheetModal: React.FC<CharacterSheetModalProps> = ({
             }
           }
 
-          if (item) {
-            const currentEq = updated.equipment || [];
-            const safeId = item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-            updated.equipment = [...currentEq, { ...item, id: safeId }];
+          const incomingList: any[] = [];
+          if (Array.isArray(items) && items.length > 0) {
+            incomingList.push(...items);
+          } else if (item) {
+            incomingList.push(item);
+          }
+
+          if (incomingList.length > 0) {
+            const currentEq = [...(updated.equipment || updated.items || [])];
+            for (const inc of incomingList) {
+              const safeId = inc.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+              currentEq.push({ ...inc, id: safeId, equipped: false });
+
+              // Se for arma, adiciona à lista de ataques caso ainda não conste
+              if (inc.itemType === 'weapon' || inc.weaponProps) {
+                const currentAttacks = updated.attacks || [];
+                if (!currentAttacks.some((atk) => (atk.name || '').trim().toLowerCase() === (inc.name || '').trim().toLowerCase())) {
+                  updated.attacks = [
+                    ...currentAttacks,
+                    {
+                      id: `atk-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                      name: inc.name,
+                      atkBonus: inc.weaponProps?.atkBonus ? `+${inc.weaponProps.atkBonus}` : '+2',
+                      damage: inc.weaponProps?.damage || '1d6',
+                      type: inc.weaponProps?.damageType || 'Cortante',
+                    },
+                  ];
+                }
+              }
+            }
+            updated.equipment = currentEq;
+            updated.items = currentEq;
           }
 
           updated.updatedAt = new Date().toISOString();

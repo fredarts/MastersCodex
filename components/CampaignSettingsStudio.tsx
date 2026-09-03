@@ -34,6 +34,8 @@ import {
   Wand2,
   ArrowRight,
   Search,
+  X,
+  Share2,
 } from 'lucide-react';
 import { LinesAndVeilsPanel } from '@/components/safety/LinesAndVeilsPanel';
 import { PushNotificationToggle } from '@/components/push/PushNotificationToggle';
@@ -45,11 +47,17 @@ import { worldService } from '@/lib/services/worldService';
 import { CreateCampaignModal } from '@/components/CreateCampaignModal';
 import { EditCampaignDetailsModal } from '@/components/modals/EditCampaignDetailsModal';
 import { CampaignDocumentsStudio } from '@/components/campaign/CampaignDocumentsStudio';
+import { CampaignNPCSharingModal } from '@/components/campaign/CampaignNPCSharingModal';
+import { PlayerNPCModal } from '@/components/player-view/PlayerNPCModal';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { useCustomDialog } from '@/context/CustomDialogContext';
 import { toast } from 'sonner';
 
-export const CampaignSettingsStudio: React.FC = () => {
+interface CampaignSettingsStudioProps {
+  onEquipScene?: (scene: any) => void;
+}
+
+export const CampaignSettingsStudio: React.FC<CampaignSettingsStudioProps> = ({ onEquipScene }) => {
   const { user } = useAuth();
   const { showConfirm } = useCustomDialog();
   const { userWorlds, activeWorld, worldEntities } = useWorld();
@@ -72,7 +80,7 @@ export const CampaignSettingsStudio: React.FC = () => {
 
   const worldCampaigns = React.useMemo(() => {
     const seen = new Set<string>();
-    return userCampaigns.filter((c) => {
+    return userCampaigns.filter((c: any) => {
       if (c.role !== 'dm') return false;
       if (activeWorld && c.worldId !== activeWorld.id) return false;
       if (!c.id || seen.has(c.id)) return false;
@@ -106,11 +114,14 @@ export const CampaignSettingsStudio: React.FC = () => {
     }
   }, [activeCampaign, activeTab, fetchCampaignMembers]);
   const [feedFilter, setFeedFilter] = useState<CampaignFeedEventType | 'all'>('all');
-  const [isFeedFilterCollapsed, setIsFeedFilterCollapsed] = useState(false);
+  const [feedSearchQuery, setFeedSearchQuery] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Campaign Edit Modal State
   const [showEditDetailsModal, setShowEditDetailsModal] = useState(false);
+  const [showNPCSharingModal, setShowNPCSharingModal] = useState(false);
+  const [selectedNPCForSharingId, setSelectedNPCForSharingId] = useState<string | undefined>(undefined);
+  const [previewNPCForPlayer, setPreviewNPCForPlayer] = useState<WorldEntity | null>(null);
 
   // New Feed Event Form state
   const [showAddFeedModal, setShowAddFeedModal] = useState(false);
@@ -153,6 +164,64 @@ export const CampaignSettingsStudio: React.FC = () => {
       setCampaignWorldEntities(worldEntities);
     }
   }, [activeCampaign?.worldId, activeWorld?.id, worldEntities, user?.id]);
+
+  // Ensure DM is always present in roster calculation
+  const rosterMembers: CampaignMember[] = React.useMemo(() => {
+    const list = [...campaignMembers];
+    if (activeCampaign && !list.some((m) => m.role === 'dm')) {
+      list.unshift({
+        id: `mem-dm-default`,
+        campaignId: activeCampaign.id,
+        userId: activeCampaign.dmId,
+        role: 'dm',
+        displayName: user?.displayName || 'Frederico Monteiro (Game Dev)',
+      });
+    }
+    return list;
+  }, [campaignMembers, activeCampaign, user?.displayName]);
+
+  const availablePlayers = React.useMemo(() => {
+    return rosterMembers.filter(
+      (m) => m.role === 'player' && !(activeCampaign?.partyMembers || []).some((pm) => pm.id === m.id)
+    );
+  }, [rosterMembers, activeCampaign?.partyMembers]);
+
+  const worldNpcs = React.useMemo(() => {
+    return campaignWorldEntities.filter(
+      (e) => e.category === 'npc' || (e.category as string) === 'person'
+    );
+  }, [campaignWorldEntities]);
+
+  const availableNpcs = React.useMemo(() => {
+    return worldNpcs.filter(
+      (npc) => !(activeCampaign?.partyMembers || []).some((pm) => pm.id === npc.id)
+    );
+  }, [worldNpcs, activeCampaign?.partyMembers]);
+
+  const filteredAvailableNpcs = React.useMemo(() => {
+    const q = npcSearchQuery.toLowerCase().trim();
+    if (!q) return availableNpcs;
+    return availableNpcs.filter(
+      (npc) =>
+        npc.name.toLowerCase().includes(q) ||
+        (npc.subType || '').toLowerCase().includes(q) ||
+        (npc.shortDesc || '').toLowerCase().includes(q)
+    );
+  }, [availableNpcs, npcSearchQuery]);
+
+  const filteredFeed = React.useMemo(() => {
+    return feedEvents.filter((ev) => {
+      if (feedFilter !== 'all' && ev.eventType !== feedFilter) return false;
+      if (feedSearchQuery.trim()) {
+        const q = feedSearchQuery.toLowerCase().trim();
+        const matchesTitle = ev.title?.toLowerCase().includes(q);
+        const matchesSummary = ev.summary?.toLowerCase().includes(q);
+        const matchesDetails = ev.details && Object.values(ev.details).some((v) => String(v).toLowerCase().includes(q));
+        if (!matchesTitle && !matchesSummary && !matchesDetails) return false;
+      }
+      return true;
+    });
+  }, [feedEvents, feedFilter, feedSearchQuery]);
 
   // Empty State: Allow selecting or creating campaigns directly from here!
   if (!activeCampaign || activeCampaign.role !== 'dm' || (activeWorld && activeCampaign.worldId !== activeWorld.id)) {
@@ -252,52 +321,6 @@ export const CampaignSettingsStudio: React.FC = () => {
       </div>
     );
   }
-
-  // Ensure DM is always present in roster calculation
-  const rosterMembers: CampaignMember[] = [...campaignMembers];
-  if (!rosterMembers.some((m) => m.role === 'dm')) {
-    rosterMembers.unshift({
-      id: `mem-dm-default`,
-      campaignId: activeCampaign.id,
-      userId: activeCampaign.dmId,
-      role: 'dm',
-      displayName: user?.displayName || 'Frederico Monteiro (Game Dev)',
-    });
-  }
-
-  const availablePlayers = React.useMemo(() => {
-    return rosterMembers.filter(
-      (m) => m.role === 'player' && !(activeCampaign?.partyMembers || []).some((pm) => pm.id === m.id)
-    );
-  }, [rosterMembers, activeCampaign?.partyMembers]);
-
-  const worldNpcs = React.useMemo(() => {
-    return campaignWorldEntities.filter(
-      (e) => e.category === 'npc' || (e.category as string) === 'person'
-    );
-  }, [campaignWorldEntities]);
-
-  const availableNpcs = React.useMemo(() => {
-    return worldNpcs.filter(
-      (npc) => !(activeCampaign?.partyMembers || []).some((pm) => pm.id === npc.id)
-    );
-  }, [worldNpcs, activeCampaign?.partyMembers]);
-
-  const filteredAvailableNpcs = React.useMemo(() => {
-    const q = npcSearchQuery.toLowerCase().trim();
-    if (!q) return availableNpcs;
-    return availableNpcs.filter(
-      (npc) =>
-        npc.name.toLowerCase().includes(q) ||
-        (npc.subType || '').toLowerCase().includes(q) ||
-        (npc.shortDesc || '').toLowerCase().includes(q)
-    );
-  }, [availableNpcs, npcSearchQuery]);
-
-  const filteredFeed = feedEvents.filter((ev) => {
-    if (feedFilter !== 'all' && ev.eventType !== feedFilter) return false;
-    return true;
-  });
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(activeCampaign.inviteCode);
@@ -735,16 +758,24 @@ export const CampaignSettingsStudio: React.FC = () => {
 
                   {/* Adventure Hook Card (Call to Action / Session 0) - if exists */}
                   {hookText && (
-                    <div className="bg-gradient-to-br from-[#192233] to-[#121724] border border-amber-500/40 rounded-xl p-2.5 shadow-md space-y-1 flex-shrink-0">
-                      <div className="flex items-center gap-1.5 text-amber-400">
-                        <Compass className="w-3.5 h-3.5 text-amber-400" />
-                        <h4 className="text-[10.5px] font-extrabold uppercase tracking-wider text-amber-300">
-                          Gancho Inicial de Aventura (Sessão 0 / Call to Action)
+                    <div className="bg-[#141a27] border border-amber-500/30 rounded-2xl p-3 sm:p-3.5 shadow-xl flex-1 flex flex-col min-h-0 overflow-hidden">
+                      <div className="flex items-center justify-between border-b border-amber-500/20 pb-2 mb-2 flex-shrink-0">
+                        <h4 className="text-xs sm:text-sm font-bold text-amber-300 flex items-center gap-2 font-serif">
+                          <Compass className="w-4 h-4 text-amber-400" />
+                          <span>Gancho Inicial de Aventura (Sessão 0 / Call to Action)</span>
                         </h4>
+                        <button
+                          onClick={() => setShowEditDetailsModal(true)}
+                          className="p-1 text-slate-400 hover:text-amber-400 hover:bg-[#1b2336] rounded-lg transition-colors flex items-center gap-1 text-xs cursor-pointer"
+                          title="Editar Gancho Inicial"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          <span className="hidden sm:inline">Editar</span>
+                        </button>
                       </div>
-                      <p className="text-xs text-slate-200 font-sans italic bg-[#0a0e17]/80 p-2.5 rounded-lg border border-amber-500/20 leading-relaxed">
+                      <div className="text-xs text-slate-200 font-sans italic bg-[#0a0e17]/90 p-3 rounded-xl border border-amber-500/20 leading-relaxed flex-1 min-h-0 overflow-y-auto custom-scrollbar">
                         "{hookText}"
-                      </p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -814,160 +845,262 @@ export const CampaignSettingsStudio: React.FC = () => {
 
         {/* Feed Tab Content */}
         {activeTab === 'feed' && (
-          <div className="flex flex-col md:flex-row w-full min-h-full">
-            {/* Collapsible Secondary Sidebar for Filters */}
-            <div className={`bg-[#0f141d] border-r border-[#2a3449] flex flex-col transition-all duration-300 ${isFeedFilterCollapsed ? 'w-full md:w-16' : 'w-full md:w-56'} flex-shrink-0 md:sticky md:top-0`}>
-              <div className={`p-3 border-b border-[#2a3449]/60 flex items-center ${isFeedFilterCollapsed ? 'justify-center flex-col gap-2' : 'justify-between'} bg-[#121824]/50`}>
-                {!isFeedFilterCollapsed && (
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                    Filtros
-                  </span>
-                )}
-                <button
-                  onClick={() => setIsFeedFilterCollapsed(!isFeedFilterCollapsed)}
-                  className="p-1.5 rounded-lg bg-[#161c28] text-slate-400 hover:text-amber-400 hover:bg-[#1f2738] transition-colors mx-auto"
-                  title={isFeedFilterCollapsed ? 'Expandir Filtros' : 'Recolher Filtros'}
-                >
-                  {isFeedFilterCollapsed ? <ChevronRight className="w-4 h-4 hidden md:block" /> : <ChevronLeft className="w-4 h-4 hidden md:block" />}
-                  {isFeedFilterCollapsed && <Settings className="w-4 h-4 md:hidden" />}
-                </button>
-              </div>
-
-              <div className={`flex md:flex-col gap-1 overflow-x-auto md:overflow-visible p-2`}>
+          <div className="flex-1 flex flex-col h-full min-h-0 bg-[#0a0d14] overflow-hidden">
+            {/* Top Toolbar: Horizontal Filter Chips + Quick Search + Action Button */}
+            <div className="p-3 sm:p-4 border-b border-[#252f44] bg-[#0f141d]/90 backdrop-blur-md flex-shrink-0 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+              {/* Horizontal Filter Chips */}
+              <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 lg:pb-0">
                 <button
                   onClick={() => setFeedFilter('all')}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all min-w-max ${
-                    feedFilter === 'all' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:bg-[#161c28] hover:text-slate-200'
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    feedFilter === 'all'
+                      ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                      : 'bg-[#141a27] text-slate-400 hover:text-slate-200 hover:bg-[#1a2234] border border-[#252f44]'
                   }`}
-                  title="Todos os Registros"
                 >
-                  <Scroll className={`w-4 h-4 flex-shrink-0 ${feedFilter === 'all' ? 'text-slate-950' : 'text-amber-400'}`} />
-                  {(!isFeedFilterCollapsed || (typeof window !== 'undefined' && window.innerWidth < 768)) && <span className="truncate">Todos ({feedEvents.length})</span>}
+                  <Scroll className={`w-3.5 h-3.5 ${feedFilter === 'all' ? 'text-slate-950' : 'text-amber-400'}`} />
+                  <span>Todos ({feedEvents.length})</span>
                 </button>
+
                 <button
                   onClick={() => setFeedFilter('battle_summary')}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all min-w-max ${
-                    feedFilter === 'battle_summary' ? 'bg-rose-500 text-slate-950 shadow-md' : 'text-slate-400 hover:bg-[#161c28] hover:text-slate-200'
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    feedFilter === 'battle_summary'
+                      ? 'bg-rose-500 text-slate-950 shadow-md font-black'
+                      : 'bg-[#141a27] text-slate-400 hover:text-slate-200 hover:bg-[#1a2234] border border-[#252f44]'
                   }`}
-                  title="Batalhas"
                 >
-                  <Swords className={`w-4 h-4 flex-shrink-0 ${feedFilter === 'battle_summary' ? 'text-slate-950' : 'text-rose-400'}`} />
-                  {(!isFeedFilterCollapsed || (typeof window !== 'undefined' && window.innerWidth < 768)) && <span className="truncate">Batalhas</span>}
+                  <Swords className={`w-3.5 h-3.5 ${feedFilter === 'battle_summary' ? 'text-slate-950' : 'text-rose-400'}`} />
+                  <span>Batalhas ({feedEvents.filter((e) => e.eventType === 'battle_summary').length})</span>
                 </button>
+
                 <button
                   onClick={() => setFeedFilter('npc_encounter')}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all min-w-max ${
-                    feedFilter === 'npc_encounter' ? 'bg-cyan-500 text-slate-950 shadow-md' : 'text-slate-400 hover:bg-[#161c28] hover:text-slate-200'
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    feedFilter === 'npc_encounter'
+                      ? 'bg-cyan-500 text-slate-950 shadow-md font-black'
+                      : 'bg-[#141a27] text-slate-400 hover:text-slate-200 hover:bg-[#1a2234] border border-[#252f44]'
                   }`}
-                  title="NPCs"
                 >
-                  <MessageSquare className={`w-4 h-4 flex-shrink-0 ${feedFilter === 'npc_encounter' ? 'text-slate-950' : 'text-cyan-400'}`} />
-                  {(!isFeedFilterCollapsed || (typeof window !== 'undefined' && window.innerWidth < 768)) && <span className="truncate">NPCs</span>}
+                  <MessageSquare className={`w-3.5 h-3.5 ${feedFilter === 'npc_encounter' ? 'text-slate-950' : 'text-cyan-400'}`} />
+                  <span>NPCs ({feedEvents.filter((e) => e.eventType === 'npc_encounter').length})</span>
                 </button>
+
                 <button
                   onClick={() => setFeedFilter('session_recap')}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all min-w-max ${
-                    feedFilter === 'session_recap' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:bg-[#161c28] hover:text-slate-200'
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    feedFilter === 'session_recap'
+                      ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                      : 'bg-[#141a27] text-slate-400 hover:text-slate-200 hover:bg-[#1a2234] border border-[#252f44]'
                   }`}
-                  title="Recaps de Sessão"
                 >
-                  <BookOpen className={`w-4 h-4 flex-shrink-0 ${feedFilter === 'session_recap' ? 'text-slate-950' : 'text-amber-400'}`} />
-                  {(!isFeedFilterCollapsed || (typeof window !== 'undefined' && window.innerWidth < 768)) && <span className="truncate">Recaps</span>}
+                  <BookOpen className={`w-3.5 h-3.5 ${feedFilter === 'session_recap' ? 'text-slate-950' : 'text-amber-400'}`} />
+                  <span>Recaps ({feedEvents.filter((e) => e.eventType === 'session_recap').length})</span>
                 </button>
+
                 <button
                   onClick={() => setFeedFilter('world_lore')}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold transition-all min-w-max ${
-                    feedFilter === 'world_lore' ? 'bg-purple-500 text-slate-950 shadow-md' : 'text-slate-400 hover:bg-[#161c28] hover:text-slate-200'
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    feedFilter === 'world_lore'
+                      ? 'bg-purple-500 text-slate-950 shadow-md font-black'
+                      : 'bg-[#141a27] text-slate-400 hover:text-slate-200 hover:bg-[#1a2234] border border-[#252f44]'
                   }`}
-                  title="Lore do Mundo"
                 >
-                  <BookOpen className={`w-4 h-4 flex-shrink-0 ${feedFilter === 'world_lore' ? 'text-slate-950' : 'text-purple-400'}`} />
-                  {(!isFeedFilterCollapsed || (typeof window !== 'undefined' && window.innerWidth < 768)) && <span className="truncate">Lore do Mundo</span>}
+                  <BookOpen className={`w-3.5 h-3.5 ${feedFilter === 'world_lore' ? 'text-slate-950' : 'text-purple-400'}`} />
+                  <span>Lore ({feedEvents.filter((e) => e.eventType === 'world_lore').length})</span>
                 </button>
               </div>
 
-              <div className="p-2 mt-auto">
+              {/* Search Box & New Event Action Button */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="relative flex-1 sm:w-56">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Buscar no feed..."
+                    value={feedSearchQuery}
+                    onChange={(e) => setFeedSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-7 py-1.5 bg-[#0a0d14] border border-[#252f44] focus:border-amber-500 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 outline-none transition-all"
+                  />
+                  {feedSearchQuery && (
+                    <button
+                      onClick={() => setFeedSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setShowNPCSharingModal(true)}
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 text-slate-950 font-black px-3.5 py-1.5 rounded-xl text-xs shadow-md shadow-cyan-900/30 transition-all active:scale-95 cursor-pointer flex-shrink-0"
+                  title="Transmitir e Revelar NPCs do World Building para a Campanha"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span>Transmitir NPCs ({Object.values(activeCampaign?.npcDisclosures || {}).filter((d) => d.isShared).length})</span>
+                </button>
+
                 <button
                   onClick={() => setShowAddFeedModal(true)}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold px-3 py-2.5 rounded-xl text-xs shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
-                  title="Novo Evento no Feed"
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black px-3.5 py-1.5 rounded-xl text-xs shadow-md shadow-emerald-500/20 transition-all active:scale-95 cursor-pointer flex-shrink-0"
                 >
-                  <Plus className="w-4 h-4 flex-shrink-0" />
-                  {(!isFeedFilterCollapsed || (typeof window !== 'undefined' && window.innerWidth < 768)) && <span>Novo Evento</span>}
+                  <Plus className="w-4 h-4" />
+                  <span>Novo Evento</span>
                 </button>
               </div>
             </div>
 
-            {/* Main Feed Content */}
-            <div className="flex-1 space-y-4 p-6 max-w-4xl mx-auto w-full">
-              {/* Chronicle Timeline Log List */}
-              <div className="space-y-3 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#2a3449]">
-              {filteredFeed.length === 0 ? (
-                <div className="p-8 text-center text-slate-500 bg-[#0f141d]/40 rounded-2xl border border-dashed border-[#2a3449]">
-                  Nenhum registro encontrado no Feed da Jornada.
-                </div>
-              ) : (
-                filteredFeed.map((ev) => (
-                  <div
-                    key={ev.id}
-                    className="relative pl-10 group"
-                  >
-                    <div className="absolute left-2 top-3 -translate-x-1/2 w-5 h-5 rounded-full bg-[#161c28] border-2 border-amber-500 flex items-center justify-center shadow">
-                      {getEventIcon(ev.eventType)}
-                    </div>
+            {/* Main Feed Content with Smooth Scrolling */}
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 sm:p-6">
+              <div className="max-w-4xl mx-auto space-y-3.5 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#2a3449]">
+                {filteredFeed.length === 0 ? (
+                  <div className="p-8 text-center text-slate-500 bg-[#0f141d]/40 rounded-2xl border border-dashed border-[#2a3449]">
+                    <p className="text-sm font-medium mb-1">Nenhum registro encontrado no Feed da Jornada.</p>
+                    {feedSearchQuery && (
+                      <p className="text-xs text-slate-600">Nenhum resultado para "{feedSearchQuery}". Tente outro termo ou categoria.</p>
+                    )}
+                  </div>
+                ) : (
+                  filteredFeed.map((ev) => {
+                  const linkedNpc = ev.details?.entityId
+                    ? worldEntities.find((e) => e.id === ev.details?.entityId)
+                    : worldEntities.find(
+                        (e) =>
+                          (e.category === 'npc' || (e.category as string) === 'person') &&
+                          ev.title?.toLowerCase().includes(e.name.toLowerCase())
+                      );
 
-                    <div className={`p-4 rounded-2xl border transition-all ${
-                      ev.isPublic 
-                        ? 'bg-[#161c28] border-[#2a3449] hover:border-slate-500' 
-                        : 'bg-amber-950/20 border-amber-500/40'
-                    }`}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-sm text-slate-100">{ev.title}</h4>
-                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded border uppercase ${
-                            ev.isPublic 
-                              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' 
-                              : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                          }`}>
-                            {ev.isPublic ? '👁️ PÚBLICO' : '🔒 PRIVADO DM'}
-                          </span>
-                        </div>
+                  const disclosure = linkedNpc ? activeCampaign?.npcDisclosures?.[linkedNpc.id] : undefined;
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => toggleFeedEventVisibility(ev.id)}
-                            className="p-1 text-slate-400 hover:text-amber-400 rounded text-xs flex items-center gap-1"
-                            title={ev.isPublic ? 'Tornar Privado do DM' : 'Tornar Público para os Jogadores'}
-                          >
-                            {ev.isPublic ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
-                          <button
-                            onClick={() => deleteFeedEvent(ev.id)}
-                            className="p-1 text-slate-500 hover:text-rose-400 rounded"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                  const isNameRevealed = disclosure ? Boolean(disclosure.revealedFields?.name) : true;
+                  const isShortDescRevealed = disclosure ? Boolean(disclosure.revealedFields?.shortDesc) : true;
+                  const isRaceClassRevealed = disclosure ? Boolean(disclosure.revealedFields?.raceClass) : true;
+
+                  const dynamicTitle = disclosure
+                    ? `Encontro / Contato: ${isNameRevealed ? (disclosure.entitySnapshot?.name || linkedNpc?.name) : (disclosure.alias?.trim() || 'Indivíduo Misterioso')}`
+                    : ev.title;
+
+                  const dynamicSummary = disclosure
+                    ? (isShortDescRevealed
+                        ? (disclosure.entitySnapshot?.shortDesc || linkedNpc?.shortDesc || ev.summary)
+                        : 'Identidade e histórico velados pelo mistério. O resumo está oculto para os jogadores.')
+                    : ev.summary;
+
+                  return (
+                    <div
+                      key={ev.id}
+                      className="relative pl-10 group"
+                    >
+                      <div className="absolute left-2 top-3 -translate-x-1/2 w-5 h-5 rounded-full bg-[#161c28] border-2 border-amber-500 flex items-center justify-center shadow">
+                        {getEventIcon(ev.eventType)}
                       </div>
 
-                      <p className="text-xs text-slate-300 font-serif leading-relaxed">{ev.summary}</p>
+                      <div className={`p-4 rounded-2xl border transition-all ${
+                        ev.isPublic 
+                          ? 'bg-[#161c28] border-[#2a3449] hover:border-slate-500 shadow-md' 
+                          : 'bg-amber-950/20 border-amber-500/40 shadow-md'
+                      }`}>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 
+                              className={`font-bold text-sm ${linkedNpc ? 'text-amber-300 hover:underline cursor-pointer' : 'text-slate-100'}`}
+                              onClick={() => {
+                                if (linkedNpc) {
+                                  setPreviewNPCForPlayer(linkedNpc);
+                                }
+                              }}
+                              title={linkedNpc ? 'Clique para ver a Ficha do NPC (Visão do Jogador)' : undefined}
+                            >
+                              {dynamicTitle}
+                            </h4>
+                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded border uppercase ${
+                              ev.isPublic 
+                                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' 
+                                : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            }`}>
+                              {ev.isPublic ? '👁️ PÚBLICO' : '🔒 PRIVADO DM'}
+                            </span>
+                            {disclosure && !isNameRevealed && (
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded border uppercase bg-amber-500/20 text-amber-300 border-amber-500/40">
+                                Codinome Ativo
+                              </span>
+                            )}
+                          </div>
 
-                      {ev.details && Object.keys(ev.details).length > 0 && (
-                        <div className="mt-2 p-2 bg-[#0a0d14] rounded-lg border border-[#2a3449] text-[11px] text-amber-300 font-mono">
-                          {Object.entries(ev.details).map(([k, v]) => (
-                            <div key={k}>
-                              <strong className="capitalize">{k}:</strong> {String(v)}
-                            </div>
-                          ))}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {/* Botão para Gerenciar Revelações deste NPC específico */}
+                            {linkedNpc && (
+                              <button
+                                onClick={() => {
+                                  setSelectedNPCForSharingId(linkedNpc.id);
+                                  setShowNPCSharingModal(true);
+                                }}
+                                className="px-2.5 py-1 bg-gradient-to-r from-cyan-600/30 to-cyan-700/40 hover:from-cyan-600/60 hover:to-cyan-700/70 border border-cyan-500/50 text-cyan-300 hover:text-white rounded-lg text-[10px] font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                                title="Editar permissões e revelar mais informações deste NPC aos jogadores"
+                              >
+                                <Share2 className="w-3 h-3 text-cyan-400" />
+                                <span>Gerenciar Revelações</span>
+                              </button>
+                            )}
+
+                            {linkedNpc && (
+                              <button
+                                onClick={() => setPreviewNPCForPlayer(linkedNpc)}
+                                className="p-1 text-slate-400 hover:text-amber-300 rounded text-xs flex items-center gap-1 cursor-pointer"
+                                title="Inspecionar ficha como o jogador vê"
+                              >
+                                <BookOpen className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => toggleFeedEventVisibility(ev.id)}
+                              className="p-1 text-slate-400 hover:text-amber-400 rounded text-xs flex items-center gap-1 cursor-pointer"
+                              title={ev.isPublic ? 'Tornar Privado do DM' : 'Tornar Público para os Jogadores'}
+                            >
+                              {ev.isPublic ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              onClick={() => deleteFeedEvent(ev.id)}
+                              className="p-1 text-slate-500 hover:text-rose-400 rounded cursor-pointer"
+                              title="Excluir Evento"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                      )}
+
+                        <p className={`text-xs font-serif leading-relaxed ${
+                          disclosure && !isShortDescRevealed ? 'text-slate-400 italic' : 'text-slate-300'
+                        }`}>
+                          {dynamicSummary}
+                        </p>
+
+                        {ev.details && Object.keys(ev.details).length > 0 && (
+                          <div className="mt-2.5 p-2 bg-[#0a0d14] rounded-lg border border-[#2a3449] text-[11px] text-amber-300 font-mono flex flex-wrap gap-x-4 gap-y-1">
+                            {Object.entries(ev.details)
+                              .filter(([k]) => k !== 'entityId')
+                              .map(([k, v]) => {
+                                const displayVal = (k.toLowerCase() === 'origem' && disclosure && !isRaceClassRevealed)
+                                  ? 'Origem Oculta'
+                                  : String(v);
+                                return (
+                                  <div key={k}>
+                                    <strong className="capitalize text-slate-400">{k}:</strong> {displayVal}
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
-              )}
+                  );
+                })
+                )}
+              </div>
             </div>
           </div>
-        </div>
         )}
 
         {/* Documents & Lore Tab Content */}
@@ -990,10 +1123,18 @@ export const CampaignSettingsStudio: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setShowNPCSharingModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow transition-all cursor-pointer"
+                    title="Transmitir e Revelar NPCs do World Building para os Jogadores"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>Transmitir NPCs ({Object.values(activeCampaign?.npcDisclosures || {}).filter(d => d.isShared).length})</span>
+                  </button>
                   <button
                     onClick={() => activeCampaign && fetchCampaignMembers(activeCampaign.id)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] text-amber-400 hover:text-amber-300 font-bold text-xs rounded-xl transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0a0d14] hover:bg-[#1f2738] border border-[#2a3449] text-amber-400 hover:text-amber-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
                     title="Atualizar lista de jogadores"
                   >
                     <RefreshCw className="w-3 h-3" />
@@ -1001,7 +1142,7 @@ export const CampaignSettingsStudio: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setShowAddMemberModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded-xl shadow transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded-xl shadow transition-all cursor-pointer"
                   >
                     <UserPlus className="w-3.5 h-3.5" />
                     <span>+ Jogador Manual</span>
@@ -1624,6 +1765,28 @@ export const CampaignSettingsStudio: React.FC = () => {
           isOpen={showEditDetailsModal}
           onClose={() => setShowEditDetailsModal(false)}
           campaign={activeCampaign}
+        />
+      )}
+
+      {/* Modal Transmitir NPCs do World Building & Revelação Progressiva */}
+      {showNPCSharingModal && activeCampaign && (
+        <CampaignNPCSharingModal
+          campaign={activeCampaign}
+          worldEntities={worldEntities}
+          initialEntityId={selectedNPCForSharingId}
+          onClose={() => {
+            setShowNPCSharingModal(false);
+            setSelectedNPCForSharingId(undefined);
+          }}
+        />
+      )}
+
+      {/* Modal Preview da Visão do Jogador */}
+      {previewNPCForPlayer && activeCampaign && (
+        <PlayerNPCModal
+          entity={previewNPCForPlayer}
+          disclosure={activeCampaign.npcDisclosures?.[previewNPCForPlayer.id]}
+          onClose={() => setPreviewNPCForPlayer(null)}
         />
       )}
     </div>

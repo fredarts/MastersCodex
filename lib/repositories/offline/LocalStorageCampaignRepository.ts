@@ -144,6 +144,10 @@ export class LocalStorageCampaignRepository implements ICampaignRepository {
       const all: UserCampaign[] = saved ? JSON.parse(saved) : [];
       const updated = all.map((c) => (c.id === campaign.id ? campaign : c));
       localStorage.setItem('codex_campaigns', JSON.stringify(updated));
+
+      if (campaign.npcDisclosures) {
+        localStorage.setItem(`codex_campaign_disclosures_${campaign.id}`, JSON.stringify(campaign.npcDisclosures));
+      }
     } catch (_e) {}
     return campaign;
   }

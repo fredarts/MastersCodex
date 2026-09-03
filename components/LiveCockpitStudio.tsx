@@ -335,60 +335,57 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
       const updatedAvatarUrl: string | undefined = sheet.faceImageUrl || sheet.avatarUrl;
       const updatedCombatImg: string | undefined = combatPinUrl || (updatedTokenType === 'billboard' ? updatedModelUrl : undefined);
 
-      setCombatants((prev) => {
-        let hasChanges = false;
-        const next = prev.map((c) => {
-          const cClean = c.name.split('(')[0].trim().toLowerCase();
-          const sheetClean = (sheet.characterName || '').split('(')[0].trim().toLowerCase();
-          const isMatch =
-            cClean === sheetClean ||
-            c.name.toLowerCase().includes(sheetClean) ||
-            sheet.characterName?.toLowerCase().includes(cClean) ||
-            (sheet.id && c.id.includes(sheet.id));
+      let hasChanges = false;
+      const next = combatants.map((c) => {
+        const cClean = c.name.split('(')[0].trim().toLowerCase();
+        const sheetClean = (sheet.characterName || '').split('(')[0].trim().toLowerCase();
+        const isMatch =
+          cClean === sheetClean ||
+          c.name.toLowerCase().includes(sheetClean) ||
+          sheet.characterName?.toLowerCase().includes(cClean) ||
+          (sheet.id && c.id.includes(sheet.id));
 
-          if (isMatch) {
-            if (
-              c.modelUrl !== updatedModelUrl ||
-              c.tokenType !== updatedTokenType ||
-              c.tokenImageUrl !== updatedCombatImg ||
-              c.combatImageUrl !== combatPinUrl ||
-              c.avatarUrl !== updatedAvatarUrl
-            ) {
-              hasChanges = true;
-              return {
-                ...c,
-                modelUrl: updatedModelUrl,
-                tokenType: updatedTokenType,
-                tokenImageUrl: updatedTokenType === 'billboard' ? updatedCombatImg : undefined,
-                combatImageUrl: combatPinUrl || updatedCombatImg,
-                avatarUrl: updatedAvatarUrl,
-              };
-            }
+        if (isMatch) {
+          if (
+            c.modelUrl !== updatedModelUrl ||
+            c.tokenType !== updatedTokenType ||
+            c.tokenImageUrl !== updatedCombatImg ||
+            c.combatImageUrl !== combatPinUrl ||
+            c.avatarUrl !== updatedAvatarUrl
+          ) {
+            hasChanges = true;
+            return {
+              ...c,
+              modelUrl: updatedModelUrl,
+              tokenType: updatedTokenType,
+              tokenImageUrl: updatedTokenType === 'billboard' ? updatedCombatImg : undefined,
+              combatImageUrl: combatPinUrl || updatedCombatImg,
+              avatarUrl: updatedAvatarUrl,
+            };
           }
-          return c;
-        });
-
-        if (hasChanges) {
-          if (broadcastCombatUpdate) {
-            broadcastCombatUpdate({
-              combatants: next,
-              currentTurnIndex,
-              roundCount,
-            });
-          }
-          if (initializeFromCombatants) {
-            initializeFromCombatants(next);
-          }
-          if (activeScene && updateScene) {
-            updateScene({
-              ...activeScene,
-              combatants: next,
-            });
-          }
-          return next;
         }
-        return prev;
+        return c;
       });
+
+      if (hasChanges) {
+        setCombatants(next);
+        if (broadcastCombatUpdate) {
+          broadcastCombatUpdate({
+            combatants: next,
+            currentTurnIndex,
+            roundCount,
+          });
+        }
+        if (initializeFromCombatants) {
+          initializeFromCombatants(next);
+        }
+        if (activeScene && updateScene) {
+          updateScene({
+            ...activeScene,
+            combatants: next,
+          });
+        }
+      }
     };
 
     let bc: BroadcastChannel | null = null;

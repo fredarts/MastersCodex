@@ -86,6 +86,18 @@ export interface RealtimeSyncPayloads {
     };
     strokeId?: string;
   };
+  NPC_DISCLOSURE_UPDATED: {
+    campaignId: string;
+    entityId: string;
+    entityName?: string;
+    disclosure: any;
+    timestamp: number;
+  };
+  CAMPAIGN_FEED_EVENT_CREATED: {
+    campaignId: string;
+    event: any;
+    timestamp: number;
+  };
 }
 
 export interface UseRealtimeSyncOptions {
@@ -112,6 +124,8 @@ export interface UseRealtimeSyncOptions {
   onXCardAlert?: (payload: RealtimeSyncPayloads['SAFETY_X_CARD_TRIGGERED']) => void;
   onSafetySettingsUpdated?: (payload: RealtimeSyncPayloads['SAFETY_SETTINGS_UPDATED']) => void;
   onInvestigationBoardUpdate?: (payload: RealtimeSyncPayloads['INVESTIGATION_BOARD_UPDATE']) => void;
+  onNpcDisclosureUpdated?: (payload: RealtimeSyncPayloads['NPC_DISCLOSURE_UPDATED']) => void;
+  onCampaignFeedEventCreated?: (payload: RealtimeSyncPayloads['CAMPAIGN_FEED_EVENT_CREATED']) => void;
 }
 
 interface RealtimeChannelEntry {
@@ -381,6 +395,26 @@ export function useRealtimeSync({
             );
           }
         })
+        .on('broadcast', { event: 'NPC_DISCLOSURE_UPDATED' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onNpcDisclosureUpdated?.(payload));
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('codex_campaign_npc_disclosure_sync', {
+                detail: payload,
+              })
+            );
+          }
+        })
+        .on('broadcast', { event: 'CAMPAIGN_FEED_EVENT_CREATED' }, ({ payload }) => {
+          newEntry.listeners.forEach((l) => l.current.onCampaignFeedEventCreated?.(payload));
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('codex_campaign_feed_sync', {
+                detail: payload,
+              })
+            );
+          }
+        })
         .subscribe(async (status) => {
           if (status === 'SUBSCRIBED') {
             newEntry.isSubscribed = true;
@@ -577,6 +611,14 @@ export function useRealtimeSync({
     sendBroadcast('INVESTIGATION_BOARD_UPDATE', payload);
   }, [sendBroadcast]);
 
+  const broadcastNpcDisclosure = useCallback((payload: RealtimeSyncPayloads['NPC_DISCLOSURE_UPDATED']) => {
+    sendBroadcast('NPC_DISCLOSURE_UPDATED', payload);
+  }, [sendBroadcast]);
+
+  const broadcastCampaignFeedEvent = useCallback((payload: RealtimeSyncPayloads['CAMPAIGN_FEED_EVENT_CREATED']) => {
+    sendBroadcast('CAMPAIGN_FEED_EVENT_CREATED', payload);
+  }, [sendBroadcast]);
+
   return {
     sendBroadcast,
     broadcastTokenMove,
@@ -601,5 +643,71 @@ export function useRealtimeSync({
     broadcastXCardAlert,
     broadcastSafetySettingsUpdated,
     broadcastInvestigationBoard,
+    broadcastNpcDisclosure,
+    broadcastCampaignFeedEvent,
   };
 }
+
+/**
+ * Função utilitária standalone para emissão atômica multi-canal (Supabase Realtime + BroadcastChannel + Window Event)
+ */
+export async function dispatchCrossAccountCampaignEvent(
+  campaignId: string,
+  eventType: 'NPC_DISCLOSURE_UPDATED' | 'CAMPAIGN_FEED_EVENT_CREATED',
+  payload: any
+) {
+  if (!campaignId) return;
+
+  // 1. Emite via canal Supabase Realtime Singleton
+  if (isSupabaseConfigured()) {
+    try {
+      const channelName = `masters_codex_campaign_${campaignId}`;
+      let entry = activeRealtimeChannels.get(campaignId);
+      if (entry && entry.channel) {
+        entry.channel.send({
+          type: 'broadcast',
+          event: eventType,
+          payload,
+        });
+      } else {
+        const channel = supabase.channel(channelName);
+        channel.send({
+          type: 'broadcast',
+          event: eventType,
+          payload,
+        });
+      }
+    } catch (e) {
+      console.warn('Erro ao enviar broadcast Supabase Realtime:', e);
+    }
+  }
+
+  // 2. Emite via BroadcastChannel (para abas no mesmo navegador)
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    try {
+      const bc = new BroadcastChannel(`campaign-sync-${campaignId}`);
+      bc.postMessage({
+        type: eventType,
+        campaignId,
+        ...payload,
+      });
+      bc.close();
+    } catch (e) {
+      console.warn('Erro ao emitir via BroadcastChannel:', e);
+    }
+  }
+
+  // 3. Emite CustomEvent no Window local
+  if (typeof window !== 'undefined') {
+    const customEventName =
+      eventType === 'NPC_DISCLOSURE_UPDATED'
+        ? 'codex_campaign_npc_disclosure_sync'
+        : 'codex_campaign_feed_sync';
+    window.dispatchEvent(
+      new CustomEvent(customEventName, {
+        detail: payload,
+      })
+    );
+  }
+}
+

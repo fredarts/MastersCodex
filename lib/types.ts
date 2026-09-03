@@ -415,6 +415,26 @@ export interface ProgressClock {
   updatedAt?: string;
 }
 
+export interface CampaignNPCDisclosure {
+  entityId: string; // ID do WorldEntity (NPC)
+  isShared: boolean; // Se está transmitido para a campanha
+  alias?: string; // Pseudônimo/Codinome quando o nome verdadeiro for secreto
+  revealedFields: {
+    image: boolean;
+    name: boolean;
+    raceClass: boolean;
+    shortDesc: boolean;
+    fullContent: boolean;
+    secrets: boolean;
+    connections: boolean;
+    statSheet: boolean;
+    tags: boolean;
+  };
+  entitySnapshot?: WorldEntity; // Dados completos do NPC gravados na campanha para acesso por todos os jogadores
+  sharedAt?: string;
+  updatedAt?: string;
+}
+
 export interface UserCampaign {
   id: string;
   dmId: string;
@@ -431,11 +451,13 @@ export interface UserCampaign {
   calendarConfig?: import('./types/calendar').CampaignCalendarConfig;
   calendarState?: import('./types/calendar').CampaignCalendarState;
   documents?: CampaignDocumentItem[];
+  npcDisclosures?: Record<string, CampaignNPCDisclosure>; // Vínculo de visibilidade de NPCs por campanha
   activeSceneId?: string; // ID da cena que o mestre está projetando ativamente
   liveState?: {
     displayMode?: 'artwork' | 'map' | 'combat';
     activeMapId?: string | null;
     dungeonExplorationStarted?: boolean;
+    npcDisclosures?: Record<string, CampaignNPCDisclosure>;
     updatedAt?: number;
   };
 }
@@ -1301,6 +1323,7 @@ export interface DirectTransferPayload {
   toUserId?: string;
   toCharacterName: string;
   item?: CharacterEquipmentItem;
+  items?: CharacterEquipmentItem[];
   currency?: Partial<CharacterCurrency>;
   sentAt: string;
 }

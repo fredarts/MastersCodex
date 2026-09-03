@@ -39,7 +39,8 @@ import {
   Mic,
   MicOff,
   PhoneCall,
-  PhoneOff
+  PhoneOff,
+  Package
 } from 'lucide-react';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
@@ -73,13 +74,28 @@ import { MagicShaderSlideshow } from './MagicShaderSlideshow';
 import { SlideTextOverlayRenderer } from '@/components/session/SlideTextOverlayRenderer';
 import { normalizeImageUrl, getYouTubeEmbedUrl, resolveCurrentSceneImage } from '@/lib/imageUtils';
 import { revealVisionWithLOS, getTokenVisionRadius } from '@/components/map/visionCore';
+import { CampaignFeedModal } from './session/CampaignFeedModal';
+import { useCampaignNotifications } from '@/lib/hooks/useCampaignNotifications';
+import { MemberContextMenu, ContextMenuMember } from './player-view/MemberContextMenu';
+import { ItemTransferModal } from './player-view/ItemTransferModal';
+import { ReceivedItemsModal } from './player-view/ReceivedItemsModal';
+import { executeItemTransfer, TransferItemPayload } from '@/lib/services/itemTransferService';
+import { DirectTransferPayload } from '@/lib/types';
 
 interface PlayerLobbyProps {
   onOpenPlayerView: () => void;
 }
 
 export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) => {
-  const { activeCampaign, setActiveCampaign, userCampaigns, joinCampaignByCode, leaveCampaign, feedEvents, updateCampaignMemberModelUrl } = useCampaign();
+  const { 
+    userCampaigns, 
+    activeCampaign, 
+    setActiveCampaign, 
+    joinCampaignByCode, 
+    leaveCampaign,
+    feedEvents,
+    updateCampaignMemberModelUrl
+  } = useCampaign();
   const { 
     tokenPositions3D, 
     updateTokenPosition3D, 
@@ -95,6 +111,8 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     chatMessages,
     onlineUsers,
     broadcastPlayerRoll,
+    broadcastCombatLogEntry,
+    broadcastChatMessage,
     broadcastToPlayerView,
     broadcastCombatUpdate,
     updateCombatantState,
@@ -109,7 +127,12 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   const { activeScene, fetchSceneMap, campaignMaps } = useSession();
   const { user } = useAuth();
   const { showAlert, showConfirm } = useCustomDialog();
-  const { setIsOnPlayerCampaignView } = usePartyLoot();
+  const { 
+    setIsOnPlayerCampaignView, 
+    pendingReceivedTransfer, 
+    setPendingReceivedTransfer, 
+    sendDirectTransfer 
+  } = usePartyLoot();
   const { isInCall, isConnecting, isMuted, isSpeaking, joinCall, toggleMute, setIsWidgetOpen, participants } = useVoiceCall();
   
   // Navigation & Modal States
@@ -117,6 +140,13 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     activeCampaign?.role === 'player' ? activeCampaign?.id || null : null
   );
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [showCampaignFeedModal, setShowCampaignFeedModal] = useState(false);
+
+  const chronicleNotifications = useCampaignNotifications(
+    activeCampaign?.id,
+    activeCampaign?.npcDisclosures,
+    feedEvents
+  );
 
   // Garante que o CampaignContext tenha a campanha ativa sincronizada para conectar ao WebSocket Supabase
   useEffect(() => {
@@ -278,12 +308,374 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
   }, [playerCanvasView, liveDisplayMode, projectedScene, activeScene, mapData, lastLoadedSceneMapKey, fetchSceneMap, setMapData, campaignMaps, combatants, isMapLoading]);
 
   // VTT Player Cockpit UI States
-  const [sidebarTab, setSidebarTab] = useState<'init' | 'log' | 'chat'>('init');
+  const [sidebarTab, setSidebarTab] = useState<'init' | 'log' | 'chat'>('chat');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [macroDisplayMode, setMacroDisplayMode] = useState<MacroBarDisplayMode>('both');
   const [secretRollMode, setSecretRollMode] = useState<SecretRollNotificationMode>('subtle_notice');
   const [pendingAttackPayload, setPendingAttackPayload] = useState<any>(null);
+
+  // Context Menu & Item Trading States
+  const [memberContextMenu, setMemberContextMenu] = useState<{
+    x: number;
+    y: number;
+    member: ContextMenuMember;
+  } | null>(null);
+
+  const [tradeModalState, setTradeModalState] = useState<{
+    isOpen: boolean;
+    receiverMember: ContextMenuMember | null;
+  }>({ isOpen: false, receiverMember: null });
+
+  const handleMemberContextMenu = (e: React.MouseEvent, member: { id: string; userId: string; characterName?: string; avatarUrl?: string; role: string }) => {
+    e.preventDefault();
+    setMemberContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      member: {
+        id: member.id,
+        userId: member.userId,
+        characterName: member.characterName,
+        avatarUrl: member.avatarUrl,
+        role: member.role,
+      },
+    });
+  };
+
+  const handleStartItemTransfer = (member: ContextMenuMember) => {
+    setTradeModalState({
+      isOpen: true,
+      receiverMember: member,
+    });
+  };
+
+  const handleConfirmItemTransfer = async (itemsToTransfer: TransferItemPayload[]) => {
+    if (!tradeModalState.receiverMember || !activeSheet) return;
+    const targetMember = tradeModalState.receiverMember;
+    const targetCharName = (targetMember.characterName || '').trim();
+
+    // 1. Localiza a ficha do destinatário com máxima abrangência (Supabase + localStorage)
+    let receiverSheet: CharacterSheet | null = null;
+    let receiverRowId: string | null = null;
+    let receiverUserId: string | null = (targetMember.userId && isValidUuid(targetMember.userId)) ? targetMember.userId : null;
+
+    if (isSupabaseConfigured()) {
+      try {
+        let query = supabase.from('character_sheets').select('*');
+        if (currentCampaign?.id && isValidUuid(currentCampaign.id)) {
+          query = query.or(`campaign_id.eq.${currentCampaign.id},campaign_id.is.null`);
+        }
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          const normTarget = targetCharName.toLowerCase();
+          const match = data.find((row) => {
+            const rowCharName = (row.character_name || row.data?.characterName || '').trim().toLowerCase();
+            return (
+              (targetMember.userId && isValidUuid(targetMember.userId) && row.user_id === targetMember.userId) ||
+              (normTarget && rowCharName === normTarget) ||
+              (normTarget && (rowCharName.includes(normTarget) || normTarget.includes(rowCharName)))
+            );
+          });
+
+          if (match) {
+            receiverRowId = match.id;
+            if (match.user_id && isValidUuid(match.user_id)) {
+              receiverUserId = match.user_id;
+            }
+            receiverSheet = {
+              ...match.data,
+              id: match.id,
+              userId: match.user_id || receiverUserId || 'unknown',
+              campaignId: match.campaign_id || currentCampaign?.id,
+              characterName: match.character_name || match.data?.characterName || targetCharName,
+            };
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao buscar ficha do destinatário no Supabase:', err);
+      }
+    }
+
+    // Fallback: busca em localStorage
+    if (!receiverSheet && targetCharName) {
+      try {
+        const saved = localStorage.getItem('masters_codex_character_sheets_v1');
+        const sheets: CharacterSheet[] = saved ? JSON.parse(saved) : [];
+        const normTarget = targetCharName.toLowerCase();
+        const match = sheets.find(
+          (s) => s.characterName && s.characterName.trim().toLowerCase() === normTarget
+        );
+        if (match) {
+          receiverSheet = { ...match };
+          if (match.id && isValidUuid(match.id)) {
+            receiverRowId = match.id;
+          }
+          if (match.userId && isValidUuid(match.userId)) {
+            receiverUserId = match.userId;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Se ainda não existir nenhuma ficha para este membro, cria uma nova ficha com UUID válido garantido
+    if (!receiverSheet) {
+      receiverSheet = createEmptyCharacterSheet(
+        (receiverUserId && isValidUuid(receiverUserId)) ? receiverUserId : (user?.id || 'player-1'),
+        currentCampaign?.id
+      );
+      receiverSheet.characterName = targetCharName || 'Aventureiro';
+      receiverSheet.playerName = targetMember.characterName || 'Jogador';
+      receiverRowId = receiverSheet.id;
+    }
+
+    // 2. Executa a transferência pura mantendo a integridade total do modelo de dados D&D 5e
+    const result = executeItemTransfer(activeSheet, receiverSheet, itemsToTransfer);
+    const updatedSender = result.updatedSenderSheet;
+    const updatedReceiver = result.updatedReceiverSheet;
+    const summaryText = result.transferredItemsSummary.join(', ');
+
+    // 3. Persiste a ficha do remetente
+    setActiveSheet(updatedSender);
+    setCharacterSheets((prev) => prev.map((s) => (s.id === updatedSender.id ? updatedSender : s)));
+    try {
+      const saved = localStorage.getItem('masters_codex_character_sheets_v1');
+      const sheets: CharacterSheet[] = saved ? JSON.parse(saved) : [];
+      const newSheets = sheets.map((s) => (s.id === updatedSender.id ? updatedSender : s));
+      localStorage.setItem('masters_codex_character_sheets_v1', JSON.stringify(newSheets));
+    } catch (_) {}
+
+    if (isSupabaseConfigured() && isValidUuid(updatedSender.id)) {
+      try {
+        await supabase.from('character_sheets').upsert({
+          id: updatedSender.id,
+          user_id: (updatedSender.userId && isValidUuid(updatedSender.userId)) ? updatedSender.userId : (user?.id && isValidUuid(user.id) ? user.id : null),
+          campaign_id: (currentCampaign?.id && isValidUuid(currentCampaign.id)) ? currentCampaign.id : null,
+          character_name: updatedSender.characterName,
+          data: updatedSender,
+          updated_at: updatedSender.updatedAt,
+        });
+      } catch (err) {
+        console.error('Erro ao atualizar ficha do remetente no Supabase:', err);
+      }
+    }
+
+    // 4. Persiste a ficha do destinatário
+    const finalReceiverId = (receiverRowId && isValidUuid(receiverRowId))
+      ? receiverRowId
+      : (updatedReceiver.id && isValidUuid(updatedReceiver.id))
+      ? updatedReceiver.id
+      : generateUuid();
+
+    updatedReceiver.id = finalReceiverId;
+
+    setCharacterSheets((prev) => {
+      const normRec = (updatedReceiver.characterName || '').toLowerCase();
+      const exists = prev.some((s) => s.id === finalReceiverId || (s.characterName && s.characterName.toLowerCase() === normRec));
+      if (exists) {
+        return prev.map((s) => (s.id === finalReceiverId || (s.characterName && s.characterName.toLowerCase() === normRec) ? updatedReceiver : s));
+      }
+      return [...prev, updatedReceiver];
+    });
+
+    try {
+      const saved = localStorage.getItem('masters_codex_character_sheets_v1');
+      const sheets: CharacterSheet[] = saved ? JSON.parse(saved) : [];
+      const normRec = (updatedReceiver.characterName || '').toLowerCase();
+      const exists = sheets.some((s) => s.id === finalReceiverId || (s.characterName && s.characterName.toLowerCase() === normRec));
+      const newSheets = exists 
+        ? sheets.map((s) => (s.id === finalReceiverId || (s.characterName && s.characterName.toLowerCase() === normRec) ? updatedReceiver : s))
+        : [...sheets, updatedReceiver];
+      localStorage.setItem('masters_codex_character_sheets_v1', JSON.stringify(newSheets));
+
+      // Dispara storage event para atualizar outras abas no mesmo navegador
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'masters_codex_character_sheets_v1',
+          newValue: JSON.stringify(newSheets),
+        })
+      );
+    } catch (_) {}
+
+    const isDm = activeCampaign?.role === 'dm' || activeCampaign?.dmId === user?.id;
+    if (isDm && isSupabaseConfigured() && isValidUuid(finalReceiverId)) {
+      try {
+        await supabase.from('character_sheets').upsert({
+          id: finalReceiverId,
+          user_id: (receiverUserId && isValidUuid(receiverUserId)) ? receiverUserId : null,
+          campaign_id: (currentCampaign?.id && isValidUuid(currentCampaign.id)) ? currentCampaign.id : null,
+          character_name: updatedReceiver.characterName,
+          data: updatedReceiver,
+          updated_at: updatedReceiver.updatedAt,
+        });
+      } catch (err) {
+        console.warn('Aviso ao salvar ficha do destinatário como DM:', err);
+      }
+    }
+
+    // 5. Transmite o pacote em tempo real para abrir o modal no cliente do destinatário
+    if (sendDirectTransfer) {
+      try {
+        await sendDirectTransfer({
+          campaignId: currentCampaign?.id || activeCampaign?.id || '',
+          fromUserId: user?.id,
+          fromCharacterName: activeSheet.characterName || 'Jogador',
+          toUserId: receiverUserId || undefined,
+          toCharacterName: targetCharName,
+          items: itemsToTransfer.map((t) => ({ ...t.item, quantity: t.quantityToSend })),
+        });
+      } catch (err) {
+        console.warn('Erro no broadcast de transferência direta:', err);
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('masters_codex_loot_received', {
+          detail: {
+            characterName: updatedReceiver.characterName,
+            userId: receiverUserId,
+            items: itemsToTransfer.map((t) => t.item),
+            sourceName: activeSheet.characterName,
+          },
+        })
+      );
+      window.dispatchEvent(
+        new CustomEvent('masters_codex_sheets_updated', {
+          detail: {
+            characterName: updatedReceiver.characterName,
+            userId: receiverUserId,
+          },
+        })
+      );
+    }
+
+    // 6. Envia mensagem para o Chat e para o Registro de Jogo (Log) - SEM POPUP DE ROLAGEM!
+    if (broadcastChatMessage) {
+      broadcastChatMessage({
+        id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        campaignId: currentCampaign?.id || '',
+        senderId: user?.id || 'player',
+        senderName: activeSheet.characterName || 'Jogador',
+        senderRole: 'player',
+        content: `📦 Transferiu ${summaryText} para ${targetCharName}.`,
+        timestamp: new Date().toISOString(),
+        type: 'system',
+      });
+    }
+
+    if (broadcastCombatLogEntry) {
+      broadcastCombatLogEntry({
+        id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        round: roundCount || 0,
+        actorId: activeSheet.id,
+        actorName: activeSheet.characterName || 'Jogador',
+        targetId: updatedReceiver.id,
+        targetName: updatedReceiver.characterName,
+        eventType: 'system',
+        actionName: 'Transferência de Itens',
+        description: `📦 ${activeSheet.characterName} transferiu ${summaryText} para ${targetCharName}`,
+      });
+    }
+
+    // Fecha o modal de envio com sucesso
+    setTradeModalState({ isOpen: false, receiverMember: null });
+    toast.success(`Itens enviados com sucesso para ${targetCharName}: ${summaryText}!`);
+  };
+
+  // Coleta atômica de itens recebidos no ReceivedItemsModal (gravada com as credenciais do próprio destinatário)
+  const [isCollectingReceivedItems, setIsCollectingReceivedItems] = useState(false);
+
+  const handleCollectReceivedTransfer = async (transfer: DirectTransferPayload) => {
+    if (!activeSheet) {
+      toast.error('Nenhuma ficha ativa selecionada para receber os itens.');
+      return;
+    }
+
+    setIsCollectingReceivedItems(true);
+    try {
+      const incomingList: CharacterEquipmentItem[] = [];
+      if (Array.isArray(transfer.items) && transfer.items.length > 0) {
+        incomingList.push(...transfer.items);
+      } else if (transfer.item) {
+        incomingList.push(transfer.item);
+      }
+
+      if (incomingList.length === 0) {
+        setPendingReceivedTransfer(null);
+        return;
+      }
+
+      const updated = { ...activeSheet };
+      const currentEq = [...(updated.equipment || updated.items || [])];
+
+      for (const inc of incomingList) {
+        const existingIds = new Set(currentEq.map((e) => e.id));
+        let safeId = inc.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        if (existingIds.has(safeId)) {
+          safeId = `${safeId}_recv_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        }
+        currentEq.push({ ...inc, id: safeId, equipped: false });
+
+        // Se for arma, sincroniza com a lista de ataques caso ainda não conste
+        if (inc.itemType === 'weapon' || inc.weaponProps) {
+          const currentAttacks = updated.attacks || [];
+          if (!currentAttacks.some((atk) => (atk.name || '').trim().toLowerCase() === (inc.name || '').trim().toLowerCase())) {
+            updated.attacks = [
+              ...currentAttacks,
+              {
+                id: `atk-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                name: inc.name,
+                atkBonus: inc.weaponProps?.atkBonus ? `+${inc.weaponProps.atkBonus}` : '+2',
+                damage: inc.weaponProps?.damage || '1d6',
+                type: inc.weaponProps?.damageType || 'Cortante',
+              },
+            ];
+          }
+        }
+      }
+
+      updated.equipment = currentEq;
+      updated.items = currentEq;
+      updated.updatedAt = new Date().toISOString();
+
+      // Salva na ficha do destinatário com credenciais próprias do usuário autenticado (100% RLS compliance)
+      setActiveSheet(updated);
+      setCharacterSheets((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+
+      try {
+        const saved = localStorage.getItem('masters_codex_character_sheets_v1');
+        const sheets: CharacterSheet[] = saved ? JSON.parse(saved) : [];
+        const newSheets = sheets.map((s) => (s.id === updated.id ? updated : s));
+        localStorage.setItem('masters_codex_character_sheets_v1', JSON.stringify(newSheets));
+      } catch (_) {}
+
+      if (isSupabaseConfigured() && user?.id && isValidUuid(user.id)) {
+        const sheetId = (updated.id && isValidUuid(updated.id)) ? updated.id : generateUuid();
+        updated.id = sheetId;
+        const cId = (updated.campaignId && isValidUuid(updated.campaignId))
+          ? updated.campaignId
+          : (activeCampaign?.id && isValidUuid(activeCampaign.id) ? activeCampaign.id : null);
+
+        await supabase.from('character_sheets').upsert({
+          id: sheetId,
+          user_id: user.id,
+          campaign_id: cId,
+          character_name: updated.characterName || 'Sem Nome',
+          data: updated,
+          updated_at: updated.updatedAt,
+        });
+      }
+
+      setPendingReceivedTransfer(null);
+      toast.success(`🎁 Itens de ${transfer.fromCharacterName} coletados com sucesso para a sua ficha!`);
+    } catch (err: any) {
+      console.error('Erro ao coletar itens recebidos:', err);
+      toast.error('Erro ao salvar os itens na ficha.');
+    } finally {
+      setIsCollectingReceivedItems(false);
+    }
+  };
 
   const setPendingAttack = useLiveCockpitStudioStore((state) => state.setPendingAttack);
   const pendingAttackStore = useLiveCockpitStudioStore((state) => state.pendingAttack);
@@ -783,64 +1175,73 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     const targetCombatImg = combatPinUrl || (targetTokenType === 'billboard' ? targetModelUrl : undefined);
 
     // Atualiza combatentes locais imediatamente para refletir no grid 3D
-    setCombatants((prev) => {
-      let hasChanges = false;
-      const next = prev.map((c) => {
-        const cClean = c.name.split('(')[0].trim().toLowerCase();
-        const sheetClean = (updatedWithTimestamp.characterName || '').split('(')[0].trim().toLowerCase();
-        const isMatch =
-          cClean === sheetClean ||
-          c.name.toLowerCase().includes(sheetClean) ||
-          (updatedWithTimestamp.id && c.id.includes(updatedWithTimestamp.id));
+    let hasCombatantChanges = false;
+    const nextCombatants = combatants.map((c) => {
+      const cClean = c.name.split('(')[0].trim().toLowerCase();
+      const sheetClean = (updatedWithTimestamp.characterName || '').split('(')[0].trim().toLowerCase();
+      const isMatch =
+        cClean === sheetClean ||
+        c.name.toLowerCase().includes(sheetClean) ||
+        (updatedWithTimestamp.id && c.id.includes(updatedWithTimestamp.id));
 
-        if (isMatch) {
-          hasChanges = true;
-          return {
-            ...c,
-            name: updatedWithTimestamp.characterName || c.name,
-            modelUrl: targetModelUrl,
-            tokenType: targetTokenType,
-            tokenImageUrl: targetTokenType === 'billboard' ? targetCombatImg : undefined,
-            combatImageUrl: targetCombatImg,
-            avatarUrl: targetAvatarUrl,
-          };
-        }
-        return c;
-      });
-
-      if (hasChanges) {
-        if (broadcastCombatUpdate) {
-          broadcastCombatUpdate({ combatants: next });
-        }
-        if (initializeFromCombatants) {
-          initializeFromCombatants(next);
-        }
+      if (isMatch) {
+        hasCombatantChanges = true;
+        return {
+          ...c,
+          name: updatedWithTimestamp.characterName || c.name,
+          modelUrl: targetModelUrl,
+          tokenType: targetTokenType,
+          tokenImageUrl: targetTokenType === 'billboard' ? targetCombatImg : undefined,
+          combatImageUrl: targetCombatImg,
+          avatarUrl: targetAvatarUrl,
+        };
       }
-      return hasChanges ? next : prev;
+      return c;
     });
 
+    if (hasCombatantChanges) {
+      setCombatants(nextCombatants);
+      if (broadcastCombatUpdate) {
+        broadcastCombatUpdate({ combatants: nextCombatants });
+      }
+      if (initializeFromCombatants) {
+        initializeFromCombatants(nextCombatants);
+      }
+    }
+
     // Sincroniza a ficha com o banco de dados Supabase para acesso do Mestre e de outros usuários
-    if (isSupabaseConfigured()) {
-      const uId = user?.id || updatedWithTimestamp.userId || 'player-1';
-      const cId = updatedWithTimestamp.campaignId || activeCampaign?.id || null;
-      
-      if (isValidUuid(uId)) {
+    if (isSupabaseConfigured() && user?.id && isValidUuid(user.id)) {
+      const isOwner = !updatedWithTimestamp.userId || updatedWithTimestamp.userId === user.id;
+      const isDm = activeCampaign?.role === 'dm' || activeCampaign?.dmId === user.id;
+
+      if (isOwner || isDm) {
+        const uId = isOwner 
+          ? user.id 
+          : (updatedWithTimestamp.userId && isValidUuid(updatedWithTimestamp.userId) ? updatedWithTimestamp.userId : user.id);
+        const cId = (updatedWithTimestamp.campaignId && isValidUuid(updatedWithTimestamp.campaignId)) 
+          ? updatedWithTimestamp.campaignId 
+          : (activeCampaign?.id && isValidUuid(activeCampaign.id) ? activeCampaign.id : null);
+        const sheetId = (updatedWithTimestamp.id && isValidUuid(updatedWithTimestamp.id)) 
+          ? updatedWithTimestamp.id 
+          : generateUuid();
+        updatedWithTimestamp.id = sheetId;
+        
         supabase.from('character_sheets').upsert({
-          id: updatedWithTimestamp.id,
+          id: sheetId,
           user_id: uId,
-          campaign_id: (cId && isValidUuid(cId)) ? cId : null,
+          campaign_id: cId,
           character_name: updatedWithTimestamp.characterName || 'Sem Nome',
           data: updatedWithTimestamp,
           updated_at: updatedWithTimestamp.updatedAt,
         }).then(({ error }) => {
           if (error) {
-            console.error('Erro ao sincronizar ficha com Supabase:', error);
+            console.warn('Aviso na sincronização de ficha com Supabase:', error.message || error);
           } else {
             console.log('Ficha sincronizada com o Supabase.');
           }
         });
 
-        if (cId && isValidUuid(cId)) {
+        if (cId) {
            supabase.from('campaign_members').update({
              character_name: updatedWithTimestamp.characterName || 'Sem Nome',
              avatar_url: targetAvatarUrl || null,
@@ -851,8 +1252,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
            .ilike('character_name', updatedWithTimestamp.characterName || 'Sem Nome')
            .then(({ error }) => {
              if (error) {
-               console.error('Erro ao sincronizar token com campaign_members:', error);
-               toast.error(`Não foi possível salvar a preferência de token no servidor: ${error.message}`);
+               console.warn('Aviso na sincronização com campaign_members:', error.message || error);
              } else {
                console.log('Preferência de token salva com sucesso em campaign_members.');
              }
@@ -909,24 +1309,55 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
     const handleLootReceived = (e: Event) => {
       const customEvent = e as CustomEvent;
-      const { characterName, item, currency } = customEvent.detail;
+      const { characterName, item, items, currency } = customEvent.detail || {};
+      if (!characterName) return;
       
+      const normCharName = characterName.trim().toLowerCase();
       const sheet = characterSheetsRef.current.find(
-        (s) => s.characterName.toLowerCase() === characterName.toLowerCase()
+        (s) => s.characterName && s.characterName.trim().toLowerCase() === normCharName
       );
       
       if (sheet) {
         const updated = { ...sheet };
-        if (item) {
-          const currentEq = updated.equipment || [];
-          const existingIds = new Set(currentEq.map((e) => e.id));
-          let safeId = item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-          if (existingIds.has(safeId)) {
-            safeId = `${safeId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-          }
-          const itemWithUniqueId = { ...item, id: safeId };
-          updated.equipment = [...currentEq, itemWithUniqueId];
+        const incomingList: any[] = [];
+        if (Array.isArray(items) && items.length > 0) {
+          incomingList.push(...items);
+        } else if (item) {
+          incomingList.push(item);
         }
+
+        if (incomingList.length > 0) {
+          const currentEq = [...(updated.equipment || updated.items || [])];
+          for (const inc of incomingList) {
+            const existingIds = new Set(currentEq.map((e) => e.id));
+            let safeId = inc.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+            if (existingIds.has(safeId)) {
+              safeId = `${safeId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+            }
+            const itemWithUniqueId = { ...inc, id: safeId, equipped: false };
+            currentEq.push(itemWithUniqueId);
+
+            // Se for arma, adiciona à lista de ataques caso ainda não conste
+            if (inc.itemType === 'weapon' || inc.weaponProps) {
+              const currentAttacks = updated.attacks || [];
+              if (!currentAttacks.some((atk) => (atk.name || '').trim().toLowerCase() === (inc.name || '').trim().toLowerCase())) {
+                updated.attacks = [
+                  ...currentAttacks,
+                  {
+                    id: `atk-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                    name: inc.name,
+                    atkBonus: inc.weaponProps?.atkBonus ? `+${inc.weaponProps.atkBonus}` : '+2',
+                    damage: inc.weaponProps?.damage || '1d6',
+                    type: inc.weaponProps?.damageType || 'Cortante',
+                  },
+                ];
+              }
+            }
+          }
+          updated.equipment = currentEq;
+          updated.items = currentEq;
+        }
+
         if (currency) {
           const cur = updated.currency || { po: 0, pp: 0, pc: 0, pe: 0, pl: 0 };
           updated.currency = {
@@ -940,7 +1371,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
           // Registra a transação de loot recebido no histórico da ficha
           const newEntries: TransactionEntry[] = [];
           const nowStr = new Date().toLocaleString('pt-BR');
-          (['po', 'pp', 'pc', 'pe', 'pl'] as const).forEach(type => {
+          (['po', 'pp', 'pc', 'pe', 'pl'] as const).forEach((type) => {
             const amount = currency[type];
             if (amount && amount > 0) {
               newEntries.push({
@@ -948,8 +1379,8 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                 type: 'loot',
                 amount,
                 coinType: type,
-                reason: 'Recompensa de Loot (Mestre)',
-                date: nowStr
+                reason: 'Recompensa de Loot / Transferência',
+                date: nowStr,
               });
             }
           });
@@ -957,12 +1388,17 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             updated.transactionHistory = [...newEntries, ...(updated.transactionHistory || [])];
           }
         }
+        updated.updatedAt = new Date().toISOString();
         handleSaveSheetRef.current(updated);
       }
     };
 
     window.addEventListener('masters_codex_loot_received', handleLootReceived);
-    return () => window.removeEventListener('masters_codex_loot_received', handleLootReceived);
+    window.addEventListener('masters_codex_sheets_updated', handleLootReceived);
+    return () => {
+      window.removeEventListener('masters_codex_loot_received', handleLootReceived);
+      window.removeEventListener('masters_codex_sheets_updated', handleLootReceived);
+    };
   }, []);
 
   // Escuta atualizações de modelo/pino de combate de personagens para sincronizar o grid 3D e a ficha ativa imediatamente
@@ -976,44 +1412,44 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
       const updatedAvatarUrl: string | undefined = sheet.faceImageUrl || sheet.avatarUrl;
       const updatedCombatImg: string | undefined = combatPinUrl || (updatedTokenType === 'billboard' ? updatedModelUrl : undefined);
 
-      setCombatants((prev) => {
-        let hasChanges = false;
-        const next = prev.map((c) => {
-          const cClean = c.name.split('(')[0].trim().toLowerCase();
-          const sheetClean = (sheet.characterName || '').split('(')[0].trim().toLowerCase();
-          const isMatch =
-            cClean === sheetClean ||
-            c.name.toLowerCase().includes(sheetClean) ||
-            sheet.characterName?.toLowerCase().includes(cClean) ||
-            (sheet.id && c.id.includes(sheet.id));
+      let hasChanges = false;
+      const nextCombatants = combatants.map((c) => {
+        const cClean = c.name.split('(')[0].trim().toLowerCase();
+        const sheetClean = (sheet.characterName || '').split('(')[0].trim().toLowerCase();
+        const isMatch =
+          cClean === sheetClean ||
+          c.name.toLowerCase().includes(sheetClean) ||
+          sheet.characterName?.toLowerCase().includes(cClean) ||
+          (sheet.id && c.id.includes(sheet.id));
 
-          if (isMatch) {
-            if (
-              c.modelUrl !== updatedModelUrl ||
-              c.tokenType !== updatedTokenType ||
-              c.tokenImageUrl !== updatedCombatImg ||
-              c.combatImageUrl !== combatPinUrl ||
-              c.avatarUrl !== updatedAvatarUrl
-            ) {
-              hasChanges = true;
-              return {
-                ...c,
-                modelUrl: updatedModelUrl,
-                tokenType: updatedTokenType,
-                tokenImageUrl: updatedTokenType === 'billboard' ? updatedCombatImg : undefined,
-                combatImageUrl: combatPinUrl || updatedCombatImg,
-                avatarUrl: updatedAvatarUrl,
-              };
-            }
+        if (isMatch) {
+          if (
+            c.modelUrl !== updatedModelUrl ||
+            c.tokenType !== updatedTokenType ||
+            c.tokenImageUrl !== updatedCombatImg ||
+            c.combatImageUrl !== combatPinUrl ||
+            c.avatarUrl !== updatedAvatarUrl
+          ) {
+            hasChanges = true;
+            return {
+              ...c,
+              modelUrl: updatedModelUrl,
+              tokenType: updatedTokenType,
+              tokenImageUrl: updatedTokenType === 'billboard' ? updatedCombatImg : undefined,
+              combatImageUrl: combatPinUrl || updatedCombatImg,
+              avatarUrl: updatedAvatarUrl,
+            };
           }
-          return c;
-        });
-
-        if (hasChanges && initializeFromCombatants) {
-          initializeFromCombatants(next);
         }
-        return hasChanges ? next : prev;
+        return c;
       });
+
+      if (hasChanges) {
+        setCombatants(nextCombatants);
+        if (initializeFromCombatants) {
+          initializeFromCombatants(nextCombatants);
+        }
+      }
 
       // Atualiza activeSheet se corresponder
       setActiveSheet((prev) => {
@@ -1704,6 +2140,33 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
               />
 
               <button
+                onClick={() => setShowCampaignFeedModal(true)}
+                className="relative flex items-center gap-1.5 bg-[#141a27] hover:bg-[#1e2638] border border-amber-500/40 text-amber-300 font-bold px-3 py-1.5 rounded-xl text-xs shadow-md transition-all active:scale-95 cursor-pointer"
+                title="Abrir Crônicas e Feed da Campanha"
+              >
+                <BookOpen className="w-4 h-4 text-amber-400" />
+                <span className="hidden sm:inline">Crônicas</span>
+
+                {/* Ping Cromático de Notificação */}
+                {chronicleNotifications.hasUnread && (
+                  <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                      chronicleNotifications.latestUnreadType === 'npc' ? 'bg-cyan-400' :
+                      chronicleNotifications.latestUnreadType === 'battle' ? 'bg-rose-500' :
+                      chronicleNotifications.latestUnreadType === 'lore' ? 'bg-purple-500' : 'bg-amber-400'
+                    }`}></span>
+                    <span className={`relative inline-flex items-center justify-center rounded-full h-3.5 w-3.5 border-2 border-[#0f1420] text-[8px] font-black text-slate-950 ${
+                      chronicleNotifications.latestUnreadType === 'npc' ? 'bg-cyan-400 shadow-sm shadow-cyan-500/50' :
+                      chronicleNotifications.latestUnreadType === 'battle' ? 'bg-rose-500 shadow-sm shadow-rose-500/50' :
+                      chronicleNotifications.latestUnreadType === 'lore' ? 'bg-purple-400 shadow-sm shadow-purple-500/50' : 'bg-amber-400 shadow-sm shadow-amber-500/50'
+                    }`}>
+                      {chronicleNotifications.unreadCounts.total > 1 ? chronicleNotifications.unreadCounts.total : ''}
+                    </span>
+                  </span>
+                )}
+              </button>
+
+              <button
                 onClick={() => handleOpenSheetForCampaign(currentCampaign || undefined)}
                 className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs shadow-lg shadow-amber-500/20 transition-all active:scale-95"
               >
@@ -2065,19 +2528,19 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                   );
                 })()}
 
-                {/* 2. MIDDLE HEADER: TABS NAVIGATION (Membros, Log, Chat) & Collapse Button */}
+                {/* 2. MIDDLE HEADER: TABS NAVIGATION (Chat, Log, Grupo) & Collapse Button */}
                 <div className="flex items-center justify-between border-b border-[#2a3449] bg-[#0c1018] p-1.5 gap-1 shrink-0">
                   <div className="flex items-center gap-1 flex-1">
                     <button
-                      onClick={() => setSidebarTab('init')}
+                      onClick={() => setSidebarTab('chat')}
                       className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
-                        sidebarTab === 'init'
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                        sidebarTab === 'chat'
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
                           : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      <Users className="w-3.5 h-3.5" />
-                      <span>Membros ({campaignMembers.length})</span>
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>Chat ({chatMessages.length})</span>
                     </button>
                     <button
                       onClick={() => setSidebarTab('log')}
@@ -2091,15 +2554,15 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                       <span>Log ({combatLogs.length})</span>
                     </button>
                     <button
-                      onClick={() => setSidebarTab('chat')}
+                      onClick={() => setSidebarTab('init')}
                       className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
-                        sidebarTab === 'chat'
-                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                        sidebarTab === 'init'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
                           : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      <span>Chat ({chatMessages.length})</span>
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Grupo ({campaignMembers.length})</span>
                     </button>
                   </div>
 
@@ -2113,15 +2576,18 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                   </button>
                 </div>
 
-                {/* 3. SCROLLABLE LOWER SECTION: TAB CONTENT (Party Members / Combat Logs / Live Chat) */}
+                {/* 3. SCROLLABLE LOWER SECTION: TAB CONTENT (Live Chat / Combat Logs / Party Members) */}
                 <div className="flex-1 overflow-y-auto">
                   {sidebarTab === 'init' ? (
                     <div className="p-3 space-y-4">
-                      {/* Widget: Membros do Grupo */}
+                      {/* Widget: Integrantes do Grupo */}
                       <div className="space-y-2">
                         <div className="flex items-center justify-between pb-1 border-b border-[#2a3449]">
                           <span className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono flex items-center gap-1.5">
-                            <Users className="w-3.5 h-3.5 text-cyan-400" /> Membros Conectados
+                            <Users className="w-3.5 h-3.5 text-cyan-400" /> Integrantes do Grupo
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            Botão Direito p/ Ações
                           </span>
                         </div>
 
@@ -2132,20 +2598,26 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                           return (
                             <div
                               key={member.id}
-                              className={`flex items-center justify-between gap-2 p-2 rounded-xl border transition-all ${
-                                isMe ? 'bg-cyan-950/30 border-cyan-500/40' : isDM ? 'bg-amber-950/20 border-amber-500/30' : 'bg-[#0a0d14] border-[#2a3449]'
+                              onContextMenu={(e) => handleMemberContextMenu(e, member)}
+                              className={`flex items-center justify-between gap-2 p-2 rounded-xl border transition-all select-none cursor-pointer group ${
+                                isMe 
+                                  ? 'bg-cyan-950/30 border-cyan-500/40' 
+                                  : isDM 
+                                  ? 'bg-amber-950/20 border-amber-500/30 hover:border-amber-400/50' 
+                                  : 'bg-[#0a0d14] border-[#2a3449] hover:border-amber-500/40 hover:bg-[#0f1422]'
                               }`}
+                              title={isMe ? 'Seu personagem' : 'Clique com o botão direito para Enviar Item ou Ver Ficha'}
                             >
                               <div className="flex items-center gap-2">
                                 {member.avatarUrl ? (
-                                  <img src={member.avatarUrl} alt={member.characterName} className="w-7 h-7 rounded-lg object-cover border border-[#2a3449]" />
+                                  <img src={member.avatarUrl} alt={member.characterName} className="w-7 h-7 rounded-lg object-cover border border-[#2a3449] group-hover:border-amber-500/40 transition-colors" />
                                 ) : (
                                   <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold font-mono border ${isDM ? 'bg-amber-500/20 text-amber-300' : 'bg-cyan-500/20 text-cyan-300'}`}>
                                     {initials}
                                   </div>
                                 )}
                                 <div>
-                                  <p className="text-xs font-bold text-slate-200 leading-tight">
+                                  <p className="text-xs font-bold text-slate-200 leading-tight group-hover:text-amber-300 transition-colors">
                                     {member.characterName || 'Aventureiro'}
                                     {isMe && <span className="ml-1 text-[8px] bg-cyan-900/60 text-cyan-300 border border-cyan-500/30 px-1 rounded font-mono">VOCÊ</span>}
                                   </p>
@@ -2155,15 +2627,40 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                                 </div>
                               </div>
 
-                              {!isMe && !isDM && (
-                                <button
-                                  onClick={() => handleViewMemberSheet(member)}
-                                  disabled={loadingMemberSheet === member.id}
-                                  className="px-2 py-1 bg-[#161c28] hover:bg-cyan-950/40 border border-[#2a3449] hover:border-cyan-500/40 text-slate-400 hover:text-cyan-300 rounded-lg text-[9px] font-bold transition-all disabled:opacity-50 cursor-pointer"
-                                  title="Ver Ficha deste Jogador"
-                                >
-                                  {loadingMemberSheet === member.id ? '...' : 'Ficha'}
-                                </button>
+                              {!isMe && (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStartItemTransfer({
+                                        id: member.id,
+                                        userId: member.userId,
+                                        characterName: member.characterName,
+                                        avatarUrl: member.avatarUrl,
+                                        role: member.role,
+                                      });
+                                    }}
+                                    className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/60 text-amber-300 rounded-lg text-[9px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                                    title="Enviar Item para este jogador"
+                                  >
+                                    <Package className="w-3 h-3 text-amber-400" />
+                                    <span>Enviar</span>
+                                  </button>
+
+                                  {!isDM && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleViewMemberSheet(member);
+                                      }}
+                                      disabled={loadingMemberSheet === member.id}
+                                      className="px-2 py-1 bg-[#161c28] hover:bg-cyan-950/40 border border-[#2a3449] hover:border-cyan-500/40 text-slate-400 hover:text-cyan-300 rounded-lg text-[9px] font-bold transition-all disabled:opacity-50 cursor-pointer"
+                                      title="Ver Ficha deste Jogador"
+                                    >
+                                      {loadingMemberSheet === member.id ? '...' : 'Ficha'}
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           );
@@ -2226,8 +2723,62 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
         />
       )}
 
+      {/* ==================== MODAL DE CRÔNICAS DA CAMPANHA (PLAYER VIEW) ==================== */}
+      {showCampaignFeedModal && (
+        <CampaignFeedModal
+          campaignTitle={currentCampaign?.title || 'Campanha'}
+          feedEvents={feedEvents}
+          onClose={() => setShowCampaignFeedModal(false)}
+        />
+      )}
+
       {/* 3D BG3 Dice Roller Modal & HUD */}
       <FloatingDiceRollerHUD />
+
+      {/* ==================== MENU DE CONTEXTO DO MEMBRO (BOTÃO DIREITO) ==================== */}
+      {memberContextMenu && (
+        <MemberContextMenu
+          x={memberContextMenu.x}
+          y={memberContextMenu.y}
+          member={memberContextMenu.member}
+          onClose={() => setMemberContextMenu(null)}
+          onSendItem={(member) => handleStartItemTransfer(member)}
+          onViewSheet={memberContextMenu.member.role !== 'dm' ? (member) => handleViewMemberSheet(member as any) : undefined}
+          onWhisper={(member) => {
+            setSidebarTab('chat');
+            toast.info(`Você pode enviar mensagem para ${member.characterName} no Chat.`);
+          }}
+        />
+      )}
+
+      {/* ==================== MODAL DE TRANSFERÊNCIA DE ITENS ==================== */}
+      {tradeModalState.isOpen && tradeModalState.receiverMember && activeSheet && (
+        <ItemTransferModal
+          isOpen={tradeModalState.isOpen}
+          onClose={() => setTradeModalState({ isOpen: false, receiverMember: null })}
+          senderSheet={activeSheet}
+          receiverMember={tradeModalState.receiverMember}
+          onConfirmTransfer={handleConfirmItemTransfer}
+        />
+      )}
+
+      {/* ==================== MODAL DE ITENS RECEBIDOS (DESTINATÁRIO) ==================== */}
+      {pendingReceivedTransfer && (
+        <ReceivedItemsModal
+          isOpen={Boolean(
+            pendingReceivedTransfer && (
+              !activeSheet ||
+              (pendingReceivedTransfer.toUserId && user?.id && pendingReceivedTransfer.toUserId === user.id) ||
+              (pendingReceivedTransfer.toCharacterName && activeSheet?.characterName &&
+                pendingReceivedTransfer.toCharacterName.trim().toLowerCase() === activeSheet.characterName.trim().toLowerCase())
+            )
+          )}
+          onClose={() => setPendingReceivedTransfer(null)}
+          transferPayload={pendingReceivedTransfer}
+          onCollectItems={handleCollectReceivedTransfer}
+          isCollecting={isCollectingReceivedItems}
+        />
+      )}
     </div>
   );
 };

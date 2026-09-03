@@ -24,14 +24,30 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
 
     let allCamps: UserCampaign[] = [];
     if (dmCamps) {
-      allCamps = (dmCamps as CampaignRow[]).map((c) => mapCampaignRowToDomain(c, 'dm'));
+      allCamps = (dmCamps as CampaignRow[]).map((c) => {
+        const domain = mapCampaignRowToDomain(c, 'dm');
+        if (!domain.npcDisclosures && typeof window !== 'undefined') {
+          try {
+            const cached = localStorage.getItem(`codex_campaign_disclosures_${c.id}`);
+            if (cached) domain.npcDisclosures = JSON.parse(cached);
+          } catch (_e) {}
+        }
+        return domain;
+      });
     }
 
     if (memCamps) {
       memCamps.forEach((m: Record<string, any>) => {
         const campData = Array.isArray(m.campaigns) ? m.campaigns[0] : m.campaigns;
         if (campData && !allCamps.some((c) => c.id === campData.id && c.role === (m.role || 'player'))) {
-          allCamps.push(mapCampaignRowToDomain(campData as CampaignRow, m.role || 'player', m.character_name));
+          const domain = mapCampaignRowToDomain(campData as CampaignRow, m.role || 'player', m.character_name);
+          if (!domain.npcDisclosures && typeof window !== 'undefined') {
+            try {
+              const cached = localStorage.getItem(`codex_campaign_disclosures_${campData.id}`);
+              if (cached) domain.npcDisclosures = JSON.parse(cached);
+            } catch (_e) {}
+          }
+          allCamps.push(domain);
         }
       });
     }
@@ -211,12 +227,25 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
       throw new Error('ID de campanha inválido.');
     }
 
+    const currentLiveState = campaign.liveState || {};
+    const updatedLiveState = {
+      ...currentLiveState,
+      npcDisclosures: campaign.npcDisclosures || currentLiveState.npcDisclosures || {},
+      updatedAt: Date.now(),
+    };
+
+    // Salva no cache local imediato para máxima resiliência offline/refresh
+    if (typeof window !== 'undefined' && campaign.npcDisclosures) {
+      try {
+        localStorage.setItem(`codex_campaign_disclosures_${campaign.id}`, JSON.stringify(campaign.npcDisclosures));
+      } catch (_e) {}
+    }
+
     const updatePayload: Record<string, any> = {
       title: campaign.title,
       description: campaign.description,
       world_id: isValidUuid(campaign.worldId) ? campaign.worldId : null,
-      party_members: campaign.partyMembers || [],
-      documents: campaign.documents || [],
+      live_state: updatedLiveState,
     };
     if (campaign.coverImageUrl) updatePayload.cover_image_url = campaign.coverImageUrl;
     if (campaign.themeTone) updatePayload.theme_tone = campaign.themeTone;
@@ -228,14 +257,14 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
       .select()
       .single();
 
-    // Fallback gracioso se a coluna documents ou cover_image_url não existir no banco
-    if (error && (error.message?.includes('documents') || error.message?.includes('cover_image_url') || error.code === 'PGRST204')) {
-      console.warn('Coluna ausente no Supabase ao atualizar campanha. Executando fallback sem colunas adicionais...', error.message);
+    // Fallback gracioso se cover_image_url ou theme_tone ainda não existirem no schema do Supabase
+    if (error && (error.message?.includes('cover_image_url') || error.message?.includes('theme_tone') || error.message?.includes('schema cache') || error.code === 'PGRST204')) {
+      console.warn('Coluna opcional ausente no Supabase ao atualizar campanha. Executando fallback com live_state...', error.message);
       const fallbackPayload = {
         title: campaign.title,
         description: campaign.description,
         world_id: isValidUuid(campaign.worldId) ? campaign.worldId : null,
-        party_members: campaign.partyMembers || [],
+        live_state: updatedLiveState,
       };
       const fallbackRes = await supabase
         .from('campaigns')
@@ -244,8 +273,25 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
         .select()
         .single();
 
-      if (fallbackRes.error) throw fallbackRes.error;
-      data = fallbackRes.data;
+      if (fallbackRes.error) {
+        // Se live_state também falhar por schema desatualizado
+        console.warn('live_state ausente no Supabase. Atualizando colunas básicas:', fallbackRes.error.message);
+        const strictFallback = {
+          title: campaign.title,
+          description: campaign.description,
+          world_id: isValidUuid(campaign.worldId) ? campaign.worldId : null,
+        };
+        const strictRes = await supabase
+          .from('campaigns')
+          .update(strictFallback)
+          .eq('id', campaign.id)
+          .select()
+          .single();
+        if (strictRes.error) throw strictRes.error;
+        data = strictRes.data;
+      } else {
+        data = fallbackRes.data;
+      }
     } else if (error) {
       throw error;
     }
@@ -253,6 +299,12 @@ export class SupabaseCampaignRepository implements ICampaignRepository {
     const domainCamp = mapCampaignRowToDomain(data as CampaignRow, campaign.role || 'dm');
     if (campaign.documents && (!domainCamp.documents || domainCamp.documents.length === 0)) {
       domainCamp.documents = campaign.documents;
+    }
+    if (campaign.partyMembers && (!domainCamp.partyMembers || domainCamp.partyMembers.length === 0)) {
+      domainCamp.partyMembers = campaign.partyMembers;
+    }
+    if (campaign.npcDisclosures) {
+      domainCamp.npcDisclosures = campaign.npcDisclosures;
     }
     return domainCamp;
   }

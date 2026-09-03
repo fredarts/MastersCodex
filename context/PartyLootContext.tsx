@@ -29,6 +29,8 @@ interface PartyLootContextType {
   // Controla se o jogador está na view de campanha do modo jogador
   isOnPlayerCampaignView: boolean;
   setIsOnPlayerCampaignView: (active: boolean) => void;
+  pendingReceivedTransfer: DirectTransferPayload | null;
+  setPendingReceivedTransfer: (payload: DirectTransferPayload | null) => void;
 
   // Ações de Negócio
   createLootSession: (params: {
@@ -60,6 +62,7 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isPartyLootModalOpen, setIsPartyLootModalOpen] = useState<boolean>(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState<boolean>(false);
   const [transferTargetItem, setTransferTargetItem] = useState<CharacterEquipmentItem | null>(null);
+  const [pendingReceivedTransfer, setPendingReceivedTransfer] = useState<DirectTransferPayload | null>(null);
   // Flag: true quando o jogador está na view de campanha (feed) do modo jogador
   const [isOnPlayerCampaignView, setIsOnPlayerCampaignView] = useState<boolean>(false);
 
@@ -143,32 +146,27 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const handleRealtimeDirectTransfer = useCallback(
     ({ transfer }: { transfer: DirectTransferPayload }) => {
-      partyLootService.grantLootToCharacter({
-        campaignId: transfer.campaignId,
-        characterName: transfer.toCharacterName,
-        userId: transfer.toUserId,
-        currency: transfer.currency,
-        item: transfer.item,
-        sourceName: `Transferência de ${transfer.fromCharacterName}`,
-      });
+      setPendingReceivedTransfer(transfer);
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
-          new CustomEvent('masters_codex_loot_received', {
-            detail: { 
-              characterName: transfer.toCharacterName, 
-              item: transfer.item, 
-              currency: transfer.currency 
-            },
+          new CustomEvent('masters_codex_direct_transfer_package', {
+            detail: transfer,
           })
         );
       }
 
+      const count = (transfer.items && transfer.items.length > 0)
+        ? transfer.items.length
+        : transfer.item ? 1 : 0;
+
+      const desc = count > 1
+        ? `${count} itens`
+        : transfer.items?.[0]?.name || transfer.item?.name || 'moedas';
+
       toast.info(
-        `📦 ${transfer.fromCharacterName} enviou ${
-          transfer.item ? `o item "${transfer.item.name}"` : 'moedas'
-        } para ${transfer.toCharacterName}!`,
-        { duration: 5000 }
+        `🎁 ${transfer.fromCharacterName} enviou ${desc} para ${transfer.toCharacterName}!`,
+        { duration: 6000 }
       );
     },
     []
@@ -472,6 +470,8 @@ export const PartyLootProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setTransferTargetItem,
         isOnPlayerCampaignView,
         setIsOnPlayerCampaignView,
+        pendingReceivedTransfer,
+        setPendingReceivedTransfer,
         createLootSession,
         claimItem,
         distributeItem,

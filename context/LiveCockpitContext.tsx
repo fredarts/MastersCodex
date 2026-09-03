@@ -394,61 +394,59 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const updatedAvatarUrl: string | undefined = sheet.faceImageUrl || sheet.avatarUrl;
         const updatedCombatImg: string | undefined = combatPinUrl || (updatedTokenType === 'billboard' ? updatedModelUrl : undefined);
 
-        setCombatants((prev) => {
-          let hasChanges = false;
-          const next = prev.map((c) => {
-            const cClean = c.name.split('(')[0].trim().toLowerCase();
-            const sheetClean = (sheet.characterName || '').split('(')[0].trim().toLowerCase();
-            const isMatch =
-              cClean === sheetClean ||
-              c.name.toLowerCase().includes(sheetClean) ||
-              sheet.characterName?.toLowerCase().includes(cClean) ||
-              (sheet.id && c.id.includes(sheet.id));
+        let hasChanges = false;
+        const next = combatants.map((c) => {
+          const cClean = c.name.split('(')[0].trim().toLowerCase();
+          const sheetClean = (sheet.characterName || '').split('(')[0].trim().toLowerCase();
+          const isMatch =
+            cClean === sheetClean ||
+            c.name.toLowerCase().includes(sheetClean) ||
+            sheet.characterName?.toLowerCase().includes(cClean) ||
+            (sheet.id && c.id.includes(sheet.id));
 
-            if (isMatch) {
-              if (
-                c.modelUrl !== updatedModelUrl ||
-                c.tokenType !== updatedTokenType ||
-                c.tokenImageUrl !== updatedCombatImg ||
-                c.combatImageUrl !== combatPinUrl ||
-                c.avatarUrl !== updatedAvatarUrl
-              ) {
-                hasChanges = true;
-                return {
-                  ...c,
-                  modelUrl: updatedModelUrl,
-                  tokenType: updatedTokenType,
-                  tokenImageUrl: updatedTokenType === 'billboard' ? updatedCombatImg : undefined,
-                  combatImageUrl: combatPinUrl || updatedCombatImg,
-                  avatarUrl: updatedAvatarUrl,
-                };
-              }
+          if (isMatch) {
+            if (
+              c.modelUrl !== updatedModelUrl ||
+              c.tokenType !== updatedTokenType ||
+              c.tokenImageUrl !== updatedCombatImg ||
+              c.combatImageUrl !== combatPinUrl ||
+              c.avatarUrl !== updatedAvatarUrl
+            ) {
+              hasChanges = true;
+              return {
+                ...c,
+                modelUrl: updatedModelUrl,
+                tokenType: updatedTokenType,
+                tokenImageUrl: updatedTokenType === 'billboard' ? updatedCombatImg : undefined,
+                combatImageUrl: combatPinUrl || updatedCombatImg,
+                avatarUrl: updatedAvatarUrl,
+              };
             }
-            return c;
-          });
-
-          if (hasChanges) {
-            const isDm = activeCampaign?.role === 'dm';
-            if (isDm && activeScene && updateScene) {
-              updateScene({
-                ...activeScene,
-                combatants: next,
-              });
-            }
-            if (broadcastCombatUpdateRef.current) {
-              broadcastCombatUpdateRef.current({
-                combatants: next,
-                currentTurnIndex,
-                roundCount,
-              });
-            }
-            storeInitializeFromCombatants(next);
           }
-          return hasChanges ? next : prev;
+          return c;
         });
+
+        if (hasChanges) {
+          setCombatants(next);
+          const isDm = activeCampaign?.role === 'dm';
+          if (isDm && activeScene && updateScene) {
+            updateScene({
+              ...activeScene,
+              combatants: next,
+            });
+          }
+          if (broadcastCombatUpdateRef.current) {
+            broadcastCombatUpdateRef.current({
+              combatants: next,
+              currentTurnIndex,
+              roundCount,
+            });
+          }
+          storeInitializeFromCombatants(next);
+        }
       }
     }
-  }, [storeInitializeFromCombatants, activeCampaign, activeScene, updateScene, currentTurnIndex, roundCount]);
+  }, [storeInitializeFromCombatants, activeCampaign, activeScene, updateScene, currentTurnIndex, roundCount, combatants]);
 
   // Realtime Sync Hook
   const {

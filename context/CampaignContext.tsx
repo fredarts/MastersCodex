@@ -1,11 +1,11 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { UserCampaign, CampaignMember, CampaignFeedEvent } from '@/lib/types';
+import { UserCampaign, CampaignMember, CampaignFeedEvent, CampaignNPCDisclosure } from '@/lib/types';
 import { campaignService } from '@/lib/services/campaignService';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-
+import { dispatchCrossAccountCampaignEvent } from '@/lib/hooks/useRealtimeSync';
 import { useWorld } from '@/context/WorldContext';
 
 interface CampaignContextType {
@@ -21,6 +21,7 @@ interface CampaignContextType {
   updateCampaignMemberModelUrl: (campaignId: string, characterName: string, modelUrl: string) => Promise<void>;
   createCampaign: (title: string, worldId?: string, description?: string, coverImageUrl?: string, themeTone?: string) => Promise<UserCampaign | null>;
   updateCampaign: (updatedCampaign: UserCampaign) => Promise<void>;
+  updateNPCDisclosure: (campaignId: string, entityId: string, disclosure: CampaignNPCDisclosure, entityName?: string) => Promise<void>;
   joinCampaignByCode: (code: string, characterName?: string, modelUrl?: string) => Promise<boolean>;
   leaveCampaign: (campaignId: string) => Promise<void>;
   feedEvents: CampaignFeedEvent[];
@@ -225,6 +226,149 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
     }
   };
 
+  const updateNPCDisclosure = async (campaignId: string, entityId: string, disclosure: CampaignNPCDisclosure, entityName?: string) => {
+    const targetCampaign = userCampaigns.find((c) => c.id === campaignId) || activeCampaign;
+    if (!targetCampaign) return;
+
+    const existingDisclosures = targetCampaign.npcDisclosures || {};
+    const updatedDisclosures = {
+      ...existingDisclosures,
+      [entityId]: {
+        ...disclosure,
+        updatedAt: new Date().toISOString(),
+      },
+    };
+
+    const currentLiveState = targetCampaign.liveState || {};
+    const updatedCampaign: UserCampaign = {
+      ...targetCampaign,
+      npcDisclosures: updatedDisclosures,
+      liveState: {
+        ...currentLiveState,
+        npcDisclosures: updatedDisclosures,
+        updatedAt: Date.now(),
+      },
+    };
+
+    await updateCampaign(updatedCampaign);
+
+    // Dispara alerta multi-canal (Supabase Realtime + BroadcastChannel + Window Event)
+    await dispatchCrossAccountCampaignEvent(campaignId, 'NPC_DISCLOSURE_UPDATED', {
+      campaignId,
+      entityId,
+      entityName: entityName || disclosure.alias || 'Personagem',
+      disclosure: {
+        ...disclosure,
+        updatedAt: new Date().toISOString(),
+      },
+      timestamp: Date.now(),
+    });
+
+    toast.success(disclosure.isShared ? `Permissões de ${entityName || 'NPC'} atualizadas!` : `${entityName || 'NPC'} ocultado da campanha.`);
+  };
+
+  // Sincronização em tempo real de revelações de NPCs para todos os jogadores conectados
+  useEffect(() => {
+    if (!activeCampaign?.id) return;
+    const campaignId = activeCampaign.id;
+
+    const handleDisclosureSync = (detail: any) => {
+      if (!detail || detail.campaignId !== campaignId) return;
+      const { entityId, disclosure: updatedDisc } = detail;
+      if (entityId && updatedDisc) {
+        setActiveCampaignState((prev) => {
+          if (!prev || prev.id !== campaignId) return prev;
+          const nextDisclosures = { ...(prev.npcDisclosures || {}), [entityId]: updatedDisc };
+          return {
+            ...prev,
+            npcDisclosures: nextDisclosures,
+            liveState: {
+              ...(prev.liveState || {}),
+              npcDisclosures: nextDisclosures,
+              updatedAt: Date.now(),
+            },
+          };
+        });
+        setUserCampaigns((prevList) =>
+          prevList.map((c) => {
+            if (c.id !== campaignId) return c;
+            const nextDisclosures = { ...(c.npcDisclosures || {}), [entityId]: updatedDisc };
+            return {
+              ...c,
+              npcDisclosures: nextDisclosures,
+              liveState: {
+                ...(c.liveState || {}),
+                npcDisclosures: nextDisclosures,
+                updatedAt: Date.now(),
+              },
+            };
+          })
+        );
+      }
+    };
+
+    const handleFeedSync = (detail: any) => {
+      if (!detail || detail.campaignId !== campaignId) return;
+      const newEv = detail.event;
+      if (newEv) {
+        setFeedEvents((prev) => {
+          if (prev.some((ev) => ev.id === newEv.id)) return prev;
+          return [newEv, ...prev];
+        });
+
+        if (newEv.isPublic) {
+          const evType = newEv.eventType;
+          if (evType === 'npc_encounter') {
+            toast.info(`💬 Crônica: ${newEv.title}`);
+          } else if (evType === 'battle_summary') {
+            toast.error(`⚔️ Crônica: ${newEv.title}`);
+          } else if (evType === 'session_recap') {
+            toast.warning(`📖 Crônica: ${newEv.title}`);
+          } else if (evType === 'world_lore') {
+            toast(`🔮 Crônica: ${newEv.title}`);
+          }
+        }
+      }
+    };
+
+    const onWindowDisclosure = (e: Event) => {
+      const customEv = e as CustomEvent;
+      handleDisclosureSync(customEv.detail);
+    };
+
+    const onWindowFeed = (e: Event) => {
+      const customEv = e as CustomEvent;
+      handleFeedSync(customEv.detail);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('codex_campaign_npc_disclosure_sync', onWindowDisclosure);
+      window.addEventListener('codex_campaign_feed_sync', onWindowFeed);
+    }
+
+    let bc: BroadcastChannel | null = null;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      bc = new BroadcastChannel(`campaign-sync-${campaignId}`);
+      bc.onmessage = (e) => {
+        if (e.data?.type === 'NPC_DISCLOSURE_UPDATED') {
+          handleDisclosureSync(e.data);
+        } else if (e.data?.type === 'CAMPAIGN_FEED_EVENT_CREATED') {
+          handleFeedSync(e.data);
+        }
+      };
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('codex_campaign_npc_disclosure_sync', onWindowDisclosure);
+        window.removeEventListener('codex_campaign_feed_sync', onWindowFeed);
+      }
+      if (bc) {
+        bc.close();
+      }
+    };
+  }, [activeCampaign?.id]);
+
   const joinCampaignByCode = async (code: string, characterName?: string, modelUrl?: string): Promise<boolean> => {
     const res = await campaignService.joinCampaignByCode(code, currentUserId || 'demo-user-1', characterName);
     if (!res.ok) {
@@ -277,6 +421,14 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
     }
     const newEvent = res.value;
     setFeedEvents((prev) => [newEvent, ...prev]);
+
+    // Emite evento multi-canal para sincronização atômica instantânea (Supabase Realtime + BroadcastChannel + Window)
+    await dispatchCrossAccountCampaignEvent(payload.campaignId, 'CAMPAIGN_FEED_EVENT_CREATED', {
+      campaignId: payload.campaignId,
+      event: newEvent,
+      timestamp: Date.now(),
+    });
+
     return newEvent;
   };
 
@@ -316,6 +468,7 @@ export const CampaignProvider: React.FC<{ children: React.ReactNode; currentUser
         updateCampaignMemberModelUrl,
         createCampaign,
         updateCampaign,
+        updateNPCDisclosure,
         joinCampaignByCode,
         leaveCampaign,
         feedEvents,

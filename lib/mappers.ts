@@ -57,6 +57,7 @@ export function mapWorldEntityRowToDomain(row: WorldEntityRow): WorldEntity {
 }
 
 export function mapCampaignRowToDomain(row: CampaignRow, role: 'dm' | 'player' = 'dm', characterName?: string): UserCampaign {
+  const rowDisclosures = (row as any).npc_disclosures || (row as any).npcDisclosures || row.live_state?.npcDisclosures || undefined;
   return {
     id: row.id,
     dmId: row.dm_id,
@@ -70,6 +71,7 @@ export function mapCampaignRowToDomain(row: CampaignRow, role: 'dm' | 'player' =
     characterName: characterName || undefined,
     partyMembers: Array.isArray(row.party_members) ? row.party_members : undefined,
     documents: Array.isArray(row.documents) ? row.documents : (Array.isArray((row as any).documents) ? (row as any).documents : undefined),
+    npcDisclosures: rowDisclosures,
     activeSceneId: row.active_scene_id || undefined,
     liveState: row.live_state || undefined,
   };
