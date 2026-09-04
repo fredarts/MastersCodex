@@ -457,3 +457,5 @@ export const useCampaignCalendar = () => {
   }
   return context;
 };
+
+export const useCalendar = useCampaignCalendar;

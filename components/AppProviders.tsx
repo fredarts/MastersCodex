@@ -20,6 +20,7 @@ import { CustomDialogProvider } from '@/context/CustomDialogContext';
 import { CustomDialogModal } from '@/components/CustomDialogModal';
 
 import { CalendarProvider } from '@/context/CalendarContext';
+import { DmCommandPalette } from '@/components/omnibar/DmCommandPalette';
 
 function InnerProviders({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -36,6 +37,8 @@ function InnerProviders({ children }: { children: React.ReactNode }) {
                       {children}
                       {/* Widget Flutuante Global de Chamada de Voz */}
                       <VoiceCallFloatingWidget />
+                      {/* Omnibar / Command Palette Global do Mestre (Ctrl+K) */}
+                      <DmCommandPalette />
                     </VoiceCallProvider>
                   </LiveCockpitProvider>
                 </AudioProvider>

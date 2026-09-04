@@ -92,6 +92,25 @@ function MainApp() {
       if (savedAI !== null) {
         setIsAIPanelCollapsed(savedAI === 'true');
       }
+
+      // Listener para navegação rápida acionada via Omnibar / Command Palette
+      const handleNavEvent = (e: any) => {
+        const tab = e.detail?.tabKey;
+        if (!tab) return;
+        if (tab === 'tv_mode') {
+          window.open('/tv', '_blank');
+        } else if (tab === 'streamer_overlay') {
+          window.open('/overlay', '_blank');
+        } else {
+          setActiveTab(tab as ActiveTab);
+          setIsLandingPage(false);
+        }
+      };
+
+      window.addEventListener('masters-codex:navigate-tab', handleNavEvent);
+      return () => {
+        window.removeEventListener('masters-codex:navigate-tab', handleNavEvent);
+      };
     }
   }, []);
 

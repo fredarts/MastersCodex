@@ -149,6 +149,23 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
+        {/* DM Omnibar & Command Palette (Alt+K) */}
+        <button
+          onClick={() => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', altKey: true, bubbles: true }));
+            }
+          }}
+          className="flex items-center gap-2 bg-gradient-to-r from-amber-500/10 to-amber-600/20 hover:from-amber-500/25 hover:to-amber-600/35 text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:border-amber-400/80 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all group cursor-pointer shadow-sm"
+          title="Abrir Command Palette & Omnibar do Mestre (Alt+K ou /)"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-12 transition-transform" />
+          <span className="hidden sm:inline">Comandos</span>
+          <kbd className="hidden lg:inline-block bg-[#0f141d]/90 border border-amber-500/30 text-[10px] text-amber-300/90 px-1.5 py-0.5 rounded font-mono">
+            Alt + K
+          </kbd>
+        </button>
+
         {/* Global Search Button */}
         <button
           onClick={onOpenSearch}
