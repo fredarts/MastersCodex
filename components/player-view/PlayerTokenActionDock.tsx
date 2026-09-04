@@ -359,7 +359,7 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
         </div>
 
         {/* Enhanced HP Bar */}
-        <div className="w-full bg-[#080b10] h-2 rounded-full overflow-hidden border border-[#232d40] shadow-inner relative">
+        <div className="w-full bg-[#080b10] h-2.5 rounded-full overflow-hidden border border-[#232d40] shadow-inner relative">
           <div 
             className={`h-full transition-all duration-300 shadow-sm ${
               hpPercent > 50 
@@ -372,50 +372,50 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
           />
         </div>
 
-        {/* Combat Resource Budget Badges */}
+        {/* Combat Resource Budget Badges - Tablet Friendly Touch Targets */}
         {isCombatActive && (
-          <div className="flex flex-wrap items-center gap-1 pt-1 border-t border-[#232d40]/60">
+          <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-[#232d40]/60 select-none">
             <button
               onClick={() => onUpdateCombatantActionState?.({ actionUsed: !actionUsed })}
-              className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold flex items-center gap-1 border transition-all ${
+              className={`h-7 sm:h-8 px-2.5 rounded-lg text-[11px] font-mono font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
                 actionUsed
-                  ? 'bg-rose-950/60 text-rose-400 border-rose-500/40 line-through opacity-70'
-                  : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
+                  ? 'bg-rose-950/40 text-rose-400 border-rose-500/30 line-through opacity-60'
+                  : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/50 shadow-sm hover:bg-emerald-900/50'
               }`}
-              title="Ação Padrão"
+              title="Alternar status da Ação Padrão"
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${actionUsed ? 'bg-rose-500' : 'bg-emerald-400 animate-pulse'}`} />
+              <span className={`w-2 h-2 rounded-full ${actionUsed ? 'bg-rose-500' : 'bg-emerald-400 animate-pulse'}`} />
               <span>Ação</span>
             </button>
 
             <button
               onClick={() => onUpdateCombatantActionState?.({ bonusActionUsed: !bonusActionUsed })}
-              className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold flex items-center gap-1 border transition-all ${
+              className={`h-7 sm:h-8 px-2.5 rounded-lg text-[11px] font-mono font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
                 bonusActionUsed
-                  ? 'bg-rose-950/60 text-rose-400 border-rose-500/40 line-through opacity-70'
-                  : 'bg-amber-950/60 text-amber-300 border-amber-500/40'
+                  ? 'bg-rose-950/40 text-rose-400 border-rose-500/30 line-through opacity-60'
+                  : 'bg-amber-950/60 text-amber-300 border-amber-500/50 shadow-sm hover:bg-amber-900/50'
               }`}
-              title="Ação Bônus"
+              title="Alternar status da Ação Bônus"
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${bonusActionUsed ? 'bg-rose-500' : 'bg-amber-400'}`} />
+              <span className={`w-2 h-2 rounded-full ${bonusActionUsed ? 'bg-rose-500' : 'bg-amber-400'}`} />
               <span>Bônus</span>
             </button>
 
             <button
               onClick={() => onUpdateCombatantActionState?.({ reactionUsed: !reactionUsed })}
-              className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold flex items-center gap-1 border transition-all ${
+              className={`h-7 sm:h-8 px-2.5 rounded-lg text-[11px] font-mono font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
                 reactionUsed
-                  ? 'bg-rose-950/60 text-rose-400 border-rose-500/40 line-through opacity-70'
-                  : 'bg-cyan-950/60 text-cyan-300 border-cyan-500/40'
+                  ? 'bg-rose-950/40 text-rose-400 border-rose-500/30 line-through opacity-60'
+                  : 'bg-cyan-950/60 text-cyan-300 border-cyan-500/50 shadow-sm hover:bg-cyan-900/50'
               }`}
-              title="Reação"
+              title="Alternar status da Reação"
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${reactionUsed ? 'bg-rose-500' : 'bg-cyan-400'}`} />
+              <span className={`w-2 h-2 rounded-full ${reactionUsed ? 'bg-rose-500' : 'bg-cyan-400'}`} />
               <span>Reação</span>
             </button>
 
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#0a0d14] text-slate-300 border border-[#2a3449] flex items-center gap-1">
-              <Footprints className="w-2.5 h-2.5 text-emerald-400" />
+            <span className="h-7 sm:h-8 px-2.5 rounded-lg text-[11px] font-mono font-bold bg-[#0a0d14] text-slate-300 border border-[#2a3449] flex items-center gap-1.5 ml-auto">
+              <Footprints className="w-3 h-3 text-emerald-400" />
               <span>{movementRemaining}/{speedFeet}ft</span>
             </span>
           </div>
@@ -425,57 +425,57 @@ export const PlayerTokenActionDock: React.FC<PlayerTokenActionDockProps> = ({
       {/* Action Content Panel */}
       {isExpanded && (
         <div className="p-2 space-y-2 flex flex-col">
-          {/* Navigation Tabs */}
-          <div className="grid grid-cols-4 gap-1 p-0.5 bg-[#090d14] rounded-lg border border-[#232d40]">
+          {/* Navigation Tabs (Ergonomic Touch 38px) */}
+          <div className="grid grid-cols-4 gap-1 p-1 bg-[#090d14] rounded-xl border border-[#232d40]">
             <button
               onClick={() => setActiveTab('attacks')}
-              className={`py-1 text-[10px] font-bold font-mono rounded transition-all flex flex-col items-center justify-center gap-0.5 ${
+              className={`py-1.5 text-[11px] font-bold font-mono rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                 activeTab === 'attacks'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-[#141b29]'
               }`}
               title="Ataques & Armas"
             >
-              <Swords className="w-3 h-3" />
+              <Swords className="w-3.5 h-3.5" />
               <span className="truncate">Armas ({attacksList.length})</span>
             </button>
 
             <button
               onClick={() => setActiveTab('spells')}
-              className={`py-1 text-[10px] font-bold font-mono rounded transition-all flex flex-col items-center justify-center gap-0.5 ${
+              className={`py-1.5 text-[11px] font-bold font-mono rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                 activeTab === 'spells'
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-[#141b29]'
               }`}
               title="Magias e Truques"
             >
-              <Wand2 className="w-3 h-3" />
+              <Wand2 className="w-3.5 h-3.5" />
               <span className="truncate">Magias ({spellsList.length})</span>
             </button>
 
             <button
               onClick={() => setActiveTab('features')}
-              className={`py-1 text-[10px] font-bold font-mono rounded transition-all flex flex-col items-center justify-center gap-0.5 ${
+              className={`py-1.5 text-[11px] font-bold font-mono rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                 activeTab === 'features'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-[#141b29]'
               }`}
               title="Ações Bônus e Habilidades"
             >
-              <Zap className="w-3 h-3" />
+              <Zap className="w-3.5 h-3.5" />
               <span className="truncate">Habil.</span>
             </button>
 
             <button
               onClick={() => setActiveTab('saves')}
-              className={`py-1 text-[10px] font-bold font-mono rounded transition-all flex flex-col items-center justify-center gap-0.5 ${
+              className={`py-1.5 text-[11px] font-bold font-mono rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                 activeTab === 'saves'
-                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-[#141b29]'
               }`}
               title="Salvaguardas de Atributo"
             >
-              <ShieldAlert className="w-3 h-3" />
+              <ShieldAlert className="w-3.5 h-3.5" />
               <span className="truncate">Saves</span>
             </button>
           </div>

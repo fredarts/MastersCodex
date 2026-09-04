@@ -2065,9 +2065,9 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
 
       {/* ==================== 2. VISÃO 1: HUB DE CAMPANHAS DO JOGADOR ==================== */}
       {!selectedCampaignId ? (
-        <div className={`flex flex-col space-y-4 sm:space-y-5 ${playerCampaigns.length <= 3 ? 'h-full justify-between sm:justify-start' : ''}`}>
-          {/* Header Banner with Fantasy Art */}
-          <div className="relative overflow-hidden rounded-2xl shadow-2xl border border-amber-500/30 p-4 sm:p-5 lg:p-6 flex flex-wrap items-center justify-between gap-4 group shrink-0">
+        <div className="flex flex-col space-y-2.5 sm:space-y-3 pb-4">
+          {/* Header Banner with Fantasy Art - Compact Height for Tablet Visibility */}
+          <div className="relative overflow-hidden rounded-2xl shadow-xl border border-amber-500/30 px-3.5 py-2.5 sm:px-4 sm:py-3 flex flex-wrap items-center justify-between gap-3 group shrink-0">
             {/* Background Image & Atmospheric Gradients */}
             <div className="absolute inset-0 z-0">
               <img
@@ -2080,51 +2080,51 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             </div>
 
             {/* Foreground Content */}
-            <div className="relative z-10 flex items-center gap-3.5 sm:gap-4 max-w-xl">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/10 backdrop-blur-md shrink-0">
-                <Shield className="w-6 h-6 sm:w-7 sm:h-7 drop-shadow-md" />
+            <div className="relative z-10 flex items-center gap-3 max-w-xl">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/10 backdrop-blur-md shrink-0">
+                <Shield className="w-5 h-5 drop-shadow-md" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] sm:text-xs font-extrabold uppercase tracking-widest text-amber-300 bg-amber-950/80 border border-amber-500/40 px-2.5 py-0.5 rounded-md shadow-sm backdrop-blur-sm">
+                  <span className="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-widest text-amber-300 bg-amber-950/80 border border-amber-500/40 px-2 py-0.2 rounded shadow-sm backdrop-blur-sm">
                     MODO JOGADOR
                   </span>
                   <span className="text-[10px] font-mono text-slate-400 hidden sm:inline-block">
                     D&D 5e • Diário & Cockpit
                   </span>
                 </div>
-                <h2 className="text-lg sm:text-xl lg:text-2xl font-black text-slate-100 mt-1 tracking-tight drop-shadow-md">
+                <h2 className="text-base sm:text-lg font-black text-slate-100 tracking-tight drop-shadow-md leading-tight mt-0.5">
                   Minhas Campanhas & Mesas de Jogo
                 </h2>
-                <p className="text-xs text-slate-300/90 mt-0.5 font-medium drop-shadow leading-relaxed line-clamp-2 sm:line-clamp-none">
-                  Selecione um card para acessar o Diário de Bordo e o Feed da Aventura, ou adicione uma nova mesa via código.
+                <p className="text-[11px] text-slate-300/90 font-medium drop-shadow leading-tight hidden md:block">
+                  Selecione um card para acessar o Diário de Bordo e o Feed da Aventura, ou conecte-se via código.
                 </p>
               </div>
             </div>
 
-            <div className="relative z-10 flex flex-wrap items-center gap-2.5 sm:gap-3">
+            <div className="relative z-10 flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setIsManagerModalOpen(true)}
-                className="flex items-center gap-2 bg-[#101522]/90 hover:bg-[#182032] border border-amber-500/40 hover:border-amber-400 text-amber-300 hover:text-amber-200 font-bold px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs shadow-lg shadow-black/40 backdrop-blur-md transition-all active:scale-95 cursor-pointer"
+                className="flex items-center gap-1.5 bg-[#101522]/90 hover:bg-[#182032] border border-amber-500/40 hover:border-amber-400 text-amber-300 hover:text-amber-200 font-bold px-3 py-1.5 rounded-lg text-xs shadow-md shadow-black/40 backdrop-blur-md transition-all active:scale-95 cursor-pointer"
               >
-                <FileText className="w-4 h-4 text-amber-400" />
+                <FileText className="w-3.5 h-3.5 text-amber-400" />
                 <span>Minhas Fichas ({characterSheets.length})</span>
               </button>
 
               <button
                 onClick={handleOpenJoinModal}
-                className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs shadow-xl shadow-amber-500/25 transition-all active:scale-95 hover:scale-[1.02] cursor-pointer"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-3.5 py-1.5 rounded-lg text-xs shadow-lg shadow-amber-500/25 transition-all active:scale-95 hover:scale-[1.02] cursor-pointer"
               >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>Entrar em Mesa (Código)</span>
+                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                <span>Entrar em Mesa</span>
               </button>
             </div>
           </div>
 
           {/* Cards Grid Header */}
           <div className="flex items-center justify-between shrink-0">
-            <h3 className="text-xs sm:text-sm font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-2">
-              <Compass className="w-4 h-4 text-amber-400" /> Suas Campanhas Ativas ({playerCampaigns.length})
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-2">
+              <Compass className="w-3.5 h-3.5 text-amber-400" /> Suas Campanhas Ativas ({playerCampaigns.length})
             </h3>
           </div>
 
@@ -2149,9 +2149,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
               </button>
             </div>
           ) : (
-            <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5 ${
-              playerCampaigns.length <= 3 ? 'flex-1 min-h-0' : ''
-            }`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
               {playerCampaigns.map((camp) => {
                 const isActive = activeCampaign?.id === camp.id;
                 const cardData = resolveCampaignCardData(camp);
@@ -2162,14 +2160,14 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                   <div
                     key={camp.id}
                     onClick={() => handleSelectCampaign(camp)}
-                    className={`group relative rounded-2xl border transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden shadow-xl hover:-translate-y-1 ${
+                    className={`group relative rounded-xl border transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden shadow-lg hover:-translate-y-0.5 ${
                       isActive
                         ? 'bg-gradient-to-b from-[#1c2438] to-[#10141f] border-amber-500/70 shadow-amber-500/10 ring-1 ring-amber-500/30'
                         : 'bg-[#141a27] border-[#253046] hover:border-amber-500/50 hover:bg-[#182030]'
                     }`}
                   >
                     {/* 1. Capa / Banner da Campanha */}
-                    <div className="w-full h-32 sm:h-36 relative overflow-hidden bg-[#0a0d14] border-b border-[#253046]/80 shrink-0">
+                    <div className="w-full h-24 sm:h-28 relative overflow-hidden bg-[#0a0d14] border-b border-[#253046]/80 shrink-0">
                       {coverUrl ? (
                         <img
                           src={coverUrl}
@@ -2179,7 +2177,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-[#162032] via-[#0d131f] to-[#080b12] flex items-center justify-center relative overflow-hidden">
                           <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#f59e0b_1px,transparent_1px)] [background-size:16px_16px]" />
-                          <Compass className="w-12 h-12 text-amber-500/30 group-hover:text-amber-500/50 group-hover:scale-110 transition-all duration-500" />
+                          <Compass className="w-10 h-10 text-amber-500/30 group-hover:text-amber-500/50 group-hover:scale-110 transition-all duration-500" />
                         </div>
                       )}
 
@@ -2187,21 +2185,21 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                       <div className="absolute inset-0 bg-gradient-to-t from-[#141a27] via-transparent to-black/40" />
 
                       {/* Badges superiores na capa */}
-                      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
-                        <div className="flex items-center gap-1.5 pointer-events-auto">
-                          <span className="text-[9px] font-mono font-bold text-amber-300 uppercase tracking-wider bg-black/70 backdrop-blur-md border border-amber-500/40 px-2 py-0.5 rounded shadow">
+                      <div className="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none">
+                        <div className="flex items-center gap-1 pointer-events-auto">
+                          <span className="text-[8px] font-mono font-bold text-amber-300 uppercase tracking-wider bg-black/70 backdrop-blur-md border border-amber-500/40 px-1.5 py-0.2 rounded shadow">
                             MESA DE JOGO
                           </span>
                           {camp.themeTone && (
-                            <span className="text-[9px] font-mono font-medium text-slate-300 bg-black/60 backdrop-blur-md border border-slate-600/40 px-1.5 py-0.5 rounded">
+                            <span className="text-[8px] font-mono font-medium text-slate-300 bg-black/60 backdrop-blur-md border border-slate-600/40 px-1 py-0.2 rounded">
                               {camp.themeTone}
                             </span>
                           )}
                         </div>
 
-                        <div className="flex items-center gap-1.5 pointer-events-auto">
+                        <div className="flex items-center gap-1 pointer-events-auto">
                           {isActive && (
-                            <span className="text-[9px] font-black bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 px-2 py-0.5 rounded-full font-mono shadow-md flex items-center gap-1">
+                            <span className="text-[8px] font-black bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 px-1.5 py-0.2 rounded-full font-mono shadow-md flex items-center gap-1">
                               <span className="w-1.5 h-1.5 rounded-full bg-slate-950 inline-block animate-ping" />
                               ATIVA
                             </span>
@@ -2214,13 +2212,13 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                             className="p-1 text-slate-400 hover:text-rose-400 bg-black/60 hover:bg-rose-950/60 border border-slate-700/50 hover:border-rose-500/50 rounded-lg backdrop-blur-md transition-all cursor-pointer"
                             title="Sair desta Campanha"
                           >
-                            <LogOut className="w-3.5 h-3.5" />
+                            <LogOut className="w-3 h-3" />
                           </button>
                         </div>
                       </div>
 
                       {/* Código da mesa na capa (canto inferior direito) */}
-                      <div className="absolute bottom-2 right-2.5 pointer-events-auto">
+                      <div className="absolute bottom-1.5 right-2 pointer-events-auto">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -2229,89 +2227,84 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                             setTimeout(() => setCopiedCampaignCode(null), 2000);
                             toast.success(`Código ${camp.inviteCode} copiado!`);
                           }}
-                          className="flex items-center gap-1 text-[10px] font-mono font-bold text-amber-300 bg-black/80 hover:bg-amber-950/80 border border-amber-500/40 px-2 py-0.5 rounded shadow backdrop-blur-md transition-all active:scale-95 cursor-pointer"
+                          className="flex items-center gap-1 text-[9px] font-mono font-bold text-amber-300 bg-black/80 hover:bg-amber-950/80 border border-amber-500/40 px-1.5 py-0.5 rounded shadow backdrop-blur-md transition-all active:scale-95 cursor-pointer"
                           title="Copiar Código de Convite da Mesa"
                         >
                           <span>{camp.inviteCode}</span>
                           {isCopied ? (
-                            <Check className="w-3 h-3 text-emerald-400" />
+                            <Check className="w-2.5 h-2.5 text-emerald-400" />
                           ) : (
-                            <Copy className="w-3 h-3 text-slate-400 hover:text-amber-300" />
+                            <Copy className="w-2.5 h-2.5 text-slate-400 hover:text-amber-300" />
                           )}
                         </button>
                       </div>
                     </div>
 
                     {/* 2. Conteúdo do Card */}
-                    <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-3.5">
-                      <div className="space-y-2">
+                    <div className="p-3 sm:p-3.5 flex-1 flex flex-col justify-between space-y-2.5">
+                      <div className="space-y-1">
                         {/* Título da Campanha */}
-                        <h4 className="text-base sm:text-lg font-black text-slate-100 group-hover:text-amber-300 transition-colors line-clamp-1 leading-snug">
+                        <h4 className="text-sm sm:text-base font-black text-slate-100 group-hover:text-amber-300 transition-colors line-clamp-1 leading-tight">
                           {camp.title}
                         </h4>
 
                         {/* Sinopse da Campanha */}
                         {camp.description ? (
-                          <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                          <p className="text-[11px] text-slate-400 line-clamp-1 leading-snug">
                             {camp.description}
                           </p>
                         ) : (
-                          <p className="text-xs text-slate-500 italic">
+                          <p className="text-[11px] text-slate-500 italic">
                             Sem sinopse fornecida pelo Mestre.
                           </p>
                         )}
                       </div>
 
                       {/* 3. Seção de Informações da Mesa: Mestre & Aventureiros */}
-                      <div className="pt-3 border-t border-[#253046] space-y-3">
+                      <div className="pt-2 border-t border-[#253046] space-y-2">
                         {/* Mestre da Mesa (Google Account Name) */}
-                        <div className="flex items-center justify-between bg-[#0a0d14]/80 border border-amber-500/25 px-3 py-2 rounded-xl">
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-sm">
-                              <Crown className="w-3.5 h-3.5" />
+                        <div className="flex items-center justify-between bg-[#0a0d14]/80 border border-amber-500/20 px-2.5 py-1.5 rounded-lg">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-5 h-5 rounded-md bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-sm shrink-0">
+                              <Crown className="w-3 h-3" />
                             </div>
-                            <span className="text-[11px] text-slate-400 font-medium">Dungeon Master:</span>
+                            <span className="text-[10px] text-slate-400 font-medium">Dungeon Master:</span>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
                             {cardData.dmAvatarUrl && (
                               <img
                                 src={normalizeImageUrl(cardData.dmAvatarUrl)}
                                 alt={cardData.dmName}
-                                className="w-5 h-5 rounded-full object-cover border border-amber-400/50 shadow-sm"
+                                className="w-4 h-4 rounded-full object-cover border border-amber-400/60 shadow-sm shrink-0"
                               />
                             )}
-                            <span className="font-bold text-amber-300 text-xs truncate max-w-[170px]">
+                            <span className="font-bold text-amber-300 text-[11px]">
                               {cardData.dmName}
                             </span>
                           </div>
                         </div>
 
-                        {/* Aventureiros da Mesa (Galeria com Rosto, Nome do Jogador, Personagem e Classe) */}
-                        <div className="space-y-2">
+                        {/* Aventureiros da Mesa (Galeria Compacta com Rosto, Nome do Jogador, Personagem e Classe) */}
+                        <div className="space-y-1.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 font-mono">
-                              <Users className="w-3.5 h-3.5 text-cyan-400" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 font-mono">
+                              <Users className="w-3 h-3 text-cyan-400 shrink-0" />
                               <span>Aventureiros Conectados ({cardData.adventurers.length}):</span>
                             </span>
                           </div>
 
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          <div className="grid grid-cols-2 gap-1.5">
                             {cardData.adventurers.map((adv) => (
                               <div
                                 key={adv.id}
-                                className={`flex flex-col items-center text-center p-2 rounded-xl border transition-all duration-200 ${
+                                className={`flex items-center gap-2 p-1.5 rounded-lg border transition-all duration-200 ${
                                   adv.isCurrentUser
-                                    ? 'bg-gradient-to-b from-cyan-950/40 to-[#0a0d14] border-cyan-500/50 shadow-md shadow-cyan-500/10'
+                                    ? 'bg-gradient-to-r from-cyan-950/40 to-[#0a0d14] border-cyan-500/50 shadow-sm'
                                     : 'bg-[#0a0d14]/70 border-[#253046] hover:border-slate-500'
                                 }`}
                               >
-                                {/* Nome do Jogador (acima da imagem) */}
-                                <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider truncate max-w-full mb-1">
-                                  {adv.playerName}
-                                </span>
-
                                 {/* Imagem do Rosto do Personagem */}
-                                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden bg-slate-900 border-2 border-cyan-400/60 shadow-md flex items-center justify-center shrink-0 mb-1.5 relative group-hover:border-amber-400 transition-colors">
+                                <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-900 border border-cyan-400/60 shadow-sm flex items-center justify-center shrink-0 relative">
                                   {adv.faceImageUrl ? (
                                     <img
                                       src={normalizeImageUrl(adv.faceImageUrl)}
@@ -2319,26 +2312,34 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                                       className="w-full h-full object-cover object-[center_18%]"
                                     />
                                   ) : (
-                                    <div className="w-full h-full bg-gradient-to-br from-[#162032] to-[#0d131f] flex items-center justify-center text-base font-black text-cyan-300">
+                                    <div className="w-full h-full bg-gradient-to-br from-[#162032] to-[#0d131f] flex items-center justify-center text-xs font-black text-cyan-300">
                                       {adv.characterName.charAt(0).toUpperCase()}
                                     </div>
                                   )}
                                   {adv.isCurrentUser && (
-                                    <span className="absolute bottom-0 inset-x-0 bg-cyan-600/90 text-slate-950 text-[8px] font-black uppercase py-0.2 text-center tracking-tighter">
+                                    <span className="absolute bottom-0 inset-x-0 bg-cyan-600/90 text-slate-950 text-[7px] font-black uppercase py-0.2 text-center tracking-tighter shadow">
                                       VOCÊ
                                     </span>
                                   )}
                                 </div>
 
-                                {/* Nome do Personagem */}
-                                <strong className="text-xs font-bold text-slate-100 truncate max-w-full leading-tight">
-                                  {adv.characterName}
-                                </strong>
+                                {/* Coluna com Informações do Jogador / Personagem */}
+                                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                  {/* Nome do Jogador */}
+                                  <span className="text-[9px] font-bold text-amber-300 uppercase tracking-wider truncate leading-none">
+                                    {adv.playerName}
+                                  </span>
 
-                                {/* Classe e Nível */}
-                                <span className="text-[9px] font-mono text-cyan-300 bg-cyan-950/80 border border-cyan-500/30 px-1.5 py-0.5 rounded-md mt-1 truncate max-w-full font-semibold">
-                                  {adv.className} {adv.level ? `Nvl ${adv.level}` : ''}
-                                </span>
+                                  {/* Nome do Personagem */}
+                                  <strong className="text-[11px] font-bold text-slate-100 truncate leading-tight mt-0.5">
+                                    {adv.characterName}
+                                  </strong>
+
+                                  {/* Classe e Nível */}
+                                  <span className="text-[8px] font-mono text-cyan-300 truncate leading-none mt-0.5">
+                                    {adv.className} {adv.level ? `Nvl ${adv.level}` : ''}
+                                  </span>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -2346,13 +2347,13 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                       </div>
 
                       {/* 4. Ação Principal */}
-                      <div className="pt-3 pb-1 border-t border-[#253046] flex items-center justify-between text-xs font-bold text-amber-400 group-hover:text-amber-300">
-                        <span className="text-[11px] text-slate-400 font-medium group-hover:text-slate-300 transition-colors">
+                      <div className="pt-2 pb-0.5 border-t border-[#253046] flex items-center justify-between text-xs font-bold text-amber-400 group-hover:text-amber-300">
+                        <span className="text-[10px] text-slate-400 font-medium group-hover:text-slate-300 transition-colors">
                           {isActive ? 'Mesa Ativa Conectada' : 'Acessar Central'}
                         </span>
                         <div className="flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                          <span>Acessar Feed & Diário</span>
-                          <ChevronRight className="w-4 h-4 text-amber-400" />
+                          <span className="text-[11px]">Acessar Feed & Diário</span>
+                          <ChevronRight className="w-3.5 h-3.5 text-amber-400" />
                         </div>
                       </div>
                     </div>
@@ -2365,57 +2366,58 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
       ) : (
         /* ==================== 3. VISÃO 2: COCKPIT DO JOGADOR (CENTRAL DE JOGO) ==================== */
         <div className="flex-1 min-h-0 flex flex-col h-full space-y-2 sm:space-y-3 overflow-hidden animate-fade-in">
-          {/* TOP HEADER UNIFICADO (BARRA SUPERIOR) */}
-          <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 bg-[#141a26] border border-[#2a3449] p-2 sm:p-3 rounded-xl sm:rounded-2xl shadow-xl shrink-0">
-            <div className="flex items-center gap-2 sm:gap-3">
+          {/* TOP HEADER UNIFICADO (BARRA SUPERIOR ERGONÔMICA 48px) */}
+          <div className="h-12 min-h-[48px] flex items-center justify-between gap-2 sm:gap-3 bg-[#0f141f]/95 backdrop-blur-md border border-[#2a3449] px-2.5 sm:px-3 rounded-xl sm:rounded-2xl shadow-lg shrink-0 select-none">
+            {/* ESQUERDA: NAVEGAÇÃO, CONTEXTO DA MESA & CALENDÁRIO */}
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
               <button
                 onClick={handleBackToHub}
-                className="flex items-center justify-center bg-[#0a0d14] hover:bg-[#2a3449] border border-[#2a3449] hover:border-amber-500/40 text-slate-300 hover:text-amber-400 font-bold p-1.5 sm:p-2 rounded-xl transition-all shadow-sm cursor-pointer"
+                className="flex items-center justify-center bg-[#0a0d14] hover:bg-[#1a2334] border border-[#2a3449] hover:border-amber-500/40 text-slate-300 hover:text-amber-400 font-bold p-1.5 rounded-lg transition-all shadow-sm cursor-pointer shrink-0"
                 title="Voltar para Minhas Campanhas"
                 aria-label="Voltar para Minhas Campanhas"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-3.5 h-3.5" />
               </button>
 
-              <div className="h-6 w-[1px] bg-[#2a3449]" />
+              <div className="h-5 w-[1px] bg-[#2a3449]/70 shrink-0" />
 
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-mono font-bold text-amber-400 uppercase tracking-widest bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded">
-                    COCKPIT DO JOGADOR
-                  </span>
-                  {currentCampaign?.inviteCode && (
-                    <button
-                      onClick={() => handleCopyInviteCode(currentCampaign.inviteCode)}
-                      className="text-[10px] font-mono font-bold text-slate-300 bg-[#0a0d14] hover:bg-[#1a2334] border border-[#2a3449] hover:border-amber-500/40 px-2 py-0.5 rounded-lg flex items-center gap-1 transition-all"
-                      title="Clique para copiar código de convite da mesa"
-                    >
-                      <span>Convite: <strong className="text-amber-400">{currentCampaign.inviteCode}</strong></span>
-                      {copiedInvite ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-400" />}
-                    </button>
-                  )}
-                </div>
-                <h2 className="text-base font-bold text-slate-100 leading-tight mt-0.5">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="hidden xl:inline-block text-[8px] font-mono font-bold text-amber-400 uppercase tracking-widest bg-amber-950/60 border border-amber-500/30 px-1.5 py-0.5 rounded shrink-0">
+                  COCKPIT
+                </span>
+                <h2 className="text-xs sm:text-sm font-bold text-slate-100 truncate max-w-[110px] sm:max-w-[180px] lg:max-w-[240px] leading-tight" title={currentCampaign?.title}>
                   {currentCampaign?.title || 'Campanha Ativa'}
                 </h2>
+                {currentCampaign?.inviteCode && (
+                  <button
+                    onClick={() => handleCopyInviteCode(currentCampaign.inviteCode)}
+                    className="hidden sm:flex items-center gap-1 text-[10px] font-mono font-bold text-slate-300 bg-[#0a0d14] hover:bg-[#1a2334] border border-[#2a3449] hover:border-amber-500/40 px-1.5 py-0.5 rounded transition-all shrink-0 cursor-pointer"
+                    title="Clique para copiar código de convite da mesa"
+                  >
+                    <span className="text-amber-400">{currentCampaign.inviteCode}</span>
+                    {copiedInvite ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5 text-slate-400" />}
+                  </button>
+                )}
+              </div>
+
+              {/* Campaign In-Game Calendar Widget (Compact Player Perspective) */}
+              <div className="hidden lg:flex items-center pl-1 border-l border-[#2a3449]/60 shrink-0">
+                <LiveCalendarWidget />
               </div>
             </div>
 
-            {/* Campaign In-Game Calendar & Celestial Orrery Widget (Player Perspective) */}
-            <LiveCalendarWidget />
-
-            {/* Controles de Visualização / Projeção do Jogador (Estilo Cockpit DM) */}
+            {/* CENTRO: CONTROLES DE PROJEÇÃO / VISUALIZAÇÃO EM SEGMENTED CONTROL */}
             {(() => {
               const resolvedView = playerCanvasView === 'auto' ? (liveDisplayMode === 'artwork' ? 'art' : liveDisplayMode) : playerCanvasView;
               const isArt = resolvedView === 'art';
               const isMap = resolvedView === 'map';
               const isGrid = resolvedView === 'grid' || resolvedView === 'combat';
               return (
-                <div className="flex items-center gap-1.5 bg-[#0a0d14] p-1.5 rounded-xl border border-[#2a3449]">
+                <div className="flex items-center gap-1 bg-[#090d14] p-1 rounded-xl border border-[#2a3449] shadow-inner shrink-0">
                   {/* Botão Auto (Seguir Mestre) */}
                   <button
                     onClick={() => setPlayerCanvasView('auto')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 cursor-pointer ${
+                    className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all duration-200 cursor-pointer ${
                       playerCanvasView === 'auto'
                         ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md shadow-blue-500/20 ring-1 ring-cyan-400/40'
                         : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
@@ -2423,17 +2425,17 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                     title="Seguir visualização projetada pelo Mestre automaticamente"
                   >
                     <Sparkles className={`w-3.5 h-3.5 ${playerCanvasView === 'auto' ? 'animate-pulse text-amber-300' : ''}`} />
-                    <span>Auto</span>
+                    <span className="hidden sm:inline">Auto</span>
                   </button>
 
-                  <div className="h-4 w-[1px] bg-[#2a3449]/60" />
+                  <div className="h-3.5 w-[1px] bg-[#2a3449]/60" />
 
                   {/* Botão Ilustração */}
                   <button
                     onClick={() => setPlayerCanvasView('art')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 cursor-pointer ${
+                    className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all duration-200 cursor-pointer ${
                       playerCanvasView === 'art'
-                        ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                        ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-black'
                         : isArt && playerCanvasView === 'auto'
                         ? 'border border-amber-500/50 text-amber-400 bg-amber-950/40 hover:bg-[#161f30]'
                         : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
@@ -2441,15 +2443,15 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                     title="Modo Ilustração / Arte da Cena"
                   >
                     <ImageIcon className="w-3.5 h-3.5" />
-                    <span>Ilustração</span>
+                    <span className="hidden md:inline">Ilustração</span>
                   </button>
 
                   {/* Botão Dungeon Map */}
                   <button
                     onClick={() => setPlayerCanvasView('map')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 cursor-pointer ${
+                    className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all duration-200 cursor-pointer ${
                       playerCanvasView === 'map'
-                        ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'
+                        ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20 font-black'
                         : isMap && playerCanvasView === 'auto'
                         ? 'border border-indigo-500/50 text-indigo-400 bg-indigo-950/40 hover:bg-[#161f30]'
                         : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
@@ -2457,15 +2459,15 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                     title="Modo Dungeon Map 2D"
                   >
                     <MapIcon className="w-3.5 h-3.5" />
-                    <span>Dungeon Map</span>
+                    <span className="hidden md:inline">Mapa</span>
                   </button>
 
                   {/* Botão Grid 3D / Combate */}
                   <button
                     onClick={() => setPlayerCanvasView('grid')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition-all duration-200 cursor-pointer ${
+                    className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono transition-all duration-200 cursor-pointer ${
                       playerCanvasView === 'grid'
-                        ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20'
+                        ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20 font-black'
                         : isGrid && playerCanvasView === 'auto'
                         ? 'border border-rose-500/50 text-rose-400 bg-rose-950/40 hover:bg-[#161f30]'
                         : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
@@ -2473,38 +2475,40 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                     title="Modo Grid 3D / Combate"
                   >
                     <Swords className="w-3.5 h-3.5" />
-                    <span>Grid 3D</span>
+                    <span className="hidden md:inline">Grid 3D</span>
                   </button>
                 </div>
               );
             })()}
 
-            {/* Right Header Actions & Online Avatars */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              <PresenceIndicator users={onlineUsers} className="border-r border-[#2a3449] pr-2 sm:pr-3" />
+            {/* DIREITA: FERRAMENTAS DO JOGADOR, PRESENÇA & AÇÕES */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <div className="hidden sm:block">
+                <PresenceIndicator users={onlineUsers} className="border-r border-[#2a3449] pr-2" />
+              </div>
 
               {/* Chamada de Voz (Voice Call) no Player Lobby */}
               {isInCall ? (
-                <div className="flex items-center gap-1 bg-[#121824] border border-emerald-500/40 rounded-xl p-1 shadow-sm">
+                <div className="flex items-center gap-1 bg-[#121824] border border-emerald-500/40 rounded-lg p-0.5 shadow-sm">
                   <button
                     type="button"
                     onClick={() => setIsWidgetOpen((prev: boolean) => !prev)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-300 hover:bg-emerald-500/10 transition-all cursor-pointer"
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/10 transition-all cursor-pointer"
                     title="Abrir Painel da Chamada de Voz"
                   >
                     <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                     </span>
-                    <span className="hidden sm:inline">Na Call</span>
-                    <span className="font-mono text-[10px] text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded">
+                    <span className="hidden md:inline">Na Call</span>
+                    <span className="font-mono text-[9px] text-emerald-400 bg-emerald-500/20 px-1 py-0.2 rounded">
                       {participants.length}
                     </span>
                   </button>
                   <button
                     type="button"
                     onClick={toggleMute}
-                    className={`p-1.5 rounded-lg text-xs transition-all ${
+                    className={`p-1 rounded-md text-xs transition-all ${
                       isMuted
                         ? 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30'
                         : isSpeaking
@@ -2513,7 +2517,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                     }`}
                     title={isMuted ? 'Desmutar Microfone' : 'Mutar Microfone'}
                   >
-                    {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                    {isMuted ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
                   </button>
                 </div>
               ) : (
@@ -2521,14 +2525,15 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                   type="button"
                   onClick={() => joinCall()}
                   disabled={isConnecting}
-                  className="flex items-center gap-1.5 bg-[#161c28] hover:bg-[#1f2738] text-slate-300 hover:text-emerald-400 border border-[#2a3449] hover:border-emerald-500/50 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 bg-[#161c28] hover:bg-[#1f2738] text-slate-300 hover:text-emerald-400 border border-[#2a3449] hover:border-emerald-500/50 px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
                   title="Conectar à Chamada de Voz da Mesa"
                 >
                   <PhoneCall className={`w-3.5 h-3.5 text-emerald-400 ${isConnecting ? 'animate-spin' : ''}`} />
-                  <span className="hidden sm:inline">{isConnecting ? 'Conectando...' : 'Entrar na Call'}</span>
+                  <span className="hidden lg:inline">{isConnecting ? 'Conectando...' : 'Call'}</span>
                 </button>
               )}
 
+              {/* Safety Tools (X-Card) */}
               <XCardButton
                 campaignId={currentCampaign?.id}
                 playerName={resolveCharName(currentCampaign)}
@@ -2536,23 +2541,24 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                 onSendAlert={(alert) => broadcastXCardAlert({ alert })}
               />
 
+              {/* Crônicas da Campanha */}
               <button
                 onClick={() => setShowCampaignFeedModal(true)}
-                className="relative flex items-center gap-1.5 bg-[#141a27] hover:bg-[#1e2638] border border-amber-500/40 text-amber-300 font-bold px-3 py-1.5 rounded-xl text-xs shadow-md transition-all active:scale-95 cursor-pointer"
+                className="relative flex items-center gap-1 bg-[#141a27] hover:bg-[#1e2638] border border-amber-500/40 text-amber-300 font-bold px-2 sm:px-2.5 py-1 rounded-lg text-[11px] shadow-sm transition-all active:scale-95 cursor-pointer"
                 title="Abrir Crônicas e Feed da Campanha"
               >
-                <BookOpen className="w-4 h-4 text-amber-400" />
-                <span className="hidden sm:inline">Crônicas</span>
+                <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden md:inline">Crônicas</span>
 
                 {/* Ping Cromático de Notificação */}
                 {chronicleNotifications.hasUnread && (
-                  <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
                     <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
                       chronicleNotifications.latestUnreadType === 'npc' ? 'bg-cyan-400' :
                       chronicleNotifications.latestUnreadType === 'battle' ? 'bg-rose-500' :
                       chronicleNotifications.latestUnreadType === 'lore' ? 'bg-purple-500' : 'bg-amber-400'
                     }`}></span>
-                    <span className={`relative inline-flex items-center justify-center rounded-full h-3.5 w-3.5 border-2 border-[#0f1420] text-[8px] font-black text-slate-950 ${
+                    <span className={`relative inline-flex items-center justify-center rounded-full h-3 w-3 border-2 border-[#0f1420] text-[7px] font-black text-slate-950 ${
                       chronicleNotifications.latestUnreadType === 'npc' ? 'bg-cyan-400 shadow-sm shadow-cyan-500/50' :
                       chronicleNotifications.latestUnreadType === 'battle' ? 'bg-rose-500 shadow-sm shadow-rose-500/50' :
                       chronicleNotifications.latestUnreadType === 'lore' ? 'bg-purple-400 shadow-sm shadow-purple-500/50' : 'bg-amber-400 shadow-sm shadow-amber-500/50'
@@ -2563,29 +2569,24 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                 )}
               </button>
 
-              <button
-                onClick={() => handleOpenSheetForCampaign(currentCampaign || undefined)}
-                className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs shadow-lg shadow-amber-500/20 transition-all active:scale-95"
-              >
-                <FileText className="w-4 h-4" />
-                <span>Ficha: <strong className="font-extrabold">{resolveCharName(currentCampaign)}</strong></span>
-              </button>
-
+              {/* Modo TV Projeção */}
               <button
                 onClick={onOpenPlayerView}
-                className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs shadow-lg shadow-cyan-900/30 transition-all active:scale-95"
+                className="hidden sm:flex items-center gap-1 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 text-slate-950 font-bold px-2 sm:px-2.5 py-1 rounded-lg text-[11px] shadow-sm transition-all active:scale-95 cursor-pointer"
+                title="Abrir Modo TV / Projeção Secundária"
               >
-                <Tv className="w-4 h-4" />
-                <span>Modo TV</span>
+                <Tv className="w-3.5 h-3.5" />
+                <span className="hidden xl:inline">Modo TV</span>
               </button>
 
+              {/* Sair da Campanha */}
               {currentCampaign && (
                 <button
                   onClick={() => handleLeaveCampaign(currentCampaign)}
-                  className="p-1.5 bg-[#0a0d14] hover:bg-rose-950/40 border border-[#2a3449] hover:border-rose-500/40 text-slate-400 hover:text-rose-400 rounded-xl transition-all"
+                  className="p-1 sm:p-1.5 bg-[#0a0d14] hover:bg-rose-950/40 border border-[#2a3449] hover:border-rose-500/40 text-slate-400 hover:text-rose-400 rounded-lg transition-all cursor-pointer"
                   title="Sair desta Campanha"
                 >
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
@@ -2856,11 +2857,16 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
               {isSidebarCollapsed && (
                 <button
                   onClick={() => setIsSidebarCollapsed(false)}
-                  className="absolute top-3 right-3 z-30 flex items-center gap-1.5 px-3 py-1.5 bg-[#141a26]/90 hover:bg-[#1a2334] border border-amber-500/40 text-amber-300 font-bold text-xs rounded-xl shadow-2xl backdrop-blur-md transition-all active:scale-95 animate-fade-in cursor-pointer"
-                  title="Expandir Painel Lateral & Ações"
+                  className="absolute top-3 right-3 z-30 flex items-center gap-2 px-3.5 py-2 bg-[#0d121f]/95 hover:bg-[#161f30] border border-amber-500/50 hover:border-amber-400 text-amber-300 font-bold text-xs rounded-xl shadow-2xl backdrop-blur-md transition-all active:scale-95 animate-fade-in cursor-pointer group ring-1 ring-amber-500/30"
+                  title="Expandir Painel do Herói & Chat"
                 >
-                  <ChevronLeft className="w-4 h-4" />
-                  <span>Painel Lateral & Ações</span>
+                  <PanelRightOpen className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+                  <span className="font-mono text-slate-100">Herói & Chat</span>
+                  {chatMessages.length > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-cyan-500/30 text-cyan-300 text-[10px] font-mono border border-cyan-500/40">
+                      {chatMessages.length}
+                    </span>
+                  )}
                 </button>
               )}
             </div>

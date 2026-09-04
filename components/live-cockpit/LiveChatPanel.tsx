@@ -130,26 +130,26 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({
 
   return (
     <div className={`flex flex-col h-full bg-[#0a0e17] rounded-xl border border-[#1e293b] overflow-hidden ${className}`}>
-      {/* Channel & Macro Tabs */}
-      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-[#1e293b] bg-[#0d1220] overflow-x-auto scrollbar-none">
+      {/* Channel & Macro Tabs (Ergonomic Touch 32px) */}
+      <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-[#1e293b] bg-[#0d1220] overflow-x-auto scrollbar-none select-none">
         {channels.map((ch) => (
           <button
             key={ch.key}
             onClick={() => setActiveChannel(ch.key)}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
               activeChannel === ch.key
                 ? ch.key === 'whisper'
-                  ? 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30'
+                  ? 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/40 shadow-sm'
                   : ch.key === 'ic'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
                   : ch.key === 'macros'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                  : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                  : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#151d2f] border border-transparent'
             }`}
           >
             {ch.icon}
-            {ch.label}
+            <span>{ch.label}</span>
           </button>
         ))}
       </div>
@@ -251,12 +251,12 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({
         </button>
       )}
 
-      {/* Command & Advantage Bar + Input */}
-      <div className="flex flex-col gap-1 px-2 py-1.5 border-t border-[#1e293b] bg-[#0d1220]">
+      {/* Command & Advantage Bar + Input (Ergonomic Tablet Tray) */}
+      <div className="flex flex-col gap-1.5 px-2.5 py-2 border-t border-[#1e293b] bg-[#0d1220] select-none">
         {/* Advantage & Quick Command Shortcuts */}
-        <div className="flex items-center justify-between text-[10px]">
-          <div className="flex items-center gap-1">
-            <span className="text-slate-500 font-bold mr-0.5">Modo:</span>
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1 bg-[#090d15] p-0.5 rounded-lg border border-[#2a3449]/60">
+            <span className="text-slate-500 font-bold px-1 text-[10px] hidden sm:inline">Modo:</span>
             {[
               { key: 'normal', label: 'Norm' },
               { key: 'adv', label: 'Vant (ADV)' },
@@ -266,14 +266,14 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({
                 key={adv.key}
                 type="button"
                 onClick={() => setAdvantageToggle(adv.key as any)}
-                className={`px-1.5 py-0.5 rounded font-bold transition-colors ${
+                className={`h-6 sm:h-7 px-2 rounded-md text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer ${
                   advantageToggle === adv.key
                     ? adv.key === 'adv'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 shadow-sm'
                       : adv.key === 'dis'
-                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                    : 'text-slate-500 hover:text-slate-300'
+                      ? 'bg-rose-500/30 text-rose-300 border border-rose-500/50 shadow-sm'
+                      : 'bg-amber-500/30 text-amber-300 border border-amber-500/50 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#161f30]'
                 }`}
               >
                 {adv.label}
@@ -282,11 +282,11 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({
           </div>
 
           {/* Quick Dice Prefixes */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => setInputText('/roll 1d20+')}
-              className="px-1.5 py-0.5 bg-[#172030] hover:bg-[#202c42] text-cyan-300 font-mono font-bold rounded border border-cyan-500/30"
+              className="h-6 sm:h-7 px-2.5 bg-[#172030] hover:bg-[#202c42] text-cyan-300 font-mono font-bold text-xs rounded-md border border-cyan-500/40 shadow-sm transition-all cursor-pointer active:scale-95"
             >
               /roll
             </button>
@@ -294,7 +294,7 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({
               <button
                 type="button"
                 onClick={() => setInputText('/gmroll 1d20+')}
-                className="px-1.5 py-0.5 bg-purple-950 hover:bg-purple-900 text-purple-300 font-mono font-bold rounded border border-purple-500/40"
+                className="h-6 sm:h-7 px-2.5 bg-purple-950 hover:bg-purple-900 text-purple-300 font-mono font-bold text-xs rounded-md border border-purple-500/40 shadow-sm transition-all cursor-pointer active:scale-95"
                 title="Rolagem Secreta (DM Only)"
               >
                 🔒 /gmroll
@@ -316,14 +316,14 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({
                 ? 'Fale como seu personagem...'
                 : 'Mensagem ou /roll 1d20+5 ou /gmroll...'
             }
-            className="flex-1 bg-[#141b2d] border border-[#2a3449] rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/50 transition-colors"
+            className="flex-1 bg-[#141b2d] border border-[#2a3449] rounded-xl px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
           />
           <button
             onClick={() => handleSend()}
             disabled={!inputText.trim()}
-            className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all shrink-0"
+            className="w-9 h-9 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 border border-cyan-400/40 flex items-center justify-center text-slate-950 hover:from-cyan-500 hover:to-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-md active:scale-95 shrink-0 cursor-pointer"
           >
-            <Send className="w-3.5 h-3.5" />
+            <Send className="w-4 h-4" />
           </button>
         </div>
       </div>
