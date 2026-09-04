@@ -87,12 +87,13 @@ export const DmCommandPalette: React.FC<DmCommandPaletteProps> = ({ onNavigateTa
   }, [isOpen]);
 
   // Lista de Itens Filtrados via Engine
+  // Lista de Itens Filtrados via Engine
   const items = useMemo(() => {
     return evaluateOmnibarQuery(query, {
       combatants,
       activeCampaignTitle: activeCampaign?.title,
       isPlayingBgm,
-      activeBgmTitle: activeBgm?.title,
+      activeBgmTitle: activeBgm?.name,
     });
   }, [query, combatants, activeCampaign, isPlayingBgm, activeBgm]);
 
@@ -127,22 +128,27 @@ export const DmCommandPalette: React.FC<DmCommandPaletteProps> = ({ onNavigateTa
           // Notifica a mesa e o log de combate
           broadcastPlayerRoll({
             id: `roll-${Date.now()}`,
-            playerId: user?.id || 'dm-id',
+            characterName: isSecret ? 'Dungeon Master (Secreto)' : 'Dungeon Master',
             playerName: 'Dungeon Master',
-            rollType: isSecret ? 'gm' : 'public',
-            rollLabel: `Rolagem do Mestre (${formula})`,
-            formula: formula,
+            rollType: 'custom',
+            label: `Rolagem do Mestre (${formula})`,
+            d20Roll: total,
+            modifier: 0,
+            diceFormula: formula,
             total: total,
             isCrit: isCrit,
             isFail: isFail,
-            timestamp: Date.now(),
+            timestamp: new Date().toISOString(),
           });
 
           broadcastCombatLogEntry({
             id: `log-${Date.now()}`,
-            timestamp: Date.now(),
-            text: `🎲 DM rolou ${formula}: **${total}** ${isSecret ? '(Secreto)' : ''}`,
-            type: 'dice',
+            timestamp: new Date().toISOString(),
+            round: 1,
+            actorId: user?.id || 'dm',
+            actorName: 'Dungeon Master',
+            eventType: 'system',
+            description: `🎲 DM rolou ${formula}: **${total}** ${isSecret ? '(Secreto)' : ''}`,
           });
 
           toast.success(
@@ -188,7 +194,7 @@ export const DmCommandPalette: React.FC<DmCommandPaletteProps> = ({ onNavigateTa
           const { combatantId, combatantName } = item.payload;
           const combatant = combatants.find((c) => c.id === combatantId);
           if (combatant) {
-            openSheet(combatant.id, combatant.isPlayer ? 'pc' : 'monster', combatant.name, combatant);
+            openSheet(combatant.id, combatant.type === 'player' ? 'pc' : 'monster', combatant.name, combatant);
             toast.info(`Painel de ${combatantName} aberto para ajuste de combate`);
           }
           closeOmnibar();
@@ -241,8 +247,11 @@ export const DmCommandPalette: React.FC<DmCommandPaletteProps> = ({ onNavigateTa
 
         case 'trigger_xcard': {
           setActiveXCardAlert({
-            senderId: user?.id || 'dm',
+            id: `xcard-${Date.now()}`,
+            campaignId: activeCampaign?.id || 'default-campaign',
+            type: 'pause',
             senderName: 'Dungeon Master',
+            isAnonymous: false,
             timestamp: Date.now(),
           });
           toast.error('⚠️ Alerta X-Card Ativado: Pausando a cena por segurança', {

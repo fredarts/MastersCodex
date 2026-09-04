@@ -10,6 +10,7 @@ interface MagicShaderSlideshowProps {
   aspectRatio?: SlideAspectRatio;
   fitMode?: 'cover' | 'contain';
   onTransitionEnd?: () => void;
+  isPaused?: boolean;
 }
 
 // Convert transition type to uniform integer
@@ -52,7 +53,13 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
   transitionType = 'magical_dissolve',
   fitMode = 'cover',
   onTransitionEnd,
+  isPaused = false,
 }) => {
+  const isPausedRef = useRef(Boolean(isPaused));
+  useEffect(() => {
+    isPausedRef.current = Boolean(isPaused);
+  }, [isPaused]);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [webglFailed, setWebglFailed] = useState(false);
@@ -364,7 +371,7 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
     }
     patchWebGLContext(renderer);
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1.5));
     state.renderer = renderer;
     retryCountRef.current = 0;
     setWebglFailed(false);
@@ -423,6 +430,9 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
           uniforms.uTex2.value = tex;
           uniforms.uImageSize1.value.copy(state.imageSize1);
           uniforms.uImageSize2.value.copy(state.imageSize2);
+          if (renderer && scene && camera) {
+            renderer.render(scene, camera);
+          }
         },
         undefined,
         () => {}
@@ -439,16 +449,27 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
       if (w > 0 && h > 0) {
         renderer.setSize(w, h);
         uniforms.uPlaneSize.value.set(w, h);
+        if (renderer && scene && camera) {
+          renderer.render(scene, camera);
+        }
       }
     });
     resizeObserver.observe(container);
 
-    // 7. Animation Loop
+    // 7. Animation Loop com Eco Mode & Visibility Detection
     let animationId: number;
+    let isLoopRunning = false;
     const loopStartTime = performance.now();
 
     const animate = () => {
+      const isHidden = typeof document !== 'undefined' && document.hidden;
+      if (isPausedRef.current || isHidden) {
+        isLoopRunning = false;
+        return;
+      }
+
       animationId = requestAnimationFrame(animate);
+      isLoopRunning = true;
       const currentTime = (performance.now() - loopStartTime) / 1000;
       uniforms.uTime.value = currentTime;
 
@@ -476,8 +497,16 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
     };
     animate();
 
+    const handleVisibilityChange = () => {
+      if (!document.hidden && !isPausedRef.current && !isLoopRunning) {
+        animate();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       cancelAnimationFrame(animationId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       resizeObserver.disconnect();
       geometry.dispose();
       material.dispose();

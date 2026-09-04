@@ -203,11 +203,10 @@ export const Dice3DCanvas: React.FC<Dice3DCanvasProps> = ({
 
     let animationFrameId: number;
     let hasNotifiedSettled = false;
+    let isLoopRunning = false;
 
-    // 6. Animation and Physics Step Loop
+    // 6. Animation and Physics Step Loop com Sleep State
     const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
-
       const dt = 1 / 60;
       body.update(dt, bounds);
 
@@ -230,6 +229,10 @@ export const Dice3DCanvas: React.FC<Dice3DCanvasProps> = ({
             propsRef.current.onSettled(result);
           }
         }
+        renderer.render(scene, camera);
+        // Sleep state: encerra o loop contínuo até o próximo lançamento
+        isLoopRunning = false;
+        return;
       } else {
         hasNotifiedSettled = false;
         if (isActivelyRollingRef.current) {
@@ -239,9 +242,22 @@ export const Dice3DCanvas: React.FC<Dice3DCanvasProps> = ({
       }
 
       renderer.render(scene, camera);
+      animationFrameId = requestAnimationFrame(animate);
+      isLoopRunning = true;
     };
 
-    animate();
+    // Função de ativação de lançamento
+    launchRef.current = (opts) => {
+      body.launch(opts);
+      hasNotifiedSettled = false;
+      isActivelyRollingRef.current = true;
+      if (!isLoopRunning) {
+        animate();
+      }
+    };
+
+    // Render inicial estático
+    renderer.render(scene, camera);
 
     const gl = renderer.getContext();
     const extension = gl ? gl.getExtension('WEBGL_lose_context') : null;

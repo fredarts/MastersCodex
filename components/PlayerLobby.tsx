@@ -42,7 +42,8 @@ import {
   PhoneOff,
   Package,
   Crown,
-  Play
+  Play,
+  Download
 } from 'lucide-react';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useWorld } from '@/lib/hooks/useWorld';
@@ -54,6 +55,7 @@ import { UserCampaign, CharacterSheet, CharacterEquipmentItem, MacroBarDisplayMo
 import { mapWorldEntityRowToDomain } from '@/lib/mappers';
 import { CharacterSheetModal } from './character-sheet/CharacterSheetModal';
 import { CharacterManagerModal } from './character-sheet/CharacterManagerModal';
+import { ImportCharacterModal } from './character-sheet/ImportCharacterModal';
 import { createEmptyCharacterSheet, generateUuid } from '@/lib/dnd5e-data';
 import { getModelUrlByNameOrPath } from '@/lib/3d-models';
 import { useAuth } from '@/context/AuthContext';
@@ -146,6 +148,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     activeCampaign?.role === 'player' ? activeCampaign?.id || null : null
   );
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [isJoinImportModalOpen, setIsJoinImportModalOpen] = useState(false);
   const [showCampaignFeedModal, setShowCampaignFeedModal] = useState(false);
 
   const chronicleNotifications = useCampaignNotifications(
@@ -1111,6 +1114,21 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
     setIsSheetModalOpen(true);
   };
 
+  const handleImportNewSheet = (importedSheet: CharacterSheet) => {
+    const finalSheet: CharacterSheet = {
+      ...importedSheet,
+      userId: user?.id || importedSheet.userId || 'player-1',
+      campaignId: selectedCampaignId || activeCampaign?.id || importedSheet.campaignId,
+      updatedAt: new Date().toISOString(),
+    };
+    setCharacterSheets((prev) => [finalSheet, ...prev.filter((s) => s.id !== finalSheet.id)]);
+    setActiveSheet(finalSheet);
+    setCharacterNameInput(finalSheet.characterName);
+    setIsManagerModalOpen(false);
+    setIsJoinImportModalOpen(false);
+    toast.success(`Ficha de "${finalSheet.characterName}" importada e pronta para o jogo!`);
+  };
+
   const handleSelectSheetToEdit = (sheet: CharacterSheet) => {
     setActiveSheet(sheet);
     setIsManagerModalOpen(false);
@@ -2005,10 +2023,20 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
-                  <span>Selecione o Personagem para esta Mesa:</span>
-                  <span className="text-[10px] text-amber-400 font-mono">({characterSheets.length} ficha(s) salvas)</span>
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Selecione o Personagem para esta Mesa:
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsJoinImportModalOpen(true)}
+                    className="flex items-center gap-1 text-[10px] font-bold text-cyan-400 hover:text-cyan-300 bg-cyan-950/50 hover:bg-cyan-900/50 border border-cyan-500/40 px-2 py-0.5 rounded-lg transition-all cursor-pointer"
+                    title="Importar ficha pronta do D&D Beyond"
+                  >
+                    <Download className="w-3 h-3 text-cyan-400" />
+                    <span>Importar D&D Beyond</span>
+                  </button>
+                </div>
 
                 {characterSheets.length > 0 ? (
                   <select
@@ -2648,6 +2676,7 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
                           initialTokenElevations={currentScene?.tokenElevations || currentScene?.environmentSettings?.token_elevations}
                           interactive={true}
                           userRole="player"
+                          isPaused={activeView !== 'grid' && activeView !== 'combat'}
                         />
                       </ThreeErrorBoundary>
                     );
@@ -3098,8 +3127,16 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
         characterSheets={characterSheets}
         onSelectSheetToEdit={handleSelectSheetToEdit}
         onCreateNewSheet={handleCreateNewSheet}
+        onImportSheet={handleImportNewSheet}
         onDuplicateSheet={handleDuplicateSheet}
         onDeleteSheet={handleDeleteSheet}
+      />
+
+      {/* ==================== MODAL DE IMPORTAÇÃO RÁPIDA D&D BEYOND (ENTRADA EM MESA) ==================== */}
+      <ImportCharacterModal
+        isOpen={isJoinImportModalOpen}
+        onClose={() => setIsJoinImportModalOpen(false)}
+        onImport={handleImportNewSheet}
       />
 
       {/* ==================== MODAL DA FICHA DE PERSONAGEM D&D 5E ==================== */}

@@ -413,6 +413,7 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                   onFloorTextureChange={handleFloorTextureChange}
                   onConfirmPlacement={handleConfirmPlacement}
                   userRole="dm"
+                  isPaused={liveDisplayMode !== 'combat'}
                 />
               </ThreeErrorBoundary>
             ) : liveDisplayMode === 'map' ? (

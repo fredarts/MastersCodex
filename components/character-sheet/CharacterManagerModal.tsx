@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CharacterSheet } from '@/lib/types';
 import { createEmptyCharacterSheet } from '@/lib/dnd5e-data';
 import {
@@ -13,7 +13,9 @@ import {
   X,
   FileText,
   Compass,
+  Download,
 } from 'lucide-react';
+import { ImportCharacterModal } from './ImportCharacterModal';
 
 interface CharacterManagerModalProps {
   isOpen: boolean;
@@ -21,6 +23,7 @@ interface CharacterManagerModalProps {
   characterSheets: CharacterSheet[];
   onSelectSheetToEdit: (sheet: CharacterSheet) => void;
   onCreateNewSheet: () => void;
+  onImportSheet?: (sheet: CharacterSheet) => void;
   onDuplicateSheet: (sheetId: string) => void;
   onDeleteSheet: (sheetId: string) => void;
 }
@@ -49,9 +52,12 @@ export const CharacterManagerModal: React.FC<CharacterManagerModalProps> = ({
   characterSheets,
   onSelectSheetToEdit,
   onCreateNewSheet,
+  onImportSheet,
   onDuplicateSheet,
   onDeleteSheet,
 }) => {
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
   if (!isOpen) return null;
 
   return (
@@ -73,19 +79,29 @@ export const CharacterManagerModal: React.FC<CharacterManagerModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => setIsImportModalOpen(true)}
+              className="flex items-center gap-1.5 bg-[#1a2338] hover:bg-[#25324d] border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 font-bold px-3.5 py-2.5 rounded-xl text-xs shadow-md active:scale-95 transition-all cursor-pointer"
+              title="Importar ficha pronta do D&D Beyond ou arquivo JSON"
+            >
+              <Download className="w-4 h-4 text-cyan-400" />
+              <span className="hidden sm:inline">Importar D&D Beyond / JSON</span>
+              <span className="sm:hidden">Importar</span>
+            </button>
             <button
               type="button"
               onClick={onCreateNewSheet}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs shadow-lg shadow-amber-500/20 active:scale-95 transition-transform"
+              className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-3.5 sm:px-4 py-2.5 rounded-xl text-xs shadow-lg shadow-amber-500/20 active:scale-95 transition-transform cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>Criar Novo Personagem</span>
+              <span>Novo Personagem</span>
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80"
+              className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/80 cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -102,17 +118,27 @@ export const CharacterManagerModal: React.FC<CharacterManagerModalProps> = ({
               <div>
                 <h3 className="text-base font-bold text-slate-200">Nenhum personagem cadastrado</h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Crie sua primeira ficha de personagem de D&D 5e totalmente automatizada para usar em suas sessões.
+                  Crie sua primeira ficha de personagem de D&D 5e ou importe instantaneamente sua ficha existente do D&D Beyond.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={onCreateNewSheet}
-                className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs shadow-lg"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Criar Minha Primeira Ficha</span>
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="inline-flex items-center gap-2 bg-[#1a2338] hover:bg-[#25324d] border border-cyan-500/40 text-cyan-300 font-bold px-4 py-2 rounded-xl text-xs shadow-lg transition-all cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-cyan-400" />
+                  <span>Importar do D&D Beyond</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onCreateNewSheet}
+                  className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs shadow-lg transition-all cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Criar Minha Primeira Ficha</span>
+                </button>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -190,6 +216,18 @@ export const CharacterManagerModal: React.FC<CharacterManagerModalProps> = ({
           )}
         </main>
       </div>
+
+      {/* MODAL DE IMPORTAÇÃO D&D BEYOND / JSON */}
+      <ImportCharacterModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImport={(sheet) => {
+          setIsImportModalOpen(false);
+          if (onImportSheet) {
+            onImportSheet(sheet);
+          }
+        }}
+      />
     </div>
   );
 };

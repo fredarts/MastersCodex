@@ -145,6 +145,8 @@ export interface BattleGrid3DProps {
   onGridConfigChange?: (config: import('../lib/3d-building-blocks').GridConfig3D) => void;
   initialTokenElevations?: Record<string, number>;
   onTokenElevationsChange?: (elevations: Record<string, number>) => void;
+  isPaused?: boolean;
+  ecoMode?: boolean;
 }
 
 const getDirectionLabel = (angleDeg: number): string => {
@@ -180,6 +182,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   interactive = true,
   isPlacementPhase = false,
   isBattleStarted = false,
+  isPaused = false,
+  ecoMode = false,
   setupMode = 'normal',
   timeOfDayPreset: propTimeOfDayPreset = 'day',
   timeOfDayHour: propTimeOfDayHour = 12,
@@ -261,6 +265,19 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const activeSpellTargetingRef = useRef(activeSpellTargeting);
   const casterTokenKeyRef = useRef(casterTokenKey);
   const spellTargetPositionRef = useRef(spellTargetPosition);
+
+  // Performance & Eco Mode Refs
+  const isPausedRef = useRef(Boolean(isPaused));
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const lastInteractionTimeRef = useRef<number>(performance.now());
+  const requestSingleRenderRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    isPausedRef.current = Boolean(isPaused);
+    if (isPaused) {
+      requestSingleRenderRef.current?.();
+    }
+  }, [isPaused]);
 
   useEffect(() => { activeSpellTargetingRef.current = activeSpellTargeting; }, [activeSpellTargeting]);
   useEffect(() => { casterTokenKeyRef.current = casterTokenKey; }, [casterTokenKey]);
@@ -1419,10 +1436,14 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     cameraRef.current = camera;
     controlsRef.current = controls;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     patchWebGLContext(renderer);
+    renderer.setPixelRatio(Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1.5));
     renderer.setSize(width, height);
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
+    rendererRef.current = renderer;
 
     container.appendChild(renderer.domElement);
 
@@ -2659,12 +2680,21 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       }
     };
 
+    // Notificação de interação para ativar 60 FPS e atualizar sombras sob demanda
+    const markInteraction = () => {
+      lastInteractionTimeRef.current = performance.now();
+      if (renderer.shadowMap.enabled) {
+        renderer.shadowMap.needsUpdate = true;
+      }
+    };
+
     const domElem = renderer.domElement;
-    domElem.addEventListener('pointerdown', handlePointerDown);
-    domElem.addEventListener('dblclick', handleDblClick);
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-    window.addEventListener('keydown', handleKeyDown);
+    domElem.addEventListener('pointerdown', (e) => { markInteraction(); handlePointerDown(e); });
+    domElem.addEventListener('dblclick', (e) => { markInteraction(); handleDblClick(e); });
+    window.addEventListener('pointermove', (e) => { markInteraction(); handlePointerMove(e); });
+    window.addEventListener('pointerup', () => { markInteraction(); handlePointerUp(); });
+    window.addEventListener('keydown', (e) => { markInteraction(); handleKeyDown(e); });
+    controls.addEventListener('change', markInteraction);
 
     // Inicializar o RangedAttackSplineSystem na cena 3D
     const splineSys = new RangedAttackSplineSystem(scene);
@@ -2674,14 +2704,40 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     const fireSys = createFireParticleSystem(scene);
     fireSysRef.current = fireSys;
 
-    // Animation loop
+    // Helper de Renderização Estática Sob Demanda (Dirty Flagging)
+    const requestSingleRender = () => {
+      if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+      }
+    };
+    requestSingleRenderRef.current = requestSingleRender;
+
+    // Animation loop com Adaptive Idle Throttling & Eco Pause
     let animId: number;
     let lastTime = performance.now();
+    let lastRenderTime = performance.now();
+    let isLoopRunning = false;
+
     const animate = () => {
+      const isHidden = typeof document !== 'undefined' && document.hidden;
+      if (isPausedRef.current || isHidden) {
+        isLoopRunning = false;
+        return;
+      }
+
       animId = requestAnimationFrame(animate);
+      isLoopRunning = true;
+
       const now = performance.now();
-      const delta = (now - lastTime) / 1000;
+      const delta = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
+
+      // Adaptive Idle Throttling: Quando ocioso por mais de 3s sem ataque ativo, limita a ~20 FPS (50ms intervalo)
+      const isIdle = (now - lastInteractionTimeRef.current) > 3000 && !callbacksRef.current.pendingAttack && !isDraggingRef.current;
+      if (isIdle && (now - lastRenderTime) < 48) {
+        return;
+      }
+      lastRenderTime = now;
 
       controls.update();
       if (skyDomeRef.current) {
@@ -2740,7 +2796,18 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
       renderer.render(scene, camera);
     };
+
     animate();
+
+    // Listener para troca de aba (visibilitychange)
+    const handleVisibilityChange = () => {
+      if (!document.hidden && !isPausedRef.current && !isLoopRunning) {
+        lastTime = performance.now();
+        lastInteractionTimeRef.current = performance.now();
+        animate();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Resize Observer para responsividade em modais e abas
     const resizeObserver = new ResizeObserver((entries) => {
@@ -2752,12 +2819,17 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
         renderer.setSize(w, h);
+        if (isPausedRef.current) {
+          requestSingleRender();
+        }
       }
     });
     resizeObserver.observe(container);
 
     return () => {
       cancelAnimationFrame(animId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      controls.removeEventListener('change', markInteraction);
       resizeObserver.disconnect();
       domElem.removeEventListener('pointerdown', handlePointerDown);
       domElem.removeEventListener('dblclick', handleDblClick);
