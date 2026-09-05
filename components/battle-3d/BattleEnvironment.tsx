@@ -29,6 +29,15 @@ export interface BattleEnvironmentProps {
   rainDropSize?: number;
   windAngle?: number;
   windStrength?: number;
+  rainOpacity?: number;
+  rainTheme?: 'water' | 'acid' | 'blood' | 'snow' | 'gold' | 'custom';
+  rainCustomColor?: string;
+  hasSplashes?: boolean;
+  splashSize?: number;
+  splashIntensity?: number;
+  hasCrownDrops?: boolean;
+  hasLightning?: boolean;
+  lightningFrequency?: number;
 
   // Custom fog parameters
   groundFogDensity?: number;

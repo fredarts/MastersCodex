@@ -89,6 +89,15 @@ export interface BattleControlsToolbarProps {
   rainDropSize?: number;
   windAngle?: number;
   windStrength?: number;
+  rainOpacity?: number;
+  rainTheme?: 'water' | 'acid' | 'blood' | 'snow' | 'gold' | 'custom';
+  rainCustomColor?: string;
+  hasSplashes?: boolean;
+  splashSize?: number;
+  splashIntensity?: number;
+  hasCrownDrops?: boolean;
+  hasLightning?: boolean;
+  lightningFrequency?: number;
   groundFogDensity?: number;
   groundFogHeight?: number;
   groundFogSpeed?: number;
@@ -121,6 +130,15 @@ export interface BattleControlsToolbarProps {
     rainDropSize?: number;
     windAngle?: number;
     windStrength?: number;
+    rainOpacity?: number;
+    rainTheme?: 'water' | 'acid' | 'blood' | 'snow' | 'gold' | 'custom';
+    rainCustomColor?: string;
+    hasSplashes?: boolean;
+    splashSize?: number;
+    splashIntensity?: number;
+    hasCrownDrops?: boolean;
+    hasLightning?: boolean;
+    lightningFrequency?: number;
     groundFogDensity?: number;
     groundFogHeight?: number;
     groundFogSpeed?: number;
@@ -175,6 +193,15 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   rainDropSize: rainDropSizeProp = 1.0,
   windAngle: windAngleProp = 180,
   windStrength: windStrengthProp = 0.2,
+  rainOpacity: rainOpacityProp = 0.55,
+  rainTheme: rainThemeProp = 'water',
+  rainCustomColor: rainCustomColorProp = '#88ccff',
+  hasSplashes: hasSplashesProp = true,
+  splashSize: splashSizeProp = 1.0,
+  splashIntensity: splashIntensityProp = 1.0,
+  hasCrownDrops: hasCrownDropsProp = true,
+  hasLightning: hasLightningProp = false,
+  lightningFrequency: lightningFrequencyProp = 1.0,
   groundFogDensity: groundFogDensityProp = 150,
   groundFogHeight: groundFogHeightProp = 1.0,
   groundFogSpeed: groundFogSpeedProp = 1.0,
@@ -225,6 +252,15 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   const [internalRainDropSize, setInternalRainDropSize] = useState(rainDropSizeProp);
   const [internalWindAngle, setInternalWindAngle] = useState(windAngleProp);
   const [internalWindStrength, setInternalWindStrength] = useState(windStrengthProp);
+  const [internalRainOpacity, setInternalRainOpacity] = useState(rainOpacityProp);
+  const [internalRainTheme, setInternalRainTheme] = useState<'water' | 'acid' | 'blood' | 'snow' | 'gold' | 'custom'>(rainThemeProp);
+  const [internalRainCustomColor, setInternalRainCustomColor] = useState(rainCustomColorProp);
+  const [internalHasSplashes, setInternalHasSplashes] = useState(hasSplashesProp);
+  const [internalSplashSize, setInternalSplashSize] = useState(splashSizeProp);
+  const [internalSplashIntensity, setInternalSplashIntensity] = useState(splashIntensityProp);
+  const [internalHasCrownDrops, setInternalHasCrownDrops] = useState(hasCrownDropsProp);
+  const [internalHasLightning, setInternalHasLightning] = useState(hasLightningProp);
+  const [internalLightningFrequency, setInternalLightningFrequency] = useState(lightningFrequencyProp);
   const [internalGroundFogDensity, setInternalGroundFogDensity] = useState(groundFogDensityProp);
   const [internalGroundFogHeight, setInternalGroundFogHeight] = useState(groundFogHeightProp);
   const [internalGroundFogSpeed, setInternalGroundFogSpeed] = useState(groundFogSpeedProp);
@@ -258,6 +294,15 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   useEffect(() => { setInternalRainDropSize(rainDropSizeProp); }, [rainDropSizeProp]);
   useEffect(() => { setInternalWindAngle(windAngleProp); }, [windAngleProp]);
   useEffect(() => { setInternalWindStrength(windStrengthProp); }, [windStrengthProp]);
+  useEffect(() => { setInternalRainOpacity(rainOpacityProp); }, [rainOpacityProp]);
+  useEffect(() => { setInternalRainTheme(rainThemeProp); }, [rainThemeProp]);
+  useEffect(() => { setInternalRainCustomColor(rainCustomColorProp); }, [rainCustomColorProp]);
+  useEffect(() => { setInternalHasSplashes(hasSplashesProp); }, [hasSplashesProp]);
+  useEffect(() => { setInternalSplashSize(splashSizeProp); }, [splashSizeProp]);
+  useEffect(() => { setInternalSplashIntensity(splashIntensityProp); }, [splashIntensityProp]);
+  useEffect(() => { setInternalHasCrownDrops(hasCrownDropsProp); }, [hasCrownDropsProp]);
+  useEffect(() => { setInternalHasLightning(hasLightningProp); }, [hasLightningProp]);
+  useEffect(() => { setInternalLightningFrequency(lightningFrequencyProp); }, [lightningFrequencyProp]);
   useEffect(() => { setInternalGroundFogDensity(groundFogDensityProp); }, [groundFogDensityProp]);
   useEffect(() => { setInternalGroundFogHeight(groundFogHeightProp); }, [groundFogHeightProp]);
   useEffect(() => { setInternalGroundFogSpeed(groundFogSpeedProp); }, [groundFogSpeedProp]);
@@ -268,6 +313,7 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
 
   // Tab state inside popover
   const [activeTab, setActiveTab] = useState<'luz' | 'sky' | 'fog' | 'rain' | 'map'>('luz');
+  const [rainSubTab, setRainSubTab] = useState<'gotas' | 'respingos' | 'vento'>('gotas');
   const [customYouTubeUrl, setCustomYouTubeUrl] = useState(floorTextureUrl || '');
 
   useEffect(() => {
@@ -317,6 +363,15 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
     rainDropSize: number;
     windAngle: number;
     windStrength: number;
+    rainOpacity: number;
+    rainTheme: 'water' | 'acid' | 'blood' | 'snow' | 'gold' | 'custom';
+    rainCustomColor: string;
+    hasSplashes: boolean;
+    splashSize: number;
+    splashIntensity: number;
+    hasCrownDrops: boolean;
+    hasLightning: boolean;
+    lightningFrequency: number;
     groundFogDensity: number;
     groundFogHeight: number;
     groundFogSpeed: number;
@@ -349,6 +404,15 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
     const nextRainDropSize = updates.rainDropSize ?? internalRainDropSize;
     const nextWindAngle = updates.windAngle ?? internalWindAngle;
     const nextWindStrength = updates.windStrength ?? internalWindStrength;
+    const nextRainOpacity = updates.rainOpacity ?? internalRainOpacity;
+    const nextRainTheme = updates.rainTheme ?? internalRainTheme;
+    const nextRainCustomColor = updates.rainCustomColor ?? internalRainCustomColor;
+    const nextHasSplashes = updates.hasSplashes ?? internalHasSplashes;
+    const nextSplashSize = updates.splashSize ?? internalSplashSize;
+    const nextSplashIntensity = updates.splashIntensity ?? internalSplashIntensity;
+    const nextHasCrownDrops = updates.hasCrownDrops ?? internalHasCrownDrops;
+    const nextHasLightning = updates.hasLightning ?? internalHasLightning;
+    const nextLightningFrequency = updates.lightningFrequency ?? internalLightningFrequency;
     const nextGroundFogDensity = updates.groundFogDensity ?? internalGroundFogDensity;
     const nextGroundFogHeight = updates.groundFogHeight ?? internalGroundFogHeight;
     const nextGroundFogSpeed = updates.groundFogSpeed ?? internalGroundFogSpeed;
@@ -374,6 +438,15 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
     if (updates.rainDropSize !== undefined) setInternalRainDropSize(updates.rainDropSize);
     if (updates.windAngle !== undefined) setInternalWindAngle(updates.windAngle);
     if (updates.windStrength !== undefined) setInternalWindStrength(updates.windStrength);
+    if (updates.rainOpacity !== undefined) setInternalRainOpacity(updates.rainOpacity);
+    if (updates.rainTheme !== undefined) setInternalRainTheme(updates.rainTheme);
+    if (updates.rainCustomColor !== undefined) setInternalRainCustomColor(updates.rainCustomColor);
+    if (updates.hasSplashes !== undefined) setInternalHasSplashes(updates.hasSplashes);
+    if (updates.splashSize !== undefined) setInternalSplashSize(updates.splashSize);
+    if (updates.splashIntensity !== undefined) setInternalSplashIntensity(updates.splashIntensity);
+    if (updates.hasCrownDrops !== undefined) setInternalHasCrownDrops(updates.hasCrownDrops);
+    if (updates.hasLightning !== undefined) setInternalHasLightning(updates.hasLightning);
+    if (updates.lightningFrequency !== undefined) setInternalLightningFrequency(updates.lightningFrequency);
     if (updates.groundFogDensity !== undefined) setInternalGroundFogDensity(updates.groundFogDensity);
     if (updates.groundFogHeight !== undefined) setInternalGroundFogHeight(updates.groundFogHeight);
     if (updates.groundFogSpeed !== undefined) setInternalGroundFogSpeed(updates.groundFogSpeed);
@@ -406,6 +479,15 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
         rainDropSize: nextRainDropSize,
         windAngle: nextWindAngle,
         windStrength: nextWindStrength,
+        rainOpacity: nextRainOpacity,
+        rainTheme: nextRainTheme,
+        rainCustomColor: nextRainCustomColor,
+        hasSplashes: nextHasSplashes,
+        splashSize: nextSplashSize,
+        splashIntensity: nextSplashIntensity,
+        hasCrownDrops: nextHasCrownDrops,
+        hasLightning: nextHasLightning,
+        lightningFrequency: nextLightningFrequency,
         groundFogDensity: nextGroundFogDensity,
         groundFogHeight: nextGroundFogHeight,
         groundFogSpeed: nextGroundFogSpeed,
@@ -441,14 +523,18 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
       hour = 0;
       ambient = 0.0;
       sun = 0.0;
-    } else if (preset === 'night') {
-      hour = 24;
-      ambient = 0.03;
-      sun = 0.08;
+    } else if (preset === 'day') {
+      hour = 12;
+      ambient = 0.65;
+      sun = 1.0;
     } else if (preset === 'sunset') {
       hour = 18;
       ambient = 0.35;
       sun = 0.7;
+    } else if (preset === 'night') {
+      hour = 0;
+      ambient = 0.03;
+      sun = 0.08;
     } else if (preset === 'fog') {
       hour = 10;
       fog = true;
@@ -565,9 +651,9 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                 <span>Clima & Luz</span>
               </button>
 
-              {/* Environment Popover Menu */}
+              {/* Environment Popover Menu - Responsive Height & Full Fit */}
               {showEnvMenu && (
-                <div className="absolute left-0 mt-2 w-72 bg-slate-950/95 backdrop-blur-xl border border-slate-800 rounded-xl p-3.5 shadow-2xl space-y-3.5 z-30 text-xs text-slate-200 select-none max-h-[85vh] overflow-y-auto custom-scrollbar">
+                <div className="absolute left-0 mt-1.5 w-80 bg-slate-950/95 backdrop-blur-xl border border-slate-800 rounded-xl p-3 shadow-2xl space-y-2.5 z-30 text-xs text-slate-200 select-none max-h-[calc(100vh-80px)] overflow-y-auto custom-scrollbar">
                   <div className="flex justify-between items-center border-b border-slate-800 pb-2">
                     <span className="font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wide text-[10px]">
                       <Sliders className="w-3.5 h-3.5 text-amber-500" /> Atmosfera & Clima Pro
@@ -1043,116 +1129,375 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                       </div>
                     )}
 
-                    {/* TAB: RAIN & WIND */}
+                    {/* TAB: RAIN & WEATHER PRO */}
                     {activeTab === 'rain' && (
-                      <div className="space-y-2.5 animate-fade-in">
-                        {/* Rain Toggle */}
-                        <div className="flex items-center justify-between pb-1 border-b border-slate-900">
-                          <label className="flex items-center gap-1.5 cursor-pointer font-bold text-indigo-400 uppercase tracking-wider text-[9px]">
+                      <div className="space-y-2.5 animate-fade-in text-xs">
+                        {/* Rain Master Toggle */}
+                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+                          <label className="flex items-center gap-2 cursor-pointer font-bold text-sky-400 uppercase tracking-wider text-[10px]">
                             <input
                               type="checkbox"
                               checked={hasRain}
                               onChange={(e) => triggerEnvChange({ hasRain: e.target.checked })}
-                              className="rounded border-slate-800 text-indigo-500 focus:ring-0 bg-slate-950 w-3 h-3"
+                              className="rounded border-slate-800 text-sky-500 focus:ring-0 bg-slate-950 w-3.5 h-3.5"
                             />
-                            <span>Habilitar Chuva</span>
+                            <span>Habilitar Chuva Realista</span>
                           </label>
+                          {hasRain && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono font-bold border border-sky-500/30">
+                              {internalRainIntensity} gotas
+                            </span>
+                          )}
                         </div>
 
-                        {/* Rain Intensity */}
-                        <div className="space-y-0.5">
-                          <div className="flex justify-between text-[10px] font-mono">
-                            <span className="text-slate-400">Intensidade (Gotas):</span>
-                            <span className="font-bold text-indigo-300">{internalRainIntensity}</span>
+                        {/* Rain Sub-Tabs Switcher */}
+                        <div className="flex bg-slate-900/90 p-0.5 rounded-lg border border-slate-800 text-[9.5px]">
+                          <button
+                            type="button"
+                            onClick={() => setRainSubTab('gotas')}
+                            className={`flex-1 py-1 px-1 rounded font-semibold transition-all flex items-center justify-center gap-1 ${
+                              rainSubTab === 'gotas'
+                                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm'
+                                : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            <span>💧 Gotas</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRainSubTab('respingos')}
+                            className={`flex-1 py-1 px-1 rounded font-semibold transition-all flex items-center justify-center gap-1 ${
+                              rainSubTab === 'respingos'
+                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                                : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            <span>🌊 Respingos</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRainSubTab('vento')}
+                            className={`flex-1 py-1 px-1 rounded font-semibold transition-all flex items-center justify-center gap-1 ${
+                              rainSubTab === 'vento'
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                                : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            <span>⚡ Vento & Temp</span>
+                          </button>
+                        </div>
+
+                        {/* SUB-TAB 1: GOTAS & PRECIPITAÇÃO */}
+                        {rainSubTab === 'gotas' && (
+                          <div className="space-y-2.5 animate-fade-in">
+                            {/* Rain Thematic Presets */}
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Presets de Precipitação:</label>
+                              <div className="grid grid-cols-4 gap-1">
+                                {[
+                                  { id: 'drizzle', label: 'Garoa', icon: '🌦️', theme: 'water' as const, int: 1200, spd: 0.8, size: 0.8, op: 0.45, wStr: 0.1, spl: true, splSz: 0.7, splInt: 0.4, cr: false, lgt: false },
+                                  { id: 'steady', label: 'Chuva', icon: '🌧️', theme: 'water' as const, int: 3500, spd: 1.3, size: 1.0, op: 0.6, wStr: 0.3, spl: true, splSz: 1.0, splInt: 0.75, cr: true, lgt: false },
+                                  { id: 'storm', label: 'Temporal', icon: '⛈️', theme: 'water' as const, int: 6000, spd: 2.2, size: 1.4, op: 0.8, wStr: 0.8, spl: true, splSz: 1.4, splInt: 1.0, cr: true, lgt: false },
+                                  { id: 'thunder', label: 'Elétrica', icon: '⚡', theme: 'water' as const, int: 5500, spd: 2.4, size: 1.3, op: 0.75, wStr: 1.1, spl: true, splSz: 1.3, splInt: 0.9, cr: true, lgt: true },
+                                  { id: 'acid', label: 'Ácida', icon: '🧪', theme: 'acid' as const, int: 3000, spd: 1.2, size: 1.1, op: 0.7, wStr: 0.2, spl: true, splSz: 1.1, splInt: 0.8, cr: true, lgt: false },
+                                  { id: 'blood', label: 'Sangue', icon: '🩸', theme: 'blood' as const, int: 4000, spd: 1.4, size: 1.2, op: 0.85, wStr: 0.3, spl: true, splSz: 1.2, splInt: 0.85, cr: true, lgt: false },
+                                  { id: 'snow', label: 'Nevasca', icon: '❄️', theme: 'snow' as const, int: 3200, spd: 0.5, size: 1.8, op: 0.9, wStr: 0.6, spl: false, splSz: 0.0, splInt: 0.0, cr: false, lgt: false },
+                                  { id: 'gold', label: 'Sagrada', icon: '✨', theme: 'gold' as const, int: 2500, spd: 1.1, size: 1.2, op: 0.7, wStr: 0.2, spl: true, splSz: 1.0, splInt: 0.7, cr: true, lgt: false },
+                                ].map((preset) => {
+                                  const isCurrent = internalRainTheme === preset.theme && Math.abs(internalRainIntensity - preset.int) < 800;
+                                  return (
+                                    <button
+                                      key={preset.id}
+                                      type="button"
+                                      disabled={!hasRain}
+                                      onClick={() => {
+                                        triggerEnvChange({
+                                          rainTheme: preset.theme,
+                                          rainIntensity: preset.int,
+                                          rainSpeed: preset.spd,
+                                          rainDropSize: preset.size,
+                                          rainOpacity: preset.op,
+                                          windStrength: preset.wStr,
+                                          hasSplashes: preset.spl,
+                                          splashSize: preset.splSz,
+                                          splashIntensity: preset.splInt,
+                                          hasCrownDrops: preset.cr,
+                                          hasLightning: preset.lgt,
+                                        });
+                                      }}
+                                      className={`py-1 px-1 rounded flex flex-col items-center justify-center border text-[8.5px] font-bold transition-all disabled:opacity-30 ${
+                                        isCurrent
+                                          ? 'bg-sky-500/20 border-sky-400 text-sky-200 shadow-md ring-1 ring-sky-400/50'
+                                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                                      }`}
+                                    >
+                                      <span className="text-xs">{preset.icon}</span>
+                                      <span className="mt-0.5">{preset.label}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Rain Density / Intensity */}
+                            <div className="space-y-0.5">
+                              <div className="flex justify-between text-[10px] font-mono">
+                                <span className="text-slate-400">Intensidade de Gotas:</span>
+                                <span className="font-bold text-sky-300">{internalRainIntensity}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="200"
+                                max="8000"
+                                step="200"
+                                disabled={!hasRain}
+                                value={internalRainIntensity}
+                                onChange={(e) => triggerEnvChange({ rainIntensity: parseInt(e.target.value) })}
+                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500 disabled:opacity-30"
+                              />
+                            </div>
+
+                            {/* Drop Size & Falling Speed Grid */}
+                            <div className="grid grid-cols-2 gap-2">
+                              {/* Rain Drop Size */}
+                              <div className="space-y-0.5">
+                                <div className="flex justify-between text-[10px] font-mono">
+                                  <span className="text-slate-400">Tamanho:</span>
+                                  <span className="font-bold text-sky-300">{internalRainDropSize.toFixed(1)}x</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min="0.5"
+                                  max="4.0"
+                                  step="0.1"
+                                  disabled={!hasRain}
+                                  value={internalRainDropSize}
+                                  onChange={(e) => triggerEnvChange({ rainDropSize: parseFloat(e.target.value) })}
+                                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500 disabled:opacity-30"
+                                />
+                              </div>
+
+                              {/* Rain Speed */}
+                              <div className="space-y-0.5">
+                                <div className="flex justify-between text-[10px] font-mono">
+                                  <span className="text-slate-400">Velocidade:</span>
+                                  <span className="font-bold text-sky-300">{internalRainSpeed.toFixed(1)}x</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min="0.2"
+                                  max="5.0"
+                                  step="0.1"
+                                  disabled={!hasRain}
+                                  value={internalRainSpeed}
+                                  onChange={(e) => triggerEnvChange({ rainSpeed: parseFloat(e.target.value) })}
+                                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500 disabled:opacity-30"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Rain Opacity */}
+                            <div className="space-y-0.5">
+                              <div className="flex justify-between text-[10px] font-mono">
+                                <span className="text-slate-400">Opacidade / Visibilidade:</span>
+                                <span className="font-bold text-slate-300">{Math.round(internalRainOpacity * 100)}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="0.1"
+                                max="1.0"
+                                step="0.05"
+                                disabled={!hasRain}
+                                value={internalRainOpacity}
+                                onChange={(e) => triggerEnvChange({ rainOpacity: parseFloat(e.target.value) })}
+                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-400 disabled:opacity-30"
+                              />
+                            </div>
                           </div>
-                          <input
-                            type="range"
-                            min="100"
-                            max="5000"
-                            step="100"
-                            disabled={!hasRain}
-                            value={internalRainIntensity}
-                            onChange={(e) => triggerEnvChange({ rainIntensity: parseInt(e.target.value) })}
-                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 disabled:opacity-30"
-                          />
-                        </div>
+                        )}
 
-                        {/* Rain Drop Size */}
-                        <div className="space-y-0.5">
-                          <div className="flex justify-between text-[10px] font-mono">
-                            <span className="text-slate-400">Tamanho das Gotas:</span>
-                            <span className="font-bold text-indigo-300">{internalRainDropSize.toFixed(1)}x</span>
+                        {/* SUB-TAB 2: RESPINGOS & ONDULAÇÕES NO CHÃO */}
+                        {rainSubTab === 'respingos' && (
+                          <div className="space-y-2.5 animate-fade-in">
+                            {/* Ground Splash Toggle */}
+                            <div className="flex items-center justify-between pb-1 border-b border-slate-900">
+                              <label className="flex items-center gap-1.5 cursor-pointer font-bold text-cyan-400 uppercase tracking-wider text-[9.5px]">
+                                <input
+                                  type="checkbox"
+                                  disabled={!hasRain || internalRainTheme === 'snow'}
+                                  checked={internalHasSplashes && internalRainTheme !== 'snow'}
+                                  onChange={(e) => triggerEnvChange({ hasSplashes: e.target.checked })}
+                                  className="rounded border-slate-800 text-cyan-500 focus:ring-0 bg-slate-950 w-3 h-3 disabled:opacity-30"
+                                />
+                                <span>🌊 Habilitar Respingos & Ondas</span>
+                              </label>
+                              {internalHasSplashes && internalRainTheme !== 'snow' && (
+                                <span className="text-[8px] text-cyan-300 font-mono">Shader GPU</span>
+                              )}
+                            </div>
+
+                            {/* 0% to 100% Exact Splash Frequency Slider */}
+                            <div className="space-y-0.5">
+                              <div className="flex justify-between text-[10px] font-mono">
+                                <span className="text-slate-400" title="Porcentagem exata de gotas que criam ondulações e respingos ao tocar o chão">
+                                  Frequência de Respingos:
+                                </span>
+                                <span className="font-bold text-cyan-300">
+                                  {Math.round(internalSplashIntensity * 100)}%
+                                </span>
+                              </div>
+                              <input
+                                type="range"
+                                min="0.0"
+                                max="1.0"
+                                step="0.05"
+                                disabled={!hasRain || !internalHasSplashes || internalRainTheme === 'snow'}
+                                value={internalSplashIntensity}
+                                onChange={(e) => triggerEnvChange({ splashIntensity: parseFloat(e.target.value) })}
+                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400 disabled:opacity-30"
+                              />
+                              <div className="flex justify-between text-[8px] text-slate-500 font-mono pt-0.5">
+                                <span>0% (Sem respingos)</span>
+                                <span>{internalSplashIntensity === 0 ? 'Desativado' : internalSplashIntensity >= 0.99 ? 'Todas as gotas' : `${Math.round(internalSplashIntensity * 100)}% das gotas`}</span>
+                                <span>100% (Todas)</span>
+                              </div>
+                            </div>
+
+                            {/* Ripple Ring Scale */}
+                            <div className="space-y-0.5">
+                              <div className="flex justify-between text-[10px] font-mono">
+                                <span className="text-slate-400">Tamanho das Ondulações:</span>
+                                <span className="font-bold text-cyan-300">{internalSplashSize.toFixed(1)}x</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="0.5"
+                                max="3.0"
+                                step="0.1"
+                                disabled={!hasRain || !internalHasSplashes || internalRainTheme === 'snow'}
+                                value={internalSplashSize}
+                                onChange={(e) => triggerEnvChange({ splashSize: parseFloat(e.target.value) })}
+                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400 disabled:opacity-30"
+                              />
+                            </div>
+
+                            {/* Crown Drops Toggle */}
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-900">
+                              <label className="flex items-center gap-1.5 cursor-pointer text-[9.5px] text-slate-300 font-medium">
+                                <input
+                                  type="checkbox"
+                                  disabled={!hasRain || !internalHasSplashes || internalRainTheme === 'snow'}
+                                  checked={internalHasCrownDrops}
+                                  onChange={(e) => triggerEnvChange({ hasCrownDrops: e.target.checked })}
+                                  className="rounded border-slate-800 text-cyan-500 focus:ring-0 bg-slate-950 w-3 h-3 disabled:opacity-30"
+                                />
+                                <span>Gotículas Saltitantes de Impacto</span>
+                              </label>
+                            </div>
                           </div>
-                          <input
-                            type="range"
-                            min="0.5"
-                            max="4.0"
-                            step="0.1"
-                            disabled={!hasRain}
-                            value={internalRainDropSize}
-                            onChange={(e) => triggerEnvChange({ rainDropSize: parseFloat(e.target.value) })}
-                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 disabled:opacity-30"
-                          />
-                        </div>
+                        )}
 
-                        {/* Rain Speed */}
-                        <div className="space-y-0.5">
-                          <div className="flex justify-between text-[10px] font-mono">
-                            <span className="text-slate-400">Velocidade de Queda:</span>
-                            <span className="font-bold text-indigo-300">{internalRainSpeed.toFixed(1)}x</span>
+                        {/* SUB-TAB 3: VENTO & TEMPESTADE */}
+                        {rainSubTab === 'vento' && (
+                          <div className="space-y-2.5 animate-fade-in">
+                            {/* Wind Angle / Direction */}
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[10px] font-mono">
+                                <span className="text-slate-400">Direção do Vento (Azimute):</span>
+                                <span className="font-bold text-sky-300">{getCompassLabel(internalWindAngle)} ({internalWindAngle}°)</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="0"
+                                max="360"
+                                step="5"
+                                disabled={!hasRain}
+                                value={internalWindAngle}
+                                onChange={(e) => triggerEnvChange({ windAngle: parseInt(e.target.value) })}
+                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-400 disabled:opacity-30"
+                              />
+                              <div className="grid grid-cols-8 gap-0.5 pt-0.5">
+                                {CARDINAL_POINTS.map((cardinal) => {
+                                  const isCurrent = Math.abs(((internalWindAngle % 360) + 360) % 360 - cardinal.angle) < 15;
+                                  return (
+                                    <button
+                                      key={cardinal.label}
+                                      type="button"
+                                      disabled={!hasRain}
+                                      onClick={() => triggerEnvChange({ windAngle: cardinal.angle })}
+                                      className={`py-0.5 text-[8.5px] font-bold rounded border transition-all ${
+                                        isCurrent
+                                          ? 'bg-sky-500/30 border-sky-400 text-sky-200'
+                                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                      } disabled:opacity-30`}
+                                    >
+                                      {cardinal.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Wind Strength / Tilt */}
+                            <div className="space-y-0.5">
+                              <div className="flex justify-between text-[10px] font-mono">
+                                <span className="text-slate-400">Força / Inclinação do Vento:</span>
+                                <span className="font-bold text-sky-300">
+                                  {internalWindStrength.toFixed(2)}
+                                  {internalWindStrength === 0 ? ' (Sem Vento)' : internalWindStrength > 1.2 ? ' (Vendaval)' : internalWindStrength > 0.6 ? ' (Forte)' : ' (Brisa)'}
+                                </span>
+                              </div>
+                              <input
+                                type="range"
+                                min="0.0"
+                                max="2.5"
+                                step="0.05"
+                                disabled={!hasRain}
+                                value={internalWindStrength}
+                                onChange={(e) => triggerEnvChange({ windStrength: parseFloat(e.target.value) })}
+                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-400 disabled:opacity-30"
+                              />
+                            </div>
+
+                            {/* Thunderstorm & Lightning */}
+                            <div className="space-y-1 pt-1.5 border-t border-slate-900">
+                              <div className="flex items-center justify-between">
+                                <label className="flex items-center gap-1.5 cursor-pointer font-bold text-amber-400 uppercase tracking-wider text-[9.5px]">
+                                  <input
+                                    type="checkbox"
+                                    disabled={!hasRain}
+                                    checked={internalHasLightning}
+                                    onChange={(e) => triggerEnvChange({ hasLightning: e.target.checked })}
+                                    className="rounded border-slate-800 text-amber-500 focus:ring-0 bg-slate-950 w-3 h-3 disabled:opacity-30"
+                                  />
+                                  <span>⚡ Relâmpagos & Flashes na Cena</span>
+                                </label>
+                                {internalHasLightning && (
+                                  <span className="text-[8px] text-amber-300 font-mono animate-pulse">Ativo</span>
+                                )}
+                              </div>
+
+                              {internalHasLightning && (
+                                <div className="space-y-0.5 pl-2 border-l border-amber-500/30">
+                                  <div className="flex justify-between text-[10px] font-mono">
+                                    <span className="text-slate-400">Frequência dos Relâmpagos:</span>
+                                    <span className="font-bold text-amber-300">{internalLightningFrequency.toFixed(1)}x</span>
+                                  </div>
+                                  <input
+                                    type="range"
+                                    min="0.3"
+                                    max="3.0"
+                                    step="0.1"
+                                    disabled={!hasRain}
+                                    value={internalLightningFrequency}
+                                    onChange={(e) => triggerEnvChange({ lightningFrequency: parseFloat(e.target.value) })}
+                                    className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500 disabled:opacity-30"
+                                  />
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <input
-                            type="range"
-                            min="0.1"
-                            max="3.0"
-                            step="0.1"
-                            disabled={!hasRain}
-                            value={internalRainSpeed}
-                            onChange={(e) => triggerEnvChange({ rainSpeed: parseFloat(e.target.value) })}
-                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 disabled:opacity-30"
-                          />
-                        </div>
-
-                        {/* Wind Header */}
-                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pt-1 border-t border-slate-900">
-                          Direção e Força do Vento
-                        </div>
-
-                        {/* Wind Angle (Azimuth) */}
-                        <div className="space-y-0.5">
-                          <div className="flex justify-between text-[10px] font-mono">
-                            <span className="text-slate-400">Ângulo do Vento (Azimute):</span>
-                            <span className="font-bold text-slate-300">{internalWindAngle}°</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="360"
-                            step="10"
-                            disabled={!hasRain}
-                            value={internalWindAngle}
-                            onChange={(e) => triggerEnvChange({ windAngle: parseInt(e.target.value) })}
-                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-slate-400 disabled:opacity-30"
-                          />
-                        </div>
-
-                        {/* Wind Strength */}
-                        <div className="space-y-0.5">
-                          <div className="flex justify-between text-[10px] font-mono">
-                            <span className="text-slate-400">Força do Vento (Inclinação):</span>
-                            <span className="font-bold text-slate-300">{internalWindStrength.toFixed(2)}</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0.0"
-                            max="1.5"
-                            step="0.05"
-                            disabled={!hasRain}
-                            value={internalWindStrength}
-                            onChange={(e) => triggerEnvChange({ windStrength: parseFloat(e.target.value) })}
-                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-slate-400 disabled:opacity-30"
-                          />
-                        </div>
+                        )}
                       </div>
                     )}
 

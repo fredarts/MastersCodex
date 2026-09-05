@@ -229,6 +229,15 @@ export interface BattleGrid3DProps {
     rainDropSize?: number;
     windAngle?: number;
     windStrength?: number;
+    rainOpacity?: number;
+    rainTheme?: 'water' | 'acid' | 'blood' | 'snow' | 'gold' | 'custom';
+    rainCustomColor?: string;
+    hasSplashes?: boolean;
+    splashSize?: number;
+    splashIntensity?: number;
+    hasCrownDrops?: boolean;
+    hasLightning?: boolean;
+    lightningFrequency?: number;
     groundFogDensity?: number;
     groundFogHeight?: number;
     groundFogSpeed?: number;
@@ -744,6 +753,15 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     rainDropSize?: number;
     windAngle?: number;
     windStrength?: number;
+    rainOpacity?: number;
+    rainTheme?: 'water' | 'acid' | 'blood' | 'snow' | 'gold' | 'custom';
+    rainCustomColor?: string;
+    hasSplashes?: boolean;
+    splashSize?: number;
+    splashIntensity?: number;
+    hasCrownDrops?: boolean;
+    hasLightning?: boolean;
+    lightningFrequency?: number;
     groundFogDensity?: number;
     groundFogHeight?: number;
     groundFogSpeed?: number;
@@ -774,6 +792,15 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     rainDropSize: propRainDropSize,
     windAngle: propWindAngle,
     windStrength: propWindStrength,
+    rainOpacity: 0.6,
+    rainTheme: 'water',
+    rainCustomColor: '#88ccff',
+    hasSplashes: true,
+    splashSize: 1.0,
+    splashIntensity: 1.0,
+    hasCrownDrops: true,
+    hasLightning: false,
+    lightningFrequency: 1.0,
     groundFogDensity: propGroundFogDensity,
     groundFogHeight: propGroundFogHeight,
     groundFogSpeed: propGroundFogSpeed,
@@ -909,6 +936,15 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       rainDropSize?: number;
       windAngle?: number;
       windStrength?: number;
+      rainOpacity?: number;
+      rainTheme?: 'water' | 'acid' | 'blood' | 'snow' | 'gold' | 'custom';
+      rainCustomColor?: string;
+      hasSplashes?: boolean;
+      splashSize?: number;
+      splashIntensity?: number;
+      hasCrownDrops?: boolean;
+      hasLightning?: boolean;
+      lightningFrequency?: number;
       groundFogDensity?: number;
       groundFogHeight?: number;
       groundFogSpeed?: number;
@@ -942,6 +978,15 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         rainDropSize: env.rainDropSize ?? prev.rainDropSize,
         windAngle: env.windAngle ?? prev.windAngle,
         windStrength: env.windStrength ?? prev.windStrength,
+        rainOpacity: env.rainOpacity ?? prev.rainOpacity,
+        rainTheme: env.rainTheme ?? prev.rainTheme,
+        rainCustomColor: env.rainCustomColor ?? prev.rainCustomColor,
+        hasSplashes: env.hasSplashes ?? prev.hasSplashes,
+        splashSize: env.splashSize ?? prev.splashSize,
+        splashIntensity: env.splashIntensity ?? prev.splashIntensity,
+        hasCrownDrops: env.hasCrownDrops ?? prev.hasCrownDrops,
+        hasLightning: env.hasLightning ?? prev.hasLightning,
+        lightningFrequency: env.lightningFrequency ?? prev.lightningFrequency,
         groundFogDensity: env.groundFogDensity ?? prev.groundFogDensity,
         groundFogHeight: env.groundFogHeight ?? prev.groundFogHeight,
         groundFogSpeed: env.groundFogSpeed ?? prev.groundFogSpeed,
@@ -3049,7 +3094,19 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         cloudSystemRef.current.update(delta, p, cd, h, wa, ws);
       }
 
-      if (rainSysRef.current) rainSysRef.current.update(delta);
+      if (rainSysRef.current) {
+        const { lightningIntensity } = rainSysRef.current.update(delta);
+        if (lightningIntensity > 0.005) {
+          if (ambientLightRef.current) {
+            const baseAmb = envRef.current.ambientLightIntensity ?? 0.65;
+            ambientLightRef.current.intensity = baseAmb + lightningIntensity * 2.8;
+          }
+          if (dirLightRef.current) {
+            const baseSun = envRef.current.sunLightIntensity ?? 1.0;
+            dirLightRef.current.intensity = baseSun + lightningIntensity * 4.0;
+          }
+        }
+      }
       if (groundFogSysRef.current) {
         const { timeOfDayPreset: p, timeOfDayHour: h, windAngle: wa, windStrength: ws } = envRef.current;
         groundFogSysRef.current.update(delta, p, h, wa, ws);
@@ -3293,12 +3350,28 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       if (!rainSysRef.current) {
         rainSysRef.current = createRainParticleSystem(sceneRef.current);
       }
+      const wUnits = (gridConfig.widthCells || 20) * 2.0;
+      const hUnits = (gridConfig.heightCells || 20) * 2.0;
       rainSysRef.current.updateParams({
         intensity: rainIntensity,
         speed: rainSpeed,
         dropSize: rainDropSize,
         windAngle: windAngle,
-        windStrength: windStrength
+        windStrength: windStrength,
+        opacity: internalEnv.rainOpacity,
+        theme: internalEnv.rainTheme,
+        customColor: internalEnv.rainCustomColor,
+        hasSplashes: internalEnv.hasSplashes,
+        splashSize: internalEnv.splashSize,
+        splashIntensity: internalEnv.splashIntensity,
+        hasCrownDrops: internalEnv.hasCrownDrops,
+        hasLightning: internalEnv.hasLightning || timeOfDayPreset === 'storm',
+        lightningFrequency: internalEnv.lightningFrequency,
+        gridBounds: {
+          widthUnits: wUnits,
+          heightUnits: hUnits,
+          shape: gridConfig.shape || 'square',
+        },
       });
     } else if (rainSysRef.current) {
       rainSysRef.current.dispose();
@@ -3321,7 +3394,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       groundFogSysRef.current.dispose();
       groundFogSysRef.current = null;
     }
-  }, [internalEnv]);
+  }, [internalEnv, gridConfig.widthCells, gridConfig.heightCells, gridConfig.shape]);
 
   // Sincroniza a textura do chão (YouTube em 3D, Vídeo direto HTML5 ou Imagem estática)
   useEffect(() => {
@@ -4150,6 +4223,15 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         rainDropSize={internalEnv.rainDropSize}
         windAngle={internalEnv.windAngle}
         windStrength={internalEnv.windStrength}
+        rainOpacity={internalEnv.rainOpacity}
+        rainTheme={internalEnv.rainTheme}
+        rainCustomColor={internalEnv.rainCustomColor}
+        hasSplashes={internalEnv.hasSplashes}
+        splashSize={internalEnv.splashSize}
+        splashIntensity={internalEnv.splashIntensity}
+        hasCrownDrops={internalEnv.hasCrownDrops}
+        hasLightning={internalEnv.hasLightning}
+        lightningFrequency={internalEnv.lightningFrequency}
         groundFogDensity={internalEnv.groundFogDensity}
         groundFogHeight={internalEnv.groundFogHeight}
         groundFogSpeed={internalEnv.groundFogSpeed}
