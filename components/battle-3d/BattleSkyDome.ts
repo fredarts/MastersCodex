@@ -117,6 +117,7 @@ export function createBattleSkyDome(scene: THREE.Scene): SkyDomeInstance {
   sky.scale.setScalar(450000);
   sky.name = 'battleSky Dome';
   sky.renderOrder = -1000;
+  sky.frustumCulled = false;
   scene.add(sky);
 
   const skyUniforms = sky.material.uniforms;
@@ -215,6 +216,7 @@ export function createBattleSkyDome(scene: THREE.Scene): SkyDomeInstance {
   });
   const starField = new THREE.Points(starGeometry, starMaterial);
   starField.name = 'starField';
+  starField.frustumCulled = false;
   scene.add(starField);
 
   // Orbit radius for Sun & Moon

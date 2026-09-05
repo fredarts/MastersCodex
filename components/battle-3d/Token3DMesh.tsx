@@ -102,6 +102,7 @@ function normalizeAndPrepareModel(modelScene: THREE.Group, sizeStr?: string): TH
     if ((child as THREE.Mesh).isMesh) {
       child.castShadow = true;
       child.receiveShadow = true;
+      child.renderOrder = 50;
       const mat = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
       if (mat && mat.emissive && !mat.emissiveMap) {
         mat.emissive.setHex(0x000000);
@@ -147,6 +148,7 @@ export function createTokenMesh(
     ringMesh.name = 'selectionRing';
     ringMesh.rotation.x = Math.PI / 2;
     ringMesh.position.y = 0.02;
+    ringMesh.renderOrder = 51;
     group.add(ringMesh);
   }
 
@@ -157,6 +159,7 @@ export function createTokenMesh(
   arrowMesh.name = 'arrowMesh';
   arrowMesh.rotation.x = Math.PI / 2;
   arrowMesh.position.set(0, 0.05, -1.0 * sizeScale);
+  arrowMesh.renderOrder = 51;
   group.add(arrowMesh);
 
   // 2.1. Dynamic Torch Light (3D PointLight)
@@ -225,6 +228,7 @@ export function createTokenMesh(
     shadowMesh.rotation.x = -Math.PI / 2;
     shadowMesh.position.y = 0.01;
     shadowMesh.name = 'tokenShadow';
+    shadowMesh.renderOrder = 48;
     group.add(shadowMesh);
 
     const applyTextureToSprite = (texture: THREE.Texture) => {
@@ -254,6 +258,7 @@ export function createTokenMesh(
 
       const sprite = new THREE.Sprite(spriteMat);
       sprite.name = 'billboardSprite';
+      sprite.renderOrder = 50;
       const width = spriteHeight * aspect;
       sprite.scale.set(width, spriteHeight, 1.0);
       sprite.position.set(0, spriteHeight / 2, 0);

@@ -69,6 +69,9 @@ export interface BattleForgeToolbarProps {
   onClearAllTerrains?: () => void;
   isAssetsLocked?: boolean;
   onToggleAssetsLocked?: () => void;
+  floorTextureUrl?: string;
+  videoGridConfig?: import('@/lib/types').VideoGridAlignmentConfig;
+  onVideoGridConfigChange?: (config: import('@/lib/types').VideoGridAlignmentConfig) => void;
 }
 
 export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
@@ -100,9 +103,13 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
   onClearAllTerrains,
   isAssetsLocked = true,
   onToggleAssetsLocked,
+  floorTextureUrl,
+  videoGridConfig,
+  onVideoGridConfigChange,
 }) => {
   const [activeTab, setActiveTab] = useState<'blocks' | 'terrains' | 'grid' | 'spells' | 'elevation'>('blocks');
   const [blockCategory, setBlockCategory] = useState<'all' | 'structures' | 'lights' | 'props'>('all');
+  const [isAspectLocked, setIsAspectLocked] = useState(false);
 
   if (!isDm || !isOpen) return null;
 
@@ -126,6 +133,19 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
     });
     onSetBuildMode('spell');
     toast.success(`✨ Modelo de ${name} (${radiusFeet}ft) pronto! Clique no mapa para posicionar.`);
+  };
+
+  const onVideoGridChangeHelper = (offsetX: number, offsetY: number) => {
+    if (onVideoGridConfigChange) {
+      onVideoGridConfigChange({
+        scale: videoGridConfig?.scale ?? 1.0,
+        offsetX,
+        offsetY,
+        gridOpacity: gridConfig.lineOpacity,
+        gridColor: gridConfig.lineColor,
+        aspectRatio: gridConfig.aspectRatio || '16:9',
+      });
+    }
   };
 
   return (
@@ -512,18 +532,18 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
                   onClick={() => onGridConfigChange({ ...gridConfig, shape: 'square' })}
                   className={`py-2 rounded-xl border flex items-center justify-center gap-2 font-bold transition-all ${
                     gridConfig.shape === 'square'
-                      ? 'bg-sky-500/20 border-sky-500 text-sky-300'
-                      : 'bg-slate-900 border-slate-800 text-slate-400'
+                      ? 'bg-sky-500/20 border-sky-500 text-sky-300 shadow-md shadow-sky-500/10'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
                   }`}
                 >
-                  <Square className="w-3.5 h-3.5" /> Quadrado
+                  <Square className="w-3.5 h-3.5" /> Quadrado / Retangular
                 </button>
                 <button
                   onClick={() => onGridConfigChange({ ...gridConfig, shape: 'circle' })}
                   className={`py-2 rounded-xl border flex items-center justify-center gap-2 font-bold transition-all ${
                     gridConfig.shape === 'circle'
-                      ? 'bg-sky-500/20 border-sky-500 text-sky-300'
-                      : 'bg-slate-900 border-slate-800 text-slate-400'
+                      ? 'bg-sky-500/20 border-sky-500 text-sky-300 shadow-md shadow-sky-500/10'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
                   }`}
                 >
                   <Circle className="w-3.5 h-3.5" /> Arena Circular
@@ -531,53 +551,477 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
               </div>
             </div>
 
-            {/* Dimensions */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center text-[10px]">
-                <span className="text-slate-400">Largura (X):</span>
-                <span className="font-mono font-bold text-amber-300">{gridConfig.widthCells} células ({gridConfig.widthCells * 5} ft)</span>
+            {/* Quick Size Presets */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold uppercase text-slate-400 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-400" /> Presets de Tamanho Rápido:
+                </label>
               </div>
-              <input
-                type="range"
-                min="8"
-                max="50"
-                step="2"
-                value={gridConfig.widthCells}
-                onChange={(e) => onGridConfigChange({ ...gridConfig, widthCells: parseInt(e.target.value) })}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
-              />
-
-              <div className="flex justify-between items-center text-[10px]">
-                <span className="text-slate-400">Comprimento (Z):</span>
-                <span className="font-mono font-bold text-amber-300">{gridConfig.heightCells} células ({gridConfig.heightCells * 5} ft)</span>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { label: '⚔️ Padrão', w: 20, h: 20, desc: '100x100 ft' },
+                  { label: '🏰 Salão', w: 24, h: 36, desc: '120x180 ft' },
+                  { label: '🌲 Amplo', w: 36, h: 36, desc: '180x180 ft' },
+                  { label: '🐉 Boss', w: 50, h: 50, desc: '250x250 ft' },
+                  { label: '🚪 Corredor', w: 12, h: 36, desc: '60x180 ft' },
+                  { label: '⚡ Duelo', w: 14, h: 14, desc: '70x70 ft' },
+                ].map((preset) => {
+                  const isActive = gridConfig.widthCells === preset.w && gridConfig.heightCells === preset.h;
+                  return (
+                    <button
+                      key={preset.label}
+                      onClick={() => {
+                        onGridConfigChange({
+                          ...gridConfig,
+                          widthCells: preset.w,
+                          heightCells: preset.h,
+                        });
+                        toast.success(`Tamanho ajustado: ${preset.w}x${preset.h} células (${preset.desc})`);
+                      }}
+                      className={`p-1.5 rounded-lg border text-left flex flex-col transition-all ${
+                        isActive
+                          ? 'bg-amber-500/20 border-amber-500 text-amber-200 shadow-sm'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                      }`}
+                    >
+                      <span className="font-bold text-[10px] truncate">{preset.label}</span>
+                      <span className="text-[8.5px] text-slate-500 font-mono">{preset.w}x{preset.h} ({preset.desc})</span>
+                    </button>
+                  );
+                })}
               </div>
-              <input
-                type="range"
-                min="8"
-                max="50"
-                step="2"
-                value={gridConfig.heightCells}
-                onChange={(e) => onGridConfigChange({ ...gridConfig, heightCells: parseInt(e.target.value) })}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
-              />
             </div>
 
-            {/* Grid Opacity */}
-            <div className="space-y-1">
-              <div className="flex justify-between items-center text-[10px]">
-                <span className="text-slate-400">Opacidade das Linhas:</span>
-                <span className="font-mono font-bold text-slate-300">{Math.round(gridConfig.lineOpacity * 100)}%</span>
+            {/* Aspect Ratio Matcher (Casar Proporção do Mapa / Evitar Distorção) */}
+            <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase text-slate-400 flex items-center gap-1">
+                  📐 Casar Proporção do Mapa:
+                </span>
+                <span className="text-[9px] text-sky-400 font-mono">Zero Distorção</span>
               </div>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={gridConfig.lineOpacity}
-                onChange={(e) => onGridConfigChange({ ...gridConfig, lineOpacity: parseFloat(e.target.value) })}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
-              />
+              <div className="grid grid-cols-4 gap-1">
+                {[
+                  {
+                    label: '🎬 16:9',
+                    name: 'Living Map / YouTube',
+                    apply: (w: number) => Math.max(6, Math.round((w * 9) / 16 / 2) * 2),
+                    ratio: '16:9' as const,
+                  },
+                  {
+                    label: '📺 4:3',
+                    name: 'Clássico VTT',
+                    apply: (w: number) => Math.max(6, Math.round((w * 3) / 4 / 2) * 2),
+                    ratio: '4:3' as const,
+                  },
+                  {
+                    label: '🔲 1:1',
+                    name: 'Quadrado',
+                    apply: (w: number) => w,
+                    ratio: '1:1' as const,
+                  },
+                  {
+                    label: '🎞️ 21:9',
+                    name: 'Ultrawide',
+                    apply: (w: number) => Math.max(6, Math.round((w * 9) / 21 / 2) * 2),
+                    ratio: '21:9' as const,
+                  },
+                ].map((item) => {
+                  const targetH = item.apply(gridConfig.widthCells);
+                  const isCurrent = gridConfig.heightCells === targetH;
+                  return (
+                    <button
+                      key={item.label}
+                      type="button"
+                      onClick={() => {
+                        onGridConfigChange({
+                          ...gridConfig,
+                          heightCells: targetH,
+                          aspectRatio: item.ratio,
+                        });
+                        toast.success(`Proporção ajustada para ${item.label} (${gridConfig.widthCells}x${targetH} células)!`);
+                      }}
+                      className={`p-1.5 rounded-lg border text-center transition-all ${
+                        isCurrent
+                          ? 'bg-sky-500/20 border-sky-500 text-sky-200 font-bold shadow-sm'
+                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                      }`}
+                      title={`${item.name} -> ${gridConfig.widthCells}x${targetH} células`}
+                    >
+                      <span className="text-[10px] font-bold block">{item.label}</span>
+                      <span className="text-[8px] text-slate-400 font-mono block">{gridConfig.widthCells}x{targetH}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Modo de Enquadramento da Textura */}
+              <div className="pt-1 border-t border-slate-800 flex items-center justify-between gap-2">
+                <span className="text-[9.5px] text-slate-400">Enquadramento:</span>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onGridConfigChange({ ...gridConfig, textureFitMode: 'repeat' });
+                      toast.info('Modo: Piso Contínuo (Textura repete a cada 5ft sem esticar).');
+                    }}
+                    className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all ${
+                      (gridConfig.textureFitMode || 'repeat') === 'repeat'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="A textura se repete a cada célula de 5ft. Expandir o grid adiciona mais piso sem distorção."
+                  >
+                    🔄 Piso Contínuo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onGridConfigChange({ ...gridConfig, textureFitMode: 'aspect_fit' });
+                      toast.info('Modo: Mapa Único (Enquadra o mapa inteiro no grid).');
+                    }}
+                    className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all ${
+                      gridConfig.textureFitMode === 'aspect_fit'
+                        ? 'bg-sky-500/20 border-sky-500 text-sky-300'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Enquadra o mapa completo como uma imagem única."
+                  >
+                    🖼️ Mapa Único
+                  </button>
+                </div>
+              </div>
             </div>
+
+            {/* Custom Dimensions (Width X & Length Z) with Aspect Lock */}
+            <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Dimensões Personalizadas:</span>
+                <button
+                  type="button"
+                  onClick={() => setIsAspectLocked(!isAspectLocked)}
+                  className={`px-2 py-0.5 rounded-md border text-[9.5px] font-bold flex items-center gap-1 transition-all ${
+                    isAspectLocked
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                  }`}
+                  title={isAspectLocked ? 'Proporção 1:1 travada (quadrado)' : 'Livre (X e Z independentes)'}
+                >
+                  {isAspectLocked ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
+                  {isAspectLocked ? '1:1 Travado' : 'Proporção Livre'}
+                </button>
+              </div>
+
+              {/* Largura (X) */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-slate-300 font-medium">Largura (Eixo X):</span>
+                  <div className="flex items-center gap-1.5 font-mono">
+                    <span className="font-bold text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">
+                      {gridConfig.widthCells} células ({gridConfig.widthCells * 5} ft)
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newW = Math.max(6, gridConfig.widthCells - 2);
+                      onGridConfigChange({
+                        ...gridConfig,
+                        widthCells: newW,
+                        heightCells: isAspectLocked ? newW : gridConfig.heightCells,
+                      });
+                    }}
+                    className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center text-slate-300 font-bold"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="range"
+                    min="6"
+                    max="60"
+                    step="2"
+                    value={gridConfig.widthCells}
+                    onChange={(e) => {
+                      const newW = parseInt(e.target.value, 10);
+                      onGridConfigChange({
+                        ...gridConfig,
+                        widthCells: newW,
+                        heightCells: isAspectLocked ? newW : gridConfig.heightCells,
+                      });
+                    }}
+                    className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newW = Math.min(60, gridConfig.widthCells + 2);
+                      onGridConfigChange({
+                        ...gridConfig,
+                        widthCells: newW,
+                        heightCells: isAspectLocked ? newW : gridConfig.heightCells,
+                      });
+                    }}
+                    className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center text-slate-300 font-bold"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Comprimento (Z) */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-slate-300 font-medium">Comprimento / Altura (Eixo Z):</span>
+                  <div className="flex items-center gap-1.5 font-mono">
+                    <span className="font-bold text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">
+                      {gridConfig.heightCells} células ({gridConfig.heightCells * 5} ft)
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newH = Math.max(6, gridConfig.heightCells - 2);
+                      onGridConfigChange({
+                        ...gridConfig,
+                        heightCells: newH,
+                        widthCells: isAspectLocked ? newH : gridConfig.widthCells,
+                      });
+                    }}
+                    className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center text-slate-300 font-bold"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="range"
+                    min="6"
+                    max="60"
+                    step="2"
+                    value={gridConfig.heightCells}
+                    onChange={(e) => {
+                      const newH = parseInt(e.target.value, 10);
+                      onGridConfigChange({
+                        ...gridConfig,
+                        heightCells: newH,
+                        widthCells: isAspectLocked ? newH : gridConfig.widthCells,
+                      });
+                    }}
+                    className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newH = Math.min(60, gridConfig.heightCells + 2);
+                      onGridConfigChange({
+                        ...gridConfig,
+                        heightCells: newH,
+                        widthCells: isAspectLocked ? newH : gridConfig.widthCells,
+                      });
+                    }}
+                    className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center text-slate-300 font-bold"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Living Map & Video Alignment Calibration (se disponível) */}
+            {onVideoGridConfigChange && (
+              <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 flex items-center gap-1">
+                    🎯 Calibração Fina do Mapa / Vídeo:
+                  </span>
+                  <span className="text-[9px] text-amber-400 font-mono">Projeção Independente</span>
+                </div>
+
+                {/* Zoom / Escala */}
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-[9.5px]">
+                    <span className="text-slate-300 font-medium">Zoom / Escala da Projeção:</span>
+                    <span className="font-mono font-bold text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">
+                      {Math.round((videoGridConfig?.scale ?? 1.0) * 100)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newScale = Math.max(0.2, Number(((videoGridConfig?.scale ?? 1.0) - 0.05).toFixed(2)));
+                        onVideoGridConfigChange({
+                          scale: newScale,
+                          offsetX: videoGridConfig?.offsetX ?? 0,
+                          offsetY: videoGridConfig?.offsetY ?? 0,
+                          gridOpacity: gridConfig.lineOpacity,
+                          gridColor: gridConfig.lineColor,
+                          aspectRatio: gridConfig.aspectRatio || '16:9',
+                        });
+                      }}
+                      className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center text-slate-300 font-bold"
+                    >
+                      -
+                    </button>
+                    <input
+                      type="range"
+                      min="0.2"
+                      max="5.0"
+                      step="0.02"
+                      value={videoGridConfig?.scale ?? 1.0}
+                      onChange={(e) =>
+                        onVideoGridConfigChange({
+                          scale: parseFloat(e.target.value),
+                          offsetX: videoGridConfig?.offsetX ?? 0,
+                          offsetY: videoGridConfig?.offsetY ?? 0,
+                          gridOpacity: gridConfig.lineOpacity,
+                          gridColor: gridConfig.lineColor,
+                          aspectRatio: gridConfig.aspectRatio || '16:9',
+                        })
+                      }
+                      className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newScale = Math.min(5.0, Number(((videoGridConfig?.scale ?? 1.0) + 0.05).toFixed(2)));
+                        onVideoGridConfigChange({
+                          scale: newScale,
+                          offsetX: videoGridConfig?.offsetX ?? 0,
+                          offsetY: videoGridConfig?.offsetY ?? 0,
+                          gridOpacity: gridConfig.lineOpacity,
+                          gridColor: gridConfig.lineColor,
+                          aspectRatio: gridConfig.aspectRatio || '16:9',
+                        });
+                      }}
+                      className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center text-slate-300 font-bold"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* Deslocamento X e Z */}
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/80">
+                  <div className="space-y-0.5">
+                    <div className="flex justify-between items-center text-[9px]">
+                      <span className="text-slate-400">Offset X:</span>
+                      <span className="font-mono text-slate-300">{videoGridConfig?.offsetX ?? 0}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="-100"
+                      max="100"
+                      step="1"
+                      value={videoGridConfig?.offsetX ?? 0}
+                      onChange={(e) =>
+                        onVideoGridChangeHelper(parseInt(e.target.value, 10), videoGridConfig?.offsetY ?? 0)
+                      }
+                      className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                    />
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="flex justify-between items-center text-[9px]">
+                      <span className="text-slate-400">Offset Z:</span>
+                      <span className="font-mono text-slate-300">{videoGridConfig?.offsetY ?? 0}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="-100"
+                      max="100"
+                      step="1"
+                      value={videoGridConfig?.offsetY ?? 0}
+                      onChange={(e) =>
+                        onVideoGridChangeHelper(videoGridConfig?.offsetX ?? 0, parseInt(e.target.value, 10))
+                      }
+                      className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* High-Contrast Grid Line Colors */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase text-slate-400">Cor das Linhas da Grade:</label>
+              <div className="flex items-center gap-1.5">
+                {[
+                  { color: '#0284c7', label: 'Azul Arcana' },
+                  { color: '#eab308', label: 'Dourado Celestial' },
+                  { color: '#10b981', label: 'Esmeralda' },
+                  { color: '#ef4444', label: 'Carmesim' },
+                  { color: '#f8fafc', label: 'Branco Puro' },
+                  { color: '#0f172a', label: 'Sombra' },
+                ].map((c) => (
+                  <button
+                    key={c.color}
+                    type="button"
+                    onClick={() => onGridConfigChange({ ...gridConfig, lineColor: c.color })}
+                    title={c.label}
+                    className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 ${
+                      gridConfig.lineColor === c.color ? 'ring-2 ring-white scale-110' : 'border-slate-700'
+                    }`}
+                    style={{ backgroundColor: c.color }}
+                  />
+                ))}
+                <label className="w-6 h-6 rounded-full border border-slate-700 flex items-center justify-center cursor-pointer bg-slate-800 hover:border-slate-500 text-[10px]" title="Cor personalizada">
+                  🎨
+                  <input
+                    type="color"
+                    value={gridConfig.lineColor || '#0284c7'}
+                    onChange={(e) => onGridConfigChange({ ...gridConfig, lineColor: e.target.value })}
+                    className="sr-only"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Grid Opacity Slider */}
+            <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 space-y-1.5">
+              <div className="flex justify-between items-center text-[10px]">
+                <span className="text-slate-300 font-medium">Opacidade das Linhas:</span>
+                <span className="font-mono font-bold text-sky-300 bg-sky-500/10 px-1.5 py-0.2 rounded border border-sky-500/30">
+                  {Math.round(gridConfig.lineOpacity * 100)}%
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] text-slate-500 font-mono">0%</span>
+                <input
+                  type="range"
+                  min="0.05"
+                  max="1.0"
+                  step="0.05"
+                  value={gridConfig.lineOpacity}
+                  onChange={(e) => onGridConfigChange({ ...gridConfig, lineOpacity: parseFloat(e.target.value) })}
+                  className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                />
+                <span className="text-[9px] text-slate-500 font-mono">100%</span>
+              </div>
+            </div>
+
+            {/* Reset Grid Button */}
+            <button
+              type="button"
+              onClick={() => {
+                onGridConfigChange({
+                  ...gridConfig,
+                  widthCells: 20,
+                  heightCells: 20,
+                  shape: 'square',
+                  lineColor: '#0284c7',
+                  lineOpacity: 0.35,
+                  textureFitMode: 'repeat',
+                  aspectRatio: '1:1',
+                });
+                toast.success('Grade restaurada para o padrão (20x20 células / 100ft).');
+              }}
+              className="w-full py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-colors active:scale-98"
+            >
+              <RotateCw className="w-3 h-3 text-slate-400" /> Resetar Grade para Padrão (20x20)
+            </button>
           </div>
         )}
 

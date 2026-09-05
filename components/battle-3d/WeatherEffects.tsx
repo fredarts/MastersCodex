@@ -75,7 +75,8 @@ export function createRainParticleSystem(scene: THREE.Scene, maxParticles = 5000
       uniform float sizeMultiplier;
       void main() {
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_PointSize = size * sizeMultiplier * (200.0 / -mvPosition.z);
+        float pDist = max(0.1, -mvPosition.z);
+        gl_PointSize = clamp(size * sizeMultiplier * (200.0 / pDist), 0.5, 64.0);
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
@@ -108,6 +109,7 @@ export function createRainParticleSystem(scene: THREE.Scene, maxParticles = 5000
   });
 
   const particles = new THREE.Points(geometry, rainMaterial);
+  particles.frustumCulled = false;
   scene.add(particles);
 
   return {

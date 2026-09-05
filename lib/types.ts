@@ -273,8 +273,18 @@ export interface GameScene {
   isDungeonExplorationStarted?: boolean;
   associatedMapId?: string; // ID do mapa da campanha vinculado a esta cena
   associatedMapIds?: string[]; // IDs de múltiplos mapas de masmorras vinculados a esta cena
+  videoGridConfig?: VideoGridAlignmentConfig; // Calibração e alinhamento de living battle maps (YouTube/vídeo)
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface VideoGridAlignmentConfig {
+  scale?: number; // Zoom / Escala do vídeo (0.5 a 3.0, default 1.0)
+  offsetX?: number; // Deslocamento horizontal (-50 a 50 %)
+  offsetY?: number; // Deslocamento vertical (-50 a 50 %)
+  aspectRatio?: '16:9' | '4:3' | '1:1' | '21:9' | 'custom' | 'fill' | 'contain';
+  gridOpacity?: number; // Opacidade das linhas da grade 3D sobre o mapa (0.05 a 1.0)
+  gridColor?: string; // Cor principal das linhas da grade (ex: '#0284c7', '#ffffff', '#22d3ee', '#fbbf24')
 }
 
 export interface MapLevel {

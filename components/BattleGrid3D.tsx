@@ -15,7 +15,8 @@ import { createTokenMesh, updateTokenMeshState, TokenMeshOptions } from './battl
 import { getModelUrlByNameOrPath, resolvePlayerModelUrl } from '@/lib/3d-models';
 import { createBattleSkyDome, SkyDomeInstance } from './battle-3d/BattleSkyDome';
 import { createCloudSystem, CloudSystemInstance } from './battle-3d/BattleClouds';
-import { createRainParticleSystem, createGroundFogSystem } from './battle-3d/WeatherEffects';
+import { createRainParticleSystem } from './battle-3d/WeatherEffects';
+import { createVolumetricGroundFogSystem, VolumetricFogInstance } from './battle-3d/BattleVolumetricFog';
 import { createFireParticleSystem, FireParticleSystemInstance } from './battle-3d/FireParticleSystem';
 import { BattleControlsToolbar } from './battle-3d/BattleControlsToolbar';
 import { InstancedTokenManager } from './battle-3d/InstancedTokenManager';
@@ -51,6 +52,16 @@ import { createBuildingBlockMesh, createSpellTemplateMesh, createSelectionGizmoM
 import { createInteractiveTransformGizmo } from './battle-3d/BuildingBlockGizmo';
 import { BattleForgeToolbar } from './battle-3d/BattleForgeToolbar';
 import { AssetInspectorTransform } from './battle-3d/AssetInspectorTransform';
+import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+import { useAudio } from '@/context/AudioContext';
+import { 
+  isAnyVideoMapUrl, 
+  isYouTubeUrl, 
+  isVideoFileUrl, 
+  extractYouTubeVideoId, 
+  getYouTubeEmbedUrl 
+} from '@/lib/living-battlemaps-catalog';
+import { VideoGridAlignmentConfig } from '@/lib/types';
 
 const getCombatantDisplayName = (combatant: Combatant, allCombatants: Combatant[]): string => {
   if (combatant.type !== 'monster') return combatant.name;
@@ -65,6 +76,95 @@ const getCombatantDisplayName = (combatant: Combatant, allCombatants: Combatant[
   const idx = sorted.findIndex((c) => c.id === combatant.id);
   return `${combatant.name} ${idx + 1}`;
 };
+
+export function createCustomGridLines(
+  widthCells = 20,
+  heightCells = 20,
+  shape: 'square' | 'circle' = 'square',
+  primaryColor: string | number = '#0284c7',
+  secondaryColor: string | number = '#334155',
+  opacity = 0.4
+): THREE.LineSegments {
+  const widthUnits = widthCells * 2.0;
+  const heightUnits = heightCells * 2.0;
+  const halfW = widthUnits / 2;
+  const halfH = heightUnits / 2;
+
+  const positions: number[] = [];
+  const colors: number[] = [];
+
+  const cPrimary = new THREE.Color(primaryColor);
+  const cSecondary = new THREE.Color(secondaryColor);
+
+  if (shape === 'circle') {
+    const radius = Math.max(halfW, halfH);
+    const maxRings = Math.max(1, Math.floor(radius / 2.0));
+
+    // Anéis táticos concêntricos a cada 2 unidades (5 ft)
+    const segments = 64;
+    for (let rIdx = 1; rIdx <= maxRings; rIdx++) {
+      const r = rIdx * 2.0;
+      const isOuter = rIdx === maxRings;
+      const col = isOuter ? cPrimary : cSecondary;
+
+      for (let i = 0; i < segments; i++) {
+        const theta1 = (i / segments) * Math.PI * 2;
+        const theta2 = ((i + 1) / segments) * Math.PI * 2;
+
+        positions.push(Math.cos(theta1) * r, 0, Math.sin(theta1) * r);
+        positions.push(Math.cos(theta2) * r, 0, Math.sin(theta2) * r);
+
+        colors.push(col.r, col.g, col.b, col.r, col.g, col.b);
+      }
+    }
+
+    // Raios a cada 45 graus (8 direções da bússola)
+    const spokes = 8;
+    for (let s = 0; s < spokes; s++) {
+      const angle = (s / spokes) * Math.PI * 2;
+      positions.push(0, 0, 0);
+      positions.push(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+      colors.push(cPrimary.r, cPrimary.g, cPrimary.b, cPrimary.r, cPrimary.g, cPrimary.b);
+    }
+  } else {
+    // 1. Linhas verticais (ao longo de Z) para cada célula de X (-halfW até +halfW)
+    for (let i = 0; i <= widthCells; i++) {
+      const x = -halfW + i * 2.0;
+      const isEdge = i === 0 || i === widthCells || (widthCells % 2 === 0 && i === widthCells / 2);
+      const col = isEdge ? cPrimary : cSecondary;
+
+      positions.push(x, 0, -halfH);
+      positions.push(x, 0, halfH);
+      colors.push(col.r, col.g, col.b, col.r, col.g, col.b);
+    }
+
+    // 2. Linhas horizontais (ao longo de X) para cada célula de Z (-halfH até +halfH)
+    for (let j = 0; j <= heightCells; j++) {
+      const z = -halfH + j * 2.0;
+      const isEdge = j === 0 || j === heightCells || (heightCells % 2 === 0 && j === heightCells / 2);
+      const col = isEdge ? cPrimary : cSecondary;
+
+      positions.push(-halfW, 0, z);
+      positions.push(halfW, 0, z);
+      colors.push(col.r, col.g, col.b, col.r, col.g, col.b);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+  const material = new THREE.LineBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: Math.max(0.05, Math.min(1.0, opacity)),
+    depthWrite: false,
+  });
+
+  const lineSegments = new THREE.LineSegments(geometry, material);
+  lineSegments.position.y = 0.01;
+  return lineSegments;
+}
 
 export interface BattleGrid3DProps {
   combatants: Combatant[];
@@ -102,6 +202,9 @@ export interface BattleGrid3DProps {
   groundFogHeight?: number;
   groundFogSpeed?: number;
   globalFogDensity?: number;
+  fogNoiseScale?: number;
+  fogColorPreset?: 'natural' | 'graveyard' | 'swamp' | 'crimson' | 'frost' | 'custom';
+  fogCustomColor?: string;
   onTimeOfDayChange?: (time: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors') => void;
   onEnvironmentChange?: (env: {
     timeOfDayPreset?: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors';
@@ -130,11 +233,16 @@ export interface BattleGrid3DProps {
     groundFogHeight?: number;
     groundFogSpeed?: number;
     globalFogDensity?: number;
+    fogNoiseScale?: number;
+    fogColorPreset?: 'natural' | 'graveyard' | 'swamp' | 'crimson' | 'frost' | 'custom';
+    fogCustomColor?: string;
   }) => void;
   onConfirmPlacement?: () => void;
   userRole?: 'dm' | 'player';
   floorTextureUrl?: string;
   onFloorTextureChange?: (url: string) => void;
+  videoGridConfig?: VideoGridAlignmentConfig;
+  onVideoGridConfigChange?: (config: VideoGridAlignmentConfig) => void;
   onAttackTarget?: (target: Combatant) => void;
   isBattleStarted?: boolean;
   initialBuildingBlocks?: import('../lib/3d-building-blocks').BuildingBlock3D[];
@@ -211,12 +319,17 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   groundFogHeight: propGroundFogHeight = 1.0,
   groundFogSpeed: propGroundFogSpeed = 1.0,
   globalFogDensity: propGlobalFogDensity = 0.003,
+  fogNoiseScale: propFogNoiseScale = 1.0,
+  fogColorPreset: propFogColorPreset = 'natural',
+  fogCustomColor: propFogCustomColor = '#cbd5e1',
   onTimeOfDayChange,
   onEnvironmentChange: propOnEnvironmentChange,
   onConfirmPlacement,
   userRole,
   floorTextureUrl,
   onFloorTextureChange,
+  videoGridConfig,
+  onVideoGridConfigChange,
   onAttackTarget: propOnAttackTarget,
   initialBuildingBlocks,
   onBuildingBlocksChange,
@@ -572,6 +685,8 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     return () => window.removeEventListener('masters_codex_clear_target_selection', handleClear);
   }, [onSelectTarget, setSelectedCombatantId]);
 
+  const { videoMapVolume, isVideoMapMuted } = useAudio();
+
   // Three.js persistent references
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -582,7 +697,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const dragTrailRef = useRef<{ x: number; z: number }[]>([]);
   const tokenMeshMapRef = useRef<Map<string, THREE.Group>>(new Map());
   const rainSysRef = useRef<ReturnType<typeof createRainParticleSystem> | null>(null);
-  const groundFogSysRef = useRef<ReturnType<typeof createGroundFogSystem> | null>(null);
+  const groundFogSysRef = useRef<VolumetricFogInstance | null>(null);
   const fireSysRef = useRef<FireParticleSystemInstance | null>(null);
   const skyDomeRef = useRef<SkyDomeInstance | null>(null);
   const cloudSystemRef = useRef<CloudSystemInstance | null>(null);
@@ -593,12 +708,50 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   const pingGroupRef = useRef<THREE.Group | null>(null);
   const auraSysRef = useRef<AuraSystem3D | null>(null);
 
+  // 3D Living Battlemap (YouTube CSS3D & Direct HTML5 VideoTexture) References
+  const css3dRendererRef = useRef<CSS3DRenderer | null>(null);
+  const css3dSceneRef = useRef<THREE.Scene | null>(null);
+  const css3dFloorObjectRef = useRef<CSS3DObject | null>(null);
+  const youtubeIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const videoElementRef = useRef<HTMLVideoElement | null>(null);
+  const videoTextureRef = useRef<THREE.VideoTexture | null>(null);
+
   useEffect(() => {
     floorTextureUrlRef.current = floorTextureUrl;
   }, [floorTextureUrl]);
 
   // Local environment state for immediate UI slider responsiveness
-  const [internalEnv, setInternalEnv] = useState({
+  const [internalEnv, setInternalEnv] = useState<{
+    timeOfDayHour: number;
+    timeOfDayPreset: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors';
+    isIndoor: boolean;
+    hasFog: boolean;
+    hasRain: boolean;
+    cloudDensity: number;
+    moonSize: number;
+    moonLuminosity: number;
+    moonOffsetAngle: number;
+    moonAltitude: number;
+    sunSize: number;
+    sunLightIntensity?: number;
+    ambientLightIntensity?: number;
+    skyTurbidity?: number;
+    skyRayleigh?: number;
+    mieCoefficient?: number;
+    mieDirectionalG?: number;
+    rainIntensity?: number;
+    rainSpeed?: number;
+    rainDropSize?: number;
+    windAngle?: number;
+    windStrength?: number;
+    groundFogDensity?: number;
+    groundFogHeight?: number;
+    groundFogSpeed?: number;
+    globalFogDensity?: number;
+    fogNoiseScale?: number;
+    fogColorPreset?: 'natural' | 'graveyard' | 'swamp' | 'crimson' | 'frost' | 'custom';
+    fogCustomColor?: string;
+  }>({
     timeOfDayHour: propTimeOfDayHour,
     timeOfDayPreset: propTimeOfDayPreset,
     isIndoor: propIsIndoor,
@@ -625,29 +778,79 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     groundFogHeight: propGroundFogHeight,
     groundFogSpeed: propGroundFogSpeed,
     globalFogDensity: propGlobalFogDensity,
+    fogNoiseScale: propFogNoiseScale,
+    fogColorPreset: propFogColorPreset,
+    fogCustomColor: propFogCustomColor,
   });
 
   useEffect(() => {
     setInternalEnv((prev) => {
-      if (
+      const isSame =
         prev.timeOfDayHour === propTimeOfDayHour &&
         prev.timeOfDayPreset === propTimeOfDayPreset &&
         prev.isIndoor === propIsIndoor &&
         prev.hasFog === propHasFog &&
         prev.hasRain === propHasRain &&
-        prev.cloudDensity === propCloudDensity
-      ) {
+        prev.cloudDensity === propCloudDensity &&
+        prev.moonSize === propMoonSize &&
+        prev.moonLuminosity === propMoonLuminosity &&
+        prev.moonOffsetAngle === propMoonOffsetAngle &&
+        prev.moonAltitude === propMoonAltitude &&
+        prev.sunSize === propSunSize &&
+        prev.sunLightIntensity === propSunLightIntensity &&
+        prev.ambientLightIntensity === propAmbientLightIntensity &&
+        prev.skyTurbidity === propSkyTurbidity &&
+        prev.skyRayleigh === propSkyRayleigh &&
+        prev.mieCoefficient === propMieCoefficient &&
+        prev.mieDirectionalG === propMieDirectionalG &&
+        prev.rainIntensity === propRainIntensity &&
+        prev.rainSpeed === propRainSpeed &&
+        prev.rainDropSize === propRainDropSize &&
+        prev.windAngle === propWindAngle &&
+        prev.windStrength === propWindStrength &&
+        prev.groundFogDensity === propGroundFogDensity &&
+        prev.groundFogHeight === propGroundFogHeight &&
+        prev.groundFogSpeed === propGroundFogSpeed &&
+        prev.globalFogDensity === propGlobalFogDensity &&
+        prev.fogNoiseScale === propFogNoiseScale &&
+        prev.fogColorPreset === propFogColorPreset &&
+        prev.fogCustomColor === propFogCustomColor;
+
+      if (isSame) {
         return prev;
       }
+
       return {
         ...prev,
-        // Only sync props that parent components actually manage
         timeOfDayHour: propTimeOfDayHour,
         timeOfDayPreset: propTimeOfDayPreset,
         isIndoor: propIsIndoor,
         hasFog: propHasFog,
         hasRain: propHasRain,
         cloudDensity: propCloudDensity,
+        moonSize: propMoonSize,
+        moonLuminosity: propMoonLuminosity,
+        moonOffsetAngle: propMoonOffsetAngle,
+        moonAltitude: propMoonAltitude,
+        sunSize: propSunSize,
+        sunLightIntensity: propSunLightIntensity,
+        ambientLightIntensity: propAmbientLightIntensity,
+        skyTurbidity: propSkyTurbidity,
+        skyRayleigh: propSkyRayleigh,
+        mieCoefficient: propMieCoefficient,
+        mieDirectionalG: propMieDirectionalG,
+        rainIntensity: propRainIntensity,
+        rainSpeed: propRainSpeed,
+        rainDropSize: propRainDropSize,
+        windAngle: propWindAngle,
+        windStrength: propWindStrength,
+        groundFogDensity: propGroundFogDensity,
+        groundFogHeight: propGroundFogHeight,
+        groundFogSpeed: propGroundFogSpeed,
+        globalFogDensity: propGlobalFogDensity,
+        fogNoiseScale: propFogNoiseScale,
+        fogColorPreset: propFogColorPreset,
+        fogCustomColor: propFogCustomColor,
       };
     });
   }, [
@@ -657,6 +860,29 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
     propHasFog,
     propHasRain,
     propCloudDensity,
+    propMoonSize,
+    propMoonLuminosity,
+    propMoonOffsetAngle,
+    propMoonAltitude,
+    propSunSize,
+    propSunLightIntensity,
+    propAmbientLightIntensity,
+    propSkyTurbidity,
+    propSkyRayleigh,
+    propMieCoefficient,
+    propMieDirectionalG,
+    propRainIntensity,
+    propRainSpeed,
+    propRainDropSize,
+    propWindAngle,
+    propWindStrength,
+    propGroundFogDensity,
+    propGroundFogHeight,
+    propGroundFogSpeed,
+    propGlobalFogDensity,
+    propFogNoiseScale,
+    propFogColorPreset,
+    propFogCustomColor,
   ]);
 
   const handleEnvironmentChange = useCallback(
@@ -687,6 +913,9 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
       groundFogHeight?: number;
       groundFogSpeed?: number;
       globalFogDensity?: number;
+      fogNoiseScale?: number;
+      fogColorPreset?: 'natural' | 'graveyard' | 'swamp' | 'crimson' | 'frost' | 'custom';
+      fogCustomColor?: string;
     }) => {
       const prev = envRef.current;
       const nextPreset = env.timeOfDayPreset ?? prev.timeOfDayPreset;
@@ -717,6 +946,9 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
         groundFogHeight: env.groundFogHeight ?? prev.groundFogHeight,
         groundFogSpeed: env.groundFogSpeed ?? prev.groundFogSpeed,
         globalFogDensity: env.globalFogDensity ?? prev.globalFogDensity,
+        fogNoiseScale: env.fogNoiseScale ?? prev.fogNoiseScale,
+        fogColorPreset: env.fogColorPreset ?? prev.fogColorPreset,
+        fogCustomColor: env.fogCustomColor ?? prev.fogCustomColor,
       };
       
       setInternalEnv(next);
@@ -1432,32 +1664,73 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     const scene = new THREE.Scene();
     sceneRef.current = scene;
 
+    const css3dScene = new THREE.Scene();
+    css3dSceneRef.current = css3dScene;
+
     const { camera, controls } = setupCameraAndOrbit(container, width, height);
     cameraRef.current = camera;
     controlsRef.current = controls;
+
+    const css3dRenderer = new CSS3DRenderer();
+    css3dRenderer.setSize(width, height);
+    css3dRenderer.domElement.style.position = 'absolute';
+    css3dRenderer.domElement.style.top = '0';
+    css3dRenderer.domElement.style.left = '0';
+    css3dRenderer.domElement.style.width = '100%';
+    css3dRenderer.domElement.style.height = '100%';
+    css3dRenderer.domElement.style.pointerEvents = 'none';
+    css3dRenderer.domElement.style.zIndex = '0';
+    css3dRenderer.domElement.style.transformStyle = 'preserve-3d';
+    css3dRenderer.domElement.style.backfaceVisibility = 'visible';
+    (css3dRenderer.domElement.style as any).webkitBackfaceVisibility = 'visible';
+    css3dRendererRef.current = css3dRenderer;
+    container.appendChild(css3dRenderer.domElement);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     patchWebGLContext(renderer);
     renderer.setPixelRatio(Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1.5));
     renderer.setSize(width, height);
+    renderer.setClearColor(0x000000, 0);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.autoUpdate = false;
     renderer.shadowMap.needsUpdate = true;
     rendererRef.current = renderer;
 
+    renderer.domElement.style.position = 'absolute';
+    renderer.domElement.style.top = '0';
+    renderer.domElement.style.left = '0';
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
+    renderer.domElement.style.zIndex = '1';
     container.appendChild(renderer.domElement);
 
-    // Grid Floor Helper (40 total size, 20 divisions -> each square is 2x2 units)
-    const gridHelper = new THREE.GridHelper(40, 20, 0x0284c7, 0x1e293b);
-    const gridMat = gridHelper.material as THREE.LineBasicMaterial;
-    gridMat.transparent = true;
-    gridMat.opacity = 0.35;
-    gridHelper.position.y = 0.01;
-    scene.add(gridHelper);
-    gridHelperRef.current = gridHelper;
+    // Grid Floor Helper (Linhas do Grid 3D Retangular / Circular)
+    const initConfig = forgeRef.current.gridConfig || DEFAULT_GRID_CONFIG_3D;
+    const initWCells = initConfig.widthCells || 20;
+    const initHCells = initConfig.heightCells || 20;
+    const initShape = initConfig.shape || 'square';
+    const initColor = initConfig.lineColor || '#0284c7';
+    const initOpacity = typeof initConfig.lineOpacity === 'number' ? initConfig.lineOpacity : 0.35;
 
-    // Floor Platform (same size as grid: 40x40)
-    const floorGeo = new THREE.PlaneGeometry(40, 40);
+    const gridLines = createCustomGridLines(
+      initWCells,
+      initHCells,
+      initShape,
+      initColor,
+      '#334155',
+      initOpacity
+    );
+    (gridLines as any).frustumCulled = false;
+    scene.add(gridLines);
+    gridHelperRef.current = gridLines as any;
+
+    // Floor Platform (compatível com largura e comprimento independentes)
+    const initWUnits = initWCells * 2.0;
+    const initHUnits = initHCells * 2.0;
+    const floorGeo = initShape === 'circle'
+      ? new THREE.CircleGeometry(Math.max(initWUnits, initHUnits) / 2, 64)
+      : new THREE.PlaneGeometry(initWUnits, initHUnits);
+
     const floorMat = new THREE.MeshStandardMaterial({ 
       color: 0x0b1120, 
       roughness: 0.95, 
@@ -1469,6 +1742,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     floorMesh.rotation.x = -Math.PI / 2;
     floorMesh.position.y = 0;
     floorMesh.receiveShadow = true;
+    floorMesh.frustumCulled = false;
     scene.add(floorMesh);
     floorMeshRef.current = floorMesh;
 
@@ -1489,8 +1763,8 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     scene.add(spellTemplateGroup);
     spellTemplateGroupRef.current = spellTemplateGroup;
 
-    // Apply floor texture immediately if a URL is already available on mount
-    if (floorTextureUrlRef.current) {
+    // Apply floor texture immediately if a static image URL is already available on mount
+    if (floorTextureUrlRef.current && !isAnyVideoMapUrl(floorTextureUrlRef.current)) {
       const loader = new THREE.TextureLoader();
       loader.load(floorTextureUrlRef.current, (texture) => {
         texture.colorSpace = THREE.SRGBColorSpace;
@@ -2740,7 +3014,11 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       lastRenderTime = now;
 
       controls.update();
+      const isVideoFloor = isAnyVideoMapUrl(floorTextureUrlRef.current);
+
       if (skyDomeRef.current) {
+        skyDomeRef.current.skyObj.visible = !envRef.current.isIndoor;
+        skyDomeRef.current.moonMesh.visible = !envRef.current.isIndoor;
         const {
           timeOfDayHour: h,
           timeOfDayPreset: p,
@@ -2764,12 +3042,18 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
           dirLightRef.current.position.copy(skyDomeRef.current.sunPosition);
         }
       }
+
       if (cloudSystemRef.current) {
-        const { timeOfDayPreset: p, cloudDensity: cd, timeOfDayHour: h } = envRef.current;
-        cloudSystemRef.current.update(delta, p, cd, h);
+        cloudSystemRef.current.group.visible = !envRef.current.isIndoor;
+        const { timeOfDayPreset: p, cloudDensity: cd, timeOfDayHour: h, windAngle: wa, windStrength: ws } = envRef.current;
+        cloudSystemRef.current.update(delta, p, cd, h, wa, ws);
       }
+
       if (rainSysRef.current) rainSysRef.current.update(delta);
-      if (groundFogSysRef.current) groundFogSysRef.current.update(delta);
+      if (groundFogSysRef.current) {
+        const { timeOfDayPreset: p, timeOfDayHour: h, windAngle: wa, windStrength: ws } = envRef.current;
+        groundFogSysRef.current.update(delta, p, h, wa, ws);
+      }
       if (fireSysRef.current) fireSysRef.current.update(delta);
 
       // Animar e projetar o Badge de Distância da Trajetória Spline Curva
@@ -2792,6 +3076,16 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
       if (auraSysRef.current) {
         auraSysRef.current.update(callbacksRef.current.combatants, localPositionsRef.current || {});
+      }
+
+      // Renderiza a cena 3D CSS (vídeos do YouTube posicionados no plano 3D do chão)
+      if (css3dRendererRef.current && css3dSceneRef.current) {
+        css3dRendererRef.current.render(css3dSceneRef.current, camera);
+      }
+
+      // Atualiza textura de vídeo direta HTML5
+      if (videoTextureRef.current && videoElementRef.current && videoElementRef.current.readyState >= 2) {
+        videoTextureRef.current.needsUpdate = true;
       }
 
       renderer.render(scene, camera);
@@ -2819,6 +3113,9 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
         renderer.setSize(w, h);
+        if (css3dRendererRef.current) {
+          css3dRendererRef.current.setSize(w, h);
+        }
         if (isPausedRef.current) {
           requestSingleRender();
         }
@@ -2871,6 +3168,19 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         auraSysRef.current.dispose();
         auraSysRef.current = null;
       }
+      if (css3dRendererRef.current && css3dRendererRef.current.domElement.parentElement) {
+        css3dRendererRef.current.domElement.parentElement.removeChild(css3dRendererRef.current.domElement);
+        css3dRendererRef.current = null;
+      }
+      if (videoElementRef.current) {
+        videoElementRef.current.pause();
+        videoElementRef.current.src = '';
+        videoElementRef.current = null;
+      }
+      if (videoTextureRef.current) {
+        videoTextureRef.current.dispose();
+        videoTextureRef.current = null;
+      }
       renderer.dispose();
       disposeHierarchy(scene);
       tokenMeshMapRef.current.clear();
@@ -2915,6 +3225,9 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       groundFogHeight,
       groundFogSpeed,
       globalFogDensity,
+      fogNoiseScale,
+      fogColorPreset,
+      fogCustomColor,
     } = internalEnv;
 
     const env = applySceneEnvironment(
@@ -2932,7 +3245,9 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       sunLightIntensity,
       ambientLightIntensity,
       globalFogDensity,
-      isIndoor
+      isIndoor,
+      fogColorPreset,
+      fogCustomColor
     );
 
     // Dynamically adjust ambient light intensity and color
@@ -2971,7 +3286,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     }
 
     if (cloudSystemRef.current) {
-      cloudSystemRef.current.update(0.016, timeOfDayPreset, cloudDensity, timeOfDayHour);
+      cloudSystemRef.current.update(0.016, timeOfDayPreset, cloudDensity, timeOfDayHour, windAngle, windStrength);
     }
 
     if (hasRain || timeOfDayPreset === 'storm') {
@@ -2992,12 +3307,15 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
     if (hasFog || timeOfDayPreset === 'fog' || timeOfDayPreset === 'storm') {
       if (!groundFogSysRef.current) {
-        groundFogSysRef.current = createGroundFogSystem(sceneRef.current);
+        groundFogSysRef.current = createVolumetricGroundFogSystem(sceneRef.current);
       }
       groundFogSysRef.current.updateParams({
         intensity: groundFogDensity,
         height: groundFogHeight,
-        speed: groundFogSpeed
+        speed: groundFogSpeed,
+        noiseScale: fogNoiseScale,
+        colorPreset: fogColorPreset,
+        customColor: fogCustomColor,
       });
     } else if (groundFogSysRef.current) {
       groundFogSysRef.current.dispose();
@@ -3005,30 +3323,38 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     }
   }, [internalEnv]);
 
-  // Handle floor texture updates dynamically
+  // Sincroniza a textura do chão (YouTube em 3D, Vídeo direto HTML5 ou Imagem estática)
   useEffect(() => {
-    if (!floorMatRef.current) return;
+    if (!floorMatRef.current || !floorMeshRef.current) return;
 
-    if (floorTextureUrl) {
-      const loader = new THREE.TextureLoader();
-      loader.load(floorTextureUrl, (texture) => {
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(1, 1);
-        if (floorMatRef.current) {
-          floorMatRef.current.map = texture;
-          floorMatRef.current.color.setHex(0xffffff); // Permite que a textura seja renderizada com 100% de nitidez e brilho natural
-          floorMatRef.current.roughness = 0.85;
-          floorMatRef.current.metalness = 0.05;
-          floorMatRef.current.emissive = new THREE.Color(0x000000);
-          floorMatRef.current.emissiveMap = null;
-          floorMatRef.current.emissiveIntensity = 0;
-          floorMatRef.current.needsUpdate = true;
-        }
-      });
-    } else {
-      // Clear texture — revert to solid color floor
+    // 1. Limpa qualquer objeto 3D de chão CSS3D anterior
+    if (css3dSceneRef.current && css3dFloorObjectRef.current) {
+      css3dSceneRef.current.remove(css3dFloorObjectRef.current);
+      css3dFloorObjectRef.current = null;
+      youtubeIframeRef.current = null;
+    }
+
+    // 2. Limpa qualquer vídeo HTML5 / VideoTexture anterior
+    if (videoElementRef.current) {
+      videoElementRef.current.pause();
+      videoElementRef.current.src = '';
+      videoElementRef.current = null;
+    }
+    if (videoTextureRef.current) {
+      videoTextureRef.current.dispose();
+      videoTextureRef.current = null;
+    }
+
+    if (!floorTextureUrl) {
+      // Sem textura — chão sólido padrão
+      floorMeshRef.current.visible = true;
+      if (skyDomeRef.current) {
+        skyDomeRef.current.skyObj.visible = !envRef.current.isIndoor;
+        skyDomeRef.current.moonMesh.visible = !envRef.current.isIndoor;
+      }
+      if (cloudSystemRef.current) {
+        cloudSystemRef.current.group.visible = !envRef.current.isIndoor;
+      }
       if (floorMatRef.current.map) {
         floorMatRef.current.map.dispose();
         floorMatRef.current.map = null;
@@ -3043,10 +3369,224 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       floorMatRef.current.emissive = new THREE.Color(0x000000);
       floorMatRef.current.emissiveIntensity = 0;
       floorMatRef.current.needsUpdate = true;
+      return;
+    }
+
+    if (isYouTubeUrl(floorTextureUrl)) {
+      // 🌟 Modo YouTube Living Battlemap no Plano 3D:
+      // O vídeo é posicionado como um objeto 3D com CSS3DObject deitado no chão (rotation.x = -Math.PI/2)
+      // O SkyDome e nuvens 3D continuam ativos no horizonte ao redor da arena!
+      // Usamos um material punch-through no floorMesh para abrir uma janela transparente sobre o vídeo sem tampar o céu.
+      const punchThroughMat = new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        blending: THREE.CustomBlending,
+        blendSrc: THREE.ZeroFactor,
+        blendDst: THREE.ZeroFactor,
+        blendSrcAlpha: THREE.ZeroFactor,
+        blendDstAlpha: THREE.ZeroFactor,
+        depthWrite: true,
+      });
+      floorMeshRef.current.material = punchThroughMat;
+      floorMeshRef.current.visible = true;
+
+      if (skyDomeRef.current) {
+        skyDomeRef.current.skyObj.visible = !envRef.current.isIndoor;
+        skyDomeRef.current.moonMesh.visible = !envRef.current.isIndoor;
+      }
+      if (cloudSystemRef.current) {
+        cloudSystemRef.current.group.visible = !envRef.current.isIndoor;
+      }
+      if (floorMatRef.current.map) {
+        floorMatRef.current.map.dispose();
+        floorMatRef.current.map = null;
+      }
+
+      const videoId = extractYouTubeVideoId(floorTextureUrl);
+      if (videoId && css3dSceneRef.current) {
+        const embedUrl = getYouTubeEmbedUrl(videoId, {
+          autoplay: true,
+          mute: isVideoMapMuted,
+          loop: true,
+          controls: false,
+          enablejsapi: true,
+        });
+
+        const floorDiv = document.createElement('div');
+        floorDiv.style.width = '1600px';
+        floorDiv.style.height = '900px'; // 16:9 proporção nativa de vídeo widescreen
+        floorDiv.style.background = '#000000';
+        floorDiv.style.overflow = 'hidden';
+        floorDiv.style.display = 'flex';
+        floorDiv.style.alignItems = 'center';
+        floorDiv.style.justifyContent = 'center';
+        floorDiv.style.pointerEvents = 'none';
+        floorDiv.style.transformStyle = 'preserve-3d';
+        floorDiv.style.backfaceVisibility = 'visible';
+        (floorDiv.style as any).webkitBackfaceVisibility = 'visible';
+
+        if (embedUrl) {
+          const iframe = document.createElement('iframe');
+          iframe.src = embedUrl;
+          iframe.style.width = '100%';
+          iframe.style.height = '100%';
+          iframe.style.border = 'none';
+          iframe.style.pointerEvents = 'none';
+          iframe.style.transform = 'scale(1.02)';
+          iframe.style.transformStyle = 'preserve-3d';
+          iframe.style.backfaceVisibility = 'visible';
+          (iframe.style as any).webkitBackfaceVisibility = 'visible';
+          iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+          youtubeIframeRef.current = iframe;
+          floorDiv.appendChild(iframe);
+        }
+
+        const css3dObj = new CSS3DObject(floorDiv);
+        css3dObj.rotation.x = -Math.PI / 2;
+        const baseScale = 40 / 1600; // Constante fixa (0.025) - a largura do grid não altera o tamanho da projeção
+        const userScale = videoGridConfig?.scale ?? 1.0;
+        const finalScale = baseScale * userScale;
+        css3dObj.scale.set(finalScale, finalScale, finalScale);
+        css3dObj.position.set(
+          (videoGridConfig?.offsetX ?? 0) * 0.4,
+          -0.01,
+          (videoGridConfig?.offsetY ?? 0) * 0.4
+        );
+
+        css3dSceneRef.current.add(css3dObj);
+        css3dFloorObjectRef.current = css3dObj;
+      }
+    } else if (isVideoFileUrl(floorTextureUrl)) {
+      // 🌟 Modo Arquivo de Vídeo Direto (.mp4 / .webm):
+      // Renderiza diretamente como THREE.VideoTexture no plano 3D (floorMesh) com SkyDome ao redor
+      floorMeshRef.current.material = floorMatRef.current;
+      floorMeshRef.current.visible = true;
+      if (skyDomeRef.current) {
+        skyDomeRef.current.skyObj.visible = !envRef.current.isIndoor;
+        skyDomeRef.current.moonMesh.visible = !envRef.current.isIndoor;
+      }
+      if (cloudSystemRef.current) {
+        cloudSystemRef.current.group.visible = !envRef.current.isIndoor;
+      }
+
+      const video = document.createElement('video');
+      video.src = floorTextureUrl;
+      video.crossOrigin = 'anonymous';
+      video.loop = true;
+      video.autoplay = true;
+      video.muted = isVideoMapMuted;
+      video.playsInline = true;
+      video.volume = Math.max(0, Math.min(1, videoMapVolume));
+      video.play().catch(() => {});
+      videoElementRef.current = video;
+
+      const videoTexture = new THREE.VideoTexture(video);
+      videoTexture.colorSpace = THREE.SRGBColorSpace;
+      videoTexture.wrapS = THREE.RepeatWrapping;
+      videoTexture.wrapT = THREE.RepeatWrapping;
+      videoTextureRef.current = videoTexture;
+
+      if (floorMatRef.current) {
+        floorMatRef.current.map = videoTexture;
+        floorMatRef.current.color.setHex(0xffffff);
+        floorMatRef.current.roughness = 0.85;
+        floorMatRef.current.metalness = 0.05;
+        floorMatRef.current.emissive = new THREE.Color(0x000000);
+        floorMatRef.current.needsUpdate = true;
+      }
+    } else {
+      // Modo Imagem Estática (Floresta, Mangue, Deserto, Pedra, etc.):
+      floorMeshRef.current.material = floorMatRef.current;
+      floorMeshRef.current.visible = true;
+      if (skyDomeRef.current) {
+        skyDomeRef.current.skyObj.visible = !envRef.current.isIndoor;
+        skyDomeRef.current.moonMesh.visible = !envRef.current.isIndoor;
+      }
+      if (cloudSystemRef.current) {
+        cloudSystemRef.current.group.visible = !envRef.current.isIndoor;
+      }
+      const loader = new THREE.TextureLoader();
+      loader.load(floorTextureUrl, (texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(1, 1);
+        if (floorMatRef.current) {
+          floorMatRef.current.map = texture;
+          floorMatRef.current.color.setHex(0xffffff);
+          floorMatRef.current.roughness = 0.85;
+          floorMatRef.current.metalness = 0.05;
+          floorMatRef.current.emissive = new THREE.Color(0x000000);
+          floorMatRef.current.emissiveMap = null;
+          floorMatRef.current.emissiveIntensity = 0;
+          floorMatRef.current.needsUpdate = true;
+        }
+      });
     }
   }, [floorTextureUrl]);
 
-  // Dynamic Grid Dimensions & Shape (Square / Circle Arena)
+  // Calibração em Tempo Real (Escala e Deslocamento X/Y no Plano 3D)
+  useEffect(() => {
+    if (css3dFloorObjectRef.current) {
+      const baseScale = 40 / 1600;
+      const userScale = videoGridConfig?.scale ?? 1.0;
+      const finalScale = baseScale * userScale;
+      css3dFloorObjectRef.current.scale.set(finalScale, finalScale, finalScale);
+      css3dFloorObjectRef.current.position.set(
+        (videoGridConfig?.offsetX ?? 0) * 0.4,
+        -0.01,
+        (videoGridConfig?.offsetY ?? 0) * 0.4
+      );
+    }
+  }, [videoGridConfig?.scale, videoGridConfig?.offsetX, videoGridConfig?.offsetY]);
+
+  // Sincronização de Áudio (Volume & Mute em Tempo Real para YouTube e Vídeo HTML5)
+  useEffect(() => {
+    if (youtubeIframeRef.current && youtubeIframeRef.current.contentWindow) {
+      try {
+        if (isVideoMapMuted) {
+          youtubeIframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'mute' }),
+            '*'
+          );
+        } else {
+          youtubeIframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'unMute' }),
+            '*'
+          );
+          youtubeIframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'setVolume', args: [Math.round(videoMapVolume * 100)] }),
+            '*'
+          );
+        }
+      } catch {}
+    }
+    if (videoElementRef.current) {
+      videoElementRef.current.volume = Math.max(0, Math.min(1, videoMapVolume));
+      videoElementRef.current.muted = isVideoMapMuted;
+    }
+  }, [videoMapVolume, isVideoMapMuted]);
+
+  // Dynamic Grid Lines Color & Opacity for High Contrast / Living Map Calibration
+  useEffect(() => {
+    if (!gridHelperRef.current) return;
+    const mat = gridHelperRef.current.material as THREE.LineBasicMaterial;
+    if (mat) {
+      if (videoGridConfig?.gridOpacity !== undefined) {
+        mat.opacity = Math.max(0.05, Math.min(1.0, videoGridConfig.gridOpacity));
+      } else {
+        mat.opacity = 0.35;
+      }
+      if (videoGridConfig?.gridColor) {
+        mat.color = new THREE.Color(videoGridConfig.gridColor);
+      } else {
+        mat.color = new THREE.Color(0x0284c7);
+      }
+      mat.needsUpdate = true;
+    }
+  }, [videoGridConfig?.gridOpacity, videoGridConfig?.gridColor]);
+
+  // Dynamic Grid Dimensions & Shape (Square / Rectangle / Circle Arena)
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
@@ -3056,36 +3596,76 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     const heightCells = currentConfig.heightCells || 20;
     const shape = currentConfig.shape || 'square';
     const lineOpacity = typeof currentConfig.lineOpacity === 'number' ? currentConfig.lineOpacity : 0.4;
+    const lineColor = currentConfig.lineColor || videoGridConfig?.gridColor || '#0284c7';
+
+    const widthUnits = widthCells * 2.0;
+    const heightUnits = heightCells * 2.0;
 
     // 1. Update Floor Mesh Geometry
     if (floorMeshRef.current && floorMatRef.current) {
       floorMeshRef.current.geometry.dispose();
-      const widthUnits = widthCells * 2.0;
-      const heightUnits = heightCells * 2.0;
       if (shape === 'circle') {
-        floorMeshRef.current.geometry = new THREE.CircleGeometry(widthUnits / 2, 64);
+        const radius = Math.max(widthUnits, heightUnits) / 2;
+        floorMeshRef.current.geometry = new THREE.CircleGeometry(radius, 64);
       } else {
         floorMeshRef.current.geometry = new THREE.PlaneGeometry(widthUnits, heightUnits);
       }
     }
 
-    // 2. Update Grid Helper
+    // 2. Update CSS3D 3D Video Floor Object if active (Fixed base scale so grid size X/Z NEVER alters video projection size!)
+    if (css3dFloorObjectRef.current) {
+      const baseScale = 40 / 1600; // Constante fixa (0.025) - o tamanho da projeção do vídeo é controlado exclusivamente pelo Zoom/Escala
+      const userScale = videoGridConfig?.scale ?? 1.0;
+      const finalScale = baseScale * userScale;
+      css3dFloorObjectRef.current.scale.set(
+        finalScale,
+        finalScale,
+        finalScale
+      );
+      css3dFloorObjectRef.current.position.set(
+        (videoGridConfig?.offsetX ?? 0) * 0.4,
+        -0.01,
+        (videoGridConfig?.offsetY ?? 0) * 0.4
+      );
+    }
+
+    // 2.1 Update static image texture repeat if repeating tile texture (never stretch when expanding grid)
+    if (floorMatRef.current && floorMatRef.current.map) {
+      if (currentConfig.textureFitMode === 'repeat' || !currentConfig.textureFitMode) {
+        floorMatRef.current.map.wrapS = THREE.RepeatWrapping;
+        floorMatRef.current.map.wrapT = THREE.RepeatWrapping;
+        floorMatRef.current.map.repeat.set(widthCells / 2, heightCells / 2);
+      } else {
+        floorMatRef.current.map.wrapS = THREE.ClampToEdgeWrapping;
+        floorMatRef.current.map.wrapT = THREE.ClampToEdgeWrapping;
+        floorMatRef.current.map.repeat.set(1, 1);
+      }
+      floorMatRef.current.map.needsUpdate = true;
+    }
+
+    // 3. Update Grid Helper with true rectangular / circular line generator
     if (gridHelperRef.current) {
       scene.remove(gridHelperRef.current);
       gridHelperRef.current.geometry.dispose();
-      (gridHelperRef.current.material as THREE.Material).dispose();
+      if (Array.isArray(gridHelperRef.current.material)) {
+        gridHelperRef.current.material.forEach((m: THREE.Material) => m.dispose());
+      } else if (gridHelperRef.current.material) {
+        (gridHelperRef.current.material as THREE.Material).dispose();
+      }
       gridHelperRef.current = null;
     }
 
-    const widthUnits = widthCells * 2.0;
-    const gridHelper = new THREE.GridHelper(widthUnits, widthCells, 0x0284c7, 0x1e293b);
-    const gridMat = gridHelper.material as THREE.LineBasicMaterial;
-    gridMat.transparent = true;
-    gridMat.opacity = lineOpacity;
-    gridHelper.position.y = 0.01;
-    scene.add(gridHelper);
-    gridHelperRef.current = gridHelper;
-  }, [gridConfig]);
+    const gridLinesMesh = createCustomGridLines(
+      widthCells,
+      heightCells,
+      shape,
+      lineColor,
+      '#334155',
+      lineOpacity
+    );
+    scene.add(gridLinesMesh);
+    gridHelperRef.current = gridLinesMesh as any;
+  }, [gridConfig, videoGridConfig?.scale, videoGridConfig?.gridColor]);
 
   // Sync 3D Building Blocks (Walls, Pillars, Doors, Campfires, etc.)
   useEffect(() => {
@@ -3435,7 +4015,7 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
     <div className="relative w-full h-full min-h-[450px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800 select-none">
       <div
         ref={containerRef}
-        className="w-full h-full absolute inset-0"
+        className="w-full h-full absolute inset-0 z-10"
         style={{
           cursor: pendingAttack ? swordCursorUrl : 'grab',
         }}
@@ -3574,12 +4154,17 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         groundFogHeight={internalEnv.groundFogHeight}
         groundFogSpeed={internalEnv.groundFogSpeed}
         globalFogDensity={internalEnv.globalFogDensity}
+        fogNoiseScale={internalEnv.fogNoiseScale}
+        fogColorPreset={internalEnv.fogColorPreset}
+        fogCustomColor={internalEnv.fogCustomColor}
         onRotateSelected={handleRotateSelected}
         onSelectCameraPreset={handleSelectCameraPreset}
         onEnvironmentChange={handleEnvironmentChange}
         onTimeOfDayChange={onTimeOfDayChange}
         floorTextureUrl={floorTextureUrl}
         onFloorTextureChange={onFloorTextureChange}
+        videoGridConfig={videoGridConfig}
+        onVideoGridConfigChange={onVideoGridConfigChange}
         onConfirmPlacement={onConfirmPlacement}
         isPlayerVisionMode={isPlayerVisionMode}
         onTogglePlayerVisionMode={() => setIsPlayerVisionMode(!isPlayerVisionMode)}
@@ -3642,6 +4227,9 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         onSetTerrainOpacity={(op) => setGridConfig((prev) => ({ ...prev, terrainOpacity: op }))}
         terrainsCount={terrainSurfaces.length}
         onClearAllTerrains={() => setTerrainSurfaces([])}
+        floorTextureUrl={floorTextureUrl}
+        videoGridConfig={videoGridConfig}
+        onVideoGridConfigChange={onVideoGridConfigChange}
       />
 
       {/* Selected 3D Asset Transform & Light Inspector (Aberto com 2 cliques rápidos no asset) */}

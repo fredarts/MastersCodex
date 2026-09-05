@@ -21,6 +21,13 @@ interface AudioContextType {
   duration: number;
   seekBgm: (time: number) => void;
   resumeBgm: () => void;
+  // 4º Canal: Mapa Vivo / Vídeo
+  videoMapVolume: number;
+  isVideoMapMuted: boolean;
+  setVideoMapVolume: (vol: number) => void;
+  setIsVideoMapMuted: (muted: boolean) => void;
+  activeVideoMapTitle: string;
+  setActiveVideoMapTitle: (title: string) => void;
 }
 
 const AudioContext = createContext<AudioContextType | undefined>(undefined);
@@ -33,6 +40,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [loopOverrides, setLoopOverrides] = useState<Record<string, boolean>>({});
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+
+  // 4º Canal de Áudio (Vídeo / Living Battlemap)
+  const [videoMapVolume, setVideoMapVolume] = useState(0.5);
+  const [isVideoMapMuted, setIsVideoMapMuted] = useState(false);
+  const [activeVideoMapTitle, setActiveVideoMapTitle] = useState('');
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -236,7 +248,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       currentTime,
       duration,
       seekBgm,
-      resumeBgm
+      resumeBgm,
+      videoMapVolume,
+      isVideoMapMuted,
+      setVideoMapVolume,
+      setIsVideoMapMuted,
+      activeVideoMapTitle,
+      setActiveVideoMapTitle
     }}>
       {children}
     </AudioContext.Provider>
@@ -264,6 +282,12 @@ export const useAudio = (): AudioContextType => {
       duration: 0,
       seekBgm: () => {},
       resumeBgm: () => {},
+      videoMapVolume: 0.5,
+      isVideoMapMuted: false,
+      setVideoMapVolume: () => {},
+      setIsVideoMapMuted: () => {},
+      activeVideoMapTitle: '',
+      setActiveVideoMapTitle: () => {},
     };
   }
   return context;

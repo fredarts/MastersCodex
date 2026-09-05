@@ -35,6 +35,9 @@ export interface BattleEnvironmentProps {
   groundFogHeight?: number;
   groundFogSpeed?: number;
   globalFogDensity?: number;
+  fogNoiseScale?: number;
+  fogColorPreset?: 'natural' | 'graveyard' | 'swamp' | 'crimson' | 'frost' | 'custom';
+  fogCustomColor?: string;
 }
 
 export const calculateEnvironmentSettings = (
@@ -51,7 +54,9 @@ export const calculateEnvironmentSettings = (
   sunLightIntensity?: number,
   ambientLightIntensity?: number,
   globalFogDensity?: number,
-  isIndoorProp = false
+  isIndoorProp = false,
+  fogColorPreset = 'natural',
+  fogCustomColor = '#cbd5e1'
 ) => {
   const isIndoor = isIndoorProp || timeOfDayPreset === 'indoors';
   const isNight = timeOfDayPreset === 'night' || timeOfDayHour < 6 || timeOfDayHour > 19;
@@ -87,7 +92,20 @@ export const calculateEnvironmentSettings = (
 
   // Fog preset changes bgColor (used as fog tint)
   if (!isIndoor && (hasFog || timeOfDayPreset === 'fog')) {
-    bgColor = '#1e293b';
+    if (fogColorPreset === 'graveyard') {
+      bgColor = '#0f2942';
+    } else if (fogColorPreset === 'swamp') {
+      bgColor = '#063725';
+    } else if (fogColorPreset === 'crimson') {
+      bgColor = '#3f0713';
+    } else if (fogColorPreset === 'frost') {
+      bgColor = '#1e3a5f';
+    } else if (fogColorPreset === 'custom' && fogCustomColor) {
+      bgColor = fogCustomColor;
+    } else {
+      bgColor = '#1e293b';
+    }
+
     if (!isNight) {
       ambientIntensity = 0.4;
       sunIntensity = 0.5;
@@ -134,7 +152,9 @@ export const applySceneEnvironment = (
   sunLightIntensity?: number,
   ambientLightIntensity?: number,
   globalFogDensity?: number,
-  isIndoorProp = false
+  isIndoorProp = false,
+  fogColorPreset = 'natural',
+  fogCustomColor = '#cbd5e1'
 ) => {
   const env = calculateEnvironmentSettings(
     timeOfDayHour,
@@ -150,7 +170,9 @@ export const applySceneEnvironment = (
     sunLightIntensity,
     ambientLightIntensity,
     globalFogDensity,
-    isIndoorProp
+    isIndoorProp,
+    fogColorPreset,
+    fogCustomColor
   );
 
   if (env.isIndoor) {
@@ -161,7 +183,15 @@ export const applySceneEnvironment = (
 
   if (hasFog || timeOfDayPreset === 'fog') {
     const fogDensityVal = globalFogDensity !== undefined ? globalFogDensity : 0.003;
-    const fogColor = env.isIndoor ? 0x000000 : 0x1e293b;
+    let fogColor = env.isIndoor ? 0x000000 : 0x1e293b;
+    if (fogColorPreset === 'graveyard') fogColor = 0x0f2942;
+    else if (fogColorPreset === 'swamp') fogColor = 0x063725;
+    else if (fogColorPreset === 'crimson') fogColor = 0x3f0713;
+    else if (fogColorPreset === 'frost') fogColor = 0x1e3a5f;
+    else if (fogColorPreset === 'custom' && fogCustomColor) {
+      fogColor = parseInt(fogCustomColor.replace('#', ''), 16) || 0x1e293b;
+    }
+
     scene.fog = new THREE.FogExp2(fogColor, fogDensityVal);
   } else {
     scene.fog = null;

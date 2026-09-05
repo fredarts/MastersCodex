@@ -34,6 +34,7 @@ export class InstancedTokenManager {
     this.instancedMesh.castShadow = true;
     this.instancedMesh.receiveShadow = true;
     this.instancedMesh.name = 'instancedTokens';
+    this.instancedMesh.renderOrder = 50;
     
     // 2. Selection Ring
     const ringGeo = new THREE.RingGeometry(0.75, 0.9, 32);
@@ -44,6 +45,7 @@ export class InstancedTokenManager {
     this.ringInstancedMesh = new THREE.InstancedMesh(ringGeo, ringMat, this.maxTokens);
     this.ringInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.ringInstancedMesh.name = 'instancedRings';
+    this.ringInstancedMesh.renderOrder = 51;
 
     this.scene.add(this.instancedMesh);
     this.scene.add(this.ringInstancedMesh);

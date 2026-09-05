@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut, Gift, Mic, MicOff, Video, VideoOff, PhoneCall, Radio, Headphones, Store, ChevronDown, Layers, Play, BookOpen } from 'lucide-react';
+import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut, Gift, Mic, MicOff, Video, VideoOff, PhoneCall, Radio, Headphones, Store, ChevronDown, Layers, Play, BookOpen, Smartphone } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -17,6 +17,7 @@ import { CharacterSheet } from '@/lib/types';
 import { DetectivePinboardModal } from '@/components/investigation/DetectivePinboardModal';
 import { DMNotebookDrawer } from '@/components/live-cockpit/DMNotebookDrawer';
 import { StreamerOverlayModal } from '@/components/overlay/config/StreamerOverlayModal';
+import { CompanionQrModal } from '@/components/companion/CompanionQrModal';
 
 interface HeaderProps {
   onOpenSearch: () => void;
@@ -57,6 +58,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [isTradeModalOpen, setIsTradeModalOpen] = useState(false);
   const [isNotebookOpen, setIsNotebookOpen] = useState(false);
   const [isStreamerOverlayOpen, setIsStreamerOverlayOpen] = useState(false);
+  const [isCompanionQrOpen, setIsCompanionQrOpen] = useState(false);
 
   const previewSheet: CharacterSheet = {
     id: 'dm-preview-character',
@@ -283,6 +285,28 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                   <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
                     PROJEÇÃO
+                  </span>
+                </button>
+
+                {/* Pocket Companion Mobile */}
+                <button
+                  onClick={() => {
+                    setIsToolsMenuOpen(false);
+                    setIsCompanionQrOpen(true);
+                  }}
+                  className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:text-emerald-300 hover:bg-[#1f2738] rounded-xl transition-all flex items-center justify-between group cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 group-hover:bg-emerald-500/20 group-hover:scale-105 transition-all">
+                      <Smartphone className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-slate-200 group-hover:text-emerald-300">Pocket Companion</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Modo celular tátil sem 3D</span>
+                    </div>
+                  </div>
+                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono">
+                    MOBILE
                   </span>
                 </button>
 
@@ -584,6 +608,12 @@ export const Header: React.FC<HeaderProps> = ({
         isOpen={isStreamerOverlayOpen}
         onClose={() => setIsStreamerOverlayOpen(false)}
         campaignId={activeCampaign?.id || ''}
+      />
+
+      {/* Pocket Companion QR Modal */}
+      <CompanionQrModal
+        isOpen={isCompanionQrOpen}
+        onClose={() => setIsCompanionQrOpen(false)}
       />
     </header>
   );

@@ -15,6 +15,8 @@ export interface GridConfig3D {
   lineOpacity: number;     // 0.0 a 1.0
   gridType: 'lines' | 'dots' | 'borderless';
   terrainOpacity?: number; // 0.1 a 1.0 (opacidade das superfícies pintadas)
+  textureFitMode?: 'repeat' | 'aspect_fit' | 'stretch'; // Modo de enquadramento da textura
+  aspectRatio?: '16:9' | '4:3' | '1:1' | '21:9' | 'custom'; // Proporção do mapa de batalha
 }
 
 export const DEFAULT_GRID_CONFIG_3D: GridConfig3D = {
@@ -26,6 +28,8 @@ export const DEFAULT_GRID_CONFIG_3D: GridConfig3D = {
   lineOpacity: 0.35,
   gridType: 'lines',
   terrainOpacity: 0.65,
+  textureFitMode: 'repeat',
+  aspectRatio: '1:1',
 };
 
 export type BuildingBlockCategory = 'structures' | 'lights' | 'props';

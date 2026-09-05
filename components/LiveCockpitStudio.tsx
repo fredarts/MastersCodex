@@ -153,6 +153,7 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
   const activeSceneRef = useRef(activeScene);
   const combatantsRef = useRef(combatants);
   const lastInitializedSceneIdRef = useRef<string | null>(null);
+  const lastInitializedCombatantIdsRef = useRef<string>('');
 
   useEffect(() => {
     activeSceneRef.current = activeScene;
@@ -297,10 +298,12 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
         );
 
         const isNewScene = lastInitializedSceneIdRef.current !== scene.id;
+        const currentIds = (sorted || []).map(c => c.id).join(',');
 
         if (isNewScene) {
           // Only reset turn index and round on initial scene load
           lastInitializedSceneIdRef.current = scene.id;
+          lastInitializedCombatantIdsRef.current = currentIds;
           setCombatants(sorted);
           setCurrentTurnIndex(0);
           setRoundCount(1);
@@ -315,13 +318,14 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
             mode: defaultMode,
           });
           initializeFromCombatants(sorted);
-        } else {
-          // Same scene: sync token positions/models but DO NOT reset turn order
-          initializeFromCombatants(sorted);
+        } else if (lastInitializedCombatantIdsRef.current !== currentIds) {
+          // Only update list if combatants were actually added or removed
+          lastInitializedCombatantIdsRef.current = currentIds;
+          setCombatants(sorted);
         }
       }
     }
-  }, [activeScene?.id, activeScene?.combatants, activeScene?.isBattleStarted, setCombatants, initializeFromCombatants, setCurrentTurnIndex, setRoundCount, setIsCombatActive, setActiveBgmCategory, setLiveTimeOfDayHour, setLiveHasFog, setLiveHasRain, setLiveFloorTextureUrl, setLiveEnvironmentSettings, setSelectedTimeOfDay, setIsBattleStarted, broadcastToPlayerView, setLiveDisplayMode]);
+  }, [activeScene?.id, activeScene?.isBattleStarted, setCombatants, initializeFromCombatants, setCurrentTurnIndex, setRoundCount, setIsCombatActive, setActiveBgmCategory, setLiveTimeOfDayHour, setLiveHasFog, setLiveHasRain, setLiveFloorTextureUrl, setLiveEnvironmentSettings, setSelectedTimeOfDay, setIsBattleStarted, broadcastToPlayerView, setLiveDisplayMode]);
 
   // Listen to Character Model cross-tab broadcasts
   useEffect(() => {

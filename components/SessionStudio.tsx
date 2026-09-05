@@ -239,6 +239,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
   const [terrainSurfaces3D, setTerrainSurfaces3D] = useState<import('@/lib/3d-terrains').TerrainCellData[]>([]);
   const [gridConfig3D, setGridConfig3D] = useState<import('@/lib/3d-building-blocks').GridConfig3D | undefined>(undefined);
   const [floorTextureUrl, setFloorTextureUrl] = useState<string | undefined>(undefined);
+  const [videoGridConfig, setVideoGridConfig] = useState<import('@/lib/types').VideoGridAlignmentConfig | undefined>(undefined);
   const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
@@ -276,6 +277,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       setTerrainSurfaces3D(selectedScene.terrainSurfaces || selectedScene.environmentSettings?.terrain_surfaces_3d || []);
       setGridConfig3D(selectedScene.gridConfig3D || selectedScene.environmentSettings?.grid_config_3d || undefined);
       setFloorTextureUrl(selectedScene.floorTextureUrl || undefined);
+      setVideoGridConfig(selectedScene.videoGridConfig || selectedScene.environmentSettings?.video_grid_config || undefined);
       const initialImages: SceneImage[] = (selectedScene.sceneImages && selectedScene.sceneImages.length > 0)
         ? selectedScene.sceneImages
         : selectedScene.imageUrl
@@ -547,6 +549,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
       hasFog,
       hasRain,
       floorTextureUrl,
+      videoGridConfig,
       sceneImages: effectiveImages,
       slidePacks,
       activeSlidePackId,
@@ -1840,16 +1843,27 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                                 setEnvironmentSettings((prev) => ({ ...prev, grid_config_3d: gridCfg }));
                               }}
                               onEnvironmentChange={(env) => {
-                                if (env.timeOfDayPreset) {
-                                  setTimeOfDay(env.timeOfDayPreset);
-                                }
-                                timeOfDayHour && setTimeOfDayHour(env.timeOfDayHour);
-                                setHasFog(env.hasFog);
-                                setHasRain(env.hasRain);
-                                setEnvironmentSettings(prev => ({ ...prev, ...env }));
-                              }}
+                                 if (env.timeOfDayPreset) {
+                                   setTimeOfDay(env.timeOfDayPreset);
+                                 }
+                                 if (env.timeOfDayHour !== undefined) {
+                                   setTimeOfDayHour(env.timeOfDayHour);
+                                 }
+                                 if (env.hasFog !== undefined) {
+                                   setHasFog(env.hasFog);
+                                 }
+                                 if (env.hasRain !== undefined) {
+                                   setHasRain(env.hasRain);
+                                 }
+                                 setEnvironmentSettings((prev) => ({ ...prev, ...env }));
+                               }}
                               floorTextureUrl={floorTextureUrl}
                               onFloorTextureChange={setFloorTextureUrl}
+                              videoGridConfig={videoGridConfig}
+                              onVideoGridConfigChange={(cfg) => {
+                                setVideoGridConfig(cfg);
+                                setEnvironmentSettings(prev => ({ ...prev, video_grid_config: cfg }));
+                              }}
                               userRole="dm"
                             />
                           </ThreeErrorBoundary>

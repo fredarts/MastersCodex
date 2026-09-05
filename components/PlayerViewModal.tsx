@@ -640,6 +640,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                 hasFog={currentScene?.hasFog}
                 hasRain={currentScene?.hasRain}
                 floorTextureUrl={currentScene?.floorTextureUrl}
+                videoGridConfig={currentScene?.videoGridConfig || currentScene?.environmentSettings?.video_grid_config}
                 initialBuildingBlocks={currentScene?.buildingBlocks || currentScene?.environmentSettings?.building_blocks_3d || []}
                 initialTerrainSurfaces={currentScene?.terrainSurfaces || currentScene?.environmentSettings?.terrain_surfaces_3d || []}
                 initialGridConfig={currentScene?.gridConfig3D || currentScene?.environmentSettings?.grid_config_3d}

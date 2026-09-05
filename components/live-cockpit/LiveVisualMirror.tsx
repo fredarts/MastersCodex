@@ -316,10 +316,16 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
 
   const handleTimeOfDayChange = useCallback((preset: any) => {
     setSelectedTimeOfDay(preset);
+    if (activeScene && updateScene) {
+      updateScene({
+        ...activeScene,
+        timeOfDay: preset,
+      });
+    }
     broadcastToPlayerView({
       timeOfDay: preset,
     });
-  }, [broadcastToPlayerView, setSelectedTimeOfDay]);
+  }, [activeScene, broadcastToPlayerView, setSelectedTimeOfDay, updateScene]);
 
   const handleEnvironmentChange = useCallback((env: any) => {
     if (env.timeOfDayPreset) {
@@ -332,6 +338,17 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
     const newSettings = { ...(liveEnvironmentSettings || {}), ...env };
     setLiveEnvironmentSettings(newSettings);
 
+    if (activeScene && updateScene) {
+      updateScene({
+        ...activeScene,
+        timeOfDay: env.timeOfDayPreset || selectedTimeOfDay,
+        timeOfDayHour: env.timeOfDayHour,
+        hasFog: env.hasFog,
+        hasRain: env.hasRain,
+        environmentSettings: newSettings,
+      });
+    }
+
     broadcastToPlayerView({
       timeOfDay: env.timeOfDayPreset || selectedTimeOfDay,
       timeOfDayHour: env.timeOfDayHour,
@@ -339,12 +356,31 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
       hasRain: env.hasRain,
       environmentSettings: newSettings
     });
-  }, [broadcastToPlayerView, liveEnvironmentSettings, selectedTimeOfDay, setLiveEnvironmentSettings, setLiveHasFog, setLiveHasRain, setLiveTimeOfDayHour, setSelectedTimeOfDay]);
+  }, [activeScene, broadcastToPlayerView, liveEnvironmentSettings, selectedTimeOfDay, setLiveEnvironmentSettings, setLiveHasFog, setLiveHasRain, setLiveTimeOfDayHour, setSelectedTimeOfDay, updateScene]);
 
   const handleFloorTextureChange = useCallback((url: string) => {
     setLiveFloorTextureUrl(url);
+    if (activeScene && updateScene) {
+      updateScene({ ...activeScene, floorTextureUrl: url });
+    }
     broadcastToPlayerView({ floorTextureUrl: url });
-  }, [broadcastToPlayerView, setLiveFloorTextureUrl]);
+  }, [activeScene, broadcastToPlayerView, setLiveFloorTextureUrl, updateScene]);
+
+  const handleVideoGridConfigChange = useCallback((cfg: any) => {
+    const newSettings = { ...(liveEnvironmentSettings || {}), video_grid_config: cfg };
+    setLiveEnvironmentSettings(newSettings);
+    if (activeScene && updateScene) {
+      updateScene({
+        ...activeScene,
+        videoGridConfig: cfg,
+        environmentSettings: newSettings,
+      });
+    }
+    broadcastToPlayerView({
+      videoGridConfig: cfg,
+      environmentSettings: newSettings,
+    });
+  }, [activeScene, broadcastToPlayerView, liveEnvironmentSettings, setLiveEnvironmentSettings, updateScene]);
 
   const handleConfirmPlacement = useCallback(() => {
     setIsPlacementPhase(false);
@@ -384,7 +420,15 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
               <ThreeErrorBoundary>
                 <BattleGrid3D
                   combatants={combatants}
-                  onUpdateCombatants={(updated) => setCombatants(updated)}
+                  onUpdateCombatants={(updated) => {
+                    setCombatants(updated);
+                    if (activeScene && updateScene) {
+                      updateScene({
+                        ...activeScene,
+                        combatants: updated,
+                      });
+                    }
+                  }}
                   currentTurnIndex={currentTurnIndex}
                   selectedTargetId={selectedTargetId}
                   isBattleStarted={isBattleStarted}
@@ -411,6 +455,8 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                   onEnvironmentChange={handleEnvironmentChange}
                   floorTextureUrl={liveFloorTextureUrl}
                   onFloorTextureChange={handleFloorTextureChange}
+                  videoGridConfig={activeScene?.videoGridConfig || liveEnvironmentSettings?.video_grid_config}
+                  onVideoGridConfigChange={handleVideoGridConfigChange}
                   onConfirmPlacement={handleConfirmPlacement}
                   userRole="dm"
                   isPaused={liveDisplayMode !== 'combat'}

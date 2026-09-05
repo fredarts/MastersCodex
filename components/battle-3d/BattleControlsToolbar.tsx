@@ -18,9 +18,47 @@ import {
   Box,
   Home,
   Lock,
-  Unlock
+  Unlock,
+  Film,
+  Maximize2,
+  SlidersHorizontal,
+  Sparkles,
+  RefreshCw,
+  Grid,
+  Trash2,
+  Play
 } from 'lucide-react';
-import { Combatant } from '@/lib/types';
+import { Combatant, VideoGridAlignmentConfig } from '@/lib/types';
+import { useAudio } from '@/context/AudioContext';
+import { 
+  LIVING_BATTLEMAPS_PRESETS, 
+  isAnyVideoMapUrl, 
+  isYouTubeUrl, 
+  extractYouTubeVideoId 
+} from '@/lib/living-battlemaps-catalog';
+
+const getCompassLabel = (angle: number): string => {
+  const normalized = ((angle % 360) + 360) % 360;
+  if (normalized >= 337.5 || normalized < 22.5) return 'Norte ▲';
+  if (normalized >= 22.5 && normalized < 67.5) return 'Nordeste ↗';
+  if (normalized >= 67.5 && normalized < 112.5) return 'Leste ▶';
+  if (normalized >= 112.5 && normalized < 157.5) return 'Sudeste ↘';
+  if (normalized >= 157.5 && normalized < 202.5) return 'Sul ▼';
+  if (normalized >= 202.5 && normalized < 247.5) return 'Sudoeste ↙';
+  if (normalized >= 247.5 && normalized < 292.5) return 'Oeste ◀';
+  return 'Noroeste ↖';
+};
+
+const CARDINAL_POINTS = [
+  { label: 'N', angle: 0 },
+  { label: 'NE', angle: 45 },
+  { label: 'L', angle: 90 },
+  { label: 'SE', angle: 135 },
+  { label: 'S', angle: 180 },
+  { label: 'SO', angle: 225 },
+  { label: 'O', angle: 270 },
+  { label: 'NO', angle: 315 },
+];
 
 export interface BattleControlsToolbarProps {
   isDm: boolean;
@@ -55,6 +93,9 @@ export interface BattleControlsToolbarProps {
   groundFogHeight?: number;
   groundFogSpeed?: number;
   globalFogDensity?: number;
+  fogNoiseScale?: number;
+  fogColorPreset?: 'natural' | 'graveyard' | 'swamp' | 'crimson' | 'frost' | 'custom';
+  fogCustomColor?: string;
   onRotateSelected?: (angle: number) => void;
   onSelectCameraPreset?: (preset: 'tactical' | 'cinematic' | 'topDown') => void;
   onEnvironmentChange?: (env: {
@@ -84,6 +125,9 @@ export interface BattleControlsToolbarProps {
     groundFogHeight?: number;
     groundFogSpeed?: number;
     globalFogDensity?: number;
+    fogNoiseScale?: number;
+    fogColorPreset?: 'natural' | 'graveyard' | 'swamp' | 'crimson' | 'frost' | 'custom';
+    fogCustomColor?: string;
   }) => void;
   onTimeOfDayChange?: (preset: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors') => void;
   onConfirmPlacement?: () => void;
@@ -91,6 +135,8 @@ export interface BattleControlsToolbarProps {
   onToggleHelp?: () => void;
   floorTextureUrl?: string;
   onFloorTextureChange?: (url: string) => void;
+  videoGridConfig?: VideoGridAlignmentConfig;
+  onVideoGridConfigChange?: (config: VideoGridAlignmentConfig) => void;
   isPlayerVisionMode?: boolean;
   onTogglePlayerVisionMode?: () => void;
   onToggleTorch?: (c: Combatant) => void;
@@ -133,6 +179,9 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   groundFogHeight: groundFogHeightProp = 1.0,
   groundFogSpeed: groundFogSpeedProp = 1.0,
   globalFogDensity: globalFogDensityProp = 0.003,
+  fogNoiseScale: fogNoiseScaleProp = 1.0,
+  fogColorPreset: fogColorPresetProp = 'natural',
+  fogCustomColor: fogCustomColorProp = '#cbd5e1',
   onRotateSelected,
   onSelectCameraPreset,
   onEnvironmentChange,
@@ -142,6 +191,8 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   onToggleHelp,
   floorTextureUrl,
   onFloorTextureChange,
+  videoGridConfig,
+  onVideoGridConfigChange,
   isPlayerVisionMode = false,
   onTogglePlayerVisionMode,
   onToggleTorch,
@@ -150,11 +201,13 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   isAssetsLocked = true,
   onToggleAssetsLocked,
 }) => {
+  const { setActiveVideoMapTitle } = useAudio();
   const [showEnvMenu, setShowEnvMenu] = useState(false);
   const [availableTextures, setAvailableTextures] = useState<{name: string, url: string}[]>([]);
 
   // State variables for all new weather controls
   const [internalPreset, setInternalPreset] = useState<'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors'>(timeOfDayPreset);
+  const [internalHour, setInternalHour] = useState<number>(timeOfDayHour ?? 12);
   const [internalCloudDensity, setInternalCloudDensity] = useState(cloudDensityProp);
   const [internalMoonSize, setInternalMoonSize] = useState(moonSizeProp);
   const [internalMoonLuminosity, setInternalMoonLuminosity] = useState(moonLuminosityProp);
@@ -176,8 +229,16 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   const [internalGroundFogHeight, setInternalGroundFogHeight] = useState(groundFogHeightProp);
   const [internalGroundFogSpeed, setInternalGroundFogSpeed] = useState(groundFogSpeedProp);
   const [internalGlobalFogDensity, setInternalGlobalFogDensity] = useState(globalFogDensityProp);
+  const [internalFogNoiseScale, setInternalFogNoiseScale] = useState(fogNoiseScaleProp);
+  const [internalFogColorPreset, setInternalFogColorPreset] = useState<'natural' | 'graveyard' | 'swamp' | 'crimson' | 'frost' | 'custom'>(fogColorPresetProp);
+  const [internalFogCustomColor, setInternalFogCustomColor] = useState(fogCustomColorProp);
 
   useEffect(() => { setInternalPreset(timeOfDayPreset); }, [timeOfDayPreset]);
+  useEffect(() => { 
+    if (timeOfDayHour !== undefined) {
+      setInternalHour(timeOfDayHour);
+    }
+  }, [timeOfDayHour]);
   useEffect(() => { setInternalCloudDensity(cloudDensityProp); }, [cloudDensityProp]);
   useEffect(() => { 
     setInternalMoonSize(moonSizeProp);
@@ -201,9 +262,37 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   useEffect(() => { setInternalGroundFogHeight(groundFogHeightProp); }, [groundFogHeightProp]);
   useEffect(() => { setInternalGroundFogSpeed(groundFogSpeedProp); }, [groundFogSpeedProp]);
   useEffect(() => { setInternalGlobalFogDensity(globalFogDensityProp); }, [globalFogDensityProp]);
+  useEffect(() => { setInternalFogNoiseScale(fogNoiseScaleProp); }, [fogNoiseScaleProp]);
+  useEffect(() => { setInternalFogColorPreset(fogColorPresetProp); }, [fogColorPresetProp]);
+  useEffect(() => { setInternalFogCustomColor(fogCustomColorProp); }, [fogCustomColorProp]);
 
   // Tab state inside popover
-  const [activeTab, setActiveTab] = useState<'luz' | 'sky' | 'fog' | 'rain'>('luz');
+  const [activeTab, setActiveTab] = useState<'luz' | 'sky' | 'fog' | 'rain' | 'map'>('luz');
+  const [customYouTubeUrl, setCustomYouTubeUrl] = useState(floorTextureUrl || '');
+
+  useEffect(() => {
+    setCustomYouTubeUrl(floorTextureUrl || '');
+  }, [floorTextureUrl]);
+
+  // Calibration Helpers for Overlapping Video Grid with Game Grid 1:1
+  const currentScale = videoGridConfig?.scale ?? 1.0;
+  const currentOffsetX = videoGridConfig?.offsetX ?? 0;
+  const currentOffsetY = videoGridConfig?.offsetY ?? 0;
+  const currentGridOpacity = videoGridConfig?.gridOpacity ?? 0.35;
+  const currentGridColor = videoGridConfig?.gridColor ?? '#0284c7';
+
+  const updateVideoGrid = (patch: Partial<VideoGridAlignmentConfig>) => {
+    if (onVideoGridConfigChange) {
+      onVideoGridConfigChange({
+        scale: patch.scale ?? currentScale,
+        offsetX: patch.offsetX ?? currentOffsetX,
+        offsetY: patch.offsetY ?? currentOffsetY,
+        gridOpacity: patch.gridOpacity ?? currentGridOpacity,
+        gridColor: patch.gridColor ?? currentGridColor,
+        aspectRatio: patch.aspectRatio ?? videoGridConfig?.aspectRatio ?? '16:9'
+      });
+    }
+  };
 
   const triggerEnvChange = (updates: Partial<{
     timeOfDayPreset: 'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors';
@@ -232,11 +321,15 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
     groundFogHeight: number;
     groundFogSpeed: number;
     globalFogDensity: number;
+    fogNoiseScale: number;
+    fogColorPreset: 'natural' | 'graveyard' | 'swamp' | 'crimson' | 'frost' | 'custom';
+    fogCustomColor: string;
   }>) => {
     const nextPreset = updates.timeOfDayPreset ?? internalPreset;
     const nextIndoor = updates.isIndoor ?? (nextPreset === 'indoors');
     if (updates.timeOfDayPreset !== undefined) setInternalPreset(updates.timeOfDayPreset);
-    const nextHour = updates.timeOfDayHour ?? timeOfDayHour;
+    const nextHour = updates.timeOfDayHour !== undefined ? updates.timeOfDayHour : internalHour;
+    if (updates.timeOfDayHour !== undefined) setInternalHour(updates.timeOfDayHour);
     const nextFog = updates.hasFog ?? hasFog;
     const nextRain = updates.hasRain ?? hasRain;
     const nextClouds = updates.cloudDensity ?? internalCloudDensity;
@@ -260,6 +353,9 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
     const nextGroundFogHeight = updates.groundFogHeight ?? internalGroundFogHeight;
     const nextGroundFogSpeed = updates.groundFogSpeed ?? internalGroundFogSpeed;
     const nextGlobalFogDensity = updates.globalFogDensity ?? internalGlobalFogDensity;
+    const nextFogNoiseScale = updates.fogNoiseScale ?? internalFogNoiseScale;
+    const nextFogColorPreset = updates.fogColorPreset ?? internalFogColorPreset;
+    const nextFogCustomColor = updates.fogCustomColor ?? internalFogCustomColor;
 
     if (updates.cloudDensity !== undefined) setInternalCloudDensity(updates.cloudDensity);
     if (updates.moonSize !== undefined) setInternalMoonSize(updates.moonSize);
@@ -282,6 +378,9 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
     if (updates.groundFogHeight !== undefined) setInternalGroundFogHeight(updates.groundFogHeight);
     if (updates.groundFogSpeed !== undefined) setInternalGroundFogSpeed(updates.groundFogSpeed);
     if (updates.globalFogDensity !== undefined) setInternalGlobalFogDensity(updates.globalFogDensity);
+    if (updates.fogNoiseScale !== undefined) setInternalFogNoiseScale(updates.fogNoiseScale);
+    if (updates.fogColorPreset !== undefined) setInternalFogColorPreset(updates.fogColorPreset);
+    if (updates.fogCustomColor !== undefined) setInternalFogCustomColor(updates.fogCustomColor);
 
     if (onEnvironmentChange) {
       onEnvironmentChange({
@@ -311,6 +410,9 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
         groundFogHeight: nextGroundFogHeight,
         groundFogSpeed: nextGroundFogSpeed,
         globalFogDensity: nextGlobalFogDensity,
+        fogNoiseScale: nextFogNoiseScale,
+        fogColorPreset: nextFogColorPreset,
+        fogCustomColor: nextFogCustomColor,
       });
     }
   };
@@ -360,10 +462,11 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
       sun = 0.35;
     }
 
+    setInternalPreset(preset);
+    setInternalHour(hour);
     setInternalAmbientLightIntensity(ambient);
     setInternalSunLightIntensity(sun);
 
-    setInternalPreset(preset);
     if (onTimeOfDayChange) onTimeOfDayChange(preset);
     triggerEnvChange({
       timeOfDayPreset: preset,
@@ -508,7 +611,8 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                       { id: 'luz', label: 'Luzes', icon: <Sun className="w-3 h-3" /> },
                       { id: 'sky', label: 'Céu/Lua', icon: <Moon className="w-3 h-3" /> },
                       { id: 'fog', label: 'Nevoeiro', icon: <CloudFog className="w-3 h-3" /> },
-                      { id: 'rain', label: 'Chuva', icon: <CloudRain className="w-3 h-3" /> }
+                      { id: 'rain', label: 'Chuva', icon: <CloudRain className="w-3 h-3" /> },
+                      { id: 'map', label: 'Mapa Vivo', icon: <Film className="w-3 h-3 text-emerald-400" /> }
                     ] as const).map(tab => (
                       <button
                         key={tab.id}
@@ -535,22 +639,28 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                         <div className="space-y-0.5">
                           <div className="flex justify-between text-[10px] font-mono">
                             <span className="text-slate-400">Hora do Dia:</span>
-                            <span className="font-bold text-amber-400">{timeOfDayHour}h</span>
+                            <span className="font-bold text-amber-400">{internalHour}h</span>
                           </div>
                           <input
                             type="range"
                             min="0"
                             max="24"
-                            value={timeOfDayHour}
+                            value={internalHour}
                             onChange={(e) => {
                               const h = parseInt(e.target.value);
                               const isNight = h < 6 || h > 19;
                               const isSunset = h >= 17 && h <= 19;
                               const ambient = isNight ? 0.03 : (isSunset ? 0.35 : 0.65);
                               const sun = isNight ? 0.08 : (isSunset ? 0.7 : 1.0);
+                              const dynamicPreset = isNight ? 'night' : (isSunset ? 'sunset' : 'day');
+                              setInternalHour(h);
+                              setInternalPreset(dynamicPreset);
                               setInternalAmbientLightIntensity(ambient);
                               setInternalSunLightIntensity(sun);
+                              if (onTimeOfDayChange) onTimeOfDayChange(dynamicPreset);
                               triggerEnvChange({
+                                timeOfDayPreset: dynamicPreset,
+                                isIndoor: false,
                                 timeOfDayHour: h,
                                 ambientLightIntensity: ambient,
                                 sunLightIntensity: sun,
@@ -568,8 +678,8 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                           </div>
                           <input
                             type="range"
-                            min="0.1"
-                            max="24.0"
+                            min="0.2"
+                            max="4.0"
                             step="0.1"
                             value={internalSunSize}
                             onChange={(e) => triggerEnvChange({ sunSize: parseFloat(e.target.value) })}
@@ -619,7 +729,9 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                         {/* Clouds */}
                         <div className="space-y-0.5">
                           <div className="flex justify-between text-[10px] font-mono">
-                            <span className="text-slate-400">Densidade de Nuvens:</span>
+                            <span className="text-slate-400">
+                              Cobertura de Nuvens ({internalCloudDensity === 0 ? '0% Limpo' : internalCloudDensity === 100 ? '100% Encoberto' : `${internalCloudDensity}%`}):
+                            </span>
                             <span className="font-bold text-sky-400">{internalCloudDensity}%</span>
                           </div>
                           <input
@@ -753,7 +865,7 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                     {/* TAB: FOG */}
                     {activeTab === 'fog' && (
                       <div className="space-y-2.5 animate-fade-in">
-                        {/* Fog Toggle & Global Density */}
+                        {/* Fog Toggle */}
                         <div className="flex items-center justify-between pb-1 border-b border-slate-900">
                           <label className="flex items-center gap-1.5 cursor-pointer font-bold text-amber-400 uppercase tracking-wider text-[9px]">
                             <input
@@ -762,55 +874,82 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                               onChange={(e) => triggerEnvChange({ hasFog: e.target.checked })}
                               className="rounded border-slate-800 text-amber-500 focus:ring-0 bg-slate-950 w-3 h-3"
                             />
-                            <span>Habilitar Fog</span>
+                            <span>Habilitar Névoa 3D</span>
                           </label>
                         </div>
 
-                        {/* Global Fog Density */}
-                        <div className="space-y-0.5">
-                          <div className="flex justify-between text-[10px] font-mono">
-                            <span className="text-slate-400">Fog Global (Exp2):</span>
-                            <span className="font-bold text-amber-300">{(internalGlobalFogDensity * 1000).toFixed(1)}k</span>
+                        {/* Fog Theme Presets */}
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Estilo Atmosférico:</label>
+                          <div className="grid grid-cols-5 gap-1">
+                            {([
+                              { id: 'natural', label: 'Natural', color: 'bg-slate-400/20 text-slate-300 border-slate-600' },
+                              { id: 'graveyard', label: 'Cemitério', color: 'bg-sky-500/20 text-sky-300 border-sky-500' },
+                              { id: 'swamp', label: 'Pântano', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500' },
+                              { id: 'crimson', label: 'Abissal', color: 'bg-rose-500/20 text-rose-300 border-rose-500' },
+                              { id: 'frost', label: 'Gelo', color: 'bg-cyan-400/20 text-cyan-200 border-cyan-400' },
+                            ] as const).map(theme => (
+                              <button
+                                key={theme.id}
+                                disabled={!hasFog}
+                                onClick={() => {
+                                  setInternalFogColorPreset(theme.id);
+                                  triggerEnvChange({ fogColorPreset: theme.id });
+                                }}
+                                className={`py-1 px-0.5 rounded flex flex-col items-center justify-center border text-[8px] font-bold transition-all disabled:opacity-30 ${
+                                  internalFogColorPreset === theme.id
+                                    ? `${theme.color} ring-1 ring-amber-400 shadow-md`
+                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                                }`}
+                              >
+                                <span>{theme.label}</span>
+                              </button>
+                            ))}
                           </div>
-                          <input
-                            type="range"
-                            min="0.0"
-                            max="0.015"
-                            step="0.0005"
-                            disabled={!hasFog}
-                            value={internalGlobalFogDensity}
-                            onChange={(e) => triggerEnvChange({ globalFogDensity: parseFloat(e.target.value) })}
-                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500 disabled:opacity-30"
-                          />
-                        </div>
-
-                        {/* Ground Fog Header */}
-                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pt-1 border-t border-slate-900">
-                          Névoa de Chão Rasteira
                         </div>
 
                         {/* Ground Fog Density */}
                         <div className="space-y-0.5">
                           <div className="flex justify-between text-[10px] font-mono">
-                            <span className="text-slate-400">Intensidade (Puffs):</span>
-                            <span className="font-bold text-slate-300">{internalGroundFogDensity}</span>
+                            <span className="text-slate-400">Densidade Volumétrica:</span>
+                            <span className="font-bold text-amber-300">{Math.round((internalGroundFogDensity / 300) * 100)}%</span>
                           </div>
                           <input
                             type="range"
-                            min="10"
+                            min="0"
                             max="300"
                             step="10"
                             disabled={!hasFog}
                             value={internalGroundFogDensity}
                             onChange={(e) => triggerEnvChange({ groundFogDensity: parseInt(e.target.value) })}
-                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-slate-400 disabled:opacity-30"
+                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500 disabled:opacity-30"
+                          />
+                        </div>
+
+                        {/* Fog Noise Scale (Turbulence / Tendrils) */}
+                        <div className="space-y-0.5">
+                          <div className="flex justify-between text-[10px] font-mono">
+                            <span className="text-slate-400" title="Controla a escala das mechas e redemoinhos de ruído procedural">
+                              Turbulência / Mechas (FBM):
+                            </span>
+                            <span className="font-bold text-amber-300">{internalFogNoiseScale.toFixed(1)}x</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0.5"
+                            max="3.0"
+                            step="0.1"
+                            disabled={!hasFog}
+                            value={internalFogNoiseScale}
+                            onChange={(e) => triggerEnvChange({ fogNoiseScale: parseFloat(e.target.value) })}
+                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500 disabled:opacity-30"
                           />
                         </div>
 
                         {/* Ground Fog Height */}
                         <div className="space-y-0.5">
                           <div className="flex justify-between text-[10px] font-mono">
-                            <span className="text-slate-400">Altura de Cobertura Y:</span>
+                            <span className="text-slate-400">Altura do Manto Y:</span>
                             <span className="font-bold text-slate-300">{internalGroundFogHeight.toFixed(1)}m</span>
                           </div>
                           <input
@@ -825,20 +964,79 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                           />
                         </div>
 
-                        {/* Ground Fog Speed */}
+                        {/* Wind / Drift Direction (Compass Azimuth) */}
+                        <div className="space-y-1 pt-1 border-t border-slate-900">
+                          <div className="flex justify-between text-[10px] font-mono">
+                            <span className="text-slate-400">Direção da Névoa (Vento):</span>
+                            <span className="font-bold text-amber-300">{getCompassLabel(internalWindAngle)} ({internalWindAngle}°)</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="360"
+                            step="5"
+                            disabled={!hasFog}
+                            value={internalWindAngle}
+                            onChange={(e) => triggerEnvChange({ windAngle: parseInt(e.target.value) })}
+                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400 disabled:opacity-30"
+                          />
+                          <div className="grid grid-cols-8 gap-0.5 pt-0.5">
+                            {CARDINAL_POINTS.map((cardinal) => {
+                              const isCurrent = Math.abs(((internalWindAngle % 360) + 360) % 360 - cardinal.angle) < 15;
+                              return (
+                                <button
+                                  key={cardinal.label}
+                                  type="button"
+                                  disabled={!hasFog}
+                                  onClick={() => triggerEnvChange({ windAngle: cardinal.angle })}
+                                  className={`py-0.5 text-[8.5px] font-bold rounded border transition-all ${
+                                    isCurrent
+                                      ? 'bg-amber-500/30 border-amber-400 text-amber-200'
+                                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                  } disabled:opacity-30`}
+                                >
+                                  {cardinal.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Ground Fog Speed (Drift) */}
                         <div className="space-y-0.5">
                           <div className="flex justify-between text-[10px] font-mono">
-                            <span className="text-slate-400">Velocidade de Deriva:</span>
-                            <span className="font-bold text-slate-300">{internalGroundFogSpeed.toFixed(1)}x</span>
+                            <span className="text-slate-400">Velocidade do Vento:</span>
+                            <span className="font-bold text-slate-300">
+                              {internalGroundFogSpeed.toFixed(1)}x
+                              {internalGroundFogSpeed === 0 ? ' (Estático)' : internalGroundFogSpeed > 6.0 ? ' (Vendaval)' : internalGroundFogSpeed > 3.0 ? ' (Forte)' : ' (Brisa)'}
+                            </span>
                           </div>
                           <input
                             type="range"
                             min="0.0"
-                            max="3.0"
-                            step="0.1"
+                            max="10.0"
+                            step="0.2"
                             disabled={!hasFog}
                             value={internalGroundFogSpeed}
                             onChange={(e) => triggerEnvChange({ groundFogSpeed: parseFloat(e.target.value) })}
+                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-slate-400 disabled:opacity-30"
+                          />
+                        </div>
+
+                        {/* Global Distance Fog */}
+                        <div className="space-y-0.5 pt-1 border-t border-slate-900">
+                          <div className="flex justify-between text-[10px] font-mono">
+                            <span className="text-slate-400">Névoa Global de Distância:</span>
+                            <span className="font-bold text-slate-300">{(internalGlobalFogDensity * 1000).toFixed(1)}k</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0.0"
+                            max="0.015"
+                            step="0.0005"
+                            disabled={!hasFog}
+                            value={internalGlobalFogDensity}
+                            onChange={(e) => triggerEnvChange({ globalFogDensity: parseFloat(e.target.value) })}
                             className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-slate-400 disabled:opacity-30"
                           />
                         </div>
@@ -957,21 +1155,258 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                         </div>
                       </div>
                     )}
-                  </div>
 
-                  {/* Floor Texture Selector */}
-                  <div className="space-y-1 pt-2 border-t border-slate-800/80">
-                    <label className="text-[9px] font-bold uppercase text-slate-500 tracking-wider">Textura do Chão:</label>
-                    <select
-                      value={floorTextureUrl || ''}
-                      onChange={(e) => onFloorTextureChange && onFloorTextureChange(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-850 text-slate-300 rounded p-1.5 text-xs outline-none focus:border-amber-500/50"
-                    >
-                      <option value="">Nenhuma (Cor sólida)</option>
-                      {availableTextures.map((tex: { name: string; url: string }) => (
-                        <option key={tex.url} value={tex.url}>{tex.name}</option>
-                      ))}
-                    </select>
+                    {/* TAB: MAPA VIVO / YOUTUBE & CALIBRAÇÃO 1:1 */}
+                    {activeTab === 'map' && (
+                      <div className="space-y-3 animate-fade-in text-xs">
+                        {/* 1. Curated Living Battlemaps Presets */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[9px] font-bold uppercase text-emerald-400 tracking-wider flex items-center gap-1">
+                              <Sparkles className="w-2.5 h-2.5" />
+                              <span>Catálogo de Mapas Vivos:</span>
+                            </label>
+                            <span className="text-[9px] text-slate-500 font-mono">1-Clique</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1 custom-scrollbar">
+                            {LIVING_BATTLEMAPS_PRESETS.map((mapPreset) => {
+                              const isSelected = floorTextureUrl === mapPreset.youtubeUrl || 
+                                extractYouTubeVideoId(floorTextureUrl) === mapPreset.youtubeId;
+
+                              return (
+                                <button
+                                  key={mapPreset.id}
+                                  onClick={() => {
+                                    if (onFloorTextureChange) {
+                                      onFloorTextureChange(mapPreset.youtubeUrl);
+                                      setCustomYouTubeUrl(mapPreset.youtubeUrl);
+                                      setActiveVideoMapTitle(mapPreset.name);
+                                      if (mapPreset.defaultScale && onVideoGridConfigChange) {
+                                        updateVideoGrid({
+                                          scale: mapPreset.defaultScale,
+                                          offsetX: mapPreset.defaultOffsetX ?? 0,
+                                          offsetY: mapPreset.defaultOffsetY ?? 0
+                                        });
+                                      }
+                                    }
+                                  }}
+                                  className={`relative group flex flex-col items-start p-1 rounded-lg border text-left transition-all overflow-hidden ${
+                                    isSelected
+                                      ? 'bg-emerald-950/40 border-emerald-500 text-emerald-200 ring-1 ring-emerald-500 shadow-sm'
+                                      : 'bg-slate-900/80 hover:bg-slate-850 border-slate-800 text-slate-300'
+                                  }`}
+                                  title={`${mapPreset.name} - ${mapPreset.ambientSoundDescription}`}
+                                >
+                                  <div className="w-full h-11 rounded bg-slate-950 overflow-hidden relative mb-1 flex items-center justify-center">
+                                    <img 
+                                      src={mapPreset.thumbnailUrl} 
+                                      alt={mapPreset.name}
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                                      loading="lazy"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                      }}
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end p-0.5 pointer-events-none">
+                                      <span className="text-[7.5px] font-bold text-emerald-300 bg-slate-950/90 px-1 rounded flex items-center gap-0.5">
+                                        <Play className="w-2 h-2 fill-emerald-300" /> HD Loop
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <span className="text-[9.5px] font-bold truncate w-full">
+                                    {mapPreset.name}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* 2. Custom YouTube or Video URL Input */}
+                        <div className="space-y-1 pt-1.5 border-t border-slate-800/80">
+                          <label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider flex items-center justify-between">
+                            <span>Link Personalizado do YouTube:</span>
+                            {isAnyVideoMapUrl(floorTextureUrl) && (
+                              <span className="text-[8px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-500/40 px-1 rounded">
+                                ● Vídeo Ativo
+                              </span>
+                            )}
+                          </label>
+                          <div className="flex gap-1">
+                            <input
+                              type="text"
+                              value={customYouTubeUrl}
+                              placeholder="https://www.youtube.com/watch?v=..."
+                              onChange={(e) => setCustomYouTubeUrl(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && onFloorTextureChange) {
+                                  onFloorTextureChange(customYouTubeUrl.trim());
+                                  setActiveVideoMapTitle('Vídeo Personalizado');
+                                }
+                              }}
+                              className="flex-1 bg-slate-900 border border-slate-800 text-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-emerald-500/60 font-mono text-[10px]"
+                            />
+                            <button
+                              onClick={() => {
+                                if (onFloorTextureChange) {
+                                  onFloorTextureChange(customYouTubeUrl.trim());
+                                  setActiveVideoMapTitle('Vídeo Personalizado');
+                                }
+                              }}
+                              className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-2 py-1 rounded text-[10px] transition-all cursor-pointer"
+                              title="Aplicar Link do Vídeo"
+                            >
+                              Aplicar
+                            </button>
+                            {floorTextureUrl && (
+                              <button
+                                onClick={() => {
+                                  if (onFloorTextureChange) {
+                                    onFloorTextureChange('');
+                                    setCustomYouTubeUrl('');
+                                    setActiveVideoMapTitle('');
+                                  }
+                                }}
+                                className="bg-slate-850 hover:bg-rose-900/60 text-slate-400 hover:text-rose-300 border border-slate-700/60 p-1 rounded transition-all cursor-pointer"
+                                title="Remover Vídeo e Voltar ao Chão Sólido"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 3. Grid Alignment & Overlap Calibration Tools (1:1) */}
+                        <div className="space-y-2 pt-2 border-t border-slate-800/80 bg-slate-900/40 p-2 rounded-lg border">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] font-bold uppercase text-amber-400 tracking-wider flex items-center gap-1">
+                              <Grid className="w-3 h-3" />
+                              <span>Alinhar Grid com o Vídeo (1:1):</span>
+                            </span>
+                            <button
+                              onClick={() => updateVideoGrid({ scale: 1.0, offsetX: 0, offsetY: 0, gridOpacity: 0.35, gridColor: '#0284c7' })}
+                              className="text-[8px] font-bold text-slate-400 hover:text-amber-300 flex items-center gap-0.5 cursor-pointer"
+                              title="Resetar alinhamento para padrão"
+                            >
+                              <RefreshCw className="w-2.5 h-2.5" />
+                              <span>Reset</span>
+                            </button>
+                          </div>
+
+                          {/* Zoom / Scale */}
+                          <div className="space-y-0.5">
+                            <div className="flex justify-between text-[9px] font-mono">
+                              <span className="text-slate-400">Zoom / Escala do Vídeo:</span>
+                              <span className="font-bold text-amber-300">{currentScale.toFixed(2)}x</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.5"
+                              max="2.5"
+                              step="0.02"
+                              value={currentScale}
+                              onChange={(e) => updateVideoGrid({ scale: parseFloat(e.target.value) })}
+                              className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                            />
+                          </div>
+
+                          {/* Offset X & Y */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-0.5">
+                              <div className="flex justify-between text-[9px] font-mono">
+                                <span className="text-slate-400">Posição X:</span>
+                                <span className="font-bold text-slate-300">{currentOffsetX.toFixed(1)}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="-50"
+                                max="50"
+                                step="0.5"
+                                value={currentOffsetX}
+                                onChange={(e) => updateVideoGrid({ offsetX: parseFloat(e.target.value) })}
+                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-slate-400"
+                              />
+                            </div>
+
+                            <div className="space-y-0.5">
+                              <div className="flex justify-between text-[9px] font-mono">
+                                <span className="text-slate-400">Posição Y:</span>
+                                <span className="font-bold text-slate-300">{currentOffsetY.toFixed(1)}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="-50"
+                                max="50"
+                                step="0.5"
+                                value={currentOffsetY}
+                                onChange={(e) => updateVideoGrid({ offsetY: parseFloat(e.target.value) })}
+                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-slate-400"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Grid Opacity & Contrast Color */}
+                          <div className="space-y-1 pt-1 border-t border-slate-800/60">
+                            <div className="flex justify-between text-[9px] font-mono">
+                              <span className="text-slate-400">Opacidade do Grid:</span>
+                              <span className="font-bold text-cyan-400">{Math.round(currentGridOpacity * 100)}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.05"
+                              max="1.0"
+                              step="0.05"
+                              value={currentGridOpacity}
+                              onChange={(e) => updateVideoGrid({ gridOpacity: parseFloat(e.target.value) })}
+                              className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                            />
+
+                            {/* Color contrast palette */}
+                            <div className="flex items-center gap-1 pt-1">
+                              <span className="text-[8.5px] text-slate-500 font-bold uppercase">Cor do Grid:</span>
+                              {[
+                                { color: '#0284c7', label: 'Ciano' },
+                                { color: '#ffffff', label: 'Branco' },
+                                { color: '#fbbf24', label: 'Ouro' },
+                                { color: '#22c55e', label: 'Verde' },
+                                { color: '#e11d48', label: 'Rubi' },
+                                { color: '#1e293b', label: 'Sombra' },
+                              ].map((c) => (
+                                <button
+                                  key={c.color}
+                                  onClick={() => updateVideoGrid({ gridColor: c.color })}
+                                  className={`w-4 h-4 rounded-full border transition-all cursor-pointer ${
+                                    currentGridColor === c.color ? 'scale-125 border-white ring-1 ring-white/50' : 'border-slate-700 hover:scale-110'
+                                  }`}
+                                  style={{ backgroundColor: c.color }}
+                                  title={c.label}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 4. Textura Estática Alternativa */}
+                        <div className="space-y-1 pt-1 border-t border-slate-800/80">
+                          <label className="text-[9px] font-bold uppercase text-slate-500 tracking-wider">Ou Textura Estática:</label>
+                          <select
+                            value={isAnyVideoMapUrl(floorTextureUrl) ? '' : (floorTextureUrl || '')}
+                            onChange={(e) => {
+                              if (onFloorTextureChange) {
+                                onFloorTextureChange(e.target.value);
+                                setCustomYouTubeUrl('');
+                              }
+                            }}
+                            className="w-full bg-slate-900 border border-slate-850 text-slate-300 rounded p-1.5 text-xs outline-none focus:border-amber-500/50"
+                          >
+                            <option value="">Nenhuma (Cor sólida)</option>
+                            {availableTextures.map((tex: { name: string; url: string }) => (
+                              <option key={tex.url} value={tex.url}>{tex.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

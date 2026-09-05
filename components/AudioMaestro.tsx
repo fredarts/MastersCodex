@@ -22,7 +22,8 @@ import {
   DoorOpen,
   Hammer,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Film
 } from 'lucide-react';
 import { BGMTrack, SFXButton } from '@/lib/types';
 import { BGM_TRACKS, SFX_BUTTONS } from '@/lib/srd-data';
@@ -30,6 +31,7 @@ import { useAudio } from '@/context/AudioContext';
 import { useSession } from '@/context/SessionContext';
 import { useCampaign } from '@/context/CampaignContext';
 import { supabase, isValidUuid } from '@/lib/supabase';
+import { isAnyVideoMapUrl, extractYouTubeVideoId, LIVING_BATTLEMAPS_PRESETS } from '@/lib/living-battlemaps-catalog';
 
 interface AudioMaestroProps {
   onOpenAudioPanel?: () => void;
@@ -52,7 +54,13 @@ export const AudioMaestro: React.FC<AudioMaestroProps> = ({ onOpenAudioPanel }) 
     playSfx, 
     toggleBgmLoop, 
     isLooping, 
-    resumeBgm 
+    resumeBgm,
+    videoMapVolume,
+    isVideoMapMuted,
+    setVideoMapVolume,
+    setIsVideoMapMuted,
+    activeVideoMapTitle,
+    setActiveVideoMapTitle
   } = useAudio();
 
   const [activeSfxId, setActiveSfxId] = useState<string | null>(null);
@@ -66,6 +74,7 @@ export const AudioMaestro: React.FC<AudioMaestroProps> = ({ onOpenAudioPanel }) 
   const [isBgmCollapsed, setIsBgmCollapsed] = useState(false);
   const [isNarrationCollapsed, setIsNarrationCollapsed] = useState(false);
   const [isSfxCollapsed, setIsSfxCollapsed] = useState(false);
+  const [isMapAudioCollapsed, setIsMapAudioCollapsed] = useState(false);
 
   const npcAudioRef = useRef<HTMLAudioElement | null>(null);
   const originalVolumeRef = useRef<number>(volume);
@@ -146,6 +155,23 @@ export const AudioMaestro: React.FC<AudioMaestroProps> = ({ onOpenAudioPanel }) 
       }
     };
   }, [selectedNarrationUrl]);
+
+  // Sync active video map title from scene floor texture
+  useEffect(() => {
+    if (activeScene?.floorTextureUrl && isAnyVideoMapUrl(activeScene.floorTextureUrl)) {
+      const yId = extractYouTubeVideoId(activeScene.floorTextureUrl);
+      const preset = LIVING_BATTLEMAPS_PRESETS.find(p => p.youtubeId === yId || p.youtubeUrl === activeScene.floorTextureUrl);
+      if (preset) {
+        setActiveVideoMapTitle(preset.name);
+      } else if (yId) {
+        setActiveVideoMapTitle('YouTube Living Map');
+      } else {
+        setActiveVideoMapTitle('Vídeo Animado');
+      }
+    } else {
+      setActiveVideoMapTitle('');
+    }
+  }, [activeScene?.floorTextureUrl, setActiveVideoMapTitle]);
 
   // Auto-Ducking Engine: Attenuate BGM volume to 35% when Narration is playing
   useEffect(() => {
@@ -587,6 +613,98 @@ export const AudioMaestro: React.FC<AudioMaestroProps> = ({ onOpenAudioPanel }) 
               onClick={() => setIsSfxCollapsed(true)}
               className="p-0.5 text-slate-500 hover:text-amber-300 cursor-pointer rounded ml-0.5"
               title="Recolher SFX"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* CANAL 4: MAPA VIVO / VÍDEO DO YOUTUBE (ÁUDIO AMBIENTE DO MAPA)             */}
+        {/* ========================================================================= */}
+        {isMapAudioCollapsed ? (
+          <div className="flex items-center gap-1.5 bg-[#141a27] border border-[#2a3449] hover:border-emerald-500/40 px-2 py-1.5 rounded-xl shrink-0 transition-all shadow-sm">
+            <button
+              onClick={() => setIsVideoMapMuted(!isVideoMapMuted)}
+              className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+                activeVideoMapTitle && !isVideoMapMuted && videoMapVolume > 0
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                  : 'bg-[#0a0d14] text-slate-500'
+              }`}
+              title={isVideoMapMuted ? 'Desmutar Áudio do Mapa Vivo' : 'Mutar Áudio do Mapa Vivo'}
+            >
+              {isVideoMapMuted || videoMapVolume === 0 ? (
+                <VolumeX className="w-3 h-3 text-rose-400" />
+              ) : (
+                <Volume2 className="w-3 h-3" />
+              )}
+            </button>
+            <button
+              onClick={() => setIsMapAudioCollapsed(false)}
+              className="flex items-center gap-1 text-slate-200 hover:text-emerald-300 cursor-pointer"
+              title="Expandir Áudio do Mapa Vivo"
+            >
+              <Film className="w-3 h-3 text-emerald-400 shrink-0" />
+              <span className="text-[10px] font-bold truncate max-w-[70px] sm:max-w-[85px]">
+                {activeVideoMapTitle || 'Mapa Vivo'}
+              </span>
+              <ChevronRight className="w-3 h-3 text-slate-500" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 bg-[#141a27] border border-[#2a3449] px-2 py-1 rounded-xl shrink-0 max-w-[260px] shadow-sm">
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-1">
+                <Film className="w-3 h-3 text-emerald-400 shrink-0" />
+                <span className="text-[9px] font-bold text-emerald-300/90 uppercase font-mono tracking-wider">
+                  Mapa Vivo
+                </span>
+                {activeVideoMapTitle && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                )}
+              </div>
+              <div 
+                className="text-[11px] font-medium text-slate-200 truncate w-20 sm:w-24 px-1"
+                title={activeVideoMapTitle || 'Nenhum mapa vivo ativo no combate'}
+              >
+                {activeVideoMapTitle || 'Inativo'}
+              </div>
+            </div>
+
+            {/* Volume Slider & Mute Toggle */}
+            <div className="flex items-center gap-1 pl-1 border-l border-[#2a3449]/70">
+              <button
+                onClick={() => setIsVideoMapMuted(!isVideoMapMuted)}
+                className="text-slate-400 hover:text-emerald-300 cursor-pointer"
+                title={isVideoMapMuted ? 'Desmutar Mapa' : 'Mutar Mapa'}
+              >
+                {isVideoMapMuted || videoMapVolume === 0 ? (
+                  <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+                ) : (
+                  <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                )}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={isVideoMapMuted ? 0 : videoMapVolume}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setVideoMapVolume(val);
+                  if (isVideoMapMuted) setIsVideoMapMuted(false);
+                }}
+                className="w-10 sm:w-12 accent-emerald-500 bg-[#0a0d14] h-1 rounded-lg cursor-pointer"
+                title={`Volume do Mapa Vivo: ${Math.round(videoMapVolume * 100)}%`}
+              />
+            </div>
+
+            {/* Collapse button */}
+            <button
+              onClick={() => setIsMapAudioCollapsed(true)}
+              className="p-0.5 text-slate-500 hover:text-emerald-300 cursor-pointer rounded ml-0.5"
+              title="Recolher Áudio do Mapa Vivo"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>

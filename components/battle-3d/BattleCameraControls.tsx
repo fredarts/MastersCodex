@@ -25,8 +25,9 @@ export function setupCameraAndOrbit(
   const controls = new OrbitControls(camera, container);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
-  controls.maxPolarAngle = Math.PI / 2 - 0.05; // Impede a câmera de atravessar o chão
-  controls.minDistance = 3;
+  controls.minPolarAngle = 0.08; // Impede gimbal lock / NaN na matriz da câmera no topo (90° vertical)
+  controls.maxPolarAngle = Math.PI / 2 - 0.22; // Mantém a câmera a uma altitude segura (~12.5° acima do solo), impedindo o recorte do plano 3D/vídeo
+  controls.minDistance = 4.5;
   controls.maxDistance = 40;
 
   return { camera, controls };
