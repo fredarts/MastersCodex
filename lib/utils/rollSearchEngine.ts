@@ -51,15 +51,47 @@ export interface ParsedSearchQuery {
 }
 
 /**
+ * Normaliza qualquer formato de timestamp (string, number, Date, undefined) em uma string legível
+ */
+export function normalizeTimestampString(timestamp: unknown): string {
+  if (!timestamp) return '';
+  if (typeof timestamp === 'string') return timestamp;
+  if (typeof timestamp === 'number') {
+    try {
+      const d = new Date(timestamp);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+      return String(timestamp);
+    } catch {
+      return String(timestamp);
+    }
+  }
+  if (timestamp instanceof Date) {
+    try {
+      if (!isNaN(timestamp.getTime())) {
+        return timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+    } catch {
+      return '';
+    }
+  }
+  return String(timestamp);
+}
+
+/**
  * Converte entradas de log de combate e mensagens de chat em um modelo unificado
  */
 export function unifyLogEntries(
-  combatLogs: CombatLogEntry[],
-  chatMessages: ChatMessage[]
+  combatLogs: CombatLogEntry[] = [],
+  chatMessages: ChatMessage[] = []
 ): UnifiedLogEntry[] {
   const entries: UnifiedLogEntry[] = [];
+  const safeLogs = Array.isArray(combatLogs) ? combatLogs : [];
+  const safeMessages = Array.isArray(chatMessages) ? chatMessages : [];
 
-  for (const log of combatLogs) {
+  for (const log of safeLogs) {
+    if (!log) continue;
     const isCombatType =
       log.eventType === 'attack' ||
       log.eventType === 'damage' ||
@@ -67,12 +99,12 @@ export function unifyLogEntries(
       log.eventType === 'death';
 
     entries.push({
-      id: log.id,
+      id: log.id || `log-${Math.random().toString(36).substring(2, 9)}`,
       type: isCombatType ? 'combat' : 'roll',
-      timestamp: log.timestamp,
+      timestamp: normalizeTimestampString(log.timestamp),
       actorName: log.actorName || 'Sistema',
       targetName: log.targetName,
-      content: log.description,
+      content: log.description || '',
       isCrit: log.isCrit,
       isFail: log.isFail,
       isHit: log.isHit,
@@ -87,13 +119,14 @@ export function unifyLogEntries(
     });
   }
 
-  for (const msg of chatMessages) {
+  for (const msg of safeMessages) {
+    if (!msg) continue;
     entries.push({
-      id: msg.id,
+      id: msg.id || `chat-${Math.random().toString(36).substring(2, 9)}`,
       type: msg.rollResult ? 'roll' : 'chat',
-      timestamp: msg.timestamp,
-      actorName: msg.senderName,
-      content: msg.content,
+      timestamp: normalizeTimestampString(msg.timestamp),
+      actorName: msg.senderName || 'Anônimo',
+      content: msg.content || '',
       isCrit: msg.rollResult?.isCrit,
       isFail: msg.rollResult?.isFail,
       isSecret: msg.isSecret || msg.rollResult?.isSecret,
@@ -104,7 +137,11 @@ export function unifyLogEntries(
     });
   }
 
-  entries.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  entries.sort((a, b) => {
+    const timeA = typeof a.timestamp === 'string' ? a.timestamp : String(a.timestamp || '');
+    const timeB = typeof b.timestamp === 'string' ? b.timestamp : String(b.timestamp || '');
+    return timeA.localeCompare(timeB);
+  });
   return entries;
 }
 

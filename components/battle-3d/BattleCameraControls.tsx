@@ -30,6 +30,17 @@ export function setupCameraAndOrbit(
   controls.minDistance = 4.5;
   controls.maxDistance = 40;
 
+  // Botões do mouse:
+  // Esquerdo: Rotação orbital
+  // Scroll do Mouse / Botão do Meio (clicar e segurar): PAN da câmera (translada o grid)
+  // Direito: PAN da câmera
+  controls.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.PAN,
+    RIGHT: THREE.MOUSE.PAN,
+  };
+  controls.screenSpacePanning = true;
+
   return { camera, controls };
 }
 

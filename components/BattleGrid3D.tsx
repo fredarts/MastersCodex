@@ -1958,6 +1958,12 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
 
       raycaster.setFromCamera(mouse, camera);
 
+      // Clique com o botão do meio (scroll do mouse - button === 1): reservado exclusivamente para PAN do grid
+      if (event.button === 1) {
+        event.preventDefault();
+        return;
+      }
+
       // Clique com o botão direito (button === 2) cancela a mira do ataque
       if (event.button === 2 && callbacksRef.current.pendingAttack) {
         callbacksRef.current.setPendingAttack(null);

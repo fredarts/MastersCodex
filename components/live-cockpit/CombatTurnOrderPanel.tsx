@@ -85,73 +85,143 @@ export const CombatTurnOrderPanel: React.FC<CombatTurnOrderPanelProps> = ({
         {combatants.map((c, idx) => {
           const isActive = idx === currentTurnIndex;
           const isPlayer = c.type === 'player';
+
+          // Resolve avatar image
+          const sheet = characterSheets.find(s => {
+            const cClean = c.name.split('(')[0].trim().toLowerCase();
+            return s.characterName.toLowerCase() === cClean || 
+                   s.characterName.toLowerCase().includes(cClean) || 
+                   cClean.includes(s.characterName.toLowerCase());
+          });
+          const avatarUrl = c.avatarUrl || c.tokenImageUrl || c.portraitUrl || sheet?.avatarUrl;
+
           return (
-            <div
+            <CombatTurnOrderItem
               key={c.id || `${c.name}-${idx}`}
-              className={`p-2 rounded-lg border flex items-center justify-between text-xs transition-all ${
-                isActive
-                  ? 'bg-amber-500/10 border-amber-500 text-slate-100 font-semibold'
-                  : 'bg-slate-950/60 border-slate-800/80 text-slate-400 hover:border-slate-700'
-              }`}
-            >
-              <div className="flex flex-col gap-0.5">
-                <div className="flex items-center gap-2">
-                  <span className="w-5 text-center font-bold text-slate-500">{c.initiative ?? '-'}</span>
-                  <span className={isPlayer ? 'text-sky-400 font-bold' : 'text-rose-400'}>{c.name}</span>
-                </div>
-                
-                <div className="flex items-center gap-1.5 ml-7 text-[9px] font-mono font-bold">
-                  <span className={c.actionUsed ? 'text-slate-600' : 'text-emerald-400'} title="Ação">A</span>
-                  <span className={c.bonusActionUsed ? 'text-slate-600' : 'text-cyan-400'} title="Ação Bônus">B</span>
-                  <span className={c.reactionUsed ? 'text-slate-600' : 'text-amber-400'} title="Reação">R</span>
-                  <span className="text-slate-500 ml-1">
-                    {(() => {
-                      const sheet = characterSheets.find(s => {
-                        const cClean = c.name.split('(')[0].trim().toLowerCase();
-                        return s.characterName.toLowerCase() === cClean || 
-                               s.characterName.toLowerCase().includes(cClean) || 
-                               cClean.includes(s.characterName.toLowerCase());
-                      });
-                      const maxSpeed = getSpeedInMeters(sheet?.speed || c.notes) * (c.hasDashed ? 2 : 1);
-                      const rem = Math.max(0, maxSpeed - (c.movementUsed || 0));
-                      return `${rem.toFixed(1)}m`;
-                    })()}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1 font-bold">
-                  <Heart className="w-3 h-3 text-rose-500 fill-rose-500/20" />
-                  <span>{c.hp} / {c.maxHp}</span>
-                  <div className="flex items-center gap-0.5 ml-1">
-                    <button
-                      onClick={() => onUpdateHp(c.id, -1)}
-                      className="w-4 h-4 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded flex items-center justify-center font-bold"
-                    >
-                      -
-                    </button>
-                    <button
-                      onClick={() => onUpdateHp(c.id, 1)}
-                      className="w-4 h-4 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded flex items-center justify-center font-bold"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => onRemoveCombatant(c.id)}
-                  className="text-slate-500 hover:text-rose-400 p-1"
-                  title="Remover combatente"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
+              c={c}
+              idx={idx}
+              isActive={isActive}
+              isPlayer={isPlayer}
+              avatarUrl={avatarUrl}
+              sheet={sheet}
+              getSpeedInMeters={getSpeedInMeters}
+              onUpdateHp={onUpdateHp}
+              onRemoveCombatant={onRemoveCombatant}
+            />
           );
         })}
       </div>
     </div>
   );
 };
+
+interface CombatTurnOrderItemProps {
+  c: Combatant;
+  idx: number;
+  isActive: boolean;
+  isPlayer: boolean;
+  avatarUrl?: string;
+  sheet?: any;
+  getSpeedInMeters: (speedStr?: string) => number;
+  onUpdateHp: (id: string, delta: number) => void;
+  onRemoveCombatant: (id: string) => void;
+}
+
+const CombatTurnOrderItem: React.FC<CombatTurnOrderItemProps> = ({
+  c,
+  isActive,
+  isPlayer,
+  avatarUrl,
+  sheet,
+  getSpeedInMeters,
+  onUpdateHp,
+  onRemoveCombatant,
+}) => {
+  const itemRef = React.useRef<HTMLDivElement>(null);
+  const [imgErr, setImgErr] = React.useState(false);
+
+  React.useEffect(() => {
+    if (isActive && itemRef.current) {
+      itemRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+    }
+  }, [isActive]);
+
+  const maxSpeed = getSpeedInMeters(sheet?.speed || c.notes) * (c.hasDashed ? 2 : 1);
+  const rem = Math.max(0, maxSpeed - (c.movementUsed || 0));
+
+  return (
+    <div
+      ref={itemRef}
+      className={`p-2 rounded-lg border flex items-center justify-between text-xs transition-all ${
+        isActive
+          ? 'bg-amber-500/15 border-amber-500 text-slate-100 font-semibold shadow-[0_0_12px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/50'
+          : 'bg-slate-950/60 border-slate-800/80 text-slate-400 hover:border-slate-700'
+      }`}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        {/* Avatar */}
+        <div className="w-7 h-7 rounded-lg overflow-hidden bg-slate-900 border border-slate-800 shrink-0 flex items-center justify-center">
+          {avatarUrl && !imgErr ? (
+            <img
+              src={avatarUrl}
+              alt={c.name}
+              onError={() => setImgErr(true)}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span className="text-[9px] font-bold text-slate-400">
+              {c.name.substring(0, 2).toUpperCase()}
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[10px] font-mono font-bold text-amber-400 shrink-0">#{c.initiative ?? '-'}</span>
+            <span className={`truncate ${isPlayer ? 'text-sky-400 font-bold' : 'text-rose-400'}`}>{c.name}</span>
+          </div>
+          
+          <div className="flex items-center gap-1.5 text-[9px] font-mono font-bold">
+            <span className={c.actionUsed ? 'text-slate-600' : 'text-emerald-400'} title="Ação">A</span>
+            <span className={c.bonusActionUsed ? 'text-slate-600' : 'text-cyan-400'} title="Ação Bônus">B</span>
+            <span className={c.reactionUsed ? 'text-slate-600' : 'text-amber-400'} title="Reação">R</span>
+            <span className="text-slate-500 ml-1">{rem.toFixed(1)}m</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1 font-bold font-mono">
+          <Heart className="w-3 h-3 text-rose-500 fill-rose-500/20" />
+          <span>{c.hp}/{c.maxHp}</span>
+          <div className="flex items-center gap-0.5 ml-1">
+            <button
+              onClick={() => onUpdateHp(c.id, -1)}
+              className="w-4 h-4 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded flex items-center justify-center font-bold cursor-pointer"
+            >
+              -
+            </button>
+            <button
+              onClick={() => onUpdateHp(c.id, 1)}
+              className="w-4 h-4 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded flex items-center justify-center font-bold cursor-pointer"
+            >
+              +
+            </button>
+          </div>
+        </div>
+
+        <button
+          onClick={() => onRemoveCombatant(c.id)}
+          className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer"
+          title="Remover combatente"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+};
+

@@ -232,84 +232,42 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   const [showEnvMenu, setShowEnvMenu] = useState(false);
   const [availableTextures, setAvailableTextures] = useState<{name: string, url: string}[]>([]);
 
-  // State variables for all new weather controls
-  const [internalPreset, setInternalPreset] = useState<'day' | 'sunset' | 'night' | 'fog' | 'storm' | 'indoors'>(timeOfDayPreset);
-  const [internalHour, setInternalHour] = useState<number>(timeOfDayHour ?? 12);
-  const [internalCloudDensity, setInternalCloudDensity] = useState(cloudDensityProp);
-  const [internalMoonSize, setInternalMoonSize] = useState(moonSizeProp);
-  const [internalMoonLuminosity, setInternalMoonLuminosity] = useState(moonLuminosityProp);
-  const [internalMoonOffsetAngle, setInternalMoonOffsetAngle] = useState(moonOffsetAngleProp);
-  const [internalMoonAltitude, setInternalMoonAltitude] = useState(moonAltitudeProp);
-  const [internalSunSize, setInternalSunSize] = useState(sunSizeProp);
-  const [internalSunLightIntensity, setInternalSunLightIntensity] = useState(sunLightIntensityProp);
-  const [internalAmbientLightIntensity, setInternalAmbientLightIntensity] = useState(ambientLightIntensityProp);
-  const [internalSkyTurbidity, setInternalSkyTurbidity] = useState(skyTurbidityProp);
-  const [internalSkyRayleigh, setInternalSkyRayleigh] = useState(skyRayleighProp);
-  const [internalMieCoefficient, setInternalMieCoefficient] = useState(mieCoefficientProp);
-  const [internalMieDirectionalG, setInternalMieDirectionalG] = useState(mieDirectionalGProp);
-  const [internalRainIntensity, setInternalRainIntensity] = useState(rainIntensityProp);
-  const [internalRainSpeed, setInternalRainSpeed] = useState(rainSpeedProp);
-  const [internalRainDropSize, setInternalRainDropSize] = useState(rainDropSizeProp);
-  const [internalWindAngle, setInternalWindAngle] = useState(windAngleProp);
-  const [internalWindStrength, setInternalWindStrength] = useState(windStrengthProp);
-  const [internalRainOpacity, setInternalRainOpacity] = useState(rainOpacityProp);
-  const [internalRainTheme, setInternalRainTheme] = useState<'water' | 'acid' | 'blood' | 'snow' | 'gold' | 'custom'>(rainThemeProp);
-  const [internalRainCustomColor, setInternalRainCustomColor] = useState(rainCustomColorProp);
-  const [internalHasSplashes, setInternalHasSplashes] = useState(hasSplashesProp);
-  const [internalSplashSize, setInternalSplashSize] = useState(splashSizeProp);
-  const [internalSplashIntensity, setInternalSplashIntensity] = useState(splashIntensityProp);
-  const [internalHasCrownDrops, setInternalHasCrownDrops] = useState(hasCrownDropsProp);
-  const [internalHasLightning, setInternalHasLightning] = useState(hasLightningProp);
-  const [internalLightningFrequency, setInternalLightningFrequency] = useState(lightningFrequencyProp);
-  const [internalGroundFogDensity, setInternalGroundFogDensity] = useState(groundFogDensityProp);
-  const [internalGroundFogHeight, setInternalGroundFogHeight] = useState(groundFogHeightProp);
-  const [internalGroundFogSpeed, setInternalGroundFogSpeed] = useState(groundFogSpeedProp);
-  const [internalGlobalFogDensity, setInternalGlobalFogDensity] = useState(globalFogDensityProp);
-  const [internalFogNoiseScale, setInternalFogNoiseScale] = useState(fogNoiseScaleProp);
-  const [internalFogColorPreset, setInternalFogColorPreset] = useState<'natural' | 'graveyard' | 'swamp' | 'crimson' | 'frost' | 'custom'>(fogColorPresetProp);
-  const [internalFogCustomColor, setInternalFogCustomColor] = useState(fogCustomColorProp);
-
-  useEffect(() => { setInternalPreset(timeOfDayPreset); }, [timeOfDayPreset]);
-  useEffect(() => { 
-    if (timeOfDayHour !== undefined) {
-      setInternalHour(timeOfDayHour);
-    }
-  }, [timeOfDayHour]);
-  useEffect(() => { setInternalCloudDensity(cloudDensityProp); }, [cloudDensityProp]);
-  useEffect(() => { 
-    setInternalMoonSize(moonSizeProp);
-    setInternalMoonLuminosity(moonLuminosityProp);
-    setInternalMoonOffsetAngle(moonOffsetAngleProp); 
-  }, [moonSizeProp, moonLuminosityProp, moonOffsetAngleProp]);
-  useEffect(() => { setInternalMoonAltitude(moonAltitudeProp); }, [moonAltitudeProp]);
-  useEffect(() => { setInternalSunSize(sunSizeProp); }, [sunSizeProp]);
-  useEffect(() => { setInternalSunLightIntensity(sunLightIntensityProp); }, [sunLightIntensityProp]);
-  useEffect(() => { setInternalAmbientLightIntensity(ambientLightIntensityProp); }, [ambientLightIntensityProp]);
-  useEffect(() => { setInternalSkyTurbidity(skyTurbidityProp); }, [skyTurbidityProp]);
-  useEffect(() => { setInternalSkyRayleigh(skyRayleighProp); }, [skyRayleighProp]);
-  useEffect(() => { setInternalMieCoefficient(mieCoefficientProp); }, [mieCoefficientProp]);
-  useEffect(() => { setInternalMieDirectionalG(mieDirectionalGProp); }, [mieDirectionalGProp]);
-  useEffect(() => { setInternalRainIntensity(rainIntensityProp); }, [rainIntensityProp]);
-  useEffect(() => { setInternalRainSpeed(rainSpeedProp); }, [rainSpeedProp]);
-  useEffect(() => { setInternalRainDropSize(rainDropSizeProp); }, [rainDropSizeProp]);
-  useEffect(() => { setInternalWindAngle(windAngleProp); }, [windAngleProp]);
-  useEffect(() => { setInternalWindStrength(windStrengthProp); }, [windStrengthProp]);
-  useEffect(() => { setInternalRainOpacity(rainOpacityProp); }, [rainOpacityProp]);
-  useEffect(() => { setInternalRainTheme(rainThemeProp); }, [rainThemeProp]);
-  useEffect(() => { setInternalRainCustomColor(rainCustomColorProp); }, [rainCustomColorProp]);
-  useEffect(() => { setInternalHasSplashes(hasSplashesProp); }, [hasSplashesProp]);
-  useEffect(() => { setInternalSplashSize(splashSizeProp); }, [splashSizeProp]);
-  useEffect(() => { setInternalSplashIntensity(splashIntensityProp); }, [splashIntensityProp]);
-  useEffect(() => { setInternalHasCrownDrops(hasCrownDropsProp); }, [hasCrownDropsProp]);
-  useEffect(() => { setInternalHasLightning(hasLightningProp); }, [hasLightningProp]);
-  useEffect(() => { setInternalLightningFrequency(lightningFrequencyProp); }, [lightningFrequencyProp]);
-  useEffect(() => { setInternalGroundFogDensity(groundFogDensityProp); }, [groundFogDensityProp]);
-  useEffect(() => { setInternalGroundFogHeight(groundFogHeightProp); }, [groundFogHeightProp]);
-  useEffect(() => { setInternalGroundFogSpeed(groundFogSpeedProp); }, [groundFogSpeedProp]);
-  useEffect(() => { setInternalGlobalFogDensity(globalFogDensityProp); }, [globalFogDensityProp]);
-  useEffect(() => { setInternalFogNoiseScale(fogNoiseScaleProp); }, [fogNoiseScaleProp]);
-  useEffect(() => { setInternalFogColorPreset(fogColorPresetProp); }, [fogColorPresetProp]);
-  useEffect(() => { setInternalFogCustomColor(fogCustomColorProp); }, [fogCustomColorProp]);
+  // Weather and lighting values directly derived from props (eliminates cascading useEffect setState loops)
+  const internalPreset = timeOfDayPreset ?? 'day';
+  const internalHour = timeOfDayHour ?? 12;
+  const internalCloudDensity = cloudDensityProp ?? 30;
+  const internalMoonSize = moonSizeProp ?? 1.5;
+  const internalMoonLuminosity = moonLuminosityProp ?? 1.0;
+  const internalMoonOffsetAngle = moonOffsetAngleProp ?? 180;
+  const internalMoonAltitude = moonAltitudeProp ?? -1;
+  const internalSunSize = sunSizeProp ?? 1.0;
+  const internalSunLightIntensity = sunLightIntensityProp ?? 1.0;
+  const internalAmbientLightIntensity = ambientLightIntensityProp ?? 0.65;
+  const internalSkyTurbidity = skyTurbidityProp ?? 6;
+  const internalSkyRayleigh = skyRayleighProp ?? 2;
+  const internalMieCoefficient = mieCoefficientProp ?? 0.005;
+  const internalMieDirectionalG = mieDirectionalGProp ?? 0.7;
+  const internalRainIntensity = rainIntensityProp ?? 2000;
+  const internalRainSpeed = rainSpeedProp ?? 1.0;
+  const internalRainDropSize = rainDropSizeProp ?? 1.0;
+  const internalWindAngle = windAngleProp ?? 180;
+  const internalWindStrength = windStrengthProp ?? 0.2;
+  const internalRainOpacity = rainOpacityProp ?? 0.55;
+  const internalRainTheme = rainThemeProp ?? 'water';
+  const internalRainCustomColor = rainCustomColorProp ?? '#88ccff';
+  const internalHasSplashes = hasSplashesProp ?? true;
+  const internalSplashSize = splashSizeProp ?? 1.0;
+  const internalSplashIntensity = splashIntensityProp ?? 1.0;
+  const internalHasCrownDrops = hasCrownDropsProp ?? true;
+  const internalHasLightning = hasLightningProp ?? false;
+  const internalLightningFrequency = lightningFrequencyProp ?? 1.0;
+  const internalGroundFogDensity = groundFogDensityProp ?? 150;
+  const internalGroundFogHeight = groundFogHeightProp ?? 1.0;
+  const internalGroundFogSpeed = groundFogSpeedProp ?? 1.0;
+  const internalGlobalFogDensity = globalFogDensityProp ?? 0.003;
+  const internalFogNoiseScale = fogNoiseScaleProp ?? 1.0;
+  const internalFogColorPreset = fogColorPresetProp ?? 'natural';
+  const internalFogCustomColor = fogCustomColorProp ?? '#cbd5e1';
 
   // Tab state inside popover
   const [activeTab, setActiveTab] = useState<'luz' | 'sky' | 'fog' | 'rain' | 'map'>('luz');
@@ -382,9 +340,7 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
   }>) => {
     const nextPreset = updates.timeOfDayPreset ?? internalPreset;
     const nextIndoor = updates.isIndoor ?? (nextPreset === 'indoors');
-    if (updates.timeOfDayPreset !== undefined) setInternalPreset(updates.timeOfDayPreset);
     const nextHour = updates.timeOfDayHour !== undefined ? updates.timeOfDayHour : internalHour;
-    if (updates.timeOfDayHour !== undefined) setInternalHour(updates.timeOfDayHour);
     const nextFog = updates.hasFog ?? hasFog;
     const nextRain = updates.hasRain ?? hasRain;
     const nextClouds = updates.cloudDensity ?? internalCloudDensity;
@@ -420,40 +376,6 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
     const nextFogNoiseScale = updates.fogNoiseScale ?? internalFogNoiseScale;
     const nextFogColorPreset = updates.fogColorPreset ?? internalFogColorPreset;
     const nextFogCustomColor = updates.fogCustomColor ?? internalFogCustomColor;
-
-    if (updates.cloudDensity !== undefined) setInternalCloudDensity(updates.cloudDensity);
-    if (updates.moonSize !== undefined) setInternalMoonSize(updates.moonSize);
-    if (updates.moonLuminosity !== undefined) setInternalMoonLuminosity(updates.moonLuminosity);
-    if (updates.moonOffsetAngle !== undefined) setInternalMoonOffsetAngle(updates.moonOffsetAngle);
-    if (updates.moonAltitude !== undefined) setInternalMoonAltitude(updates.moonAltitude);
-    if (updates.sunSize !== undefined) setInternalSunSize(updates.sunSize);
-    if (updates.sunLightIntensity !== undefined) setInternalSunLightIntensity(updates.sunLightIntensity);
-    if (updates.ambientLightIntensity !== undefined) setInternalAmbientLightIntensity(updates.ambientLightIntensity);
-    if (updates.skyTurbidity !== undefined) setInternalSkyTurbidity(updates.skyTurbidity);
-    if (updates.skyRayleigh !== undefined) setInternalSkyRayleigh(updates.skyRayleigh);
-    if (updates.mieCoefficient !== undefined) setInternalMieCoefficient(updates.mieCoefficient);
-    if (updates.mieDirectionalG !== undefined) setInternalMieDirectionalG(updates.mieDirectionalG);
-    if (updates.rainIntensity !== undefined) setInternalRainIntensity(updates.rainIntensity);
-    if (updates.rainSpeed !== undefined) setInternalRainSpeed(updates.rainSpeed);
-    if (updates.rainDropSize !== undefined) setInternalRainDropSize(updates.rainDropSize);
-    if (updates.windAngle !== undefined) setInternalWindAngle(updates.windAngle);
-    if (updates.windStrength !== undefined) setInternalWindStrength(updates.windStrength);
-    if (updates.rainOpacity !== undefined) setInternalRainOpacity(updates.rainOpacity);
-    if (updates.rainTheme !== undefined) setInternalRainTheme(updates.rainTheme);
-    if (updates.rainCustomColor !== undefined) setInternalRainCustomColor(updates.rainCustomColor);
-    if (updates.hasSplashes !== undefined) setInternalHasSplashes(updates.hasSplashes);
-    if (updates.splashSize !== undefined) setInternalSplashSize(updates.splashSize);
-    if (updates.splashIntensity !== undefined) setInternalSplashIntensity(updates.splashIntensity);
-    if (updates.hasCrownDrops !== undefined) setInternalHasCrownDrops(updates.hasCrownDrops);
-    if (updates.hasLightning !== undefined) setInternalHasLightning(updates.hasLightning);
-    if (updates.lightningFrequency !== undefined) setInternalLightningFrequency(updates.lightningFrequency);
-    if (updates.groundFogDensity !== undefined) setInternalGroundFogDensity(updates.groundFogDensity);
-    if (updates.groundFogHeight !== undefined) setInternalGroundFogHeight(updates.groundFogHeight);
-    if (updates.groundFogSpeed !== undefined) setInternalGroundFogSpeed(updates.groundFogSpeed);
-    if (updates.globalFogDensity !== undefined) setInternalGlobalFogDensity(updates.globalFogDensity);
-    if (updates.fogNoiseScale !== undefined) setInternalFogNoiseScale(updates.fogNoiseScale);
-    if (updates.fogColorPreset !== undefined) setInternalFogColorPreset(updates.fogColorPreset);
-    if (updates.fogCustomColor !== undefined) setInternalFogCustomColor(updates.fogCustomColor);
 
     if (onEnvironmentChange) {
       onEnvironmentChange({
@@ -547,11 +469,6 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
       ambient = 0.22;
       sun = 0.35;
     }
-
-    setInternalPreset(preset);
-    setInternalHour(hour);
-    setInternalAmbientLightIntensity(ambient);
-    setInternalSunLightIntensity(sun);
 
     if (onTimeOfDayChange) onTimeOfDayChange(preset);
     triggerEnvChange({
@@ -739,10 +656,6 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                               const ambient = isNight ? 0.03 : (isSunset ? 0.35 : 0.65);
                               const sun = isNight ? 0.08 : (isSunset ? 0.7 : 1.0);
                               const dynamicPreset = isNight ? 'night' : (isSunset ? 'sunset' : 'day');
-                              setInternalHour(h);
-                              setInternalPreset(dynamicPreset);
-                              setInternalAmbientLightIntensity(ambient);
-                              setInternalSunLightIntensity(sun);
                               if (onTimeOfDayChange) onTimeOfDayChange(dynamicPreset);
                               triggerEnvChange({
                                 timeOfDayPreset: dynamicPreset,
