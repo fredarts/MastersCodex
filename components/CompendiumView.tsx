@@ -436,21 +436,21 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
 
   return (
     <div className="w-full h-full flex flex-col bg-[#0a0d14] text-slate-100 overflow-hidden relative">
-      {/* Header & Search Bar */}
-      <div className="p-4 md:p-5 border-b border-[#2a3449] bg-[#0f141d] flex flex-col gap-3">
+      {/* Header */}
+      <div className="px-4 py-3 md:px-5 md:py-3.5 border-b border-[#2a3449] bg-[#0f141d] flex flex-col gap-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400">
-              <BookOpen className="w-6 h-6" />
+            <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400">
+              <BookOpen className="w-5 h-5 md:w-6 md:h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-100 tracking-wide flex items-center gap-2 font-serif">
+              <h1 className="text-lg md:text-xl font-bold text-slate-100 tracking-wide flex items-center gap-2 font-serif">
                 Compêndio Completo D&D 5e SRD
                 <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
                   v5.1
                 </span>
               </h1>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-[11px] md:text-xs text-slate-400 mt-0.5">
                 Biblioteca oficial de monstros, magias e itens mágicos com separação clara de Lore e Fichas de Combate.
               </p>
             </div>
@@ -467,32 +467,11 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
           )}
         </div>
 
-        {/* Search input area */}
-        <div className="relative flex items-center">
-          <Search className="w-5 h-5 text-amber-400 absolute left-3.5" />
-          <input
-            type="text"
-            autoFocus={isModal}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Pesquisar por nome, tipo, efeito, habilidade ou palavra-chave..."
-            className="w-full bg-[#161c28] border border-[#2a3449] focus:border-amber-500 rounded-xl pl-11 pr-10 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-all shadow-inner font-medium"
-          />
-          {query && (
-            <button
-              onClick={() => setQuery('')}
-              className="absolute right-3 text-slate-400 hover:text-slate-200 text-xs bg-[#2a3449]/50 p-1 rounded-md"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-
         {/* Category Tabs */}
-        <div className="flex gap-2 border-b border-[#2a3449]/60 pb-1 -mb-1">
+        <div className="flex gap-2 border-b border-[#2a3449]/60 pb-1 -mb-1 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveTab('monsters')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all border ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all border shrink-0 ${
               activeTab === 'monsters'
                 ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 shadow-md'
                 : 'bg-[#161c28]/60 border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#161c28]'
@@ -500,14 +479,14 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
           >
             <Shield className="w-3.5 h-3.5" />
             <span>Monstros</span>
-            <span className="px-1.5 py-0.5 rounded-full bg-[#2a3449] text-[10px] text-slate-300">
+            <span className="px-1.5 py-0.5 rounded-full bg-[#2a3449] text-[10px] text-slate-300 font-mono">
               {filteredMonsters.length}
             </span>
           </button>
 
           <button
             onClick={() => setActiveTab('spells')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all border ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all border shrink-0 ${
               activeTab === 'spells'
                 ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 shadow-md'
                 : 'bg-[#161c28]/60 border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#161c28]'
@@ -515,14 +494,14 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
           >
             <Flame className="w-3.5 h-3.5" />
             <span>Magias</span>
-            <span className="px-1.5 py-0.5 rounded-full bg-[#2a3449] text-[10px] text-slate-300">
+            <span className="px-1.5 py-0.5 rounded-full bg-[#2a3449] text-[10px] text-slate-300 font-mono">
               {filteredSpells.length}
             </span>
           </button>
 
           <button
             onClick={() => setActiveTab('items')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all border ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all border shrink-0 ${
               activeTab === 'items'
                 ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 shadow-md'
                 : 'bg-[#161c28]/60 border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#161c28]'
@@ -530,14 +509,14 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
           >
             <Package className="w-3.5 h-3.5" />
             <span>Itens Mágicos</span>
-            <span className="px-1.5 py-0.5 rounded-full bg-[#2a3449] text-[10px] text-slate-300">
+            <span className="px-1.5 py-0.5 rounded-full bg-[#2a3449] text-[10px] text-slate-300 font-mono">
               {filteredItems.length}
             </span>
           </button>
 
           <button
             onClick={() => setActiveTab('equipment')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all border ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all border shrink-0 ${
               activeTab === 'equipment'
                 ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 shadow-md'
                 : 'bg-[#161c28]/60 border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#161c28]'
@@ -545,25 +524,25 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
           >
             <Package className="w-3.5 h-3.5" />
             <span>Equipamentos</span>
-            <span className="px-1.5 py-0.5 rounded-full bg-[#2a3449] text-[10px] text-slate-300">
+            <span className="px-1.5 py-0.5 rounded-full bg-[#2a3449] text-[10px] text-slate-300 font-mono">
               {filteredEquipment.length}
             </span>
           </button>
         </div>
 
-        {/* Dynamic Multi-Filter Toolbar */}
+        {/* Dynamic Multi-Filter Toolbar with Integrated Search Bar */}
         {activeTab === 'monsters' && (
-          <div className="flex flex-wrap items-center gap-2 pt-2 bg-[#0a0d14]/40 p-2.5 rounded-xl border border-[#2a3449]/50 text-xs">
-            <div className="flex items-center gap-1.5 text-amber-400 font-semibold mr-1">
+          <div className="flex flex-wrap items-center gap-2 pt-1 bg-[#0a0d14]/40 p-2 md:p-2.5 rounded-xl border border-[#2a3449]/50 text-xs">
+            <div className="flex items-center gap-1 text-amber-400 font-semibold mr-0.5 shrink-0">
               <Filter className="w-3.5 h-3.5" />
-              <span className="text-[11px] uppercase tracking-wider">Filtros:</span>
+              <span className="text-[10px] md:text-[11px] uppercase tracking-wider">Filtros:</span>
             </div>
 
             {/* CR Filter */}
             <select
               value={monsterCrFilter}
               onChange={(e) => setMonsterCrFilter(e.target.value)}
-              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium"
+              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium text-xs"
             >
               <option value="all">ND (Todos os Níveis)</option>
               <optgroup label="Faixas de Nível">
@@ -586,7 +565,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
             <select
               value={monsterTypeFilter}
               onChange={(e) => setMonsterTypeFilter(e.target.value)}
-              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium"
+              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium text-xs"
             >
               <option value="all">Tipo (Todos)</option>
               <option value="Aberração">Aberração</option>
@@ -609,7 +588,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
             <select
               value={monsterSizeFilter}
               onChange={(e) => setMonsterSizeFilter(e.target.value)}
-              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium"
+              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium text-xs"
             >
               <option value="all">Tamanho (Todos)</option>
               <option value="Miúdo">Miúdo (Tiny)</option>
@@ -624,7 +603,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
             <select
               value={monsterAlignmentFilter}
               onChange={(e) => setMonsterAlignmentFilter(e.target.value)}
-              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium"
+              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium text-xs"
             >
               <option value="all">Alinhamento (Todos)</option>
               <option value="Leal">Tendência Leal</option>
@@ -635,10 +614,32 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
               <option value="Sem Alinhamento">Sem Alinhamento</option>
             </select>
 
+            {/* Integrated Search Input */}
+            <div className="relative flex items-center flex-1 min-w-[170px] sm:min-w-[200px] max-w-sm ml-auto">
+              <Search className="w-3.5 h-3.5 text-amber-400 absolute left-2.5 pointer-events-none" />
+              <input
+                type="text"
+                autoFocus={isModal}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar por nome, tipo, traço..."
+                className="w-full bg-[#161c28] border border-[#2a3449] focus:border-amber-500 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none transition-all shadow-inner font-medium"
+              />
+              {query && (
+                <button
+                  onClick={() => setQuery('')}
+                  className="absolute right-2 text-slate-400 hover:text-slate-200 text-xs bg-[#2a3449]/60 p-0.5 rounded"
+                  title="Limpar busca"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
             {hasActiveMonsterFilters && (
               <button
                 onClick={clearMonsterFilters}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 rounded-lg transition-all font-semibold ml-auto"
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 rounded-lg transition-all font-semibold shrink-0"
                 title="Limpar filtros aplicados"
               >
                 <FilterX className="w-3.5 h-3.5" />
@@ -650,16 +651,16 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
 
         {/* Spells Filter Toolbar */}
         {activeTab === 'spells' && (
-          <div className="flex flex-wrap items-center gap-2 pt-2 bg-[#0a0d14]/40 p-2.5 rounded-xl border border-[#2a3449]/50 text-xs">
-            <div className="flex items-center gap-1.5 text-amber-400 font-semibold mr-1">
+          <div className="flex flex-wrap items-center gap-2 pt-1 bg-[#0a0d14]/40 p-2 md:p-2.5 rounded-xl border border-[#2a3449]/50 text-xs">
+            <div className="flex items-center gap-1 text-amber-400 font-semibold mr-0.5 shrink-0">
               <Filter className="w-3.5 h-3.5" />
-              <span className="text-[11px] uppercase tracking-wider">Filtros de Magia:</span>
+              <span className="text-[10px] md:text-[11px] uppercase tracking-wider">Filtros:</span>
             </div>
 
             <select
               value={spellLevelFilter}
               onChange={(e) => setSpellLevelFilter(e.target.value)}
-              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium"
+              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium text-xs"
             >
               <option value="all">Nível (Todos)</option>
               <option value="0">Truque (Nível 0)</option>
@@ -674,7 +675,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
             <select
               value={spellClassFilter}
               onChange={(e) => setSpellClassFilter(e.target.value)}
-              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium"
+              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium text-xs"
             >
               <option value="all">Classe (Todas)</option>
               <option value="Bardo">Bardo</option>
@@ -691,7 +692,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
             <select
               value={spellShapeFilter}
               onChange={(e) => setSpellShapeFilter(e.target.value)}
-              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium"
+              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium text-xs"
             >
               <option value="all">Formato / Área (Todos)</option>
               <option value="cone">📐 Cone / Leque</option>
@@ -709,20 +710,20 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
             <button
               type="button"
               onClick={() => setSpellRitualOnly(!spellRitualOnly)}
-              className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-2 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                 spellRitualOnly
                   ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow'
                   : 'bg-[#161c28] text-slate-400 border-[#2a3449] hover:text-slate-200'
               }`}
             >
               <span>📜</span>
-              <span>Apenas Rituais</span>
+              <span>Rituais</span>
             </button>
 
             <button
               type="button"
               onClick={() => setSpellConcentrationOnly(!spellConcentrationOnly)}
-              className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-2 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                 spellConcentrationOnly
                   ? 'bg-purple-500/20 text-purple-300 border-purple-500/60 shadow'
                   : 'bg-[#161c28] text-slate-400 border-[#2a3449] hover:text-slate-200'
@@ -732,10 +733,32 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
               <span>Concentração</span>
             </button>
 
+            {/* Integrated Search Input */}
+            <div className="relative flex items-center flex-1 min-w-[170px] sm:min-w-[200px] max-w-sm ml-auto">
+              <Search className="w-3.5 h-3.5 text-amber-400 absolute left-2.5 pointer-events-none" />
+              <input
+                type="text"
+                autoFocus={isModal}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar magia, escola, efeito..."
+                className="w-full bg-[#161c28] border border-[#2a3449] focus:border-amber-500 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none transition-all shadow-inner font-medium"
+              />
+              {query && (
+                <button
+                  onClick={() => setQuery('')}
+                  className="absolute right-2 text-slate-400 hover:text-slate-200 text-xs bg-[#2a3449]/60 p-0.5 rounded"
+                  title="Limpar busca"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
             {hasActiveSpellFilters && (
               <button
                 onClick={clearSpellFilters}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 rounded-lg transition-all font-semibold ml-auto"
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 rounded-lg transition-all font-semibold shrink-0"
               >
                 <FilterX className="w-3.5 h-3.5" />
                 <span>Limpar</span>
@@ -746,16 +769,16 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
 
         {/* Items Filter Toolbar */}
         {activeTab === 'items' && (
-          <div className="flex flex-wrap items-center gap-2 pt-2 bg-[#0a0d14]/40 p-2.5 rounded-xl border border-[#2a3449]/50 text-xs">
-            <div className="flex items-center gap-1.5 text-amber-400 font-semibold mr-1">
+          <div className="flex flex-wrap items-center gap-2 pt-1 bg-[#0a0d14]/40 p-2 md:p-2.5 rounded-xl border border-[#2a3449]/50 text-xs">
+            <div className="flex items-center gap-1 text-amber-400 font-semibold mr-0.5 shrink-0">
               <Filter className="w-3.5 h-3.5" />
-              <span className="text-[11px] uppercase tracking-wider">Filtros de Itens Mágicos:</span>
+              <span className="text-[10px] md:text-[11px] uppercase tracking-wider">Filtros:</span>
             </div>
 
             <select
               value={itemRarityFilter}
               onChange={(e) => setItemRarityFilter(e.target.value)}
-              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium"
+              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium text-xs"
             >
               <option value="all">Raridade (Todas)</option>
               <option value="Comum">Comum</option>
@@ -769,7 +792,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
             <select
               value={itemTypeFilter}
               onChange={(e) => setItemTypeFilter(e.target.value)}
-              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium"
+              className="bg-[#161c28] border border-[#2a3449] rounded-lg px-2 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer font-medium text-xs"
             >
               <option value="all">Categoria / Tipo (Todos)</option>
               <option value="Arma">Arma Mágica</option>
@@ -785,20 +808,42 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
             <button
               type="button"
               onClick={() => setItemAttunementOnly(!itemAttunementOnly)}
-              className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-2 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                 itemAttunementOnly
                   ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow'
                   : 'bg-[#161c28] text-slate-400 border-[#2a3449] hover:text-slate-200'
               }`}
             >
               <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span>Requer Sintonização</span>
+              <span>Sintonização</span>
             </button>
+
+            {/* Integrated Search Input */}
+            <div className="relative flex items-center flex-1 min-w-[170px] sm:min-w-[200px] max-w-sm ml-auto">
+              <Search className="w-3.5 h-3.5 text-amber-400 absolute left-2.5 pointer-events-none" />
+              <input
+                type="text"
+                autoFocus={isModal}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar item, raridade, efeito..."
+                className="w-full bg-[#161c28] border border-[#2a3449] focus:border-amber-500 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none transition-all shadow-inner font-medium"
+              />
+              {query && (
+                <button
+                  onClick={() => setQuery('')}
+                  className="absolute right-2 text-slate-400 hover:text-slate-200 text-xs bg-[#2a3449]/60 p-0.5 rounded"
+                  title="Limpar busca"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
 
             {hasActiveItemFilters && (
               <button
                 onClick={clearItemFilters}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 rounded-lg transition-all font-semibold ml-auto"
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 rounded-lg transition-all font-semibold shrink-0"
               >
                 <FilterX className="w-3.5 h-3.5" />
                 <span>Limpar</span>
@@ -809,31 +854,55 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
 
         {/* Equipment Filter Toolbar */}
         {activeTab === 'equipment' && (
-          <div className="flex flex-wrap items-center gap-2 pt-2 bg-[#0a0d14]/40 p-2.5 rounded-xl border border-[#2a3449]/50 text-xs">
-            <div className="flex items-center gap-1.5 text-amber-400 font-semibold mr-1">
+          <div className="flex flex-wrap items-center gap-2 pt-1 bg-[#0a0d14]/40 p-2 md:p-2.5 rounded-xl border border-[#2a3449]/50 text-xs">
+            <div className="flex items-center gap-1 text-amber-400 font-semibold mr-0.5 shrink-0">
               <Filter className="w-3.5 h-3.5" />
-              <span className="text-[11px] uppercase tracking-wider">Categorias de Equipamento:</span>
+              <span className="text-[10px] md:text-[11px] uppercase tracking-wider">Categorias:</span>
             </div>
 
-            {['all', 'Arma', 'Armadura', 'Equipamento', 'Poção', 'Ferramenta', 'Tesouro'].map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setEquipmentCategoryFilter(cat)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all uppercase cursor-pointer ${
-                  equipmentCategoryFilter === cat
-                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow'
-                    : 'bg-[#161c28] text-slate-400 border border-[#2a3449]/60 hover:text-white'
-                }`}
-              >
-                {cat === 'all' ? 'Todos' : cat}
-              </button>
-            ))}
+            <div className="flex flex-wrap items-center gap-1">
+              {['all', 'Arma', 'Armadura', 'Equipamento', 'Poção', 'Ferramenta', 'Tesouro'].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setEquipmentCategoryFilter(cat)}
+                  className={`px-2 py-1 rounded-lg text-xs font-bold transition-all uppercase cursor-pointer shrink-0 ${
+                    equipmentCategoryFilter === cat
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow'
+                      : 'bg-[#161c28] text-slate-400 border border-[#2a3449]/60 hover:text-white'
+                  }`}
+                >
+                  {cat === 'all' ? 'Todos' : cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Integrated Search Input */}
+            <div className="relative flex items-center flex-1 min-w-[170px] sm:min-w-[200px] max-w-sm ml-auto">
+              <Search className="w-3.5 h-3.5 text-amber-400 absolute left-2.5 pointer-events-none" />
+              <input
+                type="text"
+                autoFocus={isModal}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar equipamento, custo..."
+                className="w-full bg-[#161c28] border border-[#2a3449] focus:border-amber-500 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none transition-all shadow-inner font-medium"
+              />
+              {query && (
+                <button
+                  onClick={() => setQuery('')}
+                  className="absolute right-2 text-slate-400 hover:text-slate-200 text-xs bg-[#2a3449]/60 p-0.5 rounded"
+                  title="Limpar busca"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
 
             {hasActiveEquipmentFilters && (
               <button
                 onClick={clearEquipmentFilters}
-                className="flex items-center gap-1 px-2.5 py-1 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 rounded-lg transition-all font-semibold ml-auto cursor-pointer"
+                className="flex items-center gap-1 px-2.5 py-1 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 rounded-lg transition-all font-semibold shrink-0 cursor-pointer"
               >
                 <FilterX className="w-3.5 h-3.5" />
                 <span>Limpar</span>
@@ -843,324 +912,170 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
         )}
       </div>
 
-      {/* Content Split Pane */}
+      {/* Content Split Pane - Details on Left, List on Right */}
       <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-hidden">
-        {/* Left List Pane */}
-        <div className="md:col-span-4 lg:col-span-3 border-r border-[#2a3449] overflow-y-auto p-3 space-y-1.5 bg-[#0f141d]/60 custom-scrollbar">
-          {activeTab === 'monsters' &&
-            (filteredMonsters.length > 0 ? (
-              filteredMonsters.map((m) => (
-                <button
-                  key={m.id || m.name}
-                  onClick={() => setSelectedMonster(m)}
-                  className={`w-full text-left p-3 rounded-xl border text-xs transition-all ${
-                    selectedMonster?.name === m.name
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold shadow-md'
-                      : 'bg-[#161c28] text-slate-300 border-[#2a3449] hover:bg-[#1f2738] hover:border-slate-600'
-                  }`}
+        {/* Left Details Pane - Premium Diagrammed View */}
+        <div className="order-2 md:order-1 md:col-span-7 lg:col-span-8 xl:col-span-9 p-4 md:p-5 lg:p-6 overflow-y-auto bg-[#161c28] custom-scrollbar border-t md:border-t-0 md:border-r border-[#2a3449]">
+          {activeTab === 'monsters' && selectedMonster && (
+            <div className="space-y-4 md:space-y-5">
+              {/* Monster Top Section: Equal 50/50 split between Artwork Showcase and Title & Stats Card */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-stretch">
+                {/* Standalone Monster Artwork Card (White Background, Clean, Seamless) */}
+                <div
+                  onClick={() => {
+                    const tokenUrl = selectedMonster.tokenImageUrl || `/assets/2d/Monstros/${selectedMonster.name}.png`;
+                    setZoomedImage({ url: tokenUrl, title: selectedMonster.name });
+                  }}
+                  className="bg-white border border-amber-500/40 rounded-2xl p-2 md:p-2.5 flex items-center justify-center relative group cursor-pointer shadow-lg overflow-hidden min-h-[140px] md:min-h-[155px] max-h-[170px] hover:border-amber-400 hover:shadow-amber-500/10 transition-all"
+                  title="Clique para ampliar a arte do monstro"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="truncate pr-2 font-medium">{m.name}</span>
-                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 border border-amber-500/20 shrink-0">
-                      ND {m.cr}
-                    </span>
+                  {/* Corner Zoom Button (Subtle, on hover) */}
+                  <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-black/75 border border-amber-500/50 text-amber-300 opacity-0 group-hover:opacity-100 transition-opacity shadow-md">
+                    <ZoomIn className="w-3.5 h-3.5" />
                   </div>
-                  <div className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
-                    <span>{m.type}</span>
-                    <span>{m.size}</span>
-                  </div>
-                </button>
-              ))
-            ) : (
-              <div className="p-8 text-center text-slate-400 text-xs space-y-2">
-                <FilterX className="w-8 h-8 mx-auto opacity-30 text-amber-400" />
-                <p>Nenhum monstro encontrado com os filtros selecionados.</p>
-                <button
-                  onClick={clearMonsterFilters}
-                  className="px-3 py-1 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 rounded-lg text-[11px] font-bold transition-all border border-amber-500/40"
-                >
-                  Limpar todos os filtros
-                </button>
-              </div>
-            ))}
 
-          {activeTab === 'spells' &&
-            (filteredSpells.length > 0 ? (
-              filteredSpells.map((s) => (
-                <button
-                  key={s.id || s.name}
-                  onClick={() => setSelectedSpell(s)}
-                  className={`w-full text-left p-3 rounded-xl border text-xs transition-all ${
-                    selectedSpell?.name === s.name
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold shadow-md'
-                      : 'bg-[#161c28] text-slate-300 border-[#2a3449] hover:bg-[#1f2738] hover:border-slate-600'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="truncate pr-2 font-medium">{s.name}</span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-700 shrink-0">
-                      {s.level === 0 ? 'Truque' : `${s.level}º Nível`}
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-1">{s.school}</div>
-                </button>
-              ))
-            ) : (
-              <div className="p-8 text-center text-slate-400 text-xs space-y-2">
-                <FilterX className="w-8 h-8 mx-auto opacity-30 text-amber-400" />
-                <p>Nenhuma magia encontrada com os filtros selecionados.</p>
-                <button
-                  onClick={clearSpellFilters}
-                  className="px-3 py-1 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 rounded-lg text-[11px] font-bold transition-all border border-amber-500/40"
-                >
-                  Limpar filtros
-                </button>
-              </div>
-            ))}
+                  {/* Image Display - Seamless blend with white background */}
+                  {(() => {
+                    const tokenUrl = selectedMonster.tokenImageUrl || `/assets/2d/Monstros/${selectedMonster.name}.png`;
+                    return (
+                      <img
+                        src={tokenUrl}
+                        alt={selectedMonster.name}
+                        className="w-full h-full max-h-[130px] md:max-h-[145px] object-contain transition-transform duration-300 group-hover:scale-105 relative z-10"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          target.onerror = null;
+                          target.src = '/assets/2d/Monstros/Goblin.png';
+                        }}
+                      />
+                    );
+                  })()}
+                </div>
 
-          {activeTab === 'items' &&
-            (filteredItems.length > 0 ? (
-              filteredItems.map((i) => {
-                const rarityBadge = getItemRarityBadgeStyle(i.rarity);
-                return (
-                  <button
-                    key={i.id || i.name}
-                    onClick={() => setSelectedItem(i)}
-                    className={`w-full text-left p-3 rounded-xl border text-xs transition-all ${
-                      selectedItem?.name === i.name
-                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold shadow-md'
-                        : 'bg-[#161c28] text-slate-300 border-[#2a3449] hover:bg-[#1f2738] hover:border-slate-600'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="truncate pr-2 font-medium">{i.name}</span>
-                      <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${rarityBadge.bg} ${rarityBadge.text} ${rarityBadge.border}`}>
-                        {i.rarity}
+                {/* Title & Core Stats Card (Compact, 50% width) */}
+                <div className="flex flex-col justify-between bg-gradient-to-r from-[#0f141d] to-[#161c28] p-3 md:p-3.5 rounded-2xl border border-[#2a3449]/90 shadow-md min-h-[140px] md:min-h-[155px] max-h-[170px]">
+                  <div className="space-y-0.5">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-[#2a3449]/60 pb-1.5">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-xl md:text-2xl font-extrabold text-amber-100 font-serif tracking-wide truncate">
+                          {selectedMonster.name}
+                        </h2>
+                        <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+                          ND {selectedMonster.cr}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0">
+                        {selectedMonster.xp} XP
                       </span>
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
-                      <span>{i.type}</span>
-                      {i.attunement && i.attunement !== (false as any) && (
-                        <span className="text-[9px] text-amber-400 font-semibold flex items-center gap-0.5">
-                          <Zap className="w-2.5 h-2.5" /> Sintonização
-                        </span>
-                      )}
+                    <p className="text-[11px] text-slate-300 font-medium italic truncate">
+                      {selectedMonster.size} • {selectedMonster.type} • {selectedMonster.alignment}
+                    </p>
+                  </div>
+
+                  {/* Core Vitals Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs pt-1">
+                    <div className="p-1.5 bg-[#0a0d14]/80 border border-[#2a3449] rounded-lg text-center shadow-inner flex flex-col justify-center">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block truncate">Desafio</span>
+                      <span className="text-xs font-bold text-amber-400 font-mono block">ND {selectedMonster.cr}</span>
                     </div>
-                  </button>
-                );
-              })
-            ) : (
-              <div className="p-8 text-center text-slate-400 text-xs space-y-2">
-                <FilterX className="w-8 h-8 mx-auto opacity-30 text-amber-400" />
-                <p>Nenhum item encontrado com os filtros selecionados.</p>
-                <button
-                  onClick={clearItemFilters}
-                  className="px-3 py-1 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 rounded-lg text-[11px] font-bold transition-all border border-amber-500/40"
-                >
-                  Limpar filtros
-                </button>
-              </div>
-            ))}
-
-          {activeTab === 'equipment' &&
-            (filteredEquipment.length > 0 ? (
-              filteredEquipment.map((item) => (
-                <button
-                  key={item.name}
-                  onClick={() => setSelectedEquipment(item)}
-                  className={`w-full text-left p-3 rounded-xl border text-xs transition-all ${
-                    selectedEquipment?.name === item.name
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold shadow-md'
-                      : 'bg-[#161c28] text-slate-300 border-[#2a3449] hover:bg-[#1f2738] hover:border-slate-600'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="truncate pr-2 font-medium">{item.name}</span>
-                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 border border-amber-500/20 shrink-0">
-                      {item.cost}
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
-                    <span>{item.category}</span>
-                    <span>{item.weight} kg</span>
-                  </div>
-                </button>
-              ))
-            ) : (
-              <div className="p-8 text-center text-slate-400 text-xs space-y-2">
-                <FilterX className="w-8 h-8 mx-auto opacity-30 text-amber-400" />
-                <p>Nenhum equipamento encontrado com os filtros selecionados.</p>
-                <button
-                  onClick={clearEquipmentFilters}
-                  className="px-3 py-1 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 rounded-lg text-[11px] font-bold transition-all border border-amber-500/40"
-                >
-                  Limpar filtros
-                </button>
-              </div>
-            ))}
-        </div>
-
-        {/* Right Details Pane - Premium Diagrammed View */}
-        <div className="md:col-span-8 lg:col-span-9 p-6 overflow-y-auto bg-[#161c28] custom-scrollbar">
-          {activeTab === 'monsters' && selectedMonster && (
-            <div className="space-y-6">
-              {/* Header Hero Banner */}
-              <div className="border-b border-[#2a3449] pb-5 flex flex-wrap items-start justify-between gap-4 bg-gradient-to-r from-[#0f141d] to-transparent p-4 rounded-2xl border border-[#2a3449]/80 shadow-md">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-3xl font-extrabold text-amber-100 font-serif tracking-wide">
-                      {selectedMonster.name}
-                    </h2>
-                    <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                      ND {selectedMonster.cr}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-300 font-medium italic">
-                    {selectedMonster.size} • {selectedMonster.type} • {selectedMonster.alignment}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="px-3 py-1.5 bg-[#161c28] border border-[#2a3449] rounded-xl text-center shadow-inner">
-                    <span className="text-[9px] uppercase font-bold text-slate-400 block">Nível de Desafio</span>
-                    <span className="text-xs font-bold text-amber-400 font-mono">ND {selectedMonster.cr} ({selectedMonster.xp} XP)</span>
-                  </div>
-                  <div className="px-3 py-1.5 bg-[#161c28] border border-[#2a3449] rounded-xl text-center shadow-inner">
-                    <span className="text-[9px] uppercase font-bold text-slate-400 block">Proficiência</span>
-                    <span className="text-xs font-bold text-slate-200 font-mono">+{getProficiencyBonusByCR(selectedMonster.cr)}</span>
+                    <div className="p-1.5 bg-[#0a0d14]/80 border border-[#2a3449] rounded-lg text-center shadow-inner flex flex-col justify-center">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block truncate">Proficiência</span>
+                      <span className="text-xs font-bold text-slate-200 font-mono block">+{getProficiencyBonusByCR(selectedMonster.cr)}</span>
+                    </div>
+                    <div className="p-1.5 bg-[#0a0d14]/80 border border-[#2a3449] rounded-lg text-center shadow-inner flex flex-col justify-center">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block truncate">CA</span>
+                      <span className="text-xs font-bold text-cyan-400 font-mono block">{selectedMonster.ac}</span>
+                    </div>
+                    <div className="p-1.5 bg-[#0a0d14]/80 border border-[#2a3449] rounded-lg text-center shadow-inner flex flex-col justify-center">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block truncate">PV</span>
+                      <span className="text-xs font-bold text-rose-400 font-mono block">{selectedMonster.hp} PV</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Sub-tabs with CLEAN & DISTINCT PURPOSE */}
-              <div className="flex border-b border-[#2a3449] bg-[#0a0d14]/60 p-1 rounded-xl">
+              {/* Monster Sub-Tabs Bar: Positioned below both image and title cards with full width */}
+              <div className="flex border border-[#2a3449] bg-[#0a0d14] p-1.5 rounded-2xl shadow-md gap-2">
                 <button
                   onClick={() => setMonsterDetailTab('narrative')}
-                  className={`flex-1 py-2 text-xs font-bold transition-all rounded-lg flex items-center justify-center gap-2 ${
+                  className={`flex-1 py-2 px-4 text-xs font-bold transition-all rounded-xl flex items-center justify-center gap-2 whitespace-nowrap ${
                     monsterDetailTab === 'narrative'
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow'
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#161c28]'
                   }`}
                 >
-                  <BookOpen className="w-4 h-4" />
+                  <BookOpen className="w-4 h-4 text-amber-400" />
                   <span>Lore, Arte & Ecologia</span>
                 </button>
                 <button
                   onClick={() => setMonsterDetailTab('stats')}
-                  className={`flex-1 py-2 text-xs font-bold transition-all rounded-lg flex items-center justify-center gap-2 ${
+                  className={`flex-1 py-2 px-4 text-xs font-bold transition-all rounded-xl flex items-center justify-center gap-2 whitespace-nowrap ${
                     monsterDetailTab === 'stats'
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow'
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#161c28]'
                   }`}
                 >
-                  <Swords className="w-4 h-4" />
+                  <Swords className="w-4 h-4 text-amber-400" />
                   <span>Ficha de Combate (Estatísticas Completas)</span>
                 </button>
               </div>
 
               {/* TAB 1: PURE LORE, ART & ECOLOGY */}
               {monsterDetailTab === 'narrative' && (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-                    {/* Featured Artwork Showcase Box */}
-                    <div className="lg:col-span-5 flex flex-col bg-[#0a0d14] border border-amber-500/30 rounded-2xl p-4 shadow-xl relative overflow-hidden group">
-                      <div className="flex items-center justify-between mb-3 border-b border-[#2a3449]/80 pb-2">
-                        <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <Crown className="w-3.5 h-3.5 text-amber-400" /> Token de Combate 2D High-Res
-                        </span>
-                        <span className="text-[9px] font-mono px-2 py-0.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-md">
-                          Zoom
-                        </span>
+                <div className="space-y-4">
+                  {/* Classification & Ecology + Habitats Box */}
+                  <div className="bg-[#0a0d14]/70 p-4 md:p-5 rounded-2xl border border-[#2a3449] shadow-lg space-y-4">
+                    <div className="flex items-center justify-between border-b border-[#2a3449]/70 pb-2">
+                      <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                        <Compass className="w-4 h-4 text-amber-400" /> Classificação & Ecologia
+                      </h3>
+                      <span className="text-[10px] text-slate-400 font-medium">Informações Biológicas e Regionais</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                      <div className="bg-[#161c28] p-2.5 rounded-xl border border-[#2a3449]">
+                        <span className="text-[9px] text-slate-400 uppercase block font-semibold">Tamanho & Categoria</span>
+                        <span className="font-bold text-slate-200 text-xs">{selectedMonster.size} ({selectedMonster.type})</span>
                       </div>
-
-                      {/* Clickable Image Showcase Container */}
-                      <div
-                        onClick={() => {
-                          const tokenUrl = selectedMonster.tokenImageUrl || `/assets/2d/Monstros/${selectedMonster.name}.png`;
-                          setZoomedImage({ url: tokenUrl, title: selectedMonster.name });
-                        }}
-                        className="flex-1 w-full min-h-[220px] max-h-[300px] rounded-xl overflow-hidden bg-slate-950 border border-[#2a3449] flex items-center justify-center p-4 relative cursor-pointer transition-all duration-300 group-hover:border-amber-500/60 shadow-2xl"
-                      >
-                        <div className="absolute inset-0 bg-radial from-amber-500/15 via-transparent to-transparent opacity-60 group-hover:opacity-100 transition-opacity" />
-
-                        {(() => {
-                          const tokenUrl = selectedMonster.tokenImageUrl || `/assets/2d/Monstros/${selectedMonster.name}.png`;
-                          return (
-                            <img
-                              src={tokenUrl}
-                              alt={selectedMonster.name}
-                              className="max-w-full max-h-full object-contain filter drop-shadow-[0_0_15px_rgba(245,158,11,0.35)] transition-transform duration-300 group-hover:scale-110 relative z-10"
-                              onError={(e) => {
-                                const target = e.currentTarget;
-                                target.onerror = null;
-                                target.src = '/assets/2d/Monstros/Goblin.png';
-                              }}
-                            />
-                          );
-                        })()}
-
-                        {/* Hover Overlay Badge */}
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-2 text-amber-300 z-20">
-                          <div className="p-3 rounded-full bg-amber-500/20 border border-amber-500/50 shadow-lg">
-                            <ZoomIn className="w-6 h-6 animate-pulse" />
-                          </div>
-                          <span className="text-xs font-bold tracking-wide text-slate-100">Ampliar Arte em Zoom</span>
-                        </div>
+                      <div className="bg-[#161c28] p-2.5 rounded-xl border border-[#2a3449]">
+                        <span className="text-[9px] text-slate-400 uppercase block font-semibold">Alinhamento Moral</span>
+                        <span className="font-bold text-slate-200 text-xs">{selectedMonster.alignment}</span>
+                      </div>
+                      <div className="bg-[#161c28] p-2.5 rounded-xl border border-[#2a3449]">
+                        <span className="text-[9px] text-slate-400 uppercase block font-semibold">Deslocamento Base</span>
+                        <span className="font-bold text-amber-300 font-mono text-xs">{selectedMonster.speed}</span>
+                      </div>
+                      <div className="bg-[#161c28] p-2.5 rounded-xl border border-[#2a3449]">
+                        <span className="text-[9px] text-slate-400 uppercase block font-semibold">Nível de Desafio</span>
+                        <span className="font-bold text-amber-400 font-mono text-xs">ND {selectedMonster.cr} ({selectedMonster.xp} XP)</span>
                       </div>
                     </div>
 
-                    {/* Ecology & Habitat Summary */}
-                    <div className="lg:col-span-7 flex flex-col justify-between bg-[#0a0d14]/70 p-5 rounded-2xl border border-[#2a3449] shadow-lg space-y-4">
-                      <div>
-                        <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                          <Compass className="w-4 h-4 text-amber-400" /> Classificação & Ecologia
-                        </h3>
-
-                        <div className="grid grid-cols-2 gap-3 text-xs">
-                          <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449]">
-                            <span className="text-[10px] text-slate-400 uppercase block font-semibold">Tamanho & Categoria</span>
-                            <span className="font-bold text-slate-200">{selectedMonster.size} ({selectedMonster.type})</span>
-                          </div>
-                          <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449]">
-                            <span className="text-[10px] text-slate-400 uppercase block font-semibold">Alinhamento Moral</span>
-                            <span className="font-bold text-slate-200">{selectedMonster.alignment}</span>
-                          </div>
-                          <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449]">
-                            <span className="text-[10px] text-slate-400 uppercase block font-semibold">Deslocamento Base</span>
-                            <span className="font-bold text-amber-300 font-mono">{selectedMonster.speed}</span>
-                          </div>
-                          <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449]">
-                            <span className="text-[10px] text-slate-400 uppercase block font-semibold">Nível de Desafio</span>
-                            <span className="font-bold text-amber-400 font-mono">ND {selectedMonster.cr} ({selectedMonster.xp} XP)</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Preferred Habitats */}
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                          <MapPin className="w-3.5 h-3.5 text-amber-400" /> Terrenos e Habitats Típicos:
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {getMonsterHabitats(selectedMonster).map((habitat, idx) => (
-                            <span
-                              key={idx}
-                              className="px-2.5 py-1 bg-[#161c28] border border-amber-500/30 text-amber-300 text-[11px] font-semibold rounded-lg"
-                            >
-                              {habitat}
-                            </span>
-                          ))}
-                        </div>
+                    {/* Preferred Habitats */}
+                    <div className="pt-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                        <MapPin className="w-3.5 h-3.5 text-amber-400" /> Terrenos e Habitats Típicos:
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {getMonsterHabitats(selectedMonster).map((habitat, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2.5 py-1 bg-[#161c28] border border-amber-500/30 text-amber-300 text-[11px] font-semibold rounded-lg"
+                          >
+                            {habitat}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   </div>
 
                   {/* Narrative Lore Card */}
-                  <div className="bg-[#0a0d14]/70 p-5 rounded-2xl border border-[#2a3449] space-y-3 shadow-lg">
+                  <div className="bg-[#0a0d14]/70 p-4 md:p-5 rounded-2xl border border-[#2a3449] space-y-2.5 shadow-lg">
                     <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
                       <Scroll className="w-4 h-4 text-amber-400" /> Descrição Narrativa & História (Lore RPG):
                     </h4>
-                    <p className="text-xs md:text-sm text-slate-200 leading-relaxed font-serif whitespace-pre-wrap bg-[#161c28] p-4 rounded-xl border border-[#2a3449]/70">
+                    <p className="text-xs md:text-sm text-slate-200 leading-relaxed font-serif whitespace-pre-wrap bg-[#161c28] p-3.5 md:p-4 rounded-xl border border-[#2a3449]/70">
                       {getMonsterLoreDescription(selectedMonster)}
                     </p>
                   </div>
@@ -1349,7 +1264,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
               <div className="border-b border-[#2a3449] pb-5 flex flex-wrap items-start justify-between gap-4 bg-gradient-to-r from-[#0f141d] to-transparent p-4 rounded-2xl border border-[#2a3449]/80 shadow-md">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-3xl font-extrabold text-amber-100 font-serif tracking-wide">
+                    <h2 className="text-2xl md:text-3xl font-extrabold text-amber-100 font-serif tracking-wide">
                       {selectedSpell.name}
                     </h2>
                     <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
@@ -1400,162 +1315,84 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
 
                 <div className="bg-[#0a0d14] p-3.5 rounded-xl border border-[#2a3449] space-y-1">
                   <span className="text-slate-400 block text-[10px] uppercase font-bold">
-                    Duração
+                    Componentes
                   </span>
-                  <span className="font-bold text-slate-200">{selectedSpell.duration}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-slate-200">
+                      {typeof selectedSpell.components === 'string'
+                        ? selectedSpell.components
+                        : selectedSpell.components?.raw ||
+                          [
+                            selectedSpell.components?.verbal ? 'V' : '',
+                            selectedSpell.components?.somatic ? 'S' : '',
+                            selectedSpell.components?.material ? 'M' : '',
+                          ].filter(Boolean).join(', ') || 'V, S'}
+                    </span>
+                    {(() => {
+                      const comp = typeof selectedSpell.components === 'object' ? selectedSpell.components : null;
+                      const rawText = typeof selectedSpell.components === 'string' ? selectedSpell.components : comp?.raw || '';
+                      const matDesc = comp?.materialsDescription || (rawText.includes('(') ? rawText.substring(rawText.indexOf('(') + 1, rawText.indexOf(')')) : null);
+                      if (!matDesc) return null;
+                      return (
+                        <span
+                          className="text-[10px] text-amber-400 cursor-help"
+                          title={matDesc}
+                        >
+                          ℹ️
+                        </span>
+                      );
+                    })()}
+                  </div>
                 </div>
 
                 <div className="bg-[#0a0d14] p-3.5 rounded-xl border border-[#2a3449] space-y-1">
                   <span className="text-slate-400 block text-[10px] uppercase font-bold">
-                    Concentração & Ritual
+                    Duração
                   </span>
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${selectedSpell.concentration ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
-                      {selectedSpell.concentration ? '🧘 Concentração' : 'Sem Concentração'}
-                    </span>
-                    {selectedSpell.ritual && (
-                      <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded text-[10px] font-bold">
-                        📜 Ritual
-                      </span>
-                    )}
-                  </div>
+                  <span className="font-bold text-slate-200">{selectedSpell.duration}</span>
                 </div>
               </div>
 
-              {/* Seção 2: Componentes & Formato da Área */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Componentes (V, S, M) */}
-                <div className="bg-[#0a0d14]/70 p-4 rounded-2xl border border-[#2a3449] space-y-2.5">
-                  <span className="text-xs font-bold text-amber-400 uppercase tracking-wider block">
-                    🧪 Componentes & Ingredientes
+              {/* Tags adicionais de magia */}
+              <div className="flex flex-wrap gap-2 text-xs">
+                {selectedSpell.concentration && (
+                  <span className="px-3 py-1 rounded-lg bg-purple-500/15 border border-purple-500/40 text-purple-300 font-semibold flex items-center gap-1.5">
+                    <span>🧘</span> Requer Concentração
                   </span>
-                  {(() => {
-                    const comp = typeof selectedSpell.components === 'object' ? selectedSpell.components : null;
-                    const rawText = typeof selectedSpell.components === 'string' ? selectedSpell.components : comp?.raw || '';
-                    const isV = comp ? comp.verbal : rawText.includes('V');
-                    const isS = comp ? comp.somatic : rawText.includes('S');
-                    const isM = comp ? comp.material : rawText.includes('M');
-                    const matDesc = comp?.materialsDescription || (rawText.includes('(') ? rawText.substring(rawText.indexOf('(') + 1, rawText.indexOf(')')) : null);
-
-                    return (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-1 rounded-md text-xs font-mono font-black border ${isV ? 'bg-amber-500/20 text-amber-300 border-amber-500/50' : 'bg-slate-900 text-slate-600 border-slate-800 opacity-40'}`}>
-                            V (Verbal)
-                          </span>
-                          <span className={`px-2 py-1 rounded-md text-xs font-mono font-black border ${isS ? 'bg-amber-500/20 text-amber-300 border-amber-500/50' : 'bg-slate-900 text-slate-600 border-slate-800 opacity-40'}`}>
-                            S (Somático/Gestual)
-                          </span>
-                          <span className={`px-2 py-1 rounded-md text-xs font-mono font-black border ${isM ? 'bg-amber-500/20 text-amber-300 border-amber-500/50' : 'bg-slate-900 text-slate-600 border-slate-800 opacity-40'}`}>
-                            M (Material)
-                          </span>
-                        </div>
-                        {matDesc && (
-                          <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449] text-xs space-y-1">
-                            <span className="text-[10px] font-bold text-amber-400 uppercase block">Materiais Exigidos:</span>
-                            <p className="text-slate-300 italic">{matDesc}</p>
-                            {comp?.costly && (
-                              <span className="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 bg-yellow-500/20 text-yellow-300 border border-yellow-500/40 rounded">
-                                💰 Requer Ingrediente Valioso com Custo em PO
-                              </span>
-                            )}
-                            {comp?.consumed && (
-                              <span className="inline-block mt-1 ml-1 text-[10px] font-bold px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded">
-                                🔥 Material Consumido na Conjuração
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* Formato / Área de Efeito */}
-                <div className="bg-[#0a0d14]/70 p-4 rounded-2xl border border-[#2a3449] space-y-2.5">
-                  <span className="text-xs font-bold text-amber-400 uppercase tracking-wider block">
-                    📐 Formato & Área de Efeito
+                )}
+                {selectedSpell.ritual && (
+                  <span className="px-3 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 font-semibold flex items-center gap-1.5">
+                    <span>📜</span> Pode ser conjurada como Ritual
                   </span>
-                  {(() => {
-                    const area = selectedSpell.targetArea;
-                    const shape = area?.shape;
-                    let shapeLabel = 'Alvo / Área';
-                    let shapeIcon = '🎯';
-                    if (shape === 'cone') { shapeLabel = 'Cone / Leque'; shapeIcon = '📐'; }
-                    else if (shape === 'sphere') { shapeLabel = 'Esfera / Baforada'; shapeIcon = '🟢'; }
-                    else if (shape === 'line') { shapeLabel = 'Linha'; shapeIcon = '⚡'; }
-                    else if (shape === 'cube') { shapeLabel = 'Cubo'; shapeIcon = '🧊'; }
-                    else if (shape === 'cylinder') { shapeLabel = 'Cilindro'; shapeIcon = '🏛️'; }
-                    else if (shape === 'wall') { shapeLabel = 'Parede / Muralha'; shapeIcon = '🧱'; }
-                    else if (shape === 'single_target') { shapeLabel = 'Alvo Único'; shapeIcon = '🎯'; }
-                    else if (shape === 'multiple_targets') { shapeLabel = 'Múltiplos Alvos'; shapeIcon = '🎯🎯'; }
-                    else if (shape === 'touch') { shapeLabel = 'Toque'; shapeIcon = '🖐️'; }
-                    else if (shape === 'self') { shapeLabel = 'Pessoal (Si Mesmo)'; shapeIcon = '👤'; }
-
-                    return (
-                      <div className="space-y-2 text-xs">
-                        <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449] flex items-center justify-between">
-                          <div>
-                            <span className="text-[10px] text-slate-400 uppercase block font-semibold">Tipo / Formato</span>
-                            <span className="font-bold text-slate-200 text-sm">{shapeIcon} {shapeLabel}</span>
-                          </div>
-                          {area?.formatted && (
-                            <span className="text-xs font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-lg">
-                              {area.formatted}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
+                )}
+                {selectedSpell.targetArea && (
+                  <span className="px-3 py-1 rounded-lg bg-sky-500/15 border border-sky-500/40 text-sky-300 font-semibold flex items-center gap-1.5">
+                    <span>📐</span> Área: {selectedSpell.targetArea.formatted || selectedSpell.targetArea.shape || 'Área de Efeito'}
+                  </span>
+                )}
               </div>
 
-              {/* Dano / Salvaguarda / Rolagem de Dados Interativa */}
-              {selectedSpell.damageSave && (selectedSpell.damageSave.damageDice || selectedSpell.damageSave.saveStat) && (
-                <div className="bg-[#0a0d14]/70 p-4 rounded-2xl border border-amber-500/30 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                      ⚔️ Mecanismos de Ataque, Dano & Salvaguarda
-                    </span>
-                    {selectedSpell.damageSave.damageDice && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const diceFormula = selectedSpell.damageSave?.damageDice || '1d6';
-                          useLiveCockpitStudioStore.getState().setBg3DiceOverlay({
-                            title: `Efeito de Magia: ${selectedSpell.name}`,
-                            subtitle: `${selectedSpell.level === 0 ? 'Truque' : selectedSpell.level + 'º Nível'} - ${selectedSpell.damageSave?.damageType || 'Magia'}`,
-                            actorName: 'Conjurador',
-                            d20Roll: 15,
-                            selectedD20Roll: 15,
-                            modifier: 0,
-                            totalRoll: 15,
-                            damageDiceFormula: diceFormula,
-                            isRolling: true,
-                            phase: 'damage',
-                          });
-                          toast.success(`Executando rolagem de dano (${diceFormula}) para ${selectedSpell.name}`);
-                        }}
-                        className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
-                      >
-                        <Swords className="w-3.5 h-3.5 text-slate-950" />
-                        <span>Rolar Dano ({selectedSpell.damageSave.damageDice})</span>
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+              {/* Dano e Salvaguarda (se aplicável) */}
+              {selectedSpell.damageSave && (
+                <div className="bg-[#0a0d14] p-4 rounded-2xl border border-[#2a3449] space-y-2">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">
+                    Propriedades de Dano & Salvaguarda:
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                     {selectedSpell.damageSave.damageDice && (
                       <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449]">
-                        <span className="text-[10px] text-slate-400 uppercase block font-semibold">Dado de Dano / Cura</span>
-                        <span className="font-bold text-amber-300 font-mono text-sm">{selectedSpell.damageSave.damageDice} ({selectedSpell.damageSave.damageType || 'Magia'})</span>
+                        <span className="text-[10px] text-slate-400 uppercase block font-semibold">Dano Base</span>
+                        <span className="font-bold text-rose-400 font-mono">
+                          {selectedSpell.damageSave.damageDice} ({selectedSpell.damageSave.damageType || 'Mágico'})
+                        </span>
                       </div>
                     )}
                     {selectedSpell.damageSave.saveStat && (
                       <div className="bg-[#161c28] p-3 rounded-xl border border-[#2a3449]">
-                        <span className="text-[10px] text-slate-400 uppercase block font-semibold">Teste de Resistência (TR)</span>
-                        <span className="font-bold text-rose-300 font-mono text-sm">TR de {selectedSpell.damageSave.saveStat}</span>
+                        <span className="text-[10px] text-slate-400 uppercase block font-semibold">Salvaguarda Exigida</span>
+                        <span className="font-bold text-amber-300">
+                          TR de {selectedSpell.damageSave.saveStat} ({selectedSpell.damageSave.saveEffect || 'Efeito Padrão'})
+                        </span>
                       </div>
                     )}
                     {selectedSpell.damageSave.attackType && (
@@ -1598,7 +1435,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
               <div className="border-b border-[#2a3449] pb-5 flex flex-wrap items-start justify-between gap-4 bg-gradient-to-r from-[#0f141d] to-transparent p-4 rounded-2xl border border-[#2a3449]/80 shadow-md">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-3xl font-extrabold text-amber-100 font-serif tracking-wide">
+                    <h2 className="text-2xl md:text-3xl font-extrabold text-amber-100 font-serif tracking-wide">
                       {selectedItem.name}
                     </h2>
                     {selectedItem.englishName && (
@@ -1694,7 +1531,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
               <div className="border-b border-[#2a3449] pb-5 flex flex-wrap items-start justify-between gap-4 bg-gradient-to-r from-[#0f141d] to-transparent p-4 rounded-2xl border border-[#2a3449]/80 shadow-md">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-3xl font-extrabold text-amber-100 font-serif tracking-wide animate-fade-in">
+                    <h2 className="text-2xl md:text-3xl font-extrabold text-amber-100 font-serif tracking-wide animate-fade-in">
                       {selectedEquipment.name}
                     </h2>
                   </div>
@@ -1760,6 +1597,161 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
               </div>
             </div>
           )}
+        </div>
+
+        {/* Right List Pane - Items/Monsters/Spells/Equipment List */}
+        <div className="order-1 md:order-2 md:col-span-5 lg:col-span-4 xl:col-span-3 border-l border-[#2a3449] overflow-y-auto p-2.5 md:p-3 space-y-1.5 bg-[#0f141d]/60 custom-scrollbar">
+          {activeTab === 'monsters' &&
+            (filteredMonsters.length > 0 ? (
+              filteredMonsters.map((m) => (
+                <button
+                  key={m.id || m.name}
+                  onClick={() => setSelectedMonster(m)}
+                  className={`w-full text-left p-3 rounded-xl border text-xs transition-all ${
+                    selectedMonster?.name === m.name
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold shadow-md'
+                      : 'bg-[#161c28] text-slate-300 border-[#2a3449] hover:bg-[#1f2738] hover:border-slate-600'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="truncate pr-2 font-medium">{m.name}</span>
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 border border-amber-500/20 shrink-0">
+                      ND {m.cr}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
+                    <span>{m.type}</span>
+                    <span>{m.size}</span>
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="p-8 text-center text-slate-400 text-xs space-y-2">
+                <FilterX className="w-8 h-8 mx-auto opacity-30 text-amber-400" />
+                <p>Nenhum monstro encontrado com os filtros selecionados.</p>
+                <button
+                  onClick={clearMonsterFilters}
+                  className="px-3 py-1 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 rounded-lg text-[11px] font-bold transition-all border border-amber-500/40"
+                >
+                  Limpar todos os filtros
+                </button>
+              </div>
+            ))}
+
+          {activeTab === 'spells' &&
+            (filteredSpells.length > 0 ? (
+              filteredSpells.map((s) => (
+                <button
+                  key={s.id || s.name}
+                  onClick={() => setSelectedSpell(s)}
+                  className={`w-full text-left p-3 rounded-xl border text-xs transition-all ${
+                    selectedSpell?.name === s.name
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold shadow-md'
+                      : 'bg-[#161c28] text-slate-300 border-[#2a3449] hover:bg-[#1f2738] hover:border-slate-600'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="truncate pr-2 font-medium">{s.name}</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-700 shrink-0">
+                      {s.level === 0 ? 'Truque' : `${s.level}º Nível`}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1">{s.school}</div>
+                </button>
+              ))
+            ) : (
+              <div className="p-8 text-center text-slate-400 text-xs space-y-2">
+                <FilterX className="w-8 h-8 mx-auto opacity-30 text-amber-400" />
+                <p>Nenhuma magia encontrada com os filtros selecionados.</p>
+                <button
+                  onClick={clearSpellFilters}
+                  className="px-3 py-1 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 rounded-lg text-[11px] font-bold transition-all border border-amber-500/40"
+                >
+                  Limpar filtros
+                </button>
+              </div>
+            ))}
+
+          {activeTab === 'items' &&
+            (filteredItems.length > 0 ? (
+              filteredItems.map((i) => {
+                const rarityBadge = getItemRarityBadgeStyle(i.rarity);
+                return (
+                  <button
+                    key={i.id || i.name}
+                    onClick={() => setSelectedItem(i)}
+                    className={`w-full text-left p-3 rounded-xl border text-xs transition-all ${
+                      selectedItem?.name === i.name
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold shadow-md'
+                        : 'bg-[#161c28] text-slate-300 border-[#2a3449] hover:bg-[#1f2738] hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="truncate pr-2 font-medium">{i.name}</span>
+                      <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${rarityBadge.bg} ${rarityBadge.text} ${rarityBadge.border}`}>
+                        {i.rarity}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
+                      <span>{i.type}</span>
+                      {i.attunement && i.attunement !== (false as any) && (
+                        <span className="text-[9px] text-amber-400 font-semibold flex items-center gap-0.5">
+                          <Zap className="w-2.5 h-2.5" /> Sintonização
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="p-8 text-center text-slate-400 text-xs space-y-2">
+                <FilterX className="w-8 h-8 mx-auto opacity-30 text-amber-400" />
+                <p>Nenhum item encontrado com os filtros selecionados.</p>
+                <button
+                  onClick={clearItemFilters}
+                  className="px-3 py-1 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 rounded-lg text-[11px] font-bold transition-all border border-amber-500/40"
+                >
+                  Limpar filtros
+                </button>
+              </div>
+            ))}
+
+          {activeTab === 'equipment' &&
+            (filteredEquipment.length > 0 ? (
+              filteredEquipment.map((item) => (
+                <button
+                  key={item.name}
+                  onClick={() => setSelectedEquipment(item)}
+                  className={`w-full text-left p-3 rounded-xl border text-xs transition-all ${
+                    selectedEquipment?.name === item.name
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold shadow-md'
+                      : 'bg-[#161c28] text-slate-300 border-[#2a3449] hover:bg-[#1f2738] hover:border-slate-600'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="truncate pr-2 font-medium">{item.name}</span>
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 text-amber-400 border border-amber-500/20 shrink-0">
+                      {item.cost}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
+                    <span>{item.category}</span>
+                    <span>{item.weight} kg</span>
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="p-8 text-center text-slate-400 text-xs space-y-2">
+                <FilterX className="w-8 h-8 mx-auto opacity-30 text-amber-400" />
+                <p>Nenhum equipamento encontrado com os filtros selecionados.</p>
+                <button
+                  onClick={clearEquipmentFilters}
+                  className="px-3 py-1 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 rounded-lg text-[11px] font-bold transition-all border border-amber-500/40"
+                >
+                  Limpar filtros
+                </button>
+              </div>
+            ))}
         </div>
       </div>
 

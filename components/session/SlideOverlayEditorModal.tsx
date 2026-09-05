@@ -189,6 +189,20 @@ export const SlideOverlayEditorModal: React.FC<SlideOverlayEditorModalProps> = (
     }
   };
 
+  const getAspectStyle = (aspect: SlideAspectRatio): React.CSSProperties => {
+    switch (aspect) {
+      case '4:3':
+        return { aspectRatio: '4 / 3' };
+      case '1:1':
+        return { aspectRatio: '1 / 1' };
+      case '9:16':
+        return { aspectRatio: '9 / 16' };
+      case '16:9':
+      default:
+        return { aspectRatio: '16 / 9' };
+    }
+  };
+
   // =========================================================================
   // LOGICA DE DRAG & RESIZE COM MOUSE NO PREVIEW INTERATIVO
   // =========================================================================
@@ -363,9 +377,12 @@ export const SlideOverlayEditorModal: React.FC<SlideOverlayEditorModalProps> = (
             {/* Canvas do Preview Interativo */}
             <div 
               ref={previewContainerRef}
-              className="relative w-full bg-black/95 rounded-2xl overflow-hidden border-2 border-amber-500/30 shadow-2xl flex items-center justify-center min-h-[300px] max-h-[500px]"
+              className="relative w-full bg-black/95 rounded-2xl overflow-hidden border-2 border-amber-500/30 shadow-2xl flex items-center justify-center min-h-[300px] max-h-[500px] p-2"
             >
-              <div className={`w-full ${getAspectClass(slideAspectRatio)} relative flex items-center justify-center overflow-hidden`}>
+              <div 
+                style={getAspectStyle(slideAspectRatio)}
+                className={`h-full max-w-full w-auto ${getAspectClass(slideAspectRatio)} relative flex items-center justify-center overflow-hidden rounded-lg`}
+              >
                 {slideImageUrl ? (
                   isYouTubeUrl(slideImageUrl) ? (
                     <iframe

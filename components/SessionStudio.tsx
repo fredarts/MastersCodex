@@ -35,6 +35,7 @@ import {
   Scroll
 } from 'lucide-react';
 import { SessionChronicleModal } from '@/components/session/SessionChronicleModal';
+import { CampaignNPCSharingModal } from '@/components/campaign/CampaignNPCSharingModal';
 import { toast } from 'sonner';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useSession } from '@/lib/hooks/useSession';
@@ -87,7 +88,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
   onSetMainSidebarCollapsed,
   onEditMapInMapMaker,
 }) => {
-  const { activeCampaign, campaignMembers, createFeedEvent } = useCampaign();
+  const { activeCampaign, campaignMembers, createFeedEvent, updateNPCDisclosure } = useCampaign();
   const { showAlert } = useCustomDialog();
   const { 
     sessions, 
@@ -129,6 +130,7 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
   };
   const [worldSearch, setWorldSearch] = useState('');
   const [worldFilterCat, setWorldFilterCat] = useState('all');
+  const [sharingWorldEntityId, setSharingWorldEntityId] = useState<string | null>(null);
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
   const [showImageAiModal, setShowImageAiModal] = useState(false);
   const [showChronicleModal, setShowChronicleModal] = useState(false);
@@ -1203,11 +1205,11 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                             ? 'bg-purple-600 text-slate-950 shadow-md font-black'
                             : 'text-slate-400 hover:text-slate-100 hover:bg-[#161c28]'
                         }`}
-                        title={`Transmitir Worldbuilding (${worldEntities.length})`}
+                        title={`Worldbuilding & Lore da Cena (${worldEntities.length})`}
                       >
                         <div className="flex items-center gap-2.5 truncate">
                           <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                          {!isSubTabsCollapsed && <span className="truncate">Transmitir World</span>}
+                          {!isSubTabsCollapsed && <span className="truncate">Worldbuilding da Cena</span>}
                         </div>
                         {!isSubTabsCollapsed && worldEntities.length > 0 && (
                           <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full ${
@@ -1956,10 +1958,10 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                       <div className="flex items-center justify-between">
                         <div>
                           <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                            <Sparkles className="w-4 h-4 text-amber-400" /> Transmitir Lore & Conhecimento para a Cena
+                            <Sparkles className="w-4 h-4 text-amber-400" /> Worldbuilding & Revelação para a Cena
                           </h4>
                           <p className="text-[11px] text-slate-400 mt-0.5">
-                            Selecione entradas do Worldbuilding para revelar detalhes na cena atual e publicar no Feed da Campanha dos jogadores.
+                            Selecione entradas do Worldbuilding para revelar na cena atual, transmitir em tempo real para os jogadores ou inserir na sua narração.
                           </p>
                         </div>
                       </div>
@@ -1977,12 +1979,12 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                           />
                         </div>
 
-                        <div className="flex items-center gap-1 overflow-x-auto">
+                        <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar">
                           <button
                             type="button"
                             onClick={() => setWorldFilterCat('all')}
                             className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                              worldFilterCat === 'all' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                              worldFilterCat === 'all' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 bg-[#0a0d14] border border-[#2a3449]'
                             }`}
                           >
                             Todos ({worldEntities.length})
@@ -1991,37 +1993,46 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                             type="button"
                             onClick={() => setWorldFilterCat('npc')}
                             className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                              worldFilterCat === 'npc' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                              worldFilterCat === 'npc' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 bg-[#0a0d14] border border-[#2a3449]'
                             }`}
                           >
-                            NPCs
+                            NPCs ({worldEntities.filter(e => e.category === 'npc' || (e.category as string) === 'person').length})
                           </button>
                           <button
                             type="button"
                             onClick={() => setWorldFilterCat('location')}
                             className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                              worldFilterCat === 'location' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                              worldFilterCat === 'location' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 bg-[#0a0d14] border border-[#2a3449]'
                             }`}
                           >
-                            Locais
+                            Locais ({worldEntities.filter(e => e.category === 'location').length})
                           </button>
                           <button
                             type="button"
                             onClick={() => setWorldFilterCat('faction')}
                             className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                              worldFilterCat === 'faction' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                              worldFilterCat === 'faction' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 bg-[#0a0d14] border border-[#2a3449]'
                             }`}
                           >
-                            Facções
+                            Facções ({worldEntities.filter(e => e.category === 'faction' || e.category === 'religion').length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setWorldFilterCat('item')}
+                            className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                              worldFilterCat === 'item' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 bg-[#0a0d14] border border-[#2a3449]'
+                            }`}
+                          >
+                            Itens ({worldEntities.filter(e => e.category === 'item' || e.category === 'material').length})
                           </button>
                           <button
                             type="button"
                             onClick={() => setWorldFilterCat('spell')}
                             className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                              worldFilterCat === 'spell' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                              worldFilterCat === 'spell' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 bg-[#0a0d14] border border-[#2a3449]'
                             }`}
                           >
-                            Feitiços
+                            Feitiços ({worldEntities.filter(e => e.category === 'spell' || e.category === 'magic_system').length})
                           </button>
                         </div>
                       </div>
@@ -2031,68 +2042,179 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {worldEntities
                         .filter((ent) => {
-                          const matchesCat = worldFilterCat === 'all' || ent.category === worldFilterCat;
+                          let matchesCat = worldFilterCat === 'all';
+                          if (worldFilterCat === 'npc') matchesCat = ent.category === 'npc' || (ent.category as string) === 'person';
+                          else if (worldFilterCat === 'location') matchesCat = ent.category === 'location';
+                          else if (worldFilterCat === 'faction') matchesCat = ent.category === 'faction' || ent.category === 'religion';
+                          else if (worldFilterCat === 'item') matchesCat = ent.category === 'item' || ent.category === 'material';
+                          else if (worldFilterCat === 'spell') matchesCat = ent.category === 'spell' || ent.category === 'magic_system';
+
                           const matchesQuery =
                             !worldSearch ||
                             ent.name.toLowerCase().includes(worldSearch.toLowerCase()) ||
-                            ent.shortDesc.toLowerCase().includes(worldSearch.toLowerCase());
+                            (ent.shortDesc || '').toLowerCase().includes(worldSearch.toLowerCase()) ||
+                            (ent.tags || []).some(t => t.toLowerCase().includes(worldSearch.toLowerCase()));
                           return matchesCat && matchesQuery;
                         })
-                        .map((ent) => (
-                          <div
-                            key={ent.id}
-                            className="p-4 rounded-2xl bg-[#161c28] border border-[#2a3449] hover:border-amber-500/50 transition-all flex flex-col justify-between overflow-hidden"
-                          >
-                            <div>
-                              {ent.images && ent.images.length > 0 && (
-                                <div className="relative aspect-video -mx-4 -mt-4 mb-3 overflow-hidden bg-[#0a0d14]">
-                                  <img src={ent.images[0]} alt={ent.name} className="w-full h-full object-cover" />
-                                </div>
-                              )}
-                              <div className="flex items-center justify-between mb-1.5">
-                                <span className="text-[10px] font-bold uppercase bg-[#0a0d14] text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded">
-                                  {ent.subType || ent.category}
-                                </span>
-                              </div>
-                              <h5 className="font-bold text-sm text-slate-100">{ent.name}</h5>
-                              <p className="text-xs text-slate-300 mt-1 font-serif line-clamp-3">{ent.shortDesc}</p>
-                            </div>
+                        .map((ent) => {
+                          const disc = activeCampaign?.npcDisclosures?.[ent.id];
+                          const isShared = Boolean(disc?.isShared);
+                          const hasAlias = Boolean(!disc?.revealedFields?.name && disc?.alias);
 
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (!selectedScene) {
-                                  toast.error('Selecione uma cena ativa para transmitir a lore.');
-                                  return;
-                                }
-                                const loreSegment = `\n\n📜 [WORLDBUILDING REVELADO: ${ent.name}]\n${ent.shortDesc}\n${ent.fullContent ? `Detalhes: ${ent.fullContent}` : ''}`;
-                                const updatedSensory = sensoryText ? `${sensoryText}${loreSegment}` : loreSegment.trim();
-                                setSensoryText(updatedSensory);
-
-                                if (activeCampaign) {
-                                  await createFeedEvent({
-                                    campaignId: activeCampaign.id,
-                                    eventType: 'world_lore',
-                                    title: `Lore Revelada: ${ent.name}`,
-                                    summary: ent.shortDesc,
-                                    isPublic: true,
-                                  });
-                                }
-
-                                await updateScene({
-                                  ...selectedScene,
-                                  sensoryText: updatedSensory,
-                                });
-
-                                toast.success(`✨ Lore "${ent.name}" transmitida para a cena e Feed da Campanha!`);
-                              }}
-                              className="mt-3 w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-xl shadow flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                          return (
+                            <div
+                              key={ent.id}
+                              className={`p-4 rounded-2xl bg-[#161c28] border transition-all flex flex-col justify-between overflow-hidden shadow-lg ${
+                                isShared ? 'border-amber-500/60 ring-1 ring-amber-500/20' : 'border-[#2a3449] hover:border-slate-500'
+                              }`}
                             >
-                              <Sparkles className="w-3.5 h-3.5" />
-                              <span>⚡ Transmitir para a Cena & Feed</span>
-                            </button>
-                          </div>
-                        ))}
+                              <div>
+                                {ent.images && ent.images.length > 0 && (
+                                  <div className="relative aspect-video -mx-4 -mt-4 mb-3 overflow-hidden bg-[#0a0d14]">
+                                    <img src={ent.images[0]} alt={ent.name} className="w-full h-full object-cover" />
+                                  </div>
+                                )}
+                                <div className="flex items-center justify-between mb-1.5 gap-2">
+                                  <span className="text-[10px] font-bold uppercase bg-[#0a0d14] text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded truncate">
+                                    {ent.subType || ent.category}
+                                  </span>
+
+                                  <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded border uppercase flex items-center gap-1 ${
+                                    isShared
+                                      ? hasAlias
+                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                                  }`}>
+                                    {isShared ? (hasAlias ? '🎭 Codinome' : '👁️ Revelado') : '🔒 Oculto'}
+                                  </span>
+                                </div>
+                                <h5 className="font-bold text-sm text-slate-100 flex items-center gap-2">
+                                  <span>{ent.name}</span>
+                                  {hasAlias && (
+                                    <span className="text-xs text-amber-400/80 font-normal italic">
+                                      ("{disc?.alias}")
+                                    </span>
+                                  )}
+                                </h5>
+                                <p className="text-xs text-slate-300 mt-1 font-serif line-clamp-3">{ent.shortDesc || 'Sem descrição cadastrada.'}</p>
+                              </div>
+
+                              {/* Action Buttons Toolbar */}
+                              <div className="mt-4 pt-3 border-t border-[#2a3449] flex flex-col gap-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                  {/* Inserir no Texto Sensorial */}
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      if (!selectedScene) {
+                                        toast.error('Selecione uma cena ativa para narrar a lore.');
+                                        return;
+                                      }
+                                      const loreSegment = `\n\n📜 [WORLDBUILDING: ${ent.name}]\n${ent.shortDesc || ''}\n${ent.fullContent ? `Detalhes: ${ent.fullContent}` : ''}`;
+                                      const updatedSensory = sensoryText ? `${sensoryText}${loreSegment}` : loreSegment.trim();
+                                      setSensoryText(updatedSensory);
+
+                                      await updateScene({
+                                        ...selectedScene,
+                                        sensoryText: updatedSensory,
+                                      });
+
+                                      toast.success(`📜 Resumo de "${ent.name}" adicionado à narração da cena!`);
+                                    }}
+                                    className="py-1.5 px-2 bg-[#0f1420] hover:bg-[#1a2334] text-slate-200 border border-[#2a3449] hover:border-slate-400 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                                    title="Inserir descrição no texto sensorial da cena para narração"
+                                  >
+                                    <Scroll className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>Inserir na Fala</span>
+                                  </button>
+
+                                  {/* Configurar Permissões & Máscara */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!activeCampaign) {
+                                        toast.error('É necessário estar em uma campanha para configurar a transmissão.');
+                                        return;
+                                      }
+                                      setSharingWorldEntityId(ent.id);
+                                    }}
+                                    className="py-1.5 px-2 bg-[#0f1420] hover:bg-[#1a2334] text-cyan-300 border border-cyan-500/30 hover:border-cyan-400 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                                    title="Configurar quais campos os jogadores podem ler (Codinome, Ficha, Segredos)"
+                                  >
+                                    <Shield className="w-3.5 h-3.5 text-cyan-400" />
+                                    <span>Permissões</span>
+                                  </button>
+                                </div>
+
+                                {/* Transmitir ao Vivo / Revelar no Feed */}
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (!activeCampaign) {
+                                      toast.error('Selecione uma campanha ativa para transmitir a lore.');
+                                      return;
+                                    }
+
+                                    const nextIsShared = !isShared;
+                                    const defaultFields = disc?.revealedFields || {
+                                      image: true,
+                                      name: true,
+                                      raceClass: true,
+                                      shortDesc: true,
+                                      fullContent: true,
+                                      secrets: false,
+                                      connections: true,
+                                      statSheet: false,
+                                      tags: true,
+                                    };
+
+                                    await updateNPCDisclosure(
+                                      activeCampaign.id,
+                                      ent.id,
+                                      {
+                                        entityId: ent.id,
+                                        isShared: nextIsShared,
+                                        alias: disc?.alias || '',
+                                        revealedFields: defaultFields,
+                                        entitySnapshot: ent,
+                                      },
+                                      ent.name
+                                    );
+
+                                    if (nextIsShared) {
+                                      const isNpc = ent.category === 'npc' || (ent.category as string) === 'person';
+                                      await createFeedEvent({
+                                        campaignId: activeCampaign.id,
+                                        eventType: isNpc ? 'npc_encounter' : 'world_lore',
+                                        title: isNpc ? `Encontro: ${ent.name}` : `Worldbuilding Revelado: ${ent.name}`,
+                                        summary: ent.shortDesc || `Informações sobre ${ent.name} foram registradas no diário da mesa.`,
+                                        isPublic: true,
+                                        details: {
+                                          entityId: ent.id,
+                                          category: ent.category,
+                                          origem: ent.subType || ent.category,
+                                          status: 'Conhecido',
+                                        },
+                                      });
+                                      toast.success(`⚡ "${ent.name}" transmitido ao vivo e publicado no Feed da Campanha!`);
+                                    } else {
+                                      toast.info(`🔒 "${ent.name}" agora está oculto dos jogadores.`);
+                                    }
+                                  }}
+                                  className={`w-full py-2 rounded-xl font-bold text-xs shadow flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+                                    isShared
+                                      ? 'bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-500/40'
+                                      : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black'
+                                  }`}
+                                >
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                  <span>{isShared ? '🔒 Ocultar da Mesa' : '⚡ Transmitir ao Vivo & Feed'}</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                     </div>
                   </div>
                 )}
@@ -2177,6 +2299,16 @@ export const SessionStudio: React.FC<SessionStudioProps> = ({
           scenes={scenes}
           partyMembers={campaignMembers.filter((m) => m.role !== 'dm').map((m) => m.characterName || m.displayName || 'Herói')}
           onClose={() => setShowChronicleModal(false)}
+        />
+      )}
+
+      {/* Modal Universal de Transmissão de Worldbuilding & Permissões */}
+      {sharingWorldEntityId && activeCampaign && (
+        <CampaignNPCSharingModal
+          campaign={activeCampaign}
+          worldEntities={worldEntities}
+          initialEntityId={sharingWorldEntityId}
+          onClose={() => setSharingWorldEntityId(null)}
         />
       )}
     </div>

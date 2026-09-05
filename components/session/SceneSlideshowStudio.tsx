@@ -30,13 +30,15 @@ import {
   Image as ImageIcon,
   X,
   Palette,
-  Pencil
+  Pencil,
+  Wand2
 } from 'lucide-react';
 import { SceneImage, SlidePack, SlideTransitionType, SlideAspectRatio } from '@/lib/types';
 import { SLIDE_TRANSITION_OPTIONS, SLIDE_ASPECT_RATIO_OPTIONS } from '@/lib/constants/rpgArtStyles';
 import { MagicShaderSlideshow } from '@/components/MagicShaderSlideshow';
 import { SlideTextOverlayRenderer } from '@/components/session/SlideTextOverlayRenderer';
 import { SlideOverlayEditorModal } from '@/components/session/SlideOverlayEditorModal';
+import { SlideImageAiEditorModal } from '@/components/modals/SlideImageAiEditorModal';
 import { normalizeImageUrl, isYouTubeUrl, getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from '@/lib/imageUtils';
 import { storageService } from '@/lib/services/storageService';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -87,6 +89,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
   const [urlInput, setUrlInput] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [editingOverlaySlideIndex, setEditingOverlaySlideIndex] = useState<number | null>(null);
+  const [aiEditingSlideIndex, setAiEditingSlideIndex] = useState<number | null>(null);
 
   // Pack atualmente ativo
   const currentPack = slidePacks.find((p) => p.id === activeSlidePackId) || slidePacks[0] || {
@@ -288,6 +291,20 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
     }
   };
 
+  const getAspectStyle = (aspect: SlideAspectRatio): React.CSSProperties => {
+    switch (aspect) {
+      case '4:3':
+        return { aspectRatio: '4 / 3' };
+      case '1:1':
+        return { aspectRatio: '1 / 1' };
+      case '9:16':
+        return { aspectRatio: '9 / 16' };
+      case '16:9':
+      default:
+        return { aspectRatio: '16 / 9' };
+    }
+  };
+
   return (
     <div className="flex flex-col lg:flex-row gap-3 xl:gap-4 w-full h-full min-h-0 flex-1 overflow-hidden">
       {/* ========================================================================= */}
@@ -317,8 +334,11 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
           </div>
 
           {/* Área de Visualização com Shader WebGL */}
-          <div className="relative w-full flex-1 min-h-0 bg-black/90 rounded-xl overflow-hidden border border-[#2a3449] flex items-center justify-center p-1">
-            <div className={`w-full h-full max-h-full ${getAspectClass(currentAspect)} relative flex items-center justify-center overflow-hidden`}>
+          <div className="relative w-full flex-1 min-h-0 bg-black/90 rounded-xl overflow-hidden border border-[#2a3449] flex items-center justify-center p-2">
+            <div
+              style={getAspectStyle(currentAspect)}
+              className={`h-full max-w-full w-auto ${getAspectClass(currentAspect)} relative flex items-center justify-center overflow-hidden rounded-lg shadow-2xl border border-[#2a3449]/40 bg-black`}
+            >
               {activeDisplayUrl ? (
                 isYouTubeUrl(activeDisplayUrl) ? (
                   <iframe
@@ -635,8 +655,8 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                   >
                     {/* Linha Superior: Imagem em Primeiro Lugar + Ações de Cabeçalho */}
                     <div className="flex items-center justify-between gap-2">
-                      {/* Miniatura do Slide com Badge */}
-                      <div className="relative w-16 h-11 bg-black rounded-lg overflow-hidden border border-[#2a3449] shrink-0 shadow">
+                      {/* Miniatura do Slide com Badge e Botão Rápido de IA */}
+                      <div className="relative w-16 h-11 bg-black rounded-lg overflow-hidden border border-[#2a3449] shrink-0 shadow group/thumb">
                         {isYouTubeUrl(imgObj.imageUrl) ? (
                           <img src={getYouTubeThumbnailUrl(imgObj.imageUrl) || ''} className="w-full h-full object-cover" alt="YT" />
                         ) : imgObj.mediaType === 'video' || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(imgObj.imageUrl) ? (
@@ -647,10 +667,40 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                         <span className="absolute top-0.5 left-0.5 bg-black/85 text-[8px] font-bold text-amber-400 px-1 rounded font-mono border border-amber-500/30">
                           #{idx + 1}
                         </span>
+
+                        {!isYouTubeUrl(imgObj.imageUrl) && imgObj.mediaType !== 'video' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAiEditingSlideIndex(idx);
+                            }}
+                            className="absolute inset-0 bg-black/75 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center text-amber-300 transition-opacity cursor-pointer"
+                            title="Editar Imagem com IA"
+                          >
+                            <Wand2 className="w-3.5 h-3.5 text-amber-400 drop-shadow" />
+                          </button>
+                        )}
                       </div>
 
                       {/* Informações Centrais & Botões de Ação */}
                       <div className="flex items-center gap-1 flex-1 justify-end">
+                        {/* Botão de Edição com IA */}
+                        {!isYouTubeUrl(imgObj.imageUrl) && imgObj.mediaType !== 'video' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAiEditingSlideIndex(idx);
+                            }}
+                            className="px-2 py-1 bg-gradient-to-r from-amber-600/20 to-amber-700/20 hover:from-amber-600/40 hover:to-amber-700/40 text-amber-300 border border-amber-500/40 hover:border-amber-500 text-[10px] font-bold rounded-lg flex items-center gap-1 transition-all cursor-pointer shadow-sm active:scale-95"
+                            title="Editar / Transformar Imagem com IA (Image-to-Image)"
+                          >
+                            <Wand2 className="w-2.5 h-2.5 text-amber-400" />
+                            <span className="font-mono">Editar IA</span>
+                          </button>
+                        )}
+
                         {/* Botão de Estilização com Lápis e Badge de Caixas */}
                         <button
                           type="button"
@@ -658,7 +708,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                             e.stopPropagation();
                             setEditingOverlaySlideIndex(idx);
                           }}
-                          className="px-2 py-1 bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold rounded-lg flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+                          className="px-2 py-1 bg-[#161c28] hover:bg-[#1f2738] text-slate-300 hover:text-amber-300 border border-[#2a3449] hover:border-amber-500/40 text-[10px] font-bold rounded-lg flex items-center gap-1 transition-all cursor-pointer shadow-sm"
                           title="Abrir Designer de Legendas & Presets RPG"
                         >
                           <Pencil className="w-2.5 h-2.5 text-amber-400" />
@@ -960,6 +1010,50 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
               overlayText: mainText,
             };
             updateCurrentPackImages(next);
+          }}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL DE EDIÇÃO DE IMAGEM DO SLIDE COM IA (IMAGE-TO-IMAGE)                */}
+      {/* ========================================================================= */}
+      {aiEditingSlideIndex !== null && currentPackImages[aiEditingSlideIndex] && (
+        <SlideImageAiEditorModal
+          isOpen={true}
+          onClose={() => setAiEditingSlideIndex(null)}
+          sourceImageUrl={currentPackImages[aiEditingSlideIndex].imageUrl}
+          slideTitle={currentPack.title}
+          slideIndex={aiEditingSlideIndex}
+          initialAspectRatio={currentPackImages[aiEditingSlideIndex].aspectRatio || currentPack.aspectRatio || defaultAspectRatio}
+          onSaveModifiedImage={(newUrl, mode, newAspect) => {
+            const currentIdx = aiEditingSlideIndex;
+            const next = [...currentPackImages];
+            if (mode === 'replace') {
+              next[currentIdx] = {
+                ...next[currentIdx],
+                imageUrl: newUrl,
+                aspectRatio: newAspect || next[currentIdx].aspectRatio,
+              };
+              if (primaryImageUrl === currentPackImages[currentIdx]?.imageUrl || currentIdx === 0) {
+                setPrimaryImageUrl(newUrl);
+              }
+              updateCurrentPackImages(next);
+              toast.success('Imagem do slide substituída com sucesso!');
+            } else {
+              const newSlide: SceneImage = {
+                id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                imageUrl: newUrl,
+                overlayText: next[currentIdx]?.overlayText || '',
+                secretNotes: next[currentIdx]?.secretNotes || '',
+                mediaType: 'image',
+                aspectRatio: newAspect || next[currentIdx]?.aspectRatio || defaultAspectRatio,
+                textOverlays: next[currentIdx]?.textOverlays ? JSON.parse(JSON.stringify(next[currentIdx]?.textOverlays)) : undefined,
+              };
+              next.splice(currentIdx + 1, 0, newSlide);
+              updateCurrentPackImages(next);
+              setSelectedSlideIndex(currentIdx + 1);
+              toast.success('Nova variação adicionada ao Pack!');
+            }
           }}
         />
       )}

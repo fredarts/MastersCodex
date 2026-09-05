@@ -51,12 +51,25 @@ export const PlayerNPCModal: React.FC<PlayerNPCModalProps> = ({
 
   const portraitUrl = getEntityPortraitUrl(entity);
   const rawAttrs = (entity.attributes || {}) as any;
+  const isNpc = entity.category === 'npc' || (entity.category as string) === 'person';
   const npcRace = rawAttrs.npcRace || entity.subType || '';
   const npcClass = rawAttrs.npcClass || '';
   const npcAlignment = rawAttrs.npcAlignment || '';
 
+  const defaultCategoryDesc = entity.category === 'location'
+    ? 'Localização do Mundo'
+    : entity.category === 'faction'
+    ? 'Facção / Organização'
+    : entity.category === 'religion'
+    ? 'Religião / Devoção'
+    : entity.category === 'item'
+    ? 'Item Mágico'
+    : entity.category === 'spell'
+    ? 'Feitiço & Magia'
+    : 'Lore do Mundo';
+
   const displaySubtitle = isRaceClassRevealed
-    ? [npcRace, npcClass, npcAlignment].filter(Boolean).join(' • ') || (entity.subType || 'Personagem do Mundo')
+    ? (isNpc ? [npcRace, npcClass, npcAlignment].filter(Boolean).join(' • ') : '') || entity.subType || defaultCategoryDesc
     : 'Origem & Detalhes Desconhecidos';
 
   return (

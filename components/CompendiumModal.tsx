@@ -25,8 +25,8 @@ export const CompendiumModal: React.FC<CompendiumModalProps> = ({ isOpen, onClos
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className="bg-[#161c28] border border-amber-500/40 rounded-2xl w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 z-50 animate-fade-in">
+      <div className="bg-[#161c28] border border-amber-500/40 rounded-2xl w-full max-w-6xl h-[92vh] md:h-[88vh] flex flex-col shadow-2xl overflow-hidden">
         <CompendiumView isModal onClose={onClose} />
       </div>
     </div>

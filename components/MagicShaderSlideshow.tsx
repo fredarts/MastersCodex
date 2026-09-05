@@ -559,7 +559,7 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
   // CSS Fallback: when WebGL is unavailable, render the image with CSS effects
   if (webglFailed) {
     return (
-      <div className={`relative w-full h-full min-h-[250px] overflow-hidden ${className}`}>
+      <div className={`relative w-full h-full min-h-0 overflow-hidden ${className}`}>
         {imageUrl && (
           <img
             src={imageUrl}
@@ -574,7 +574,7 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
   }
 
   return (
-    <div ref={containerRef} className={`relative w-full h-full min-h-[250px] overflow-hidden ${className}`}>
+    <div ref={containerRef} className={`relative w-full h-full min-h-0 overflow-hidden ${className}`}>
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
     </div>
   );

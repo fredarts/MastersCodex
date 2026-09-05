@@ -13,22 +13,25 @@ import {
   Scroll, 
   Swords, 
   Lock, 
-  Unlock, 
-  HelpCircle,
-  AlertCircle,
   Image as ImageIcon,
-  BookOpen,
-  Share2,
-  Crown
+  BookOpen, 
+  Share2, 
+  Crown,
+  MapPin,
+  Flag,
+  Flame,
+  Gem,
+  AlertCircle
 } from 'lucide-react';
-import { WorldEntity, UserCampaign, CampaignNPCDisclosure } from '@/lib/types';
+import { WorldEntity, UserCampaign, CampaignNPCDisclosure, WorldEntityCategory } from '@/lib/types';
 import { useCampaign } from '@/lib/hooks/useCampaign';
 import { getEntityPortraitUrl } from '@/lib/world/entityHelpers';
 
-interface CampaignNPCSharingModalProps {
+export interface CampaignNPCSharingModalProps {
   campaign: UserCampaign;
   worldEntities: WorldEntity[];
   initialEntityId?: string;
+  initialCategory?: string;
   onClose: () => void;
 }
 
@@ -48,27 +51,64 @@ const DEFAULT_DISCLOSURE: Omit<CampaignNPCDisclosure, 'entityId'> = {
   },
 };
 
+type CategoryFilter = 'all' | 'npc' | 'location' | 'faction' | 'item' | 'spell' | 'lore';
+
 export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = ({
   campaign,
   worldEntities = [],
   initialEntityId,
+  initialCategory,
   onClose,
 }) => {
   const { updateNPCDisclosure, createFeedEvent, feedEvents } = useCampaign();
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Filtra apenas entidades do tipo NPC ou Personagem
-  const npcEntities = useMemo(() => {
+  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>(() => {
+    if (initialCategory && ['npc', 'location', 'faction', 'item', 'spell', 'lore'].includes(initialCategory)) {
+      return initialCategory as CategoryFilter;
+    }
+    if (initialEntityId) {
+      const ent = worldEntities.find(e => e.id === initialEntityId);
+      if (ent) {
+        if (ent.category === 'npc' || (ent.category as string) === 'person') return 'npc';
+        if (ent.category === 'location') return 'location';
+        if (ent.category === 'faction') return 'faction';
+        if (ent.category === 'item') return 'item';
+        if (ent.category === 'spell') return 'spell';
+        return 'lore';
+      }
+    }
+    return 'all';
+  });
+
+  // Filtragem inicial por categoria e busca
+  const categorizedEntities = useMemo(() => {
+    if (selectedCategory === 'all') return worldEntities;
+    if (selectedCategory === 'npc') {
+      return worldEntities.filter((e) => e.category === 'npc' || (e.category as string) === 'person');
+    }
+    if (selectedCategory === 'location') {
+      return worldEntities.filter((e) => e.category === 'location');
+    }
+    if (selectedCategory === 'faction') {
+      return worldEntities.filter((e) => e.category === 'faction' || e.category === 'religion');
+    }
+    if (selectedCategory === 'item') {
+      return worldEntities.filter((e) => e.category === 'item' || e.category === 'material' || e.category === 'technology');
+    }
+    if (selectedCategory === 'spell') {
+      return worldEntities.filter((e) => e.category === 'spell' || e.category === 'magic_system');
+    }
+    // lore
     return worldEntities.filter(
-      (e) => e.category === 'npc' || (e.category as string) === 'person'
+      (e) => !['npc', 'person', 'location', 'faction', 'religion', 'item', 'material', 'technology', 'spell', 'magic_system'].includes(e.category)
     );
-  }, [worldEntities]);
+  }, [worldEntities, selectedCategory]);
 
   const [selectedEntityId, setSelectedEntityId] = useState<string>(() => {
-    if (initialEntityId && npcEntities.some((e) => e.id === initialEntityId)) {
+    if (initialEntityId && worldEntities.some((e) => e.id === initialEntityId)) {
       return initialEntityId;
     }
-    return npcEntities[0]?.id || '';
+    return worldEntities[0]?.id || '';
   });
 
   // Disclosures locais sincronizadas com a campanha
@@ -87,8 +127,8 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
   }, [campaign.npcDisclosures]);
 
   const selectedEntity = useMemo(() => {
-    return npcEntities.find((e) => e.id === selectedEntityId) || npcEntities[0] || null;
-  }, [npcEntities, selectedEntityId]);
+    return worldEntities.find((e) => e.id === selectedEntityId) || categorizedEntities[0] || worldEntities[0] || null;
+  }, [worldEntities, selectedEntityId, categorizedEntities]);
 
   const currentDisclosure: CampaignNPCDisclosure = useMemo(() => {
     if (!selectedEntity) {
@@ -102,16 +142,17 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
     };
   }, [selectedEntity, localDisclosures]);
 
-  const filteredNpcList = useMemo(() => {
+  const filteredEntityList = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return npcEntities;
-    return npcEntities.filter(
-      (npc) =>
-        npc.name.toLowerCase().includes(q) ||
-        (npc.subType || '').toLowerCase().includes(q) ||
-        (npc.shortDesc || '').toLowerCase().includes(q)
+    if (!q) return categorizedEntities;
+    return categorizedEntities.filter(
+      (ent) =>
+        ent.name.toLowerCase().includes(q) ||
+        (ent.subType || '').toLowerCase().includes(q) ||
+        (ent.shortDesc || '').toLowerCase().includes(q) ||
+        (ent.tags || []).some(t => t.toLowerCase().includes(q))
     );
-  }, [npcEntities, searchQuery]);
+  }, [categorizedEntities, searchQuery]);
 
   const handleToggleField = (fieldName: keyof CampaignNPCDisclosure['revealedFields']) => {
     if (!selectedEntity) return;
@@ -210,7 +251,7 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
     }));
   };
 
-  const handleSaveCurrentNPC = async () => {
+  const handleSaveCurrentEntity = async () => {
     if (!selectedEntity) return;
 
     const fullDisclosure: CampaignNPCDisclosure = {
@@ -225,34 +266,119 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
       selectedEntity.name
     );
 
-    // Se estiver transmitindo o NPC, cria também um registro público no Feed da Campanha se ainda não houver
+    // Se estiver transmitindo a entidade, cria também um registro público no Feed da Campanha se ainda não houver
     if (currentDisclosure.isShared && createFeedEvent) {
       const publicName = currentDisclosure.revealedFields.name 
         ? selectedEntity.name 
-        : (currentDisclosure.alias?.trim() || 'Indivíduo Misterioso');
+        : (currentDisclosure.alias?.trim() || `${getCategoryLabel(selectedEntity.category)} Enigmático`);
       
+      const isNpc = selectedEntity.category === 'npc' || (selectedEntity.category as string) === 'person';
+      const eventType = isNpc ? 'npc_encounter' : 'world_lore';
+
       const alreadyHasEvent = (feedEvents || []).some(
-        (ev) => ev.eventType === 'npc_encounter' && (ev.title?.includes(publicName) || ev.details?.entityId === selectedEntity.id)
+        (ev) => ev.eventType === eventType && (ev.title?.includes(publicName) || ev.details?.entityId === selectedEntity.id)
       );
 
       if (!alreadyHasEvent) {
+        const title = isNpc 
+          ? `Encontro / Contato: ${publicName}`
+          : `${getCategoryIconEmoji(selectedEntity.category)} ${getCategoryLabel(selectedEntity.category)} Revelado: ${publicName}`;
+
         await createFeedEvent({
           campaignId: campaign.id,
-          eventType: 'npc_encounter',
-          title: `Encontro / Contato: ${publicName}`,
+          eventType,
+          title,
           summary: currentDisclosure.revealedFields.shortDesc && selectedEntity.shortDesc
             ? selectedEntity.shortDesc
-            : `Um novo contato sobre ${publicName} foi registrado no diário da jornada do grupo.`,
+            : `Um novo conhecimento sobre ${publicName} foi registrado no diário da jornada do grupo.`,
           isPublic: true,
           details: {
             entityId: selectedEntity.id,
-            origem: currentDisclosure.revealedFields.raceClass ? (selectedEntity.subType || 'NPC') : 'Origem Oculta',
+            category: selectedEntity.category,
+            origem: currentDisclosure.revealedFields.raceClass ? (selectedEntity.subType || getCategoryLabel(selectedEntity.category)) : 'Origem Oculta',
             status: 'Conhecido',
           },
         });
       }
     }
   };
+
+  // Helper para ícones por categoria
+  function getCategoryIcon(cat: WorldEntityCategory | string) {
+    if (cat === 'npc' || cat === 'person') return <Users className="w-3.5 h-3.5 text-amber-400" />;
+    if (cat === 'location') return <MapPin className="w-3.5 h-3.5 text-emerald-400" />;
+    if (cat === 'faction' || cat === 'religion') return <Flag className="w-3.5 h-3.5 text-cyan-400" />;
+    if (cat === 'item' || cat === 'material' || cat === 'technology') return <Gem className="w-3.5 h-3.5 text-yellow-400" />;
+    if (cat === 'spell' || cat === 'magic_system') return <Flame className="w-3.5 h-3.5 text-purple-400" />;
+    return <BookOpen className="w-3.5 h-3.5 text-amber-400" />;
+  }
+
+  function getCategoryIconEmoji(cat: WorldEntityCategory | string) {
+    if (cat === 'npc' || cat === 'person') return '👤';
+    if (cat === 'location') return '🏰';
+    if (cat === 'faction' || cat === 'religion') return '🛡️';
+    if (cat === 'item' || cat === 'material' || cat === 'technology') return '✨';
+    if (cat === 'spell' || cat === 'magic_system') return '🔮';
+    return '📜';
+  }
+
+  function getCategoryLabel(cat: WorldEntityCategory | string) {
+    if (cat === 'npc' || cat === 'person') return 'NPC';
+    if (cat === 'location') return 'Local';
+    if (cat === 'faction') return 'Facção';
+    if (cat === 'religion') return 'Religião';
+    if (cat === 'item') return 'Item Mágico';
+    if (cat === 'spell') return 'Feitiço';
+    if (cat === 'lore_event') return 'Evento Histórico';
+    if (cat === 'document') return 'Documento';
+    return 'Lore do Mundo';
+  }
+
+  // Labels dinâmicos conforme categoria
+  const isNpc = selectedEntity?.category === 'npc' || (selectedEntity?.category as string) === 'person';
+  const isLocation = selectedEntity?.category === 'location';
+  const isFaction = selectedEntity?.category === 'faction' || selectedEntity?.category === 'religion';
+  const isSpellItem = selectedEntity?.category === 'item' || selectedEntity?.category === 'spell';
+
+  const typeLabel = isNpc 
+    ? 'Raça, Classe & Alinhamento' 
+    : isLocation 
+    ? 'Região, Assentamento & Clima' 
+    : isFaction 
+    ? 'Tipo de Organização & Dogmas' 
+    : isSpellItem 
+    ? 'Raridade, Escola & Propriedades' 
+    : 'Categoria & Classificação';
+
+  const fullContentLabel = isNpc 
+    ? 'Biografia & História Completa' 
+    : isLocation 
+    ? 'Geografia, História & Pontos de Interesse' 
+    : isFaction 
+    ? 'História, Influência & Territórios' 
+    : isSpellItem 
+    ? 'Histórico, Efeitos & Encantamentos' 
+    : 'Conteúdo & Texto Detalhado';
+
+  const secretsLabel = isNpc 
+    ? 'Segredos & Fraquezas Ocultas' 
+    : isLocation 
+    ? 'Perigos, Armadilhas & Segredos Ocultos' 
+    : isFaction 
+    ? 'Conspirações & Planos Secretos' 
+    : isSpellItem 
+    ? 'Maldições & Propriedades Ocultas' 
+    : 'Segredos Confidenciais do Mestre';
+
+  const statsLabel = isNpc 
+    ? 'Ficha Técnica D&D 5e (Stat Block)' 
+    : isLocation 
+    ? 'Estatísticas de Exploração / CD do Local' 
+    : isFaction 
+    ? 'Recursos, Tropas & Poder Militar' 
+    : isSpellItem 
+    ? 'Ficha de Efeitos & Dano/Cura' 
+    : 'Atributos & Dados Técnicos';
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-1.5 sm:p-3 md:p-4 animate-fade-in">
@@ -265,10 +391,10 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
             </div>
             <div>
               <h3 className="text-base font-black text-slate-100 uppercase tracking-wide flex items-center gap-2 font-serif">
-                <span>Transmissão de NPCs & Revelação Progressiva</span>
+                <span>Transmissão de Worldbuilding & Revelação Progressiva</span>
               </h3>
               <p className="text-xs text-slate-400">
-                Campanha: <strong className="text-amber-400">{campaign.title}</strong> • Escolha quais segredos e campos os jogadores já descobriram
+                Campanha: <strong className="text-amber-400">{campaign.title}</strong> • Escolha quais segredos, NPCs, locais e lore os jogadores já descobriram
               </p>
             </div>
           </div>
@@ -282,9 +408,96 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
           </button>
         </div>
 
+        {/* Category Selector Tabs */}
+        <div className="px-5 sm:px-6 py-2 bg-[#0a0d14] border-b border-[#252f44] flex items-center gap-1.5 overflow-x-auto custom-scrollbar flex-shrink-0">
+          <button
+            onClick={() => setSelectedCategory('all')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              selectedCategory === 'all'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                : 'text-slate-400 hover:text-slate-200 bg-[#121824] hover:bg-[#1a2334] border border-[#252f44]'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Todos ({worldEntities.length})</span>
+          </button>
+
+          <button
+            onClick={() => setSelectedCategory('npc')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              selectedCategory === 'npc'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                : 'text-slate-400 hover:text-slate-200 bg-[#121824] hover:bg-[#1a2334] border border-[#252f44]'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>NPCs ({worldEntities.filter(e => e.category === 'npc' || (e.category as string) === 'person').length})</span>
+          </button>
+
+          <button
+            onClick={() => setSelectedCategory('location')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              selectedCategory === 'location'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                : 'text-slate-400 hover:text-slate-200 bg-[#121824] hover:bg-[#1a2334] border border-[#252f44]'
+            }`}
+          >
+            <MapPin className="w-3.5 h-3.5" />
+            <span>Locais & Cidades ({worldEntities.filter(e => e.category === 'location').length})</span>
+          </button>
+
+          <button
+            onClick={() => setSelectedCategory('faction')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              selectedCategory === 'faction'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                : 'text-slate-400 hover:text-slate-200 bg-[#121824] hover:bg-[#1a2334] border border-[#252f44]'
+            }`}
+          >
+            <Flag className="w-3.5 h-3.5" />
+            <span>Facções ({worldEntities.filter(e => e.category === 'faction' || e.category === 'religion').length})</span>
+          </button>
+
+          <button
+            onClick={() => setSelectedCategory('item')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              selectedCategory === 'item'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                : 'text-slate-400 hover:text-slate-200 bg-[#121824] hover:bg-[#1a2334] border border-[#252f44]'
+            }`}
+          >
+            <Gem className="w-3.5 h-3.5" />
+            <span>Itens Mágicos ({worldEntities.filter(e => e.category === 'item' || e.category === 'material').length})</span>
+          </button>
+
+          <button
+            onClick={() => setSelectedCategory('spell')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              selectedCategory === 'spell'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                : 'text-slate-400 hover:text-slate-200 bg-[#121824] hover:bg-[#1a2334] border border-[#252f44]'
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5" />
+            <span>Feitiços ({worldEntities.filter(e => e.category === 'spell' || e.category === 'magic_system').length})</span>
+          </button>
+
+          <button
+            onClick={() => setSelectedCategory('lore')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              selectedCategory === 'lore'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                : 'text-slate-400 hover:text-slate-200 bg-[#121824] hover:bg-[#1a2334] border border-[#252f44]'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Lore & Outros ({worldEntities.filter(e => !['npc', 'person', 'location', 'faction', 'religion', 'item', 'material', 'technology', 'spell', 'magic_system'].includes(e.category)).length})</span>
+          </button>
+        </div>
+
         {/* Modal Body */}
         <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
-          {/* Left Column: NPC Selector List */}
+          {/* Left Column: Entity Selector List */}
           <div className="w-full md:w-80 border-r border-[#252f44] bg-[#090d14] flex flex-col flex-shrink-0">
             {/* Search */}
             <div className="p-3 border-b border-[#252f44] bg-[#0c1018]">
@@ -292,7 +505,7 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Buscar NPC do Mundo..."
+                  placeholder="Buscar no World Building..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 bg-[#06080d] border border-[#252f44] focus:border-amber-500 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 outline-none transition-all"
@@ -302,21 +515,21 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
 
             {/* List */}
             <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 space-y-1.5">
-              {filteredNpcList.length === 0 ? (
+              {filteredEntityList.length === 0 ? (
                 <div className="p-6 text-center text-slate-500 text-xs">
-                  Nenhum NPC encontrado no World Building deste mundo.
+                  Nenhuma entrada encontrada para esta categoria ou busca.
                 </div>
               ) : (
-                filteredNpcList.map((npc) => {
-                  const portrait = getEntityPortraitUrl(npc);
-                  const isSelected = selectedEntity?.id === npc.id;
-                  const disc = localDisclosures[npc.id];
+                filteredEntityList.map((ent) => {
+                  const portrait = getEntityPortraitUrl(ent);
+                  const isSelected = selectedEntity?.id === ent.id;
+                  const disc = localDisclosures[ent.id];
                   const isShared = Boolean(disc?.isShared);
 
                   return (
                     <button
-                      key={npc.id}
-                      onClick={() => setSelectedEntityId(npc.id)}
+                      key={ent.id}
+                      onClick={() => setSelectedEntityId(ent.id)}
                       className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2.5 cursor-pointer ${
                         isSelected
                           ? 'bg-[#1a2334] border-amber-500 shadow-md ring-1 ring-amber-500/30'
@@ -326,17 +539,17 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-8 h-8 rounded-lg overflow-hidden bg-black/60 border border-slate-700 flex-shrink-0 flex items-center justify-center">
                           {portrait ? (
-                            <img src={portrait} alt={npc.name} className="w-full h-full object-cover" />
+                            <img src={portrait} alt={ent.name} className="w-full h-full object-cover" />
                           ) : (
-                            <Users className="w-4 h-4 text-slate-500" />
+                            getCategoryIcon(ent.category)
                           )}
                         </div>
                         <div className="min-w-0">
                           <h4 className={`text-xs font-bold truncate ${isSelected ? 'text-amber-300' : 'text-slate-200'}`}>
-                            {npc.name}
+                            {ent.name}
                           </h4>
                           <p className="text-[10px] text-slate-400 truncate">
-                            {npc.subType || (npc.attributes as any)?.npcRace || 'NPC'}
+                            {ent.subType || getCategoryLabel(ent.category)}
                           </p>
                         </div>
                       </div>
@@ -358,7 +571,7 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
           {/* Right Column: Disclosure Editor & Live Preview */}
           {selectedEntity ? (
             <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-5 flex flex-col gap-5 bg-[#0a0d14]">
-              {/* NPC Header & Sharing Master Switch */}
+              {/* Entity Header & Sharing Master Switch */}
               <div className="p-4 rounded-2xl bg-[#0f1522] border border-[#252f44] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl overflow-hidden bg-black/60 border border-amber-500/40 flex-shrink-0 flex items-center justify-center">
@@ -369,15 +582,20 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <Users className="w-6 h-6 text-amber-400" />
+                      getCategoryIcon(selectedEntity.category)
                     )}
                   </div>
                   <div>
-                    <h2 className="text-base font-bold text-slate-100 flex items-center gap-2 font-serif">
-                      <span>{selectedEntity.name}</span>
-                    </h2>
-                    <p className="text-xs text-slate-400 font-sans">
-                      {selectedEntity.subType || 'NPC do World Building'} • {selectedEntity.shortDesc || 'Sem descrição resumida'}
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-bold text-slate-100 flex items-center gap-2 font-serif">
+                        <span>{selectedEntity.name}</span>
+                      </h2>
+                      <span className="text-[10px] font-bold uppercase bg-[#0a0d14] text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded">
+                        {getCategoryLabel(selectedEntity.category)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 font-sans mt-0.5">
+                      {selectedEntity.subType || getCategoryLabel(selectedEntity.category)} • {selectedEntity.shortDesc || 'Sem descrição resumida'}
                     </p>
                   </div>
                 </div>
@@ -416,7 +634,7 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
                     onClick={() => applyPreset('basic')}
                     className="px-2.5 py-1 bg-[#1a2334] hover:bg-[#25324a] text-cyan-300 rounded-lg text-xs font-bold transition-all border border-cyan-500/30 cursor-pointer"
                   >
-                    📜 Básico (Nome + Lore)
+                    📜 Básico (Nome + Descrição)
                   </button>
                   <button
                     onClick={() => applyPreset('rumor')}
@@ -441,16 +659,16 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {/* 1. Imagem / Retrato */}
+                  {/* 1. Imagem / Retrato / Mapa */}
                   <div className="p-3 bg-[#0e131d] border border-[#252f44] rounded-xl flex items-center justify-between gap-3">
                     <div className="space-y-0.5">
                       <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                         <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Retrato & Galeria de Fotos</span>
+                        <span>{isNpc ? 'Retrato & Galeria de Fotos' : 'Ilustração Visual & Galeria'}</span>
                       </span>
                       <p className="text-[11px] text-slate-400">
                         {currentDisclosure.revealedFields.image
-                          ? 'A foto real do NPC está visível.'
+                          ? 'A arte/foto está visível aos jogadores.'
                           : 'Oculta: Exibe silhueta sombria misteriosa.'}
                       </p>
                     </div>
@@ -461,7 +679,7 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                           : 'bg-slate-800 text-slate-400 border border-slate-700'
                       }`}
-                      title={currentDisclosure.revealedFields.image ? 'Tornar Imagem Secreta' : 'Revelar Imagem'}
+                      title={currentDisclosure.revealedFields.image ? 'Ocultar Imagem' : 'Revelar Imagem'}
                     >
                       {currentDisclosure.revealedFields.image ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                     </button>
@@ -497,11 +715,11 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
                     {!currentDisclosure.revealedFields.name && (
                       <div className="mt-1">
                         <label className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block mb-1">
-                          Pseudônimo conhecido pelos jogadores:
+                          Pseudônimo / Codinome conhecido pelos jogadores:
                         </label>
                         <input
                           type="text"
-                          placeholder="Ex: O Alquimista Mascarado, Homem de Capa..."
+                          placeholder={isNpc ? "Ex: A Figura Encapuzada..." : isLocation ? "Ex: As Ruínas Antigas..." : "Ex: O Artefato Desconhecido..."}
                           value={currentDisclosure.alias || ''}
                           onChange={(e) => handleAliasChange(e.target.value)}
                           className="w-full px-2.5 py-1 bg-[#06080d] border border-amber-500/40 focus:border-amber-400 rounded-lg text-xs text-amber-300 outline-none"
@@ -510,12 +728,12 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
                     )}
                   </div>
 
-                  {/* 3. Raça & Classe */}
+                  {/* 3. Tipo / Subtipo */}
                   <div className="p-3 bg-[#0e131d] border border-[#252f44] rounded-xl flex items-center justify-between gap-3">
                     <div className="space-y-0.5">
                       <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                         <Users className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>Raça, Classe & Alinhamento</span>
+                        <span>{typeLabel}</span>
                       </span>
                       <p className="text-[11px] text-slate-400">
                         {currentDisclosure.revealedFields.raceClass ? 'Visível na ficha pública.' : 'Oculto: Exibe "???" aos jogadores.'}
@@ -561,7 +779,7 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
                     <div className="space-y-0.5">
                       <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                         <BookOpen className="w-3.5 h-3.5 text-purple-400" />
-                        <span>Biografia & História Completa</span>
+                        <span>{fullContentLabel}</span>
                       </span>
                       <p className="text-[11px] text-slate-400">
                         {currentDisclosure.revealedFields.fullContent ? 'Histórico narrativo liberado.' : 'Oculto: Permanece confidencial do Mestre.'}
@@ -579,12 +797,12 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
                     </button>
                   </div>
 
-                  {/* 6. Segredos & Motivações (npcSecrets) */}
+                  {/* 6. Segredos & Motivações */}
                   <div className="p-3 bg-[#0e131d] border border-[#252f44] rounded-xl flex items-center justify-between gap-3">
                     <div className="space-y-0.5">
                       <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                         <Lock className="w-3.5 h-3.5 text-rose-400" />
-                        <span>Segredos & Fraquezas Ocultas</span>
+                        <span>{secretsLabel}</span>
                       </span>
                       <p className="text-[11px] text-slate-400">
                         {currentDisclosure.revealedFields.secrets ? '🚨 Segredos revelados ao grupo!' : '🔒 Protegido (apenas o DM vê).'}
@@ -607,10 +825,10 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
                     <div className="space-y-0.5">
                       <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                         <Share2 className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>Conexões (Facções & Aliados)</span>
+                        <span>Conexões & Vínculos com o Mundo</span>
                       </span>
                       <p className="text-[11px] text-slate-400">
-                        {currentDisclosure.revealedFields.connections ? 'Vínculos revelados.' : 'Vínculos ocultos.'}
+                        {currentDisclosure.revealedFields.connections ? 'Vínculos e relações reveladas.' : 'Vínculos ocultos.'}
                       </p>
                     </div>
                     <button
@@ -625,15 +843,15 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
                     </button>
                   </div>
 
-                  {/* 8. Ficha Técnica / Combate */}
+                  {/* 8. Ficha Técnica / Atributos */}
                   <div className="p-3 bg-[#0e131d] border border-[#252f44] rounded-xl flex items-center justify-between gap-3">
                     <div className="space-y-0.5">
                       <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                         <Swords className="w-3.5 h-3.5 text-rose-400" />
-                        <span>Ficha Técnica D&D 5e (Stat Block)</span>
+                        <span>{statsLabel}</span>
                       </span>
                       <p className="text-[11px] text-slate-400">
-                        {currentDisclosure.revealedFields.statSheet ? 'CA, PV e Ações visíveis.' : 'Ficha oculta dos jogadores.'}
+                        {currentDisclosure.revealedFields.statSheet ? 'Estatísticas de regras visíveis.' : 'Dados de regras ocultos.'}
                       </p>
                     </div>
                     <button
@@ -658,7 +876,7 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
                 </p>
 
                 <button
-                  onClick={handleSaveCurrentNPC}
+                  onClick={handleSaveCurrentEntity}
                   className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-5 py-2.5 rounded-xl text-xs shadow-lg shadow-amber-500/20 transition-all active:scale-95 cursor-pointer"
                 >
                   <Check className="w-4 h-4" />
@@ -668,7 +886,7 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center p-8 text-slate-500">
-              Selecione um NPC para configurar suas permissões de visualização.
+              Selecione uma entrada de Worldbuilding para configurar suas permissões de visualização.
             </div>
           )}
         </div>
@@ -676,3 +894,5 @@ export const CampaignNPCSharingModal: React.FC<CampaignNPCSharingModalProps> = (
     </div>
   );
 };
+
+export const CampaignWorldSharingModal = CampaignNPCSharingModal;

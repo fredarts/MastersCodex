@@ -114,7 +114,7 @@ export const CampaignSettingsStudio: React.FC<CampaignSettingsStudioProps> = ({ 
       fetchCampaignMembers(activeCampaign.id);
     }
   }, [activeCampaign, activeTab, fetchCampaignMembers]);
-  const [feedFilter, setFeedFilter] = useState<CampaignFeedEventType | 'all'>('all');
+  const [feedFilter, setFeedFilter] = useState<CampaignFeedEventType | 'worldbuilding' | 'all'>('all');
   const [feedSearchQuery, setFeedSearchQuery] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
 
@@ -212,7 +212,13 @@ export const CampaignSettingsStudio: React.FC<CampaignSettingsStudioProps> = ({ 
 
   const filteredFeed = React.useMemo(() => {
     return feedEvents.filter((ev) => {
-      if (feedFilter !== 'all' && ev.eventType !== feedFilter) return false;
+      if (feedFilter !== 'all') {
+        if (feedFilter === 'worldbuilding') {
+          if (ev.eventType !== 'npc_encounter' && ev.eventType !== 'world_lore') return false;
+        } else if (ev.eventType !== feedFilter) {
+          return false;
+        }
+      }
       if (feedSearchQuery.trim()) {
         const q = feedSearchQuery.toLowerCase().trim();
         const matchesTitle = ev.title?.toLowerCase().includes(q);
@@ -847,10 +853,51 @@ export const CampaignSettingsStudio: React.FC<CampaignSettingsStudioProps> = ({ 
         {/* Feed Tab Content */}
         {activeTab === 'feed' && (
           <div className="flex-1 flex flex-col h-full min-h-0 bg-[#0a0d14] overflow-hidden">
-            {/* Top Toolbar: Horizontal Filter Chips + Quick Search + Action Button */}
-            <div className="p-3 sm:p-4 border-b border-[#252f44] bg-[#0f141d]/90 backdrop-blur-md flex-shrink-0 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+            {/* Top Toolbar: Quick Search & Actions on Row 1, Filter Chips on Row 2 on Tablet/Mobile */}
+            <div className="p-3 sm:p-4 border-b border-[#252f44] bg-[#0f141d]/90 backdrop-blur-md flex-shrink-0 flex flex-col 2xl:flex-row items-stretch 2xl:items-center justify-between gap-2.5 sm:gap-3">
+              {/* Search Box & New Event Action Button */}
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 order-1 2xl:order-2 justify-between sm:justify-end">
+                <div className="relative flex-1 sm:w-60 min-w-[170px]">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Buscar no feed..."
+                    value={feedSearchQuery}
+                    onChange={(e) => setFeedSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-7 py-1.5 bg-[#0a0d14] border border-[#252f44] focus:border-amber-500 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 outline-none transition-all shadow-inner"
+                  />
+                  {feedSearchQuery && (
+                    <button
+                      onClick={() => setFeedSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => setShowNPCSharingModal(true)}
+                    className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-3.5 py-1.5 rounded-xl text-xs shadow-md shadow-amber-500/20 transition-all active:scale-95 cursor-pointer flex-shrink-0"
+                    title="Transmitir e Revelar Entidades do Worldbuilding (NPCs, Locais, Facções, Itens, Lore) para a Campanha"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span>Transmitir Worldbuilding ({Object.values(activeCampaign?.npcDisclosures || {}).filter((d) => d.isShared).length})</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowAddFeedModal(true)}
+                    className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black px-3.5 py-1.5 rounded-xl text-xs shadow-md shadow-emerald-500/20 transition-all active:scale-95 cursor-pointer flex-shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Novo Evento</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Horizontal Filter Chips */}
-              <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 lg:pb-0">
+              <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 2xl:pb-0 order-2 2xl:order-1">
                 <button
                   onClick={() => setFeedFilter('all')}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
@@ -876,18 +923,6 @@ export const CampaignSettingsStudio: React.FC<CampaignSettingsStudioProps> = ({ 
                 </button>
 
                 <button
-                  onClick={() => setFeedFilter('npc_encounter')}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                    feedFilter === 'npc_encounter'
-                      ? 'bg-cyan-500 text-slate-950 shadow-md font-black'
-                      : 'bg-[#141a27] text-slate-400 hover:text-slate-200 hover:bg-[#1a2234] border border-[#252f44]'
-                  }`}
-                >
-                  <MessageSquare className={`w-3.5 h-3.5 ${feedFilter === 'npc_encounter' ? 'text-slate-950' : 'text-cyan-400'}`} />
-                  <span>NPCs ({feedEvents.filter((e) => e.eventType === 'npc_encounter').length})</span>
-                </button>
-
-                <button
                   onClick={() => setFeedFilter('session_recap')}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                     feedFilter === 'session_recap'
@@ -900,54 +935,15 @@ export const CampaignSettingsStudio: React.FC<CampaignSettingsStudioProps> = ({ 
                 </button>
 
                 <button
-                  onClick={() => setFeedFilter('world_lore')}
+                  onClick={() => setFeedFilter('worldbuilding')}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                    feedFilter === 'world_lore'
-                      ? 'bg-purple-500 text-slate-950 shadow-md font-black'
+                    feedFilter === 'worldbuilding'
+                      ? 'bg-amber-500 text-slate-950 shadow-md font-black'
                       : 'bg-[#141a27] text-slate-400 hover:text-slate-200 hover:bg-[#1a2234] border border-[#252f44]'
                   }`}
                 >
-                  <BookOpen className={`w-3.5 h-3.5 ${feedFilter === 'world_lore' ? 'text-slate-950' : 'text-purple-400'}`} />
-                  <span>Lore ({feedEvents.filter((e) => e.eventType === 'world_lore').length})</span>
-                </button>
-              </div>
-
-              {/* Search Box & New Event Action Button */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <div className="relative flex-1 sm:w-56">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Buscar no feed..."
-                    value={feedSearchQuery}
-                    onChange={(e) => setFeedSearchQuery(e.target.value)}
-                    className="w-full pl-8 pr-7 py-1.5 bg-[#0a0d14] border border-[#252f44] focus:border-amber-500 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 outline-none transition-all"
-                  />
-                  {feedSearchQuery && (
-                    <button
-                      onClick={() => setFeedSearchQuery('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => setShowNPCSharingModal(true)}
-                  className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 text-slate-950 font-black px-3.5 py-1.5 rounded-xl text-xs shadow-md shadow-cyan-900/30 transition-all active:scale-95 cursor-pointer flex-shrink-0"
-                  title="Transmitir e Revelar NPCs do World Building para a Campanha"
-                >
-                  <Share2 className="w-4 h-4" />
-                  <span>Transmitir NPCs ({Object.values(activeCampaign?.npcDisclosures || {}).filter((d) => d.isShared).length})</span>
-                </button>
-
-                <button
-                  onClick={() => setShowAddFeedModal(true)}
-                  className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black px-3.5 py-1.5 rounded-xl text-xs shadow-md shadow-emerald-500/20 transition-all active:scale-95 cursor-pointer flex-shrink-0"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Novo Evento</span>
+                  <Sparkles className={`w-3.5 h-3.5 ${feedFilter === 'worldbuilding' ? 'text-slate-950' : 'text-amber-400'}`} />
+                  <span>World Building ({feedEvents.filter((e) => e.eventType === 'npc_encounter' || e.eventType === 'world_lore').length})</span>
                 </button>
               </div>
             </div>
@@ -1128,10 +1124,10 @@ export const CampaignSettingsStudio: React.FC<CampaignSettingsStudioProps> = ({ 
                   <button
                     onClick={() => setShowNPCSharingModal(true)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow transition-all cursor-pointer"
-                    title="Transmitir e Revelar NPCs do World Building para os Jogadores"
+                    title="Transmitir e Revelar Entidades do Worldbuilding para os Jogadores"
                   >
                     <Share2 className="w-3.5 h-3.5" />
-                    <span>Transmitir NPCs ({Object.values(activeCampaign?.npcDisclosures || {}).filter(d => d.isShared).length})</span>
+                    <span>Transmitir Worldbuilding ({Object.values(activeCampaign?.npcDisclosures || {}).filter(d => d.isShared).length})</span>
                   </button>
                   <button
                     onClick={() => activeCampaign && fetchCampaignMembers(activeCampaign.id)}
