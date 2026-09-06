@@ -44,6 +44,7 @@ import { useCampaign } from '@/lib/hooks/useCampaign';
 import { useWorld } from '@/lib/hooks/useWorld';
 import { CampaignFeedEventType, CampaignMember, WorldEntity } from '@/lib/types';
 import { getEntityPortraitUrl } from '@/lib/world/entityHelpers';
+import { resolveTokenAvatar } from '@/lib/utils/tokenAvatarResolver';
 import { worldService } from '@/lib/services/worldService';
 import { CreateCampaignModal } from '@/components/CreateCampaignModal';
 import { EditCampaignDetailsModal } from '@/components/modals/EditCampaignDetailsModal';
@@ -395,6 +396,7 @@ export const CampaignSettingsStudio: React.FC<CampaignSettingsStudioProps> = ({ 
       const pName = (mem.characterName && mem.characterName !== 'undefined' ? mem.characterName : '') ||
                     (mem.displayName && mem.displayName !== 'undefined' ? mem.displayName : '') ||
                     'Jogador';
+      const resolvedAvatar = resolveTokenAvatar(pName, { avatarUrl: mem.avatarUrl } as any) || mem.avatarUrl;
       const newParty = [
         ...currentParty,
         {
@@ -402,7 +404,7 @@ export const CampaignSettingsStudio: React.FC<CampaignSettingsStudioProps> = ({ 
           name: pName,
           type: 'player' as const,
           userId: mem.userId,
-          avatarUrl: mem.avatarUrl,
+          avatarUrl: resolvedAvatar,
         },
       ];
       await updateCampaign({ ...activeCampaign, partyMembers: newParty });

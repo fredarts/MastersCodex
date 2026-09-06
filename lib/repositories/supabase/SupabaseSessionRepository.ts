@@ -175,30 +175,72 @@ export class SupabaseSessionRepository implements ISessionRepository {
   }
 
   async fetchSceneMap(sceneId: string): Promise<any | null> {
-    if (!isValidUuid(sceneId)) return null;
+    if (!isValidUuid(sceneId)) {
+      try {
+        const saved = typeof window !== 'undefined' ? localStorage.getItem('codex_scene_maps') : null;
+        if (saved) {
+          const maps = JSON.parse(saved);
+          return maps[sceneId] || null;
+        }
+      } catch {}
+      return null;
+    }
 
-    const { data, error } = await supabase
-      .from('scene_maps')
-      .select('grid_data')
-      .eq('scene_id', sceneId)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from('scene_maps')
+        .select('grid_data')
+        .eq('scene_id', sceneId)
+        .maybeSingle();
 
-    if (error) throw error;
-    return data ? data.grid_data : null;
+      if (!error && data?.grid_data) {
+        return data.grid_data;
+      }
+    } catch (e) {
+      console.warn('[SupabaseSessionRepository] Error fetching scene map from DB, falling back to local storage:', e);
+    }
+
+    try {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('codex_scene_maps') : null;
+      if (saved) {
+        const maps = JSON.parse(saved);
+        return maps[sceneId] || null;
+      }
+    } catch {}
+    return null;
   }
 
   async saveSceneMap(sceneId: string, gridData: any): Promise<void> {
+    // 1. Always cache in local storage first for offline/resilient guarantee
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('codex_scene_maps');
+        const maps = saved ? JSON.parse(saved) : {};
+        maps[sceneId] = gridData;
+        localStorage.setItem('codex_scene_maps', JSON.stringify(maps));
+      }
+    } catch (e) {
+      console.warn('[SupabaseSessionRepository] Failed to save scene map to localStorage:', e);
+    }
+
     if (!isValidUuid(sceneId)) return;
 
-    const { error } = await supabase
-      .from('scene_maps')
-      .upsert({
-        scene_id: sceneId,
-        grid_data: gridData,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'scene_id' });
+    // 2. Try remote Supabase upsert; handle 500/FK gracefully
+    try {
+      const { error } = await supabase
+        .from('scene_maps')
+        .upsert({
+          scene_id: sceneId,
+          grid_data: gridData,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'scene_id' });
 
-    if (error) throw error;
+      if (error) {
+        console.warn('[SupabaseSessionRepository] Scene map remote upsert warning:', error.message);
+      }
+    } catch (err) {
+      console.warn('[SupabaseSessionRepository] Scene map remote upsert exception:', err);
+    }
   }
 
   async fetchCampaignMaps(campaignId: string): Promise<CampaignMap[]> {

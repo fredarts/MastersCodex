@@ -37,6 +37,8 @@ import { revealVisionWithLOS, getTokenVisionRadius } from '@/components/map/visi
 import { normalizeToMultiLevel } from '@/lib/map/mapLevelsCore';
 import { normalizeImageUrl } from '@/lib/imageUtils';
 import { MapLevel, Combatant, DungeonTransitionConfig, TransitionType } from '@/lib/types';
+import { INITIAL_MONSTERS, NPC_TEMPLATES } from '@/lib/srd-data';
+import { resolveTokenAvatar } from '@/lib/utils/tokenAvatarResolver';
 import { Cell } from '../MapMaker';
 import { toast } from 'sonner';
 
@@ -75,6 +77,26 @@ export const CockpitDungeonMap: React.FC = () => {
   const { combatants, broadcastToPlayerView, drawings, broadcastDrawingAction } = useLiveCockpit();
   const { activeCampaign } = useCampaign();
 
+  // Stable refs to prevent re-triggering effects on frequent parent/realtime re-renders
+  const combatantsRef = useRef(combatants);
+  combatantsRef.current = combatants;
+
+  const broadcastToPlayerViewRef = useRef(broadcastToPlayerView);
+  broadcastToPlayerViewRef.current = broadcastToPlayerView;
+
+  const fetchSceneMapRef = useRef(fetchSceneMap);
+  fetchSceneMapRef.current = fetchSceneMap;
+
+  const saveSceneMapRef = useRef(saveSceneMap);
+  saveSceneMapRef.current = saveSceneMap;
+
+  const campaignMapsRef = useRef(campaignMaps);
+  campaignMapsRef.current = campaignMaps;
+
+  const lastLoadedSceneIdRef = useRef<string | null>(null);
+  const lastTemplateSyncTimeRef = useRef<number>(0);
+  const lastSavedPayloadRef = useRef<string>('');
+
   const [grid, setGrid] = useState<Cell[][]>([]);
   const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
   const [gridScale, setGridScale] = useState<number>(40);
@@ -86,7 +108,7 @@ export const CockpitDungeonMap: React.FC = () => {
   const [selectedTool, setSelectedTool] = useState<'pan' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'draw-pencil' | 'draw-circle' | 'draw-rect' | 'draw-eraser' | 'draw-text'>('token');
   const [selectedTokenCombatant, setSelectedTokenCombatant] = useState<Combatant | null>(null);
   const [tokenSearchQuery, setTokenSearchQuery] = useState('');
-  const [tokenCategory, setTokenCategory] = useState<'all' | 'players' | 'monsters'>('all');
+  const [tokenCategory, setTokenCategory] = useState<'all' | 'players' | 'monsters' | 'npcs'>('all');
   const [isTokenTrayOpen, setIsTokenTrayOpen] = useState(false);
 
   const [measureStart, setMeasureStart] = useState<{ r: number; c: number } | null>(null);
@@ -320,23 +342,97 @@ export const CockpitDungeonMap: React.FC = () => {
 
   // Consolidated list of all placeable combatants / tokens
   const allAvailableTokens: Combatant[] = useMemo(() => {
-    const list: Combatant[] = [...combatants];
+    const list: Combatant[] = combatants.map((c) => ({
+      ...c,
+      avatarUrl: resolveTokenAvatar(c.name, c) || c.avatarUrl,
+    }));
+    const namesSeen = new Set(list.map((c) => c.name.trim().toLowerCase()));
+
+    // 1. Registered campaign party members
     const registeredParty = activeCampaign?.partyMembers || [];
     for (const pm of registeredParty) {
-      if (!list.some(c => c.name.trim().toLowerCase() === pm.name.trim().toLowerCase())) {
+      const pmName = pm.name || (pm as any).characterName || '';
+      const nameClean = pmName.trim().toLowerCase();
+      if (nameClean && !namesSeen.has(nameClean)) {
+        const resolvedAvatar = resolveTokenAvatar(pmName, { avatarUrl: pm.avatarUrl } as any) || pm.avatarUrl;
         list.push({
           id: `party-${pm.id}`,
-          name: pm.name,
+          name: pmName,
           type: 'player',
           hp: 20,
           maxHp: 20,
           ac: 10,
           initiative: 0,
           conditions: [],
-          avatarUrl: pm.avatarUrl,
+          avatarUrl: resolvedAvatar,
         });
+        namesSeen.add(nameClean);
       }
     }
+
+    // 2. Character sheets from localStorage
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const savedSheetsRaw = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
+        if (savedSheetsRaw) {
+          const sheets: any[] = JSON.parse(savedSheetsRaw);
+          if (Array.isArray(sheets)) {
+            sheets.forEach((sheet) => {
+              const charName = sheet.characterName || sheet.name;
+              if (charName) {
+                const nameClean = charName.trim().toLowerCase();
+                if (!namesSeen.has(nameClean)) {
+                  const resolvedAvatar = resolveTokenAvatar(charName, {
+                    avatarUrl: sheet.faceImageUrl || sheet.avatarUrl || (Array.isArray(sheet.images) && sheet.images[0])
+                  } as any);
+                  list.push({
+                    id: `sheet-${sheet.id || nameClean}`,
+                    name: charName,
+                    type: 'player',
+                    hp: sheet.hp?.max || sheet.maxHp || 20,
+                    maxHp: sheet.hp?.max || sheet.maxHp || 20,
+                    ac: sheet.armorClass || sheet.ac || 10,
+                    initiative: 0,
+                    conditions: [],
+                    avatarUrl: resolvedAvatar || undefined,
+                  });
+                  namesSeen.add(nameClean);
+                }
+              }
+            });
+          }
+        }
+      } catch (_e) {}
+    }
+
+    // 3. Add NPC Templates
+    for (const npc of NPC_TEMPLATES) {
+      const nameClean = npc.name.trim().toLowerCase();
+      if (!namesSeen.has(nameClean)) {
+        list.push(npc);
+        namesSeen.add(nameClean);
+      }
+    }
+
+    // 4. Add SRD Monsters for quick tactical placement
+    for (const mon of INITIAL_MONSTERS) {
+      const nameClean = mon.name.trim().toLowerCase();
+      if (!namesSeen.has(nameClean)) {
+        list.push({
+          id: `mon-${mon.id}`,
+          name: mon.name,
+          type: 'monster',
+          hp: mon.hp,
+          maxHp: mon.hp,
+          ac: mon.ac,
+          initiative: 0,
+          conditions: [],
+          tokenImageUrl: mon.tokenImageUrl,
+        });
+        namesSeen.add(nameClean);
+      }
+    }
+
     return list;
   }, [combatants, activeCampaign?.partyMembers]);
 
@@ -526,7 +622,7 @@ export const CockpitDungeonMap: React.FC = () => {
             if (tGrid[r]?.[c]?.tokenName) {
               coveredGrid[r][c].tokenName = tGrid[r][c].tokenName;
               coveredGrid[r][c].tokenColor = tGrid[r][c].tokenColor;
-              const radius = getTokenVisionRadius(tGrid[r][c].tokenName, combatants);
+              const radius = getTokenVisionRadius(tGrid[r][c].tokenName, combatantsRef.current);
               revealVisionWithLOS(coveredGrid, r, c, radius);
             }
           }
@@ -558,17 +654,26 @@ export const CockpitDungeonMap: React.FC = () => {
       setVectorWalls(activeLevelState.vectorWalls || []);
       setLightSources(activeLevelState.lightSources || []);
     }
-  }, [campaignMaps, combatants]);
+  }, [campaignMaps]);
+
+  const loadMapFromMultiStateRef = useRef(loadMapFromMultiState);
+  loadMapFromMultiStateRef.current = loadMapFromMultiState;
 
   // Ref for deduplicating broadcasts
   const lastBroadcast = useRef<string>('');
 
   // Load or initialize scene map
   useEffect(() => {
-    if (!activeScene) return;
+    const sceneId = activeScene?.id;
+    if (!sceneId) return;
+
+    // Prevent re-fetching and reloading if this scene is already loaded
+    if (lastLoadedSceneIdRef.current === sceneId) return;
+    lastLoadedSceneIdRef.current = sceneId;
+
     setIsLoading(true);
 
-    fetchSceneMap(activeScene.id).then((savedData: any) => {
+    fetchSceneMapRef.current(sceneId).then((savedData: any) => {
       let multiState: MultiMapState | null = null;
       if (savedData) {
         if (savedData.maps) {
@@ -595,8 +700,9 @@ export const CockpitDungeonMap: React.FC = () => {
       multiMapStateRef.current = multiState;
 
       // Determine active map ID from scene's associated maps (only existing campaignMaps)
+      const currentCampaignMaps = campaignMapsRef.current;
       const associatedIds: string[] = (activeScene.associatedMapIds || (activeScene.associatedMapId ? [activeScene.associatedMapId] : []))
-        .filter((id: string) => campaignMaps.some(m => m.id === id));
+        .filter((id: string) => currentCampaignMaps.some(m => m.id === id));
       let activeId: string | null = multiState.activeMapId || null;
       if (!activeId || !associatedIds.includes(activeId)) {
         activeId = associatedIds[0] || null;
@@ -607,12 +713,12 @@ export const CockpitDungeonMap: React.FC = () => {
         activeScene.isDungeonExplorationStarted === true ||
         (multiState as any)?.isExplorationStarted === true ||
         (activeId && (multiState.maps[activeId] as any)?.isExplorationStarted === true) ||
-        (typeof window !== 'undefined' && localStorage.getItem(`masters_codex_dungeon_started_${activeScene.id}_${activeId}`) === 'true');
+        (typeof window !== 'undefined' && localStorage.getItem(`masters_codex_dungeon_started_${sceneId}_${activeId}`) === 'true');
 
       setIsExplorationStarted(Boolean(persistedStarted));
 
       setCurrentMapId(activeId);
-      loadMapFromMultiState(multiState, activeId);
+      loadMapFromMultiStateRef.current(multiState, activeId);
       setIsLoading(false);
 
       // Broadcast immediately so the player view receives the map on first load
@@ -620,7 +726,7 @@ export const CockpitDungeonMap: React.FC = () => {
         const m = multiState.maps[activeId];
         const lvlId = m.activeLevelId;
         const currentLvlState: LevelRuntimeState | undefined = (lvlId && m.levels ? m.levels[lvlId] : undefined) || (m.levels ? Object.values(m.levels)[0] : undefined);
-        const mapTemplate = campaignMaps.find(cmap => cmap.id === activeId);
+        const mapTemplate = currentCampaignMaps.find(cmap => cmap.id === activeId);
         const coverImg = mapTemplate?.gridData?.coverImageUrl || mapTemplate?.gridData?.levels?.[0]?.bgImageUrl || mapTemplate?.gridData?.bgImageUrl || currentLvlState?.bgImageUrl || m.bgImageUrl || null;
 
         const payload = {
@@ -634,7 +740,7 @@ export const CockpitDungeonMap: React.FC = () => {
           activeMapId: activeId,
           activeLevelId: lvlId,
           currentLevelName: currentLvlState?.name || 'Andar',
-          sceneId: activeScene.id,
+          sceneId: sceneId,
           dungeonExplorationStarted: Boolean(persistedStarted),
           mapTitle: mapTemplate?.title || activeScene.title,
           coverImageUrl: coverImg,
@@ -642,14 +748,17 @@ export const CockpitDungeonMap: React.FC = () => {
           challengeRating: mapTemplate?.gridData?.challengeRating || 'Nível Recomendado',
         };
         lastBroadcast.current = JSON.stringify(payload);
-        broadcastToPlayerView({
+        broadcastToPlayerViewRef.current({
           dungeonExplorationStarted: Boolean(persistedStarted),
           activeMapId: activeId,
           mapData: payload
         });
       }
+    }).catch(err => {
+      console.error('[CockpitDungeonMap] Error loading scene map:', err);
+      setIsLoading(false);
     });
-  }, [activeScene, fetchSceneMap, loadMapFromMultiState, broadcastToPlayerView]);
+  }, [activeScene?.id]);
 
   // Synchronize with updated campaignMaps (e.g. when edited and saved in MapMaker)
   useEffect(() => {
@@ -657,12 +766,22 @@ export const CockpitDungeonMap: React.FC = () => {
     const associatedMap = campaignMaps.find(m => m.id === currentMapId);
     if (!associatedMap || !associatedMap.gridData) return;
 
-    loadMapFromMultiState(multiMapStateRef.current, currentMapId, activeLevelId);
-  }, [campaignMaps, currentMapId, activeLevelId, activeScene, isLoading, loadMapFromMultiState]);
+    // Check updatedAt timestamp to avoid needless re-syncs
+    const mapUpdatedTime = associatedMap.updatedAt ? new Date(associatedMap.updatedAt).getTime() : 0;
+    if (mapUpdatedTime > 0 && mapUpdatedTime <= lastTemplateSyncTimeRef.current) {
+      return;
+    }
+    if (mapUpdatedTime > 0) {
+      lastTemplateSyncTimeRef.current = mapUpdatedTime;
+    }
+
+    loadMapFromMultiStateRef.current(multiMapStateRef.current, currentMapId, activeLevelId);
+  }, [campaignMaps, currentMapId, activeLevelId, activeScene?.id, isLoading]);
 
   // Debounced auto-save & Realtime Broadcast to Players
   useEffect(() => {
-    if (!activeScene || isLoading) return;
+    const sceneId = activeScene?.id;
+    if (!sceneId || isLoading) return;
 
     const delayDebounce = setTimeout(() => {
       if (!currentMapId) return;
@@ -718,7 +837,7 @@ export const CockpitDungeonMap: React.FC = () => {
       }
 
       const activeLevelName = activeLevels.find(l => l.id === activeLevelId)?.name;
-      const associatedMap = campaignMaps.find(m => m.id === currentMapId);
+      const associatedMap = campaignMapsRef.current.find(m => m.id === currentMapId);
       const coverImg = associatedMap?.gridData?.coverImageUrl || associatedMap?.gridData?.levels?.[0]?.bgImageUrl || associatedMap?.gridData?.bgImageUrl || bgImageUrl || null;
 
       const mapPayload = {
@@ -732,24 +851,29 @@ export const CockpitDungeonMap: React.FC = () => {
         activeMapId: currentMapId,
         activeLevelId,
         currentLevelName: activeLevelName,
-        sceneId: activeScene.id,
+        sceneId: sceneId,
         fogMatrix,
         tokens,
         dungeonExplorationStarted: isExplorationStarted,
-        mapTitle: associatedMap?.title || activeScene.title,
+        mapTitle: associatedMap?.title || activeScene?.title,
         coverImageUrl: coverImg,
         description: associatedMap?.gridData?.description || '',
         challengeRating: associatedMap?.gridData?.challengeRating || 'Nível Recomendado',
       };
 
-      saveSceneMap(activeScene.id, multiMapStateRef.current).catch((e: any) => {
-        console.error('Failed to auto-save scene map:', e);
-      });
+      // Deduplicate saves to Supabase
+      const payloadStr = JSON.stringify(multiMapStateRef.current);
+      if (lastSavedPayloadRef.current !== payloadStr) {
+        lastSavedPayloadRef.current = payloadStr;
+        saveSceneMapRef.current(sceneId, multiMapStateRef.current).catch((e: any) => {
+          console.warn('[CockpitDungeonMap] Auto-save scene map warning (persisted offline):', e);
+        });
+      }
 
       const stringified = JSON.stringify(mapPayload);
       if (lastBroadcast.current !== stringified) {
         lastBroadcast.current = stringified;
-        broadcastToPlayerView({
+        broadcastToPlayerViewRef.current({
           dungeonExplorationStarted: isExplorationStarted,
           activeMapId: currentMapId,
           mapData: mapPayload
@@ -758,7 +882,7 @@ export const CockpitDungeonMap: React.FC = () => {
     }, 800);
 
     return () => clearTimeout(delayDebounce);
-  }, [grid, bgImageUrl, vectorWalls, lightSources, gridScale, gridOffsetX, gridOffsetY, activeScene, isLoading, currentMapId, activeLevelId, activeLevels, isExplorationStarted, saveSceneMap, broadcastToPlayerView]);
+  }, [grid, bgImageUrl, vectorWalls, lightSources, gridScale, gridOffsetX, gridOffsetY, activeScene?.id, isLoading, currentMapId, activeLevelId, activeLevels, isExplorationStarted]);
 
   // Instant In-Memory Floor / Level Switcher
   const handleSwitchLevel = (targetLevelId: string) => {
@@ -1354,7 +1478,8 @@ export const CockpitDungeonMap: React.FC = () => {
   const filteredTokens = useMemo(() => {
     return allAvailableTokens.filter((token) => {
       if (tokenCategory === 'players' && token.type !== 'player') return false;
-      if (tokenCategory === 'monsters' && token.type === 'player') return false;
+      if (tokenCategory === 'monsters' && token.type !== 'monster') return false;
+      if (tokenCategory === 'npcs' && token.type !== 'npc') return false;
       if (tokenSearchQuery.trim()) {
         return token.name.toLowerCase().includes(tokenSearchQuery.toLowerCase());
       }
@@ -1363,9 +1488,10 @@ export const CockpitDungeonMap: React.FC = () => {
   }, [allAvailableTokens, tokenCategory, tokenSearchQuery]);
 
   const playerTokensCount = allAvailableTokens.filter((t) => t.type === 'player').length;
-  const monsterTokensCount = allAvailableTokens.filter((t) => t.type !== 'player').length;
+  const monsterTokensCount = allAvailableTokens.filter((t) => t.type === 'monster').length;
+  const npcTokensCount = allAvailableTokens.filter((t) => t.type === 'npc').length;
 
-  if (isLoading || !activeScene) {
+  if (!activeScene || (isLoading && (!grid || grid.length === 0))) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-[#0a0d14]">
         <div className="text-center">
@@ -1522,23 +1648,11 @@ export const CockpitDungeonMap: React.FC = () => {
                 <span className="hidden lg:inline">Cobrir Tudo</span>
               </button>
               <button
-                onClick={handleReloadFromTemplate}
-                className="px-2 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 text-amber-400 hover:bg-amber-950/40 border border-amber-500/20 cursor-pointer"
-                title="Recarregar do Modelo (Reinicia o mapa com o layout original do editor)"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">Recarregar</span>
-              </button>
-              <button
-                onClick={() => {
-                  setSelectedTool('measure');
-                  setMeasureStart(null);
-                  setMeasuredDistance(null);
-                }}
+                onClick={() => setSelectedTool('measure')}
                 className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  selectedTool === 'measure' ? 'bg-cyan-500 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+                  selectedTool === 'measure' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
                 }`}
-                title="Medir Régua"
+                title="Medir Distância (D&D 5e)"
               >
                 <Ruler className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Régua</span>
@@ -1548,83 +1662,68 @@ export const CockpitDungeonMap: React.FC = () => {
                 className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                   selectedTool === 'pan' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
                 }`}
-                title="Arrastar Mapa"
+                title="Navegar / Pan (Espaço ou Arrastar)"
               >
                 <Hand className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Mover</span>
+                <span className="hidden sm:inline">Navegar</span>
               </button>
-
-              <button
-                type="button"
-                onClick={() => setShowCoverModal(true)}
-                className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 cursor-pointer shadow-sm ml-1"
-                title="Ver Capa e Lore da Masmorra"
-              >
-                <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">Capa & Lore</span>
-              </button>
-
-              {isExplorationStarted && (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleRestartExploration}
-                    className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 bg-amber-950/50 hover:bg-amber-900/70 text-amber-300 border border-amber-500/40 cursor-pointer shadow-sm ml-1"
-                    title="Reiniciar Exploração da Masmorra (Volta para a tela de capa com imagem, lore e botão de iniciar)"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="hidden xl:inline">Reiniciar</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleEndExploration}
-                    className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 bg-rose-950/50 hover:bg-rose-900/70 text-rose-300 border border-rose-500/40 cursor-pointer shadow-sm ml-1"
-                    title="Finalizar Exploração da Masmorra"
-                  >
-                    <Swords className="w-3.5 h-3.5 text-rose-400" />
-                    <span className="hidden xl:inline">Finalizar</span>
-                  </button>
-                </>
-              )}
-
               <button
                 type="button"
                 onClick={() => setIsToolsBarCollapsed(true)}
-                className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-xl transition-colors ml-0.5 cursor-pointer"
+                className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
                 title="Recolher Barra de Ferramentas"
               >
-                <ChevronUp className="w-3.5 h-3.5" />
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           ) : (
             <button
               type="button"
               onClick={() => setIsToolsBarCollapsed(false)}
-              className="px-2.5 py-1.5 flex items-center gap-1.5 text-xs font-bold text-amber-400 hover:text-amber-300 cursor-pointer"
-              title="Expandir Barra de Ferramentas"
+              className="p-1.5 text-amber-400 hover:text-amber-300 flex items-center gap-1 text-xs font-semibold cursor-pointer"
+              title="Expandir Ferramentas Táticas"
             >
-              <span className="capitalize">{selectedTool.replace('draw-', '').replace('fog-', '')}</span>
-              <ChevronDown className="w-3.5 h-3.5" />
+              <MapPin className="w-4 h-4 text-amber-400" />
+              <ChevronLeft className="w-4 h-4 text-slate-400" />
             </button>
           )}
         </div>
       </div>
 
-      {/* Floating Token Tray HUD (Active when Token tool is selected) */}
-      {selectedTool === 'token' && isTokenTrayOpen && (
-        <div className="absolute top-16 right-3 z-30 w-80 max-w-[90vw] bg-[#0c1017]/95 backdrop-blur-xl border border-amber-500/30 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
+      {/* Floating Active Placement Banner */}
+      {selectedTokenCombatant && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-slate-950/95 border-2 border-amber-400 text-slate-100 rounded-full shadow-2xl backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+          <div className={`w-3.5 h-3.5 rounded-full ${selectedTokenCombatant.type === 'player' ? 'bg-cyan-400 animate-pulse' : 'bg-rose-500 animate-pulse'}`} />
+          <span className="text-xs font-bold">
+            Posicionar: <span className="text-amber-400 uppercase tracking-wide">{selectedTokenCombatant.name}</span>
+          </span>
+          <span className="text-[10px] text-slate-400 hidden md:inline border-l border-slate-700 pl-2">
+            Clique no mapa para colocar • Botão direito para remover
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedTokenCombatant(null)}
+            className="p-1 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-full transition-colors cursor-pointer ml-1"
+            title="Cancelar posicionamento"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Token Placement Tray HUD (Slide-over Card) */}
+      {isTokenTrayOpen && (
+        <div className="absolute top-16 right-3 z-30 w-80 bg-[#0d121a]/95 backdrop-blur-md border border-[#2a3449] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2">
           {/* Header */}
-          <div className="p-3 border-b border-[#2a3449]/70 flex items-center justify-between bg-[#121824]/80">
+          <div className="p-3 bg-[#0a0d14]/80 border-b border-[#2a3449] flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-amber-400" />
-              <h3 className="text-xs font-bold text-slate-100 uppercase tracking-wider font-mono">Tokens da Sessão</h3>
+              <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wide">Bandeja de Tokens</h4>
             </div>
             <button
               type="button"
               onClick={() => setIsTokenTrayOpen(false)}
               className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-              title="Fechar Bandeja de Tokens"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -1645,7 +1744,7 @@ export const CockpitDungeonMap: React.FC = () => {
             </div>
 
             {/* Filter Tabs */}
-            <div className="grid grid-cols-3 gap-1 bg-[#0a0d14] p-1 rounded-xl border border-[#2a3449]/60 text-[10px] font-semibold text-center">
+            <div className="grid grid-cols-4 gap-1 bg-[#0a0d14] p-1 rounded-xl border border-[#2a3449]/60 text-[10px] font-semibold text-center">
               <button
                 type="button"
                 onClick={() => setTokenCategory('all')}
@@ -1671,7 +1770,16 @@ export const CockpitDungeonMap: React.FC = () => {
                   tokenCategory === 'monsters' ? 'bg-rose-600 text-white font-bold shadow' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                Inimigos ({monsterTokensCount})
+                Monstros ({monsterTokensCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTokenCategory('npcs')}
+                className={`py-1 rounded-lg transition-all cursor-pointer ${
+                  tokenCategory === 'npcs' ? 'bg-indigo-600 text-white font-bold shadow' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                NPCs ({npcTokensCount})
               </button>
             </div>
           </div>
@@ -1680,7 +1788,7 @@ export const CockpitDungeonMap: React.FC = () => {
           <div className="max-h-72 overflow-y-auto p-2 space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800">
             {filteredTokens.length === 0 ? (
               <div className="text-center py-6 text-slate-500 text-xs">
-                Nenhum combatente ou jogador encontrado.
+                Nenhum combatente ou criatura encontrada.
               </div>
             ) : (
               filteredTokens.map((comb) => {
@@ -1705,6 +1813,7 @@ export const CockpitDungeonMap: React.FC = () => {
                           setSelectedTokenCombatant(null);
                         } else {
                           setSelectedTokenCombatant(comb);
+                          setSelectedTool('token');
                           toast.info(`Token "${comb.name}" selecionado. Clique no mapa para posicionar.`);
                         }
                       }}
@@ -1714,10 +1823,10 @@ export const CockpitDungeonMap: React.FC = () => {
                       {/* Avatar / Initial Circle */}
                       <div
                         className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 border ${
-                          isPlayer ? 'bg-cyan-950 text-cyan-300 border-cyan-400/60' : 'bg-rose-950 text-rose-300 border-rose-500/60'
+                          isPlayer ? 'bg-cyan-950 text-cyan-300 border-cyan-400/60' : comb.type === 'npc' ? 'bg-indigo-950 text-indigo-300 border-indigo-400/60' : 'bg-rose-950 text-rose-300 border-rose-500/60'
                         }`}
                       >
-                        {isPlayer ? <Shield className="w-3.5 h-3.5 text-cyan-400" /> : <Skull className="w-3.5 h-3.5 text-rose-400" />}
+                        {isPlayer ? <Shield className="w-3.5 h-3.5 text-cyan-400" /> : comb.type === 'npc' ? <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> : <Skull className="w-3.5 h-3.5 text-rose-400" />}
                       </div>
 
                       {/* Name & Status */}
@@ -1790,8 +1899,8 @@ export const CockpitDungeonMap: React.FC = () => {
 
           {/* Footer Helper */}
           <div className="p-2 bg-[#0a0d14]/90 border-t border-[#2a3449]/50 text-[10px] text-slate-400 flex items-center justify-between">
-            <span>💡 Selecione e clique na célula para posicionar</span>
-            <span className="text-slate-500">Botão dir.: remove</span>
+            <span>💡 Clique no mapa para posicionar</span>
+            <span className="text-rose-400/80">Botão dir.: remove</span>
           </div>
         </div>
       )}
@@ -1922,7 +2031,7 @@ export const CockpitDungeonMap: React.FC = () => {
         gridScale={gridScale}
         gridOffsetX={gridOffsetX}
         gridOffsetY={gridOffsetY}
-        combatants={combatants}
+        combatants={allAvailableTokens}
         vectorWalls={vectorWalls}
         lightSources={lightSources}
         selectedTool={selectedTool}

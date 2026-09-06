@@ -1,4 +1,4 @@
-import { SRDMonster, SRDSpell, SRDItem, Encounter, LoreNode, BGMTrack, SFXButton, ConditionType } from './types';
+import { Combatant, SRDMonster, SRDSpell, SRDItem, Encounter, LoreNode, BGMTrack, SFXButton, ConditionType } from './types';
 import { ALL_SRD_SPELLS } from './srd-spells-data';
 import { ALL_SRD_ITEMS } from './srd-items-data';
 import { BATCH_1_MONSTERS } from './srd-monsters-batch-1';
@@ -6,6 +6,18 @@ import { BATCH_2_MONSTERS } from './srd-monsters-batch-2';
 import { BATCH_3_MONSTERS } from './srd-monsters-batch-3';
 import { BATCH_4_MONSTERS } from './srd-monsters-batch-4';
 import { BATCH_5_MONSTERS } from './srd-monsters-batch-5';
+
+export const NPC_TEMPLATES: Combatant[] = [
+  { id: 'npc-guard', name: 'Guarda Urbano', type: 'npc', hp: 16, maxHp: 16, ac: 16, initiative: 0, conditions: [] },
+  { id: 'npc-noble', name: 'Nobre Mercador', type: 'npc', hp: 9, maxHp: 9, ac: 15, initiative: 0, conditions: [] },
+  { id: 'npc-priest', name: 'Clérigo Curandeiro', type: 'npc', hp: 27, maxHp: 27, ac: 13, initiative: 0, conditions: [] },
+  { id: 'npc-bandit', name: 'Bandido Espião', type: 'npc', hp: 11, maxHp: 11, ac: 12, initiative: 0, conditions: [] },
+  { id: 'npc-innkeeper', name: 'Taverneiro', type: 'npc', hp: 10, maxHp: 10, ac: 10, initiative: 0, conditions: [] },
+  { id: 'npc-mage', name: 'Mago Erudito', type: 'npc', hp: 22, maxHp: 22, ac: 12, initiative: 0, conditions: [] },
+  { id: 'npc-blacksmith', name: 'Ferreiro Anão', type: 'npc', hp: 35, maxHp: 35, ac: 15, initiative: 0, conditions: [] },
+  { id: 'npc-assassin', name: 'Assassino Sombrio', type: 'npc', hp: 45, maxHp: 45, ac: 15, initiative: 0, conditions: [] },
+];
+
 export const CONDITIONS: ConditionType[] = [
   'Cego',
   'Encantado',

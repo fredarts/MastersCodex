@@ -35,9 +35,10 @@ import { normalizeToMultiLevel, createEmptyLevel, duplicateLevel } from '@/lib/m
 import { useSession } from '@/context/SessionContext';
 import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { useCampaign } from '@/context/CampaignContext';
-import { INITIAL_MONSTERS } from '@/lib/srd-data';
+import { INITIAL_MONSTERS, NPC_TEMPLATES } from '@/lib/srd-data';
 import { toast } from 'sonner';
 import { storageService } from '@/lib/services/storageService';
+import { resolveTokenAvatar } from '@/lib/utils/tokenAvatarResolver';
 import { DysonCanvas } from './map/DysonCanvas';
 import { DungeonGeneratorModal } from './map/DungeonGeneratorModal';
 import { MapMakerTopBar } from './map/MapMakerTopBar';
@@ -174,15 +175,6 @@ export interface Cell {
   transitionConfig?: DungeonTransitionConfig;
 }
 
-const NPC_TEMPLATES: Combatant[] = [
-  { id: 'npc-guard', name: 'Guarda', type: 'npc', hp: 11, maxHp: 11, ac: 16, initiative: 0, conditions: [] },
-  { id: 'npc-mage', name: 'Mago', type: 'npc', hp: 40, maxHp: 40, ac: 12, initiative: 0, conditions: [] },
-  { id: 'npc-bandit', name: 'Bandido', type: 'npc', hp: 11, maxHp: 11, ac: 12, initiative: 0, conditions: [] },
-  { id: 'npc-commoner', name: 'Plebeu', type: 'npc', hp: 4, maxHp: 4, ac: 10, initiative: 0, conditions: [] },
-  { id: 'npc-priest', name: 'Sacerdote', type: 'npc', hp: 27, maxHp: 27, ac: 13, initiative: 0, conditions: [] },
-  { id: 'npc-knight', name: 'Cavaleiro', type: 'npc', hp: 52, maxHp: 52, ac: 18, initiative: 0, conditions: [] },
-];
-
 export const MapMaker: React.FC<MapMakerProps> = ({ combatants, selectedMapId }) => {
 
   const createInitialGrid = (cols = 80, rows = 80): Cell[][] => {
@@ -236,18 +228,42 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants, selectedMapId })
     if (combatants) {
       combatants.forEach((c) => {
         if (c.type === 'player') {
-          list.push(c);
+          const resolvedAvatar = resolveTokenAvatar(c.name, c) || c.avatarUrl;
+          list.push({ ...c, avatarUrl: resolvedAvatar });
           namesSeen.add(c.name.trim().toLowerCase());
         }
       });
     }
 
-    // 2. Add campaign members of role 'player' if not already added
+    // 2. Add registered campaign party members
+    if (activeCampaign?.partyMembers) {
+      activeCampaign.partyMembers.forEach((pm) => {
+        const nameClean = (pm.name || (pm as any).characterName || '').trim().toLowerCase();
+        if (nameClean && !namesSeen.has(nameClean)) {
+          const resolvedAvatar = resolveTokenAvatar(pm.name || (pm as any).characterName || '', { avatarUrl: pm.avatarUrl } as any) || pm.avatarUrl;
+          list.push({
+            id: `party-member-${pm.id}`,
+            name: pm.name || (pm as any).characterName || 'Herói',
+            type: 'player',
+            hp: 20,
+            maxHp: 20,
+            ac: 10,
+            initiative: 0,
+            conditions: [],
+            avatarUrl: resolvedAvatar,
+          });
+          namesSeen.add(nameClean);
+        }
+      });
+    }
+
+    // 3. Add campaign members of role 'player' if not already added
     if (campaignMembers) {
       campaignMembers.forEach((m) => {
         if (m.role === 'player' && m.characterName) {
           const nameClean = m.characterName.trim().toLowerCase();
           if (!namesSeen.has(nameClean)) {
+            const resolvedAvatar = resolveTokenAvatar(m.characterName, { avatarUrl: m.avatarUrl } as any) || m.avatarUrl;
             list.push({
               id: `pc-member-${m.id}`,
               name: m.characterName,
@@ -257,6 +273,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants, selectedMapId })
               ac: 10,
               initiative: 0,
               conditions: [],
+              avatarUrl: resolvedAvatar,
               modelUrl: m.modelUrl || '',
             });
             namesSeen.add(nameClean);
@@ -265,7 +282,42 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants, selectedMapId })
       });
     }
 
-    // 3. Fallback generic players if list is empty
+    // 4. Add saved character sheets from localStorage if not already present
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const savedSheetsRaw = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
+        if (savedSheetsRaw) {
+          const sheets: any[] = JSON.parse(savedSheetsRaw);
+          if (Array.isArray(sheets)) {
+            sheets.forEach((sheet) => {
+              const charName = sheet.characterName || sheet.name;
+              if (charName) {
+                const nameClean = charName.trim().toLowerCase();
+                if (!namesSeen.has(nameClean)) {
+                  const resolvedAvatar = resolveTokenAvatar(charName, {
+                    avatarUrl: sheet.faceImageUrl || sheet.avatarUrl || (Array.isArray(sheet.images) && sheet.images[0])
+                  } as any);
+                  list.push({
+                    id: `sheet-${sheet.id || nameClean}`,
+                    name: charName,
+                    type: 'player',
+                    hp: sheet.hp?.max || sheet.maxHp || 20,
+                    maxHp: sheet.hp?.max || sheet.maxHp || 20,
+                    ac: sheet.armorClass || sheet.ac || 10,
+                    initiative: 0,
+                    conditions: [],
+                    avatarUrl: resolvedAvatar || undefined,
+                  });
+                  namesSeen.add(nameClean);
+                }
+              }
+            });
+          }
+        }
+      } catch (_e) {}
+    }
+
+    // 5. Fallback generic players if list is empty
     if (list.length === 0) {
       list.push(
         { id: 'gen-p1', name: 'P1', type: 'player', hp: 10, maxHp: 10, ac: 10, initiative: 0, conditions: [] },
@@ -1296,7 +1348,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants, selectedMapId })
           gridScale={gridScale}
           gridOffsetX={gridOffsetX}
           gridOffsetY={gridOffsetY}
-          combatants={combatants}
+          combatants={getPartyTokens().concat(getMonsterTokens()).concat(getNPCTokens())}
           selectedTool={selectedTool}
           setSelectedTool={setSelectedTool}
           boxMode={boxMode}

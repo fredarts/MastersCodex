@@ -8,75 +8,46 @@ import {
   CheckCircle2, 
   X, 
   Undo2, 
-  ArrowRight, 
-  Footprints, 
   Maximize2,
-  Package,
-  Coins,
-  Sparkles,
-  Lock,
-  Unlock,
-  Dice5,
-  Eye,
-  Gem,
-  ShieldAlert,
-  AlertTriangle,
-  Shield,
-  Heart,
-  Navigation,
-  Plus,
-  Trash2,
-  DoorClosed,
   SlidersHorizontal,
-  Grid,
-  EyeOff,
-  Hammer,
-  Key,
-  Wrench
+  Grid
 } from 'lucide-react';
 import { 
-  drawDysonCrosshatch, 
-  drawWobblyLine, 
-  drawWaterHachure, 
-  drawGrassHachure, 
-  drawTrapHachure,
-  drawChestHachure,
-  drawStashHachure,
-  drawPortcullisHachure,
-  drawTriggerHachure,
-  drawIllusionWallHachure,
-  drawLightSourceIcon,
-  drawStashIcon,
-  drawTransitionIcon,
-  drawPOIIcon
+  drawLightSourceIcon, 
+  drawStashIcon, 
+  drawTransitionIcon, 
+  drawPOIIcon 
 } from './dysonCore';
 import { DungeonTransitionModal } from './DungeonTransitionModal';
-import { MapLevel, DungeonTransitionConfig } from '@/lib/types';
-
-import { 
-  hasLineOfSight, 
-  isCellBlockingVision,
-  revealVisionWithLOS, 
-  computeVisibilityPolygon, 
-  getTokenVisionRadius,
-  getCombatantVisionType,
-  isLightVisibleToPlayer,
-  findDoorNearPoint,
-  toggleDoorState,
-  getDoorSoundPreset
-} from './visionCore';
-import { Combatant, VisionType } from '@/lib/types';
-import { Cell, TileType, ChestConfig, ContainerType, ContainerStatus, ChestLoot } from '../MapMaker';
+import { MapLevel, DungeonTransitionConfig, Combatant, VisionType, WallSegment, LightSource } from '@/lib/types';
+import { Cell, TileType, ContainerType, ContainerStatus } from '../MapMaker';
 import { getCreatureGridSize } from '@/lib/utils/creatureSize';
 import { evaluateTokenStep } from '@/lib/reactive/reactiveSceneEngine';
 import { ReactiveTrapEffect } from '@/lib/reactive/reactiveTypes';
-import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
 import { ContainerLootModal } from '@/components/loot/ContainerLootModal';
 import { ItemCompendiumModal } from '@/components/character-sheet/Modals/ItemCompendiumModal';
 import { CampaignDocumentSelectModal } from '@/components/loot/CampaignDocumentSelectModal';
-import { normalizeChestItem, getItemTypeBadgeInfo } from '@/lib/utils/lootItemUtils';
 import { documentToEquipmentItem } from '@/lib/utils/campaignDocumentUtils';
-import { CharacterEquipmentItem } from '@/lib/types';
+import { 
+  hasLineOfSight, 
+  isCellBlockingVision, 
+  revealVisionWithLOS, 
+  getTokenVisionRadius, 
+  getCombatantVisionType, 
+  findDoorNearPoint, 
+  toggleDoorState, 
+  getDoorSoundPreset 
+} from './visionCore';
+
+// Hooks de Performance
+import { useLightingEngine } from './hooks/useLightingEngine';
+import { useStaticMapBake } from './hooks/useStaticMapBake';
+
+// Modais Modulares
+import { CellConfigModal, EditingCellState } from './modals/CellConfigModal';
+import { RulerHUD } from './modals/RulerHUD';
+import { CellHoverTooltip } from './modals/CellHoverTooltip';
+import { resolveTokenAvatar } from '@/lib/utils/tokenAvatarResolver';
 
 const token2DImageCache = new Map<string, HTMLImageElement>();
 
@@ -106,54 +77,24 @@ export interface RulerSegment {
   meters: number;
 }
 
-interface DysonCanvasProps {
-  grid: Cell[][];
-  bgImageUrl: string | null;
-  gridScale: number; // For custom map sizing (CELL_SIZE)
-  gridOffsetX: number;
-  gridOffsetY: number;
-  combatants: Combatant[];
-  selectedTool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan' | 'light' | 'draw-pencil' | 'draw-circle' | 'draw-rect' | 'draw-eraser' | 'draw-text';
-  setSelectedTool?: (tool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan' | 'light' | 'draw-pencil' | 'draw-circle' | 'draw-rect' | 'draw-eraser' | 'draw-text') => void;
-  boxMode?: 'fill' | 'room' | 'hollow' | 'fog-reveal' | 'fog-cover';
-  selectedTileType: string;
-  selectedTokenCombatant: Combatant | null;
-  measureStart?: { r: number; c: number } | null;
-  setMeasureStart?: React.Dispatch<React.SetStateAction<{ r: number; c: number } | null>>;
-  setMeasuredDistance?: React.Dispatch<React.SetStateAction<{ feet: number; meters: number } | null>>;
-  onGridChange: (updater: (prev: Cell[][]) => Cell[][]) => void;
-  calibrationLine?: { x1: number; y1: number; x2: number; y2: number } | null;
-  setCalibrationLine?: (line: { x1: number; y1: number; x2: number; y2: number } | null) => void;
-  onCalibrateGridSize?: (size: number) => void;
-  isPlayerView?: boolean;
-  vectorWalls?: import('@/lib/types').WallSegment[];
-  lightSources?: import('@/lib/types').LightSource[];
-  onAddLightSource?: (light: import('@/lib/types').LightSource) => void;
-  onRemoveLightSource?: (lightId: string) => void;
-  selectedLightPreset?: 'torch' | 'candle' | 'lantern' | 'spell' | 'dragon';
-  drawings?: any[];
-  onDrawingAction?: (payload: any) => void;
-  drawColor?: string;
-  drawLineWidth?: number;
-  activeLevels?: MapLevel[];
-  currentLevelId?: string | null;
-  onTransitionAction?: (action: 'teleport_party' | 'teleport_token', targetLevelId: string, spawnR?: number, spawnC?: number, tokenName?: string) => void;
-  onSaveTransitionWithTargetLevel?: (config: DungeonTransitionConfig, sourceR: number, sourceC: number, autoCreateLinked: boolean, linkedTargetInfo?: { targetLevelId: string; targetR: number; targetC: number; linkedTransitionId?: string }) => void;
-  renderLighting?: boolean;
-  renderVision?: boolean;
-  renderFog?: boolean;
-  onUpdateLightSource?: (light: import('@/lib/types').LightSource) => void;
-  onUpdateVectorWalls?: (walls: import('@/lib/types').WallSegment[]) => void;
+export interface DrawingStroke {
+  id: string;
+  tool: string;
+  color: string;
+  lineWidth: number;
+  points: { x: number; y: number }[];
+  text?: string;
+  fontSize?: number;
 }
 
-export interface DraggingItem {
+interface DraggingItem {
   kind: 'token' | 'poi' | 'light';
   tokenName?: string;
   tokenColor?: string;
-  poiType?: string;
+  poiType?: TileType;
   poiCell?: Cell;
   lightId?: string;
-  light?: import('@/lib/types').LightSource;
+  light?: LightSource;
   startR: number;
   startC: number;
   currentR: number;
@@ -164,12 +105,59 @@ export interface DraggingItem {
   currentY?: number;
 }
 
+interface DysonCanvasProps {
+  grid: Cell[][];
+  bgImageUrl: string | null;
+  gridScale: number;
+  gridOffsetX: number;
+  gridOffsetY: number;
+  combatants: Combatant[];
+  selectedTool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan' | 'light' | 'draw-pencil' | 'draw-circle' | 'draw-rect' | 'draw-eraser' | 'draw-text';
+  setSelectedTool?: (tool: 'paint' | 'box' | 'fog-reveal' | 'fog-cover' | 'token' | 'measure' | 'calibrate' | 'pan' | 'light' | 'draw-pencil' | 'draw-circle' | 'draw-rect' | 'draw-eraser' | 'draw-text') => void;
+  boxMode?: 'fill' | 'room' | 'hollow' | 'fog-reveal' | 'fog-cover';
+  selectedTileType: string;
+  selectedTokenCombatant: Combatant | null;
+  measureStart?: { r: number; c: number } | null;
+  setMeasureStart?: (pos: { r: number; c: number } | null) => void;
+  setMeasuredDistance?: (dist: { feet: number; meters: number } | null) => void;
+  onGridChange: (updater: (prev: Cell[][]) => Cell[][]) => void;
+  calibrationLine?: { x1: number; y1: number; x2: number; y2: number } | null;
+  setCalibrationLine?: (line: { x1: number; y1: number; x2: number; y2: number } | null) => void;
+  onCalibrateGridSize?: (size: number) => void;
+  isPlayerView?: boolean;
+  lightSources?: LightSource[];
+  onAddLightSource?: (light: LightSource) => void;
+  onRemoveLightSource?: (id: string) => void;
+  onUpdateLightSource?: (light: LightSource) => void;
+  selectedLightPreset?: 'torch' | 'candle' | 'lantern' | 'spell' | 'dragon';
+  vectorWalls?: WallSegment[];
+  activeLevels?: MapLevel[];
+  currentLevelId?: string | null;
+  onTransitionAction?: (action: 'teleport_party' | 'teleport_token', targetLevelId: string, spR?: number, spC?: number, tokenName?: string) => void;
+  drawings?: DrawingStroke[];
+  onDrawingAction?: (data: { action: 'add' | 'remove' | 'clear'; stroke?: DrawingStroke; strokeId?: string }) => void;
+  drawColor?: string;
+  drawLineWidth?: number;
+  onSaveTransitionWithTargetLevel?: (
+    config: DungeonTransitionConfig,
+    r: number,
+    c: number,
+    autoCreateLinked: boolean,
+    linkedTargetInfo?: { targetLevelId: string; targetR: number; targetC: number; linkedTransitionId?: string; name?: string }
+  ) => void;
+  renderLighting?: boolean;
+  renderVision?: boolean;
+  renderFog?: boolean;
+  onUpdateVectorWalls?: (walls: WallSegment[]) => void;
+}
+
 export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   grid,
   bgImageUrl,
   gridScale,
   gridOffsetX,
   gridOffsetY,
+  combatants,
   selectedTool,
   setSelectedTool,
   boxMode = 'fill',
@@ -183,34 +171,37 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   setCalibrationLine,
   onCalibrateGridSize,
   isPlayerView = false,
-  combatants,
-  vectorWalls = [],
   lightSources = [],
   onAddLightSource,
   onRemoveLightSource,
   onUpdateLightSource,
   selectedLightPreset = 'torch',
+  vectorWalls = [],
+  activeLevels,
+  currentLevelId,
+  onTransitionAction,
   drawings = [],
   onDrawingAction,
   drawColor = '#f59e0b',
   drawLineWidth = 4,
-  activeLevels = [],
-  currentLevelId = null,
-  onTransitionAction,
   onSaveTransitionWithTargetLevel,
   renderLighting = true,
   renderVision = true,
   renderFog = true,
   onUpdateVectorWalls,
 }) => {
-
-
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // 5 Dedicated Canvas Layers
+  const staticCanvasRef = useRef<HTMLCanvasElement>(null);
+  const lightingCanvasRef = useRef<HTMLCanvasElement>(null);
+  const entitiesCanvasRef = useRef<HTMLCanvasElement>(null);
   const drawingCanvasRef = useRef<HTMLCanvasElement>(null);
+  const interactionCanvasRef = useRef<HTMLCanvasElement>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const offscreenMaskRef = useRef<HTMLCanvasElement | null>(null);
   const lastPaintedCellRef = useRef<{ r: number; c: number; tool: string } | null>(null);
 
+  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawButton, setDrawButton] = useState(-1);
   const [selectionBox, setSelectionBox] = useState<{ startR: number; startC: number; currentR: number; currentC: number } | null>(null);
@@ -219,13 +210,13 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const [imageCacheVersion, setImageCacheVersion] = useState(0);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
-  const [editingCell, setEditingCell] = useState<{ r: number; c: number; cell: Cell } | null>(null);
-  const [activeLootContainer, setActiveLootContainer] = useState<{ r: number; c: number; cell: Cell } | null>(null);
+  const [editingCell, setEditingCell] = useState<EditingCellState | null>(null);
+  const [activeLootContainer, setActiveLootContainer] = useState<EditingCellState | null>(null);
   const [isChestCompendiumOpen, setIsChestCompendiumOpen] = useState(false);
   const [isChestCampaignDocsOpen, setIsChestCampaignDocsOpen] = useState(false);
   const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number; cell: Cell } | null>(null);
-  const [draggingToken, setDraggingToken] = useState<{ name: string, color: string, startR: number, startC: number, currentR: number, currentC: number } | null>(null);
   const [draggingItem, setDraggingItem] = useState<DraggingItem | null>(null);
   const dragCandidateRef = useRef<{
     kind: 'token' | 'poi' | 'light';
@@ -238,9 +229,10 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     tokenName?: string;
     tokenColor?: string;
     cell?: Cell;
-    light?: import('@/lib/types').LightSource;
+    light?: LightSource;
   } | null>(null);
-  const activeStrokeRef = useRef<any | null>(null);
+  const activeStrokeRef = useRef<DrawingStroke | null>(null);
+  const strokeCounterRef = useRef<number>(0);
 
   const CELL_SIZE = bgImageUrl ? gridScale : 40;
   const COLS = grid[0]?.length || 12;
@@ -255,155 +247,743 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
   const gridDims = useRef({ rows: grid.length, cols: grid[0]?.length || 0 });
   const panOffsetRef = useRef(panOffset);
-  panOffsetRef.current = panOffset;
   const zoomRef = useRef(zoom);
-  zoomRef.current = zoom;
   const selectedToolRef = useRef(selectedTool);
-  selectedToolRef.current = selectedTool;
   const rulerPointsRef = useRef(rulerPoints);
   const rulerCursorRef = useRef(rulerCursor);
   const rulerStatusRef = useRef(rulerStatus);
 
-  // Memoized Dyson Wall Distance Transform (recalculated ONLY when wall topology changes, and skipped if bgImage exists)
-  const wallTopologyKey = useMemo(() => {
-    if (!grid || grid.length === 0 || bgImageUrl) return '';
-    return grid.map(row => row.map(c => c.type === 'wall' ? '1' : '0').join('')).join('|');
-  }, [grid, bgImageUrl]);
-
-  const distMap = useMemo(() => {
-    if (!grid || grid.length === 0 || bgImageUrl) return [];
-    const rows = grid.length;
-    const cols = grid[0]?.length || 0;
-    const map: number[][] = Array(rows).fill(null).map(() => Array(cols).fill(99));
-
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (grid[r]?.[c] && grid[r][c].type !== 'wall') {
-          map[r][c] = 0;
-        } else {
-          let minDist = 99;
-          for (let i = -3; i <= 3; i++) {
-            for (let j = -3; j <= 3; j++) {
-              const nr = r + i;
-              const nc = c + j;
-              if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
-                if (grid[nr]?.[nc] && grid[nr][nc].type !== 'wall') {
-                  const d = Math.hypot(i, j);
-                  if (d < minDist) minDist = d;
-                }
-              }
-            }
-          }
-          map[r][c] = minDist;
-        }
-      }
-    }
-    return map;
-  }, [wallTopologyKey, bgImageUrl]);
-
-  // Memoized player tokens list
-  const playerTokens = useMemo(() => {
-    const tokens: { r: number; c: number; radius: number; visionType: VisionType; tokenName: string }[] = [];
-    if (!grid || grid.length === 0) return tokens;
-    const rows = grid.length;
-    const cols = grid[0]?.length || 0;
-
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (grid[r]?.[c]?.tokenName) {
-          const tokenNameClean = grid[r][c].tokenName!.trim().toLowerCase();
-          const isPlayerToken = grid[r][c].tokenColor?.includes('cyan') || 
-                                grid[r][c].tokenColor?.includes('emerald') || 
-                                grid[r][c].tokenColor?.includes('green') || 
-                                grid[r][c].tokenColor?.includes('blue') ||
-                                combatants?.some((comb: Combatant) => {
-                                  if (comb.type !== 'player') return false;
-                                  const cName = comb.name.trim().toLowerCase();
-                                  return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
-                                });
-          if (isPlayerToken) {
-            tokens.push({
-              r,
-              c,
-              radius: getTokenVisionRadius(grid[r][c].tokenName, combatants),
-              visionType: getCombatantVisionType(grid[r][c].tokenName, combatants),
-              tokenName: grid[r][c].tokenName!
-            });
-          }
-        }
-      }
-    }
-    return tokens;
-  }, [grid, combatants]);
-
-  // Memoized token active vision polygons (world-space, recomputed ONLY when tokens/geometry change)
-  const tokenVisionPolygons = useMemo(() => {
-    if (!renderVision || !grid || grid.length === 0) return [];
-    return playerTokens.map((pt) => {
-      const tx = bgImageUrl ? gridOffsetX + pt.c * CELL_SIZE + CELL_SIZE / 2 : pt.c * CELL_SIZE + CELL_SIZE / 2;
-      const ty = bgImageUrl ? gridOffsetY + pt.r * CELL_SIZE + CELL_SIZE / 2 : pt.r * CELL_SIZE + CELL_SIZE / 2;
-      const visionRadius = pt.radius * CELL_SIZE;
-
-      const polyPoints = computeVisibilityPolygon(
-        tx, ty, visionRadius, grid, CELL_SIZE, gridOffsetX, gridOffsetY, Boolean(bgImageUrl), vectorWalls, pt.visionType
-      );
-
-      return { tx, ty, visionRadius, polyPoints, visionType: pt.visionType };
-    });
-  }, [renderVision, playerTokens, grid, vectorWalls, CELL_SIZE, gridOffsetX, gridOffsetY, bgImageUrl]);
-
-  // Memoized light source visibility polygons (world-space, recomputed ONLY when lights/geometry change)
-  const lightPolygons = useMemo(() => {
-    if (!renderLighting || !lightSources || lightSources.length === 0 || !grid || grid.length === 0) return [];
-
-    return lightSources.map((light) => {
-      const isVisible = !isPlayerView || isLightVisibleToPlayer(light, playerTokens, grid, vectorWalls, CELL_SIZE, gridOffsetX, gridOffsetY, Boolean(bgImageUrl));
-      
-      const lx = light.x < 150 ? (bgImageUrl ? gridOffsetX + light.x * CELL_SIZE : light.x * CELL_SIZE) : light.x;
-      const ly = light.y < 150 ? (bgImageUrl ? gridOffsetY + light.y * CELL_SIZE : light.y * CELL_SIZE) : light.y;
-      const lRadius = (light.dimRadius / 5) * CELL_SIZE;
-
-      const polyPoints = isVisible ? computeVisibilityPolygon(
-        lx, ly, lRadius, grid, CELL_SIZE, gridOffsetX, gridOffsetY, Boolean(bgImageUrl), vectorWalls
-      ) : [];
-
-      return { light, lx, ly, lRadius, polyPoints, isVisible };
-    });
-  }, [renderLighting, lightSources, isPlayerView, playerTokens, grid, vectorWalls, CELL_SIZE, gridOffsetX, gridOffsetY, bgImageUrl]);
-
-  useEffect(() => {
-    gridDims.current = { rows: grid.length, cols: grid[0]?.length || 0 };
-  }, [grid]);
-
   useEffect(() => {
     panOffsetRef.current = panOffset;
-  }, [panOffset]);
-
-  useEffect(() => {
     zoomRef.current = zoom;
-  }, [zoom]);
-
-  useEffect(() => {
     selectedToolRef.current = selectedTool;
-  }, [selectedTool]);
-
-  useEffect(() => {
     rulerPointsRef.current = rulerPoints;
-  }, [rulerPoints]);
-
-  useEffect(() => {
     rulerCursorRef.current = rulerCursor;
-  }, [rulerCursor]);
+    rulerStatusRef.current = rulerStatus;
+    gridDims.current = { rows: grid.length, cols: grid[0]?.length || 0 };
+  }, [panOffset, zoom, selectedTool, rulerPoints, rulerCursor, rulerStatus, grid]);
+
+  // Hook 1: Baked Static Map Engine (Hachuras + Paredes + Fundo)
+  const { getBakedCanvas, markDirty: markStaticMapDirty, bakeVersion } = useStaticMapBake({
+    grid,
+    bgImage,
+    cellSize: CELL_SIZE,
+    gridOffsetX,
+    gridOffsetY,
+    isPlayerView
+  });
+
+  // Hook 2: Demand-Driven Lighting & Shadow Engine
+  const {
+    playerTokens,
+    tokenVisionPolygons,
+    lightPolygons,
+    getLightFlickerParams,
+  } = useLightingEngine({
+    grid,
+    lightSources,
+    combatants,
+    vectorWalls,
+    cellSize: CELL_SIZE,
+    gridOffsetX,
+    gridOffsetY,
+    bgImageUrl,
+    isPlayerView,
+    renderLighting,
+    renderVision,
+  });
+
+  // Viewport culling boundaries
+  const getViewportBounds = useCallback(() => {
+    const container = containerRef.current;
+    const width = canvasSize.width || container?.clientWidth || 800;
+    const height = canvasSize.height || container?.clientHeight || 600;
+
+    const localLeft = -panOffset.x / zoom;
+    const localRight = (-panOffset.x + width) / zoom;
+    const localTop = -panOffset.y / zoom;
+    const localBottom = (-panOffset.y + height) / zoom;
+
+    const startCol = Math.max(0, Math.floor((localLeft - (bgImage ? gridOffsetX : 0)) / CELL_SIZE) - 1);
+    const endCol = Math.min(COLS - 1, Math.ceil((localRight - (bgImage ? gridOffsetX : 0)) / CELL_SIZE) + 1);
+    const startRow = Math.max(0, Math.floor((localTop - (bgImage ? gridOffsetY : 0)) / CELL_SIZE) - 1);
+    const endRow = Math.min(ROWS - 1, Math.ceil((localBottom - (bgImage ? gridOffsetY : 0)) / CELL_SIZE) + 1);
+
+    return { width, height, startCol, endCol, startRow, endRow };
+  }, [canvasSize, panOffset, zoom, bgImage, gridOffsetX, gridOffsetY, CELL_SIZE, COLS, ROWS]);
+
+  // Handle Container Dimensions & Window Resize
+  useEffect(() => {
+    const updateSize = () => {
+      if (containerRef.current) {
+        const { clientWidth, clientHeight } = containerRef.current;
+        setCanvasSize({ width: clientWidth, height: clientHeight });
+      }
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
+
+  // Background Image Loader
+  useEffect(() => {
+    let cancelled = false;
+    if (bgImageUrl) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = bgImageUrl;
+      img.onload = () => {
+        if (!cancelled) setBgImage(img);
+      };
+    } else {
+      Promise.resolve().then(() => {
+        if (!cancelled) setBgImage(null);
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [bgImageUrl]);
+
+  // Helper de sincronização de dimensões
+  const syncCanvasDimensions = (canvas: HTMLCanvasElement, width: number, height: number) => {
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+  };
+
+  // =========================================================================
+  // CAMADA 1: RENDERIZAÇÃO DO MAPA ESTÁTICO (BAKED BUFFER BLIT)
+  // Zero recálculo de hachuras, zero curvas de bézier em runtime!
+  // =========================================================================
+  const renderStaticLayer = useCallback(() => {
+    const canvas = staticCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { width, height } = getViewportBounds();
+    if (width <= 0 || height <= 0) return;
+
+    syncCanvasDimensions(canvas, width, height);
+    ctx.clearRect(0, 0, width, height);
+
+    const baked = getBakedCanvas();
+    if (!baked) return;
+
+    ctx.save();
+    ctx.translate(panOffset.x, panOffset.y);
+    ctx.scale(zoom, zoom);
+    ctx.drawImage(baked, 0, 0);
+    ctx.restore();
+  }, [getViewportBounds, getBakedCanvas, panOffset, zoom, bakeVersion]);
 
   useEffect(() => {
-    rulerStatusRef.current = rulerStatus;
-  }, [rulerStatus]);
+    renderStaticLayer();
+  }, [renderStaticLayer]);
 
-  // Orthogonal Path & Distance helpers (Strict non-diagonal movement for D&D 5e)
+  // =========================================================================
+  // CAMADA 2: LUZ, SOMBRAS & NÉVOA DE GUERRA (SOB DEMANDA)
+  // Animação de tochas roda isolada sem recalcular física de sombras!
+  // =========================================================================
+  const renderLightingLayer = useCallback((now = Date.now()) => {
+    const canvas = lightingCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { width, height, startCol, endCol, startRow, endRow } = getViewportBounds();
+    if (width <= 0 || height <= 0) return;
+
+    syncCanvasDimensions(canvas, width, height);
+    ctx.clearRect(0, 0, width, height);
+
+    // 1. Fog of War Mask
+    if (renderFog) {
+      if (!offscreenMaskRef.current) {
+        offscreenMaskRef.current = document.createElement('canvas');
+      }
+      const maskCanvas = offscreenMaskRef.current;
+      syncCanvasDimensions(maskCanvas, width, height);
+      const maskCtx = maskCanvas.getContext('2d');
+
+      if (maskCtx) {
+        maskCtx.setTransform(1, 0, 0, 1, 0, 0);
+        maskCtx.globalCompositeOperation = 'source-over';
+        maskCtx.clearRect(0, 0, width, height);
+
+        // Preenche névoa escura em screen space
+        maskCtx.fillStyle = isPlayerView ? 'rgba(8, 8, 12, 0.98)' : 'rgba(8, 8, 12, 0.45)';
+        maskCtx.fillRect(0, 0, width, height);
+
+        maskCtx.translate(panOffset.x, panOffset.y);
+        maskCtx.scale(zoom, zoom);
+        maskCtx.globalCompositeOperation = 'destination-out';
+        maskCtx.filter = 'blur(6px)';
+
+        // Recorta áreas exploradas
+        maskCtx.fillStyle = 'rgba(0, 0, 0, 1)';
+        for (let r = startRow; r <= endRow; r++) {
+          for (let c = startCol; c <= endCol; c++) {
+            if (grid[r]?.[c] && !grid[r][c].fog) {
+              const cx = bgImage ? gridOffsetX + c * CELL_SIZE + CELL_SIZE / 2 : c * CELL_SIZE + CELL_SIZE / 2;
+              const cy = bgImage ? gridOffsetY + r * CELL_SIZE + CELL_SIZE / 2 : r * CELL_SIZE + CELL_SIZE / 2;
+              maskCtx.beginPath();
+              maskCtx.arc(cx, cy, CELL_SIZE * 0.72, 0, Math.PI * 2);
+              maskCtx.fill();
+            }
+          }
+        }
+
+        // Visão dos tokens de jogadores (polígonos do useLightingEngine)
+        if (renderVision) {
+          tokenVisionPolygons.forEach(({ tx, ty, visionRadiusPx, polyPoints }) => {
+            if (polyPoints.length > 0) {
+              maskCtx.save();
+              maskCtx.beginPath();
+              maskCtx.moveTo(polyPoints[0].x, polyPoints[0].y);
+              for (let p = 1; p < polyPoints.length; p++) {
+                maskCtx.lineTo(polyPoints[p].x, polyPoints[p].y);
+              }
+              maskCtx.closePath();
+
+              const grad = maskCtx.createRadialGradient(tx, ty, CELL_SIZE * 0.5, tx, ty, visionRadiusPx);
+              grad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
+              grad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)');
+              grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+
+              maskCtx.fillStyle = grad;
+              maskCtx.fill();
+              maskCtx.restore();
+            }
+          });
+        }
+
+        // Fontes de luz (polígonos do useLightingEngine)
+        if (renderLighting) {
+          lightPolygons.forEach(({ lx, ly, lRadius, polyPoints, isVisible }) => {
+            if (!isVisible || polyPoints.length === 0) return;
+
+            maskCtx.save();
+            maskCtx.beginPath();
+            maskCtx.moveTo(polyPoints[0].x, polyPoints[0].y);
+            for (let p = 1; p < polyPoints.length; p++) {
+              maskCtx.lineTo(polyPoints[p].x, polyPoints[p].y);
+            }
+            maskCtx.closePath();
+
+            const fogGrad = maskCtx.createRadialGradient(lx, ly, 5, lx, ly, lRadius);
+            fogGrad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
+            fogGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)');
+            fogGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+
+            maskCtx.fillStyle = fogGrad;
+            maskCtx.fill();
+            maskCtx.restore();
+          });
+        }
+
+        maskCtx.filter = 'none';
+        ctx.drawImage(maskCanvas, 0, 0);
+      }
+    }
+
+    // 2. Brilho Ambiente Colorido (Composite 'screen' com flicker isolado)
+    if (renderLighting) {
+      ctx.save();
+      ctx.translate(panOffset.x, panOffset.y);
+      ctx.scale(zoom, zoom);
+      ctx.globalCompositeOperation = 'screen';
+
+      lightPolygons.forEach(({ light, lx, ly, lRadius, polyPoints, isVisible }) => {
+        if (!isVisible || polyPoints.length === 0) return;
+
+        const { alphaMultiplier, radiusMultiplier } = getLightFlickerParams(light, now);
+        const effectiveRadius = lRadius * radiusMultiplier;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(polyPoints[0].x, polyPoints[0].y);
+        for (let p = 1; p < polyPoints.length; p++) {
+          ctx.lineTo(polyPoints[p].x, polyPoints[p].y);
+        }
+        ctx.closePath();
+
+        const lightColor = light.color || '#ffaa33';
+        const grad = ctx.createRadialGradient(lx, ly, 5, lx, ly, effectiveRadius);
+        grad.addColorStop(0.0, hexToRgba(lightColor, 0.75 * alphaMultiplier));
+        grad.addColorStop(0.45, hexToRgba(lightColor, 0.3 * alphaMultiplier));
+        grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.restore();
+      });
+
+      ctx.restore();
+    }
+  }, [
+    getViewportBounds, 
+    renderFog, 
+    renderVision, 
+    renderLighting, 
+    isPlayerView, 
+    panOffset, 
+    zoom, 
+    grid, 
+    bgImage, 
+    gridOffsetX, 
+    gridOffsetY, 
+    CELL_SIZE, 
+    tokenVisionPolygons, 
+    lightPolygons, 
+    getLightFlickerParams
+  ]);
+
+  // Loop de animação de flicker das tochas
+  useEffect(() => {
+    const hasAnimatedLights = renderLighting && lightSources.some(
+      l => l.animation === 'torch' || l.animation === 'candle' || l.animation === 'pulse'
+    );
+
+    if (!hasAnimatedLights) {
+      renderLightingLayer();
+      return;
+    }
+
+    let rafId: number;
+    let lastTime = 0;
+    const loop = (time: number) => {
+      // Throttle de ~30 FPS para flicker orgânico sem custo excessivo
+      if (time - lastTime > 32) {
+        lastTime = time;
+        renderLightingLayer(time);
+      }
+      rafId = requestAnimationFrame(loop);
+    };
+
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
+  }, [renderLighting, lightSources, renderLightingLayer]);
+
+  // =========================================================================
+  // CAMADA 3: ENTIDADES (TOKENS, POIs, ÍCONES DE LUZ, VECTOR WALLS)
+  // =========================================================================
+  const renderEntitiesLayer = useCallback(() => {
+    const canvas = entitiesCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { width, height, startCol, endCol, startRow, endRow } = getViewportBounds();
+    if (width <= 0 || height <= 0) return;
+
+    syncCanvasDimensions(canvas, width, height);
+    ctx.clearRect(0, 0, width, height);
+
+    ctx.save();
+    ctx.translate(panOffset.x, panOffset.y);
+    ctx.scale(zoom, zoom);
+
+    // 1. Ícones de POI do mapa
+    for (let r = startRow; r <= endRow; r++) {
+      for (let c = startCol; c <= endCol; c++) {
+        const cell = grid[r]?.[c];
+        if (!cell) continue;
+
+        const x = c * CELL_SIZE + CELL_SIZE / 2;
+        const y = r * CELL_SIZE + CELL_SIZE / 2;
+
+        if (cell.type === 'door') {
+          const config = cell.doorConfig;
+          if (isPlayerView && config?.doorType === 'secret' && !config?.secretRevealed) continue;
+          drawPOIIcon(ctx, x, y, 'door', zoom);
+        } else if (cell.type === 'trap') {
+          if (isPlayerView && !cell.trapConfig?.revealedToPlayers) continue;
+          drawPOIIcon(ctx, x, y, 'trap', zoom);
+        } else if (cell.type === 'chest') {
+          drawPOIIcon(ctx, x, y, 'chest', zoom);
+        } else if (cell.type === 'stash') {
+          if (isPlayerView && !cell.chestConfig?.revealedToPlayers) continue;
+          drawStashIcon(ctx, x, y, cell.chestConfig?.status === 'looted', zoom);
+        } else if (cell.type === 'transition') {
+          const tType = cell.transitionConfig?.type || 'stairs_down';
+          drawTransitionIcon(ctx, x, y, tType, cell.transitionConfig?.name, zoom);
+        }
+      }
+    }
+
+    // 2. Paredes Vetoriais e Portas
+    if (vectorWalls && vectorWalls.length > 0) {
+      vectorWalls.forEach((wall) => {
+        const x1 = (bgImage ? gridOffsetX : 0) + wall.x1 * CELL_SIZE;
+        const y1 = (bgImage ? gridOffsetY : 0) + wall.y1 * CELL_SIZE;
+        const x2 = (bgImage ? gridOffsetX : 0) + wall.x2 * CELL_SIZE;
+        const y2 = (bgImage ? gridOffsetY : 0) + wall.y2 * CELL_SIZE;
+
+        if (wall.type === 'secret_door' && isPlayerView && wall.doorState === 'closed') {
+          return;
+        }
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+
+        if (wall.type === 'door' || wall.type === 'secret_door') {
+          const isOpen = wall.doorState === 'open';
+          const isLocked = wall.doorState === 'locked';
+          const isBroken = wall.doorState === 'broken';
+
+          ctx.strokeStyle = isBroken ? '#94a3b8' : isLocked ? '#ef4444' : isOpen ? '#22c55e' : '#f59e0b';
+          ctx.lineWidth = 4;
+          ctx.setLineDash(isOpen ? [4, 6] : [6, 3]);
+
+          const mx = (x1 + x2) / 2;
+          const my = (y1 + y2) / 2;
+          ctx.fillStyle = isBroken ? '#94a3b8' : isLocked ? '#ef4444' : isOpen ? '#22c55e' : '#f59e0b';
+          ctx.fillRect(mx - 5, my - 5, 10, 10);
+
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(mx - 5, my - 5, 10, 10);
+        } else if (wall.type === 'window') {
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 3.5;
+          ctx.setLineDash([4, 4]);
+        } else if (wall.type === 'illusion') {
+          ctx.strokeStyle = isPlayerView ? 'transparent' : '#06b6d4';
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([2, 4]);
+        } else {
+          ctx.strokeStyle = isPlayerView ? 'transparent' : '#ef4444';
+          ctx.lineWidth = 3;
+        }
+
+        ctx.stroke();
+        ctx.restore();
+      });
+    }
+
+    // 3. Ícones de Decoração de Luz (Estilo Dyson)
+    if (lightSources && lightSources.length > 0) {
+      lightSources.forEach((light) => {
+        const lx = bgImage ? gridOffsetX + light.x * CELL_SIZE : light.x * CELL_SIZE;
+        const ly = bgImage ? gridOffsetY + light.y * CELL_SIZE : light.y * CELL_SIZE;
+
+        let preset: 'torch' | 'candle' | 'lantern' | 'spell' | 'dragon' = 'torch';
+        if (light.color === '#ffcc66' || light.brightRadius === 10) preset = 'candle';
+        else if (light.color === '#ffee88' || light.brightRadius === 30) preset = 'lantern';
+        else if (light.color === '#38bdf8') preset = 'spell';
+        else if (light.color === '#ef4444') preset = 'dragon';
+
+        drawLightSourceIcon(ctx, lx, ly, preset, zoom);
+      });
+    }
+
+    // 4. Tokens de Personagens e Criaturas
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const cell = grid[r]?.[c];
+        if (cell?.tokenName) {
+          const tokenNameClean = cell.tokenName.trim().toLowerCase();
+          const isPlayerToken = cell.tokenColor?.includes('cyan') || 
+                                cell.tokenColor?.includes('emerald') || 
+                                cell.tokenColor?.includes('green') || 
+                                cell.tokenColor?.includes('blue');
+
+          if (isPlayerView && !isPlayerToken && cell.fog) continue;
+
+          const tokenCombatant = combatants?.find(comb => {
+            const cName = comb.name.trim().toLowerCase();
+            return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
+          });
+
+          const sizeInfo = getCreatureGridSize(tokenCombatant?.size);
+          const gridSquares = sizeInfo.gridSquares;
+          const tokenDiameter = gridSquares * CELL_SIZE;
+          const tokenRadius = (tokenDiameter / 2) * 0.88;
+
+          const tx = (bgImage ? gridOffsetX : 0) + c * CELL_SIZE + tokenDiameter / 2;
+          const ty = (bgImage ? gridOffsetY : 0) + r * CELL_SIZE + tokenDiameter / 2;
+
+          const isBeingDragged = Boolean(draggingItem?.kind === 'token' && draggingItem.tokenName === cell.tokenName && r === draggingItem.startR && c === draggingItem.startC);
+
+          // Auras
+          if (tokenCombatant?.auras && tokenCombatant.auras.length > 0) {
+            tokenCombatant.auras.forEach((aura) => {
+              if (!aura.enabled) return;
+              const auraGridRadius = (aura.radiusFt / 5) * CELL_SIZE;
+              const auraColor = aura.visual.colorHex || '#facc15';
+
+              ctx.save();
+              ctx.beginPath();
+              ctx.arc(tx, ty, auraGridRadius, 0, Math.PI * 2);
+              ctx.fillStyle = hexToRgba(auraColor, aura.visual.opacity || 0.2);
+              ctx.fill();
+
+              ctx.strokeStyle = auraColor;
+              ctx.lineWidth = aura.visual.borderStyle === 'dashed' ? 2 : 1.5;
+              if (aura.visual.borderStyle === 'dashed') ctx.setLineDash([6, 4]);
+              ctx.stroke();
+
+              ctx.font = 'bold 9px Inter, sans-serif';
+              ctx.fillStyle = auraColor;
+              ctx.textAlign = 'center';
+              ctx.fillText(`${aura.name}`, tx, ty - auraGridRadius - 3);
+              ctx.restore();
+            });
+          }
+
+          // Token Base
+          ctx.save();
+          if (isBeingDragged) ctx.globalAlpha = 0.35;
+          ctx.beginPath();
+          ctx.arc(tx, ty, tokenRadius, 0, Math.PI * 2);
+          ctx.lineWidth = Math.max(3, 3 + (gridSquares - 1) * 1.5);
+          ctx.strokeStyle = '#020617';
+          ctx.fillStyle = cell.tokenColor?.includes('cyan') ? '#06b6d4' : '#e11d48';
+          ctx.fill();
+          ctx.stroke();
+
+          // Imagem do Avatar (resolução aprofundada com fallback para fichas de personagem, NPCs e campanhas)
+          const tokenUrl = resolveTokenAvatar(cell.tokenName, tokenCombatant);
+          let imageDrawn = false;
+          if (tokenUrl) {
+            let img = token2DImageCache.get(tokenUrl);
+            if (!img) {
+              img = new Image();
+              img.crossOrigin = 'anonymous';
+              img.onload = () => {
+                setImageCacheVersion((v) => v + 1);
+              };
+              img.onerror = () => {
+                // Keep fallback on load error
+              };
+              img.src = tokenUrl;
+              token2DImageCache.set(tokenUrl, img);
+            } else if (!img.complete && !img.onload) {
+              img.onload = () => {
+                setImageCacheVersion((v) => v + 1);
+              };
+            }
+
+            if (img.complete && img.naturalWidth > 0) {
+              ctx.save();
+              ctx.beginPath();
+              ctx.arc(tx, ty, tokenRadius - 2, 0, Math.PI * 2);
+              ctx.clip();
+              ctx.drawImage(img, tx - tokenRadius + 2, ty - tokenRadius + 2, (tokenRadius - 2) * 2, (tokenRadius - 2) * 2);
+              ctx.restore();
+              imageDrawn = true;
+            }
+          }
+
+          // Texto caso não tenha imagem
+          if (!imageDrawn) {
+            ctx.fillStyle = '#ffffff';
+            const fontSize = Math.floor(CELL_SIZE * (0.28 + (gridSquares - 1) * 0.1));
+            ctx.font = `bold ${fontSize}px monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(cell.tokenName, tx, ty);
+          }
+
+          // Badge de tamanho para criaturas grandes
+          if (gridSquares > 1) {
+            ctx.save();
+            const badgeText = `${sizeInfo.sizeLabel} (${gridSquares}x${gridSquares})`;
+            const badgeFontSize = Math.max(10, Math.floor(CELL_SIZE * 0.22));
+            ctx.font = `bold ${badgeFontSize}px Inter, sans-serif`;
+            const badgeW = ctx.measureText(badgeText).width + 8;
+            const badgeH = badgeFontSize + 4;
+            const badgeX = tx - badgeW / 2;
+            const badgeY = ty + tokenRadius - badgeH / 2;
+
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+            ctx.strokeStyle = cell.tokenColor?.includes('cyan') ? '#06b6d4' : '#e11d48';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(badgeText, tx, badgeY + badgeH / 2);
+            ctx.restore();
+          }
+
+          ctx.restore();
+        }
+      }
+    }
+
+    // 5. Preview de Arrasto Ativo
+    if (draggingItem) {
+      const targetCell = grid[draggingItem.currentR]?.[draggingItem.currentC];
+      const isBlocked = draggingItem.kind === 'token' && isCellBlockingVision(targetCell);
+
+      const targetX = (bgImage ? gridOffsetX : 0) + draggingItem.currentC * CELL_SIZE + CELL_SIZE / 2;
+      const targetY = (bgImage ? gridOffsetY : 0) + draggingItem.currentR * CELL_SIZE + CELL_SIZE / 2;
+      const startX = (bgImage ? gridOffsetX : 0) + draggingItem.startC * CELL_SIZE + CELL_SIZE / 2;
+      const startY = (bgImage ? gridOffsetY : 0) + draggingItem.startR * CELL_SIZE + CELL_SIZE / 2;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(targetX, targetY);
+      ctx.strokeStyle = isBlocked ? 'rgba(239, 68, 68, 0.8)' : (draggingItem.kind === 'poi' ? 'rgba(245, 158, 11, 0.85)' : 'rgba(56, 189, 248, 0.8)');
+      ctx.lineWidth = 2 / zoom;
+      ctx.setLineDash([5 / zoom, 5 / zoom]);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      const cellLeft = (bgImage ? gridOffsetX : 0) + draggingItem.currentC * CELL_SIZE;
+      const cellTop = (bgImage ? gridOffsetY : 0) + draggingItem.currentR * CELL_SIZE;
+      ctx.fillStyle = isBlocked ? 'rgba(239, 68, 68, 0.25)' : (draggingItem.kind === 'poi' ? 'rgba(245, 158, 11, 0.25)' : 'rgba(56, 189, 248, 0.2)');
+      ctx.fillRect(cellLeft, cellTop, CELL_SIZE, CELL_SIZE);
+      ctx.strokeStyle = isBlocked ? '#ef4444' : (draggingItem.kind === 'poi' ? '#f59e0b' : '#38bdf8');
+      ctx.lineWidth = 2 / zoom;
+      ctx.strokeRect(cellLeft, cellTop, CELL_SIZE, CELL_SIZE);
+      ctx.restore();
+
+      if (draggingItem.kind === 'token' && draggingItem.tokenName) {
+        ctx.save();
+        ctx.shadowColor = isBlocked ? '#ef4444' : '#38bdf8';
+        ctx.shadowBlur = 14 / zoom;
+        ctx.beginPath();
+        ctx.arc(targetX, targetY, (CELL_SIZE / 2) * 0.95, 0, Math.PI * 2);
+        ctx.fillStyle = draggingItem.tokenColor?.includes('cyan') ? '#06b6d4' : '#e11d48';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3 / zoom;
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      } else if (draggingItem.kind === 'poi' && draggingItem.poiCell) {
+        ctx.save();
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 12 / zoom;
+        drawPOIIcon(ctx, targetX, targetY, draggingItem.poiCell.type, zoom);
+        ctx.restore();
+      } else if (draggingItem.kind === 'light' && draggingItem.light) {
+        ctx.save();
+        ctx.shadowColor = draggingItem.light.color || '#ff9900';
+        ctx.shadowBlur = 16 / zoom;
+        drawLightSourceIcon(ctx, targetX, targetY, selectedLightPreset, zoom);
+        ctx.restore();
+      }
+    }
+
+    ctx.restore();
+  }, [
+    getViewportBounds, 
+    panOffset, 
+    zoom, 
+    grid, 
+    CELL_SIZE, 
+    ROWS, 
+    COLS, 
+    isPlayerView, 
+    vectorWalls, 
+    bgImage, 
+    gridOffsetX, 
+    gridOffsetY, 
+    lightSources, 
+    combatants, 
+    draggingItem, 
+    selectedLightPreset,
+    imageCacheVersion
+  ]);
+
+  useEffect(() => {
+    renderEntitiesLayer();
+  }, [renderEntitiesLayer]);
+
+  // =========================================================================
+  // CAMADA 4: DESENHOS LIVRES (CANVAS ISOLADO)
+  // =========================================================================
+  const renderDrawings = useCallback((liveStroke?: DrawingStroke | null) => {
+    const canvas = drawingCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { width, height } = getViewportBounds();
+    if (width <= 0 || height <= 0) return;
+
+    syncCanvasDimensions(canvas, width, height);
+    ctx.clearRect(0, 0, width, height);
+
+    ctx.save();
+    ctx.translate(panOffset.x, panOffset.y);
+    ctx.scale(zoom, zoom);
+
+    const drawSingleStroke = (stroke: DrawingStroke) => {
+      if (!stroke || !stroke.points || stroke.points.length === 0) return;
+      ctx.save();
+      ctx.strokeStyle = stroke.color || '#f59e0b';
+      ctx.lineWidth = Math.max(1.5, (stroke.lineWidth || 4) / zoom);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.fillStyle = stroke.color || '#f59e0b';
+
+      const pts = stroke.points;
+      if (stroke.tool === 'pencil') {
+        ctx.beginPath();
+        if (pts.length === 1) {
+          ctx.arc(pts[0].x, pts[0].y, Math.max(2, (stroke.lineWidth || 4) / 2 / zoom), 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.moveTo(pts[0].x, pts[0].y);
+          for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+          ctx.stroke();
+        }
+      } else if (stroke.tool === 'circle') {
+        ctx.beginPath();
+        const endPt = pts[1] || pts[0];
+        const dx = endPt.x - pts[0].x;
+        const dy = endPt.y - pts[0].y;
+        ctx.arc(pts[0].x, pts[0].y, Math.hypot(dx, dy) || 10 / zoom, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (stroke.tool === 'rect') {
+        ctx.beginPath();
+        const endPt = pts[1] || pts[0];
+        const rx = Math.min(pts[0].x, endPt.x);
+        const ry = Math.min(pts[0].y, endPt.y);
+        ctx.strokeRect(rx, ry, Math.abs(endPt.x - pts[0].x) || 2 / zoom, Math.abs(endPt.y - pts[0].y) || 2 / zoom);
+      } else if (stroke.tool === 'text') {
+        const fontSize = Math.max(12, 16 / zoom);
+        ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+        const text = stroke.text || '';
+        const metrics = ctx.measureText(text);
+        const pad = 4 / zoom;
+        ctx.fillStyle = 'rgba(10, 15, 26, 0.88)';
+        ctx.beginPath();
+        ctx.roundRect(pts[0].x - pad, pts[0].y - fontSize * 1.2 + pad, metrics.width + pad * 2, fontSize * 1.2 + pad, 4 / zoom);
+        ctx.fill();
+        ctx.fillStyle = stroke.color || '#f59e0b';
+        ctx.fillText(text, pts[0].x, pts[0].y);
+      }
+      ctx.restore();
+    };
+
+    if (drawings && drawings.length > 0) drawings.forEach(drawSingleStroke);
+    if (liveStroke) drawSingleStroke(liveStroke);
+
+    ctx.restore();
+  }, [getViewportBounds, panOffset, zoom, drawings]);
+
+  useEffect(() => {
+    renderDrawings(activeStrokeRef.current);
+  }, [renderDrawings]);
+
+  // =========================================================================
+  // CAMADA 5: INTERAÇÃO & HUD (RÉGUA ORTOGONAL, SELEÇÃO BOX, CALIBRAÇÃO)
+  // Roda a 60-120 FPS sem tocar nas hachuras nem nas luzes!
+  // =========================================================================
   const calculateSegmentDistance = (from: RulerPoint, to: RulerPoint) => {
     const deltaR = Math.abs(to.r - from.r);
     const deltaC = Math.abs(to.c - from.c);
-    // Strict Manhattan/Orthogonal distance (horizontal + vertical steps only, no diagonal cuts)
     const steps = deltaR + deltaC;
     const feet = steps * 5;
     const meters = parseFloat((feet * 0.3).toFixed(1));
@@ -411,16 +991,10 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   };
 
   const getOrthogonalPath = (from: RulerPoint, to: RulerPoint): RulerPoint[] => {
-    if (from.r === to.r || from.c === to.c) {
-      return [to];
-    }
-    // Decompose diagonal movement into an orthogonal L-shaped corner
+    if (from.r === to.r || from.c === to.c) return [to];
     const deltaR = Math.abs(to.r - from.r);
     const deltaC = Math.abs(to.c - from.c);
-    // If horizontal delta is larger or equal, move horizontal first, then vertical
-    const corner: RulerPoint = deltaC >= deltaR
-      ? { r: from.r, c: to.c }
-      : { r: to.r, c: from.c };
+    const corner: RulerPoint = deltaC >= deltaR ? { r: from.r, c: to.c } : { r: to.r, c: from.c };
     return [corner, to];
   };
 
@@ -453,1419 +1027,25 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       totalMeters += seg.meters;
     }
 
-    return {
-      activePoints,
-      segments,
-      totalSteps,
-      totalFeet,
-      totalMeters: parseFloat(totalMeters.toFixed(1)),
-    };
+    return { totalSteps, totalFeet, totalMeters: parseFloat(totalMeters.toFixed(1)), activePoints, segments };
   };
 
-  const handleFinishRuler = () => {
-    const currentPoints = rulerPointsRef.current;
-    
-    if (currentPoints.length === 0) return;
-
-    let finalPoints = [...currentPoints];
-    
-    // Only if there is only 1 point defined and user hasn't clicked/dragged a 2nd point yet
-    if (finalPoints.length === 1) {
-      const currentCursor = rulerCursorRef.current;
-      if (
-        currentCursor &&
-        (currentCursor.r !== finalPoints[0].r || currentCursor.c !== finalPoints[0].c)
-      ) {
-        const added = getOrthogonalPath(finalPoints[0], currentCursor);
-        finalPoints = [...finalPoints, ...added];
-      }
-    }
-
-    if (finalPoints.length < 2) {
-      toast.info('Selecione ao menos 2 pontos para medir a rota.');
-      return;
-    }
-
-    setRulerPoints(finalPoints);
-    setRulerStatus('completed');
-    setIsRulerDragging(false);
-
-    const summary = getRulerSummary(finalPoints, null, false);
-    setMeasuredDistance?.({ feet: summary.totalFeet, meters: summary.totalMeters });
-    toast.success(`Medição finalizada: ${summary.totalFeet}ft (${summary.totalMeters}m) • ${summary.totalSteps} casas`);
-  };
-
-  const handleUndoRulerPoint = () => {
-    if (rulerPointsRef.current.length > 1) {
-      const updated = rulerPointsRef.current.slice(0, -1);
-      setRulerPoints(updated);
-      if (rulerStatusRef.current === 'completed') {
-        setRulerStatus('measuring');
-      }
-      const summary = getRulerSummary(updated, null, false);
-      setMeasuredDistance?.({ feet: summary.totalFeet, meters: summary.totalMeters });
-    } else {
-      handleResetRuler();
-    }
-  };
-
-  const handleResetRuler = () => {
-    setRulerPoints([]);
-    setRulerCursor(null);
-    setRulerStatus('idle');
-    setIsRulerDragging(false);
-    rulerDragStartCell.current = null;
-    setMeasureStart?.(null);
-    setMeasuredDistance?.(null);
-  };
-
-  const handleExitRuler = () => {
-    handleResetRuler();
-    if (setSelectedTool) {
-      setSelectedTool('token');
-    }
-  };
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const container = containerRef.current;
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        if (width > 0 && height > 0) {
-          setCanvasSize({ width, height });
-        }
-      }
-    });
-    resizeObserver.observe(container);
-    
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
-
-      if (e.code === 'Space' && !e.repeat) {
-        if (selectedToolRef.current !== 'measure') {
-          e.preventDefault();
-          setIsSpacePressed(true);
-        }
-      }
-
-      if (selectedToolRef.current === 'measure') {
-        if (rulerStatusRef.current === 'measuring') {
-          if (e.key === 'Escape' || e.key === 'Enter' || e.code === 'Space') {
-            e.preventDefault();
-            handleFinishRuler();
-          } else if (e.key === 'Backspace' || e.key === 'Delete') {
-            e.preventDefault();
-            handleUndoRulerPoint();
-          }
-        } else if (rulerStatusRef.current === 'completed') {
-          if (e.key === 'Escape' || e.key === 'Enter' || e.code === 'Space') {
-            e.preventDefault();
-            handleExitRuler();
-          }
-        } else if (rulerStatusRef.current === 'idle') {
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            handleExitRuler();
-          }
-        }
-      }
-    };
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space') setIsSpacePressed(false);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, []);
-
-  // Track background image loading
-  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
-
-  // Track centering flag to only center once per load/scene reset
-  const centeredRef = useRef(false);
-
-  const fitAndCenterView = useCallback(() => {
-    if (!containerRef.current) return;
-    const containerRect = containerRef.current.getBoundingClientRect();
-    if (containerRect.width <= 0 || containerRect.height <= 0) return;
-
-    const padding = 36;
-    const availWidth = Math.max(100, containerRect.width - padding * 2);
-    const availHeight = Math.max(100, containerRect.height - padding * 2);
-
-    // 1. Background Image Map: Fit entire image bounds
-    if (bgImage && bgImage.width > 0 && bgImage.height > 0) {
-      const canvasWidth = bgImage.width;
-      const canvasHeight = bgImage.height;
-      const fitZoom = Math.max(0.04, Math.min(availWidth / canvasWidth, availHeight / canvasHeight, 1.5));
-
-      const panX = (containerRect.width - canvasWidth * fitZoom) / 2;
-      const panY = (containerRect.height - canvasHeight * fitZoom) / 2;
-
-      zoomRef.current = fitZoom;
-      panOffsetRef.current = { x: panX, y: panY };
-      setZoom(fitZoom);
-      setPanOffset({ x: panX, y: panY });
-      return;
-    }
-
-    // 2. Procedural / Grid Map: Find bounding box of carved cells & active elements
-    let minC = COLS;
-    let maxC = -1;
-    let minR = ROWS;
-    let maxR = -1;
-
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const cell = grid[r]?.[c];
-        if (cell && (cell.type !== 'wall' || cell.tokenName || cell.doorConfig || cell.trapConfig || cell.chestConfig || cell.transitionConfig)) {
-          if (c < minC) minC = c;
-          if (c > maxC) maxC = c;
-          if (r < minR) minR = r;
-          if (r > maxR) maxR = r;
-        }
-      }
-    }
-
-    let dungWidth = COLS * CELL_SIZE;
-    let dungHeight = ROWS * CELL_SIZE;
-    let dungCenterX = dungWidth / 2;
-    let dungCenterY = dungHeight / 2;
-
-    if (maxC >= minC && maxR >= minR) {
-      const padMinC = Math.max(0, minC - 1);
-      const padMaxC = Math.min(COLS - 1, maxC + 1);
-      const padMinR = Math.max(0, minR - 1);
-      const padMaxR = Math.min(ROWS - 1, maxR + 1);
-
-      dungWidth = (padMaxC - padMinC + 1) * CELL_SIZE;
-      dungHeight = (padMaxR - padMinR + 1) * CELL_SIZE;
-      dungCenterX = ((padMinC + padMaxC + 1) / 2) * CELL_SIZE;
-      dungCenterY = ((padMinR + padMaxR + 1) / 2) * CELL_SIZE;
-    }
-
-    const fitZoom = Math.max(0.04, Math.min(availWidth / dungWidth, availHeight / dungHeight, 1.5));
-    const panX = (containerRect.width / 2) - (dungCenterX * fitZoom);
-    const panY = (containerRect.height / 2) - (dungCenterY * fitZoom);
-
-    zoomRef.current = fitZoom;
-    panOffsetRef.current = { x: panX, y: panY };
-    setZoom(fitZoom);
-    setPanOffset({ x: panX, y: panY });
-  }, [grid, bgImage, COLS, ROWS, CELL_SIZE]);
-
-  useEffect(() => {
-    if (centeredRef.current) return;
-    if (bgImageUrl && !bgImage) return;
-
-    if (containerRef.current) {
-      fitAndCenterView();
-      centeredRef.current = true;
-    }
-  }, [bgImage, bgImageUrl, COLS, ROWS, CELL_SIZE, fitAndCenterView]);
-
-  // Reset centering flag ONLY when background URL, currentLevelId, or grid dimensions change
-  useEffect(() => {
-    centeredRef.current = false;
-  }, [bgImageUrl, currentLevelId, COLS, ROWS]);
-
-  useEffect(() => {
-    if (bgImageUrl) {
-      const img = new Image();
-      img.src = bgImageUrl;
-      img.onload = () => {
-        setBgImage(img);
-      };
-    } else {
-      const timer = setTimeout(() => {
-        setBgImage(null);
-      }, 0);
-      return () => clearTimeout(timer);
-    }
-  }, [bgImageUrl]);
-
-  // Dedicated Ultra-Fast Drawing Overlay Render (Zero-latency direct 2D canvas execution)
-  const renderDrawings = useCallback((liveStroke?: any) => {
-    const canvas = drawingCanvasRef.current;
+  const renderInteractionLayer = useCallback(() => {
+    const canvas = interactionCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
-    const container = containerRef.current;
-    if (!container) return;
-
-    const width = canvasSize.width || container.clientWidth;
-    const height = canvasSize.height || container.clientHeight;
+    const { width, height } = getViewportBounds();
     if (width <= 0 || height <= 0) return;
 
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
-    }
-
+    syncCanvasDimensions(canvas, width, height);
     ctx.clearRect(0, 0, width, height);
-
-    const currentPan = panOffsetRef.current;
-    const currentZoom = zoomRef.current;
-
-    ctx.save();
-    ctx.translate(currentPan.x, currentPan.y);
-    ctx.scale(currentZoom, currentZoom);
-
-    const drawSingleStroke = (stroke: any) => {
-      if (!stroke || !stroke.points || stroke.points.length === 0) return;
-      ctx.save();
-      ctx.strokeStyle = stroke.color || '#f59e0b';
-      ctx.lineWidth = Math.max(1.5, (stroke.lineWidth || 4) / currentZoom);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.fillStyle = stroke.color || '#f59e0b';
-
-      const pts = stroke.points;
-
-      if (stroke.tool === 'pencil') {
-        ctx.beginPath();
-        if (pts.length === 1) {
-          ctx.arc(pts[0].x, pts[0].y, Math.max(2, (stroke.lineWidth || 4) / 2 / currentZoom), 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          ctx.moveTo(pts[0].x, pts[0].y);
-          for (let i = 1; i < pts.length; i++) {
-            ctx.lineTo(pts[i].x, pts[i].y);
-          }
-          ctx.stroke();
-        }
-      } else if (stroke.tool === 'circle') {
-        ctx.beginPath();
-        const endPt = pts[1] || pts[0];
-        const dx = endPt.x - pts[0].x;
-        const dy = endPt.y - pts[0].y;
-        const radius = Math.sqrt(dx * dx + dy * dy);
-        ctx.arc(pts[0].x, pts[0].y, radius > 0 ? radius : 10 / currentZoom, 0, Math.PI * 2);
-        ctx.stroke();
-      } else if (stroke.tool === 'rect') {
-        ctx.beginPath();
-        const endPt = pts[1] || pts[0];
-        const rx = Math.min(pts[0].x, endPt.x);
-        const ry = Math.min(pts[0].y, endPt.y);
-        const rw = Math.abs(endPt.x - pts[0].x);
-        const rh = Math.abs(endPt.y - pts[0].y);
-        ctx.strokeRect(rx, ry, Math.max(2 / currentZoom, rw), Math.max(2 / currentZoom, rh));
-      } else if (stroke.tool === 'text') {
-        const fontSize = Math.max(12, 16 / currentZoom);
-        ctx.font = `bold ${fontSize}px Inter, sans-serif`;
-        const text = stroke.text || '';
-        const metrics = ctx.measureText(text);
-        const textW = metrics.width;
-        const textH = fontSize * 1.2;
-        const pad = 4 / currentZoom;
-
-        // Dark background pill with border for high readability
-        ctx.fillStyle = 'rgba(10, 15, 26, 0.88)';
-        ctx.beginPath();
-        ctx.roundRect(pts[0].x - pad, pts[0].y - textH + pad, textW + pad * 2, textH + pad, 4 / currentZoom);
-        ctx.fill();
-        ctx.strokeStyle = stroke.color || '#f59e0b';
-        ctx.lineWidth = 1 / currentZoom;
-        ctx.stroke();
-
-        // Text fill
-        ctx.fillStyle = stroke.color || '#f59e0b';
-        ctx.textBaseline = 'alphabetic';
-        ctx.fillText(text, pts[0].x, pts[0].y);
-      }
-      ctx.restore();
-    };
-
-    if (drawings && drawings.length > 0) {
-      drawings.forEach(drawSingleStroke);
-    }
-    if (liveStroke) {
-      drawSingleStroke(liveStroke);
-    }
-
-    ctx.restore();
-  }, [drawings, canvasSize]);
-
-  // Synchronize drawings overlay on drawings update, pan, or zoom
-  useEffect(() => {
-    renderDrawings(activeStrokeRef.current);
-  }, [renderDrawings, zoom, panOffset]);
-
-  // Main render loop
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Set canvas dimensions
-    const container = containerRef.current;
-    if (!container) return;
-    
-    const width = canvasSize.width || container.clientWidth;
-    const height = canvasSize.height || container.clientHeight;
-
-    // Guard: skip rendering if container has no dimensions yet (e.g. modal not fully mounted)
-    if (width <= 0 || height <= 0) return;
-    
-    // Support dynamic resizing of canvas
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
-    }
-
-    ctx.clearRect(0, 0, width, height);
-
-    // Viewport Bounding Box Calculation for Culling
-    const localLeft = -panOffset.x / zoom;
-    const localRight = (-panOffset.x + width) / zoom;
-    const localTop = -panOffset.y / zoom;
-    const localBottom = (-panOffset.y + height) / zoom;
-
-    const startCol = Math.max(0, Math.floor((localLeft - (bgImage ? gridOffsetX : 0)) / CELL_SIZE) - 1);
-    const endCol = Math.min(COLS - 1, Math.ceil((localRight - (bgImage ? gridOffsetX : 0)) / CELL_SIZE) + 1);
-    const startRow = Math.max(0, Math.floor((localTop - (bgImage ? gridOffsetY : 0)) / CELL_SIZE) - 1);
-    const endRow = Math.min(ROWS - 1, Math.ceil((localBottom - (bgImage ? gridOffsetY : 0)) / CELL_SIZE) + 1);
-
-    ctx.save();
-    
-    // 1. Draw Map Background (Procedural Dyson or Custom Image)
-    if (bgImage) {
-      ctx.fillStyle = '#0a0d14';
-      ctx.fillRect(0, 0, width, height);
-      ctx.translate(panOffset.x, panOffset.y);
-      ctx.scale(zoom, zoom);
-      // Draw uploaded background image
-      ctx.drawImage(bgImage, 0, 0, bgImage.width, bgImage.height);
-    } else {
-      // Render Dyson parchment paper color (Infinite)
-      ctx.fillStyle = '#fbf9f3';
-      ctx.fillRect(0, 0, width, height);
-      ctx.translate(panOffset.x, panOffset.y);
-      ctx.scale(zoom, zoom);
-
-      // Use memoized distance transform for Dyson wall crosshatch rendering
-
-      // Draw Dyson Wall Hachures (Culled)
-      for (let r = startRow; r <= endRow; r++) {
-        for (let c = startCol; c <= endCol; c++) {
-          if (grid[r]?.[c]?.type === 'wall' && distMap[r][c] > 0) {
-            drawDysonCrosshatch(ctx, c, r, CELL_SIZE, distMap[r][c]);
-          }
-        }
-      }
-      // Draw specialized procedural terrains (Culled)
-      for (let r = startRow; r <= endRow; r++) {
-        for (let c = startCol; c <= endCol; c++) {
-          const cell = grid[r]?.[c];
-          if (!cell) continue;
-
-          let type = cell.type;
-          
-          // Camuflagem de portas secretas para jogadores
-          if (type === 'door' && cell.doorConfig?.doorType === 'secret' && isPlayerView && !cell.doorConfig?.secretRevealed) {
-            type = 'wall';
-          }
-          // Camuflagem de armadilhas para jogadores
-          if (type === 'trap' && isPlayerView && !cell.trapConfig?.revealedToPlayers) {
-            type = 'floor';
-          }
-          // Camuflagem de esconderijos secretos (stash) para jogadores
-          if (type === 'stash' && isPlayerView && !cell.chestConfig?.revealedToPlayers) {
-            type = 'floor';
-          }
-          // Camuflagem de gatilhos secretos para jogadores
-          if (type === 'trigger' && isPlayerView && cell.triggerConfig?.isSecret && !cell.triggerConfig?.revealedToPlayers) {
-            type = 'floor';
-          }
-          // Camuflagem de parede ilusória para jogadores (falsa parede)
-          if (type === 'illusion_wall' && isPlayerView && !cell.illusionWallConfig?.revealedToPlayers) {
-            type = 'wall';
-          }
-
-          if (type && type !== 'wall') {
-            const x = c * CELL_SIZE;
-            const y = r * CELL_SIZE;
-
-            // Limpa o fundo de rocha
-            ctx.fillStyle = '#fbf9f3';
-            ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
-
-            if (type === 'water') {
-              drawWaterHachure(ctx, c, r, CELL_SIZE);
-            } else if (type === 'grass') {
-              drawGrassHachure(ctx, c, r, CELL_SIZE);
-            } else if (type === 'trap') {
-              drawTrapHachure(ctx, c, r, CELL_SIZE);
-            } else if (type === 'chest') {
-              const containerType = (isPlayerView && cell.chestConfig?.containerType === 'mimic' && !cell.chestConfig?.revealedToPlayers)
-                ? 'wooden_chest'
-                : (cell.chestConfig?.containerType || 'wooden_chest');
-              const status = cell.chestConfig?.status || 'locked';
-              drawChestHachure(ctx, c, r, CELL_SIZE, containerType, status);
-            } else if (type === 'stash') {
-              drawStashHachure(ctx, c, r, CELL_SIZE);
-            } else if (type === 'portcullis') {
-              const status = cell.portcullisConfig?.status || 'closed';
-              drawPortcullisHachure(ctx, c, r, CELL_SIZE, status);
-            } else if (type === 'trigger') {
-              const triggerType = cell.triggerConfig?.triggerType || 'lever';
-              const state = cell.triggerConfig?.state || 'inactive';
-              drawTriggerHachure(ctx, c, r, CELL_SIZE, triggerType, state);
-            } else if (type === 'illusion_wall') {
-              const revealed = cell.illusionWallConfig?.revealedToPlayers || false;
-              drawIllusionWallHachure(ctx, c, r, CELL_SIZE, isPlayerView, revealed);
-            } else {
-              // Terreno normal: grid lines
-              ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
-              drawWobblyLine(ctx, x, y, x + CELL_SIZE, y, 0.8, r * 1000 + c);
-              drawWobblyLine(ctx, x, y, x, y + CELL_SIZE, 0.8, r * 2000 + c);
-            }
-          }
-        }
-      }
-
-      // Draw wall borders (wobbly ink pen lines - Culled)
-      ctx.strokeStyle = '#1a1a1a';
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      for (let r = startRow; r <= endRow; r++) {
-        for (let c = startCol; c <= endCol; c++) {
-          const cell = grid[r]?.[c];
-          if (!cell) continue;
-
-          let type = cell.type;
-          if (type === 'door' && cell.doorConfig?.doorType === 'secret' && isPlayerView && !cell.doorConfig?.secretRevealed) {
-            type = 'wall';
-          }
-          if (type === 'trap' && isPlayerView && !cell.trapConfig?.revealedToPlayers) {
-            type = 'floor';
-          }
-          if (type === 'stash' && isPlayerView && !cell.chestConfig?.revealedToPlayers) {
-            type = 'floor';
-          }
-
-          if (type && type !== 'wall') {
-            const x = c * CELL_SIZE;
-            const y = r * CELL_SIZE;
-            const WALL_THICKNESS = 3.2;
-
-            if (r === 0 || grid[r - 1]?.[c]?.type === 'wall' || (grid[r - 1]?.[c]?.type === 'door' && grid[r - 1]?.[c]?.doorConfig?.doorType === 'secret' && isPlayerView && !grid[r - 1]?.[c]?.doorConfig?.secretRevealed)) {
-              drawWobblyLine(ctx, x, y, x + CELL_SIZE, y, WALL_THICKNESS, (r * c) + 1);
-            }
-            if (r === ROWS - 1 || grid[r + 1]?.[c]?.type === 'wall' || (grid[r + 1]?.[c]?.type === 'door' && grid[r + 1]?.[c]?.doorConfig?.doorType === 'secret' && isPlayerView && !grid[r + 1]?.[c]?.doorConfig?.secretRevealed)) {
-              drawWobblyLine(ctx, x, y + CELL_SIZE, x + CELL_SIZE, y + CELL_SIZE, WALL_THICKNESS, (r * c) + 2);
-            }
-            if (c === 0 || grid[r]?.[c - 1]?.type === 'wall' || (grid[r]?.[c - 1]?.type === 'door' && grid[r]?.[c - 1]?.doorConfig?.doorType === 'secret' && isPlayerView && !grid[r]?.[c - 1]?.doorConfig?.secretRevealed)) {
-              drawWobblyLine(ctx, x, y, x, y + CELL_SIZE, WALL_THICKNESS, (r * c) + 3);
-            }
-            if (c === COLS - 1 || grid[r]?.[c + 1]?.type === 'wall' || (grid[r]?.[c + 1]?.type === 'door' && grid[r]?.[c + 1]?.doorConfig?.doorType === 'secret' && isPlayerView && !grid[r]?.[c + 1]?.doorConfig?.secretRevealed)) {
-              drawWobblyLine(ctx, x + CELL_SIZE, y, x + CELL_SIZE, y + CELL_SIZE, WALL_THICKNESS, (r * c) + 4);
-            }
-          }
-        }
-      }
-
-      // Draw doors, traps, chests and stashes (Culled)
-      for (let r = startRow; r <= endRow; r++) {
-        for (let c = startCol; c <= endCol; c++) {
-          const cell = grid[r]?.[c];
-          if (!cell) continue;
-
-          if (cell.type === 'door') {
-            const config = cell.doorConfig;
-            const isSecret = config?.doorType === 'secret';
-            if (isPlayerView && isSecret && !config?.secretRevealed) {
-              continue;
-            }
-
-            const x = c * CELL_SIZE + CELL_SIZE / 2;
-            const y = r * CELL_SIZE + CELL_SIZE / 2;
-
-            drawPOIIcon(ctx, x, y, 'door', zoom);
-          } else if (cell.type === 'trap') {
-            const config = cell.trapConfig;
-            const isHidden = !config?.revealedToPlayers;
-            
-            if (isPlayerView && isHidden) {
-              continue;
-            }
-
-            const x = c * CELL_SIZE + CELL_SIZE / 2;
-            const y = r * CELL_SIZE + CELL_SIZE / 2;
-
-            drawPOIIcon(ctx, x, y, 'trap', zoom);
-          } else if (cell.type === 'chest') {
-            const config = cell.chestConfig;
-            const x = c * CELL_SIZE + CELL_SIZE / 2;
-            const y = r * CELL_SIZE + CELL_SIZE / 2;
-
-            drawPOIIcon(ctx, x, y, 'chest', zoom);
-          } else if (cell.type === 'stash') {
-            const config = cell.chestConfig;
-            const isHidden = !config?.revealedToPlayers;
-
-            if (isPlayerView && isHidden) {
-              continue;
-            }
-
-            const x = c * CELL_SIZE + CELL_SIZE / 2;
-            const y = r * CELL_SIZE + CELL_SIZE / 2;
-
-            drawStashIcon(ctx, x, y, config?.status === 'looted', zoom);
-          } else if (cell.type === 'transition') {
-            const config = cell.transitionConfig;
-            const x = c * CELL_SIZE + CELL_SIZE / 2;
-            const y = r * CELL_SIZE + CELL_SIZE / 2;
-
-            const tType = config?.type || 'stairs_down';
-            drawTransitionIcon(ctx, x, y, tType, config?.name, zoom);
-          }
-        }
-      }
-    }
-
-    // 1.5 Render Light Sources (Glow Halos & Hand-Drawn Icons)
-    if (lightSources && lightSources.length > 0) {
-      const now = Date.now();
-      for (const light of lightSources) {
-        if (light.x === undefined || light.y === undefined) continue;
-
-        // Normalize coordinates: if x/y were passed in grid cell units (e.g. 10.5), convert to pixels
-        const lx = light.x < 150 ? light.x * CELL_SIZE : light.x;
-        const ly = light.y < 150 ? light.y * CELL_SIZE : light.y;
-        const colorHex = light.color || '#ff9900';
-
-        // 1. Radial Glowing Light Halo (Only when lighting is enabled)
-        if (renderLighting) {
-          const dimFt = light.dimRadius || 40;
-          let dimRadiusPx = Math.max(20, (dimFt / 5) * CELL_SIZE);
-
-          // Dynamic Flicker / Pulse animation effect
-          let alphaMultiplier = 1.0;
-          if (light.animation === 'torch' || light.animation === 'candle') {
-            const flicker = (Math.sin(now / 150 + lx * 0.05) + Math.cos(now / 200 + ly * 0.05)) * 0.08;
-            dimRadiusPx *= (1 + flicker);
-            alphaMultiplier += flicker;
-          } else if (light.animation === 'pulse') {
-            const pulse = Math.sin(now / 400) * 0.12;
-            dimRadiusPx *= (1 + pulse);
-          }
-
-          ctx.save();
-          const radGrad = ctx.createRadialGradient(lx, ly, 0, lx, ly, dimRadiusPx);
-          radGrad.addColorStop(0, hexToRgba(colorHex, 0.55 * alphaMultiplier));
-          radGrad.addColorStop(0.35, hexToRgba(colorHex, 0.22 * alphaMultiplier));
-          radGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-          ctx.fillStyle = radGrad;
-          ctx.beginPath();
-          ctx.arc(lx, ly, dimRadiusPx, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-        }
-
-        // 2. Determine Preset Type for hand-drawn icon
-        let preset: 'torch' | 'candle' | 'lantern' | 'spell' | 'dragon' = 'torch';
-        if (light.animation === 'candle' || colorHex.toLowerCase() === '#ffaa33') preset = 'candle';
-        else if (light.animation === 'none' || colorHex.toLowerCase() === '#ffee77') preset = 'lantern';
-        else if (light.animation === 'pulse' || colorHex.toLowerCase() === '#ff4400') preset = 'dragon';
-        else if (light.animation === 'chroma' || colorHex.toLowerCase() === '#00ccff') preset = 'spell';
-
-        // 3. Hand-Drawn Icon on Canvas
-        drawLightSourceIcon(ctx, lx, ly, preset, zoom);
-      }
-    }
-
-    // 2. Draw Custom Grid Lines (Overlay - Culled)
-    if (bgImage) {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.lineWidth = 1.0;
-      // Verticals
-      for (let c = startCol; c <= endCol + 1; c++) {
-        const x = gridOffsetX + c * CELL_SIZE;
-        ctx.beginPath();
-        ctx.moveTo(x, Math.max(0, gridOffsetY + startRow * CELL_SIZE));
-        ctx.lineTo(x, Math.min(height, gridOffsetY + (endRow + 1) * CELL_SIZE));
-        ctx.stroke();
-      }
-      // Horizontals
-      for (let r = startRow; r <= endRow + 1; r++) {
-        const y = gridOffsetY + r * CELL_SIZE;
-        ctx.beginPath();
-        ctx.moveTo(Math.max(0, gridOffsetX + startCol * CELL_SIZE), y);
-        ctx.lineTo(Math.min(width, gridOffsetX + (endCol + 1) * CELL_SIZE), y);
-        ctx.stroke();
-      }
-    }
-
-    ctx.restore(); // Restore to screen space for mask
-
-    // 2.5 Collect Active Player Tokens for LOS and Lighting Checks
-    const playerTokens: { r: number; c: number; radius: number }[] = [];
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        if (grid[r]?.[c]?.tokenName) {
-          const tokenNameClean = grid[r][c].tokenName!.trim().toLowerCase();
-          const isPlayerToken = grid[r][c].tokenColor?.includes('cyan') || 
-                                grid[r][c].tokenColor?.includes('emerald') || 
-                                grid[r][c].tokenColor?.includes('green') || 
-                                grid[r][c].tokenColor?.includes('blue') ||
-                                combatants?.some((comb: Combatant) => {
-                                  if (comb.type !== 'player') return false;
-                                  const cName = comb.name.trim().toLowerCase();
-                                  return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
-                                });
-          if (isPlayerToken) {
-            playerTokens.push({
-              r,
-              c,
-              radius: getTokenVisionRadius(grid[r][c].tokenName, combatants)
-            });
-          }
-        }
-      }
-    }
-
-    // 3. Draw Fog of War & Vision Circles (Destination Out - Culled - Only when renderFog is enabled)
-    if (renderFog) {
-      if (!offscreenMaskRef.current) {
-        offscreenMaskRef.current = document.createElement('canvas');
-      }
-      const maskCanvas = offscreenMaskRef.current;
-      if (maskCanvas.width !== width || maskCanvas.height !== height) {
-        maskCanvas.width = width;
-        maskCanvas.height = height;
-      }
-      const maskCtx = maskCanvas.getContext('2d');
-
-      if (maskCtx) {
-        // Reset transform before clearing to avoid cumulative scaling/translating issues on reuse
-        maskCtx.setTransform(1, 0, 0, 1, 0, 0);
-        
-        // Reset composite operation to default drawing mode (essential since destination-out persists)
-        maskCtx.globalCompositeOperation = 'source-over';
-        
-        // Clear mask canvas (starts fully transparent)
-        maskCtx.clearRect(0, 0, width, height);
-
-        // 1. Fill entire viewport with dark fog (Opaque for players, semi-transparent for DM) in screen space
-        maskCtx.fillStyle = isPlayerView ? 'rgba(8, 8, 12, 0.98)' : 'rgba(8, 8, 12, 0.45)';
-        maskCtx.fillRect(0, 0, width, height);
-
-        // Now translate and scale to world coordinates for carving visibility
-        maskCtx.translate(panOffset.x, panOffset.y);
-        maskCtx.scale(zoom, zoom);
-
-        // Use destination-out to carve visibility out of the dark fog
-        maskCtx.globalCompositeOperation = 'destination-out';
-
-        // Soft smoky blur filter for organic misty fog edges
-        maskCtx.filter = 'blur(6px)';
-
-        // 2. Cut out explored areas (soft rounded blending so it feels smoky, not grid-locked)
-        maskCtx.fillStyle = 'rgba(0, 0, 0, 1)';
-        for (let r = startRow; r <= endRow; r++) {
-          for (let c = startCol; c <= endCol; c++) {
-            if (grid[r]?.[c] && !grid[r][c].fog) {
-              const cx = bgImage ? gridOffsetX + c * CELL_SIZE + CELL_SIZE / 2 : c * CELL_SIZE + CELL_SIZE / 2;
-              const cy = bgImage ? gridOffsetY + r * CELL_SIZE + CELL_SIZE / 2 : r * CELL_SIZE + CELL_SIZE / 2;
-              maskCtx.beginPath();
-              maskCtx.arc(cx, cy, CELL_SIZE * 0.72, 0, Math.PI * 2);
-              maskCtx.fill();
-            }
-          }
-        }
-
-        // 3. Current token active vision (uses memoized tokenVisionPolygons - only if renderVision enabled)
-        if (renderVision) {
-          tokenVisionPolygons.forEach(({ tx, ty, visionRadius, polyPoints, visionType }) => {
-            if (polyPoints.length > 0) {
-              maskCtx.save();
-              maskCtx.beginPath();
-              maskCtx.moveTo(polyPoints[0].x, polyPoints[0].y);
-              for (let p = 1; p < polyPoints.length; p++) {
-                maskCtx.lineTo(polyPoints[p].x, polyPoints[p].y);
-              }
-              maskCtx.closePath();
-
-              const grad = maskCtx.createRadialGradient(tx, ty, CELL_SIZE * 0.5, tx, ty, visionRadius);
-              if (visionType === 'darkvision') {
-                // Greyscale / Desaturated spotlight for Darkvision
-                grad.addColorStop(0.0, 'rgba(0, 0, 0, 0.95)');
-                grad.addColorStop(0.65, 'rgba(0, 0, 0, 0.75)');
-                grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
-              } else {
-                grad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
-                grad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)');
-                grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
-              }
-
-              maskCtx.fillStyle = grad;
-              maskCtx.fill();
-              maskCtx.restore();
-            }
-          });
-        }
-
-        // Render standalone LightSources on fog mask (uses memoized lightPolygons - only if renderLighting enabled)
-        if (renderLighting) {
-          lightPolygons.forEach(({ lx, ly, lRadius, polyPoints, isVisible }) => {
-            if (!isVisible || polyPoints.length === 0) return;
-
-            maskCtx.save();
-            maskCtx.beginPath();
-            maskCtx.moveTo(polyPoints[0].x, polyPoints[0].y);
-            for (let p = 1; p < polyPoints.length; p++) {
-              maskCtx.lineTo(polyPoints[p].x, polyPoints[p].y);
-            }
-            maskCtx.closePath();
-
-            const fogGrad = maskCtx.createRadialGradient(lx, ly, 5, lx, ly, lRadius);
-            fogGrad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
-            fogGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.85)');
-            fogGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
-
-            maskCtx.fillStyle = fogGrad;
-            maskCtx.fill();
-            maskCtx.restore();
-          });
-        }
-
-        // Reset filter
-        maskCtx.filter = 'none';
-
-        // Draw the computed fog mask back onto the main canvas
-        ctx.drawImage(maskCanvas, 0, 0);
-      }
-    }
 
     ctx.save();
     ctx.translate(panOffset.x, panOffset.y);
     ctx.scale(zoom, zoom);
 
-    // 3.B. Render Colored Ambient Light Glow on Main Canvas (uses memoized lightPolygons - only if renderLighting enabled)
-    if (renderLighting) {
-      lightPolygons.forEach(({ light, lx, ly, lRadius, polyPoints, isVisible }) => {
-        if (!isVisible || polyPoints.length === 0) return;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(polyPoints[0].x, polyPoints[0].y);
-        for (let p = 1; p < polyPoints.length; p++) {
-          ctx.lineTo(polyPoints[p].x, polyPoints[p].y);
-        }
-        ctx.closePath();
-
-        const lightColor = light.color || '#ffaa33';
-        const grad = ctx.createRadialGradient(lx, ly, 5, lx, ly, lRadius);
-        grad.addColorStop(0.0, lightColor);
-        grad.addColorStop(0.5, lightColor.startsWith('#') ? `${lightColor}66` : 'rgba(255, 170, 51, 0.4)');
-        grad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
-
-        ctx.fillStyle = grad;
-        ctx.globalCompositeOperation = 'screen';
-        ctx.fill();
-        ctx.restore();
-      });
-    }
-
-    // 4. Draw Tokens (Characters)
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const cell = grid[r]?.[c];
-        if (cell && cell.tokenName) {
-          const tokenNameClean = cell.tokenName.trim().toLowerCase();
-          const isPlayerToken = cell.tokenColor?.includes('cyan') || 
-                                cell.tokenColor?.includes('emerald') || 
-                                cell.tokenColor?.includes('green') || 
-                                cell.tokenColor?.includes('blue') ||
-                                combatants?.some((comb: Combatant) => {
-                                  if (comb.type !== 'player') return false;
-                                  const cName = comb.name.trim().toLowerCase();
-                                  return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
-                                });
-
-          // Hide tokens from players if not within active line of sight / explored areas
-          if (isPlayerView) {
-            if (isPlayerToken) {
-              if (cell.fog) continue;
-            } else {
-              if (!isCellVisibleToPlayers(c, r)) continue;
-            }
-          }
-
-          const tokenCombatant = combatants?.find(comb => {
-            const cName = comb.name.trim().toLowerCase();
-            return cName === tokenNameClean || cName.startsWith(tokenNameClean) || tokenNameClean.startsWith(cName.slice(0, 3));
-          });
-
-          const sizeInfo = getCreatureGridSize(tokenCombatant?.size);
-          const gridSquares = sizeInfo.gridSquares;
-          const tokenDiameter = gridSquares * CELL_SIZE;
-          const tokenRadius = (tokenDiameter / 2) * 0.88;
-
-          const tx = (bgImage ? gridOffsetX : 0) + c * CELL_SIZE + tokenDiameter / 2;
-          const ty = (bgImage ? gridOffsetY : 0) + r * CELL_SIZE + tokenDiameter / 2;
-
-          const isBeingDragged = Boolean(draggingToken && draggingToken.name === cell.tokenName && r === draggingToken.startR && c === draggingToken.startC);
-
-          // 4.A.0. Render Dynamic 2D Token Auras Underneath
-          if (tokenCombatant?.auras && tokenCombatant.auras.length > 0) {
-            tokenCombatant.auras.forEach((aura) => {
-              if (!aura.enabled) return;
-              const auraGridRadius = (aura.radiusFt / 5) * CELL_SIZE;
-              const auraColor = aura.visual.colorHex || '#facc15';
-
-              ctx.save();
-              ctx.beginPath();
-              ctx.arc(tx, ty, auraGridRadius, 0, Math.PI * 2);
-              ctx.fillStyle = hexToRgba(auraColor, aura.visual.opacity || 0.2);
-              ctx.fill();
-
-              ctx.strokeStyle = auraColor;
-              ctx.lineWidth = aura.visual.borderStyle === 'dashed' ? 2 : 1.5;
-              if (aura.visual.borderStyle === 'dashed') {
-                ctx.setLineDash([6, 4]);
-              }
-              ctx.stroke();
-
-              // Label on edge
-              ctx.font = 'bold 9px Inter, sans-serif';
-              ctx.fillStyle = auraColor;
-              ctx.textAlign = 'center';
-              ctx.fillText(`${aura.name}`, tx, ty - auraGridRadius - 3);
-              ctx.restore();
-            });
-          }
-
-          // Token border & base fill
-          ctx.save();
-          if (isBeingDragged) {
-            ctx.globalAlpha = 0.35;
-          }
-          ctx.beginPath();
-          ctx.arc(tx, ty, tokenRadius, 0, Math.PI * 2);
-          ctx.lineWidth = Math.max(3, 3 + (gridSquares - 1) * 1.5);
-          ctx.strokeStyle = '#020617';
-          ctx.fillStyle = cell.tokenColor?.includes('cyan') ? '#06b6d4' : '#e11d48';
-          ctx.fill();
-          ctx.stroke();
-
-          // Token Image (if present on combatant)
-          const tokenUrl = tokenCombatant?.tokenImageUrl || tokenCombatant?.avatarUrl;
-          let imageDrawn = false;
-          if (tokenUrl) {
-            let img = token2DImageCache.get(tokenUrl);
-            if (!img) {
-              img = new Image();
-              img.src = tokenUrl;
-              token2DImageCache.set(tokenUrl, img);
-            }
-            if (img.complete && img.naturalWidth > 0) {
-              ctx.save();
-              ctx.beginPath();
-              ctx.arc(tx, ty, tokenRadius - 2, 0, Math.PI * 2);
-              ctx.clip();
-              ctx.drawImage(img, tx - tokenRadius + 2, ty - tokenRadius + 2, (tokenRadius - 2) * 2, (tokenRadius - 2) * 2);
-              ctx.restore();
-              imageDrawn = true;
-            }
-          }
-
-          // Token text initials/name if no image loaded
-          if (!imageDrawn) {
-            ctx.fillStyle = '#ffffff';
-            const fontSize = Math.floor(CELL_SIZE * (0.28 + (gridSquares - 1) * 0.1));
-            ctx.font = `bold ${fontSize}px monospace`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(cell.tokenName, tx, ty);
-          }
-
-          // Size Badge for Multi-tile Creatures (e.g. [Grande 2x2], [Enorme 3x3])
-          if (gridSquares > 1) {
-            ctx.save();
-            const badgeText = `${sizeInfo.sizeLabel} (${gridSquares}x${gridSquares})`;
-            const badgeFontSize = Math.max(10, Math.floor(CELL_SIZE * 0.22));
-            ctx.font = `bold ${badgeFontSize}px Inter, sans-serif`;
-            const badgeW = ctx.measureText(badgeText).width + 8;
-            const badgeH = badgeFontSize + 4;
-            const badgeX = tx - badgeW / 2;
-            const badgeY = ty + tokenRadius - badgeH / 2;
-
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-            ctx.strokeStyle = cell.tokenColor?.includes('cyan') ? '#06b6d4' : '#e11d48';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
-            ctx.fill();
-            ctx.stroke();
-
-            ctx.fillStyle = '#ffffff';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(badgeText, tx, badgeY + badgeH / 2);
-            ctx.restore();
-          }
-
-          // Tremorsense sonar rings
-          if (tokenCombatant?.visionType === 'tremorsense') {
-            const ringCount = 3;
-            const time = Date.now() * 0.001;
-            ctx.save();
-            ctx.strokeStyle = 'rgba(6, 182, 212, 0.4)';
-            for (let i = 0; i < ringCount; i++) {
-              const phase = (time + i / ringCount) % 1;
-              const radius = tokenRadius + (CELL_SIZE * 3 * phase);
-              const alpha = (1 - phase) * 0.5;
-              ctx.beginPath();
-              ctx.arc(tx, ty, radius, 0, Math.PI * 2);
-              ctx.strokeStyle = `rgba(6, 182, 212, ${alpha})`;
-              ctx.lineWidth = 2 * (1 - phase);
-              ctx.stroke();
-            }
-            ctx.restore();
-          }
-
-          // Active indicator pulse
-          ctx.save();
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(tx, ty, tokenRadius * 1.06, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.restore();
-
-          ctx.restore();
-        }
-      }
-    }
-
-    // 4.A.2. Live High-Performance Dragging Preview Overlay (Tokens, POIs, Light Sources)
-    if (draggingItem) {
-      const targetCell = grid[draggingItem.currentR]?.[draggingItem.currentC];
-      const isBlocked = draggingItem.kind === 'token' && isCellBlockingVision(targetCell);
-
-      const targetX = (bgImage ? gridOffsetX : 0) + draggingItem.currentC * CELL_SIZE + CELL_SIZE / 2;
-      const targetY = (bgImage ? gridOffsetY : 0) + draggingItem.currentR * CELL_SIZE + CELL_SIZE / 2;
-      const startX = (bgImage ? gridOffsetX : 0) + draggingItem.startC * CELL_SIZE + CELL_SIZE / 2;
-      const startY = (bgImage ? gridOffsetY : 0) + draggingItem.startR * CELL_SIZE + CELL_SIZE / 2;
-
-      // Draw dashed motion vector trajectory
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(startX, startY);
-      ctx.lineTo(targetX, targetY);
-      ctx.strokeStyle = isBlocked ? 'rgba(239, 68, 68, 0.8)' : (draggingItem.kind === 'poi' ? 'rgba(245, 158, 11, 0.85)' : 'rgba(56, 189, 248, 0.8)');
-      ctx.lineWidth = 2 / zoom;
-      ctx.setLineDash([5 / zoom, 5 / zoom]);
-      ctx.stroke();
-      ctx.restore();
-
-      // Draw target cell bounding box
-      ctx.save();
-      const cellLeft = (bgImage ? gridOffsetX : 0) + draggingItem.currentC * CELL_SIZE;
-      const cellTop = (bgImage ? gridOffsetY : 0) + draggingItem.currentR * CELL_SIZE;
-      ctx.fillStyle = isBlocked ? 'rgba(239, 68, 68, 0.25)' : (draggingItem.kind === 'poi' ? 'rgba(245, 158, 11, 0.25)' : 'rgba(56, 189, 248, 0.2)');
-      ctx.fillRect(cellLeft, cellTop, CELL_SIZE, CELL_SIZE);
-      ctx.strokeStyle = isBlocked ? '#ef4444' : (draggingItem.kind === 'poi' ? '#f59e0b' : '#38bdf8');
-      ctx.lineWidth = 2 / zoom;
-      ctx.strokeRect(cellLeft, cellTop, CELL_SIZE, CELL_SIZE);
-      ctx.restore();
-
-      if (draggingItem.kind === 'token' && draggingItem.tokenName) {
-        const isPlayerToken = draggingItem.tokenColor?.includes('cyan') || draggingItem.tokenColor?.includes('emerald');
-        const tokenCombatant = combatants?.find(comb => {
-          const cName = comb.name.trim().toLowerCase();
-          const dName = draggingItem.tokenName!.trim().toLowerCase();
-          return cName === dName || cName.startsWith(dName) || dName.startsWith(cName.slice(0, 3));
-        });
-        const sizeInfo = getCreatureGridSize(tokenCombatant?.size);
-        const gridSquares = sizeInfo.gridSquares;
-        const tokenDiameter = gridSquares * CELL_SIZE;
-        const tokenRadius = (tokenDiameter / 2) * 0.95;
-
-        ctx.save();
-        ctx.shadowColor = isBlocked ? '#ef4444' : '#38bdf8';
-        ctx.shadowBlur = 14 / zoom;
-        ctx.beginPath();
-        ctx.arc(targetX, targetY, tokenRadius, 0, Math.PI * 2);
-        ctx.fillStyle = isPlayerToken ? '#06b6d4' : '#e11d48';
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 3 / zoom;
-        ctx.fill();
-        ctx.stroke();
-
-        const tokenUrl = tokenCombatant?.tokenImageUrl || tokenCombatant?.avatarUrl;
-        let imgDrawn = false;
-        if (tokenUrl) {
-          const img = token2DImageCache.get(tokenUrl);
-          if (img && img.complete && img.naturalWidth > 0) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(targetX, targetY, tokenRadius - 2, 0, Math.PI * 2);
-            ctx.clip();
-            ctx.drawImage(img, targetX - tokenRadius + 2, targetY - tokenRadius + 2, (tokenRadius - 2) * 2, (tokenRadius - 2) * 2);
-            ctx.restore();
-            imgDrawn = true;
-          }
-        }
-
-        if (!imgDrawn) {
-          ctx.fillStyle = '#ffffff';
-          const fontSize = Math.floor(CELL_SIZE * (0.28 + (gridSquares - 1) * 0.1));
-          ctx.font = `bold ${fontSize}px monospace`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(draggingItem.tokenName, targetX, targetY);
-        }
-        ctx.restore();
-      } else if (draggingItem.kind === 'poi' && draggingItem.poiCell) {
-        // Draw POI Vector Icon preview floating over destination cell
-        ctx.save();
-        ctx.shadowColor = '#f59e0b';
-        ctx.shadowBlur = 12 / zoom;
-        drawPOIIcon(ctx, targetX, targetY, draggingItem.poiCell.type, zoom);
-        ctx.restore();
-      } else if (draggingItem.kind === 'light' && draggingItem.light) {
-        // Draw Light Source preview
-        const light = draggingItem.light;
-        const colorHex = light.color || '#ff9900';
-        let preset: 'torch' | 'candle' | 'lantern' | 'spell' | 'dragon' = 'torch';
-        if (light.animation === 'candle' || colorHex.toLowerCase() === '#ffaa33') preset = 'candle';
-        else if (light.animation === 'none' || colorHex.toLowerCase() === '#ffee77') preset = 'lantern';
-        else if (light.animation === 'pulse' || colorHex.toLowerCase() === '#ff4400') preset = 'dragon';
-        else if (light.animation === 'chroma' || colorHex.toLowerCase() === '#00ccff') preset = 'spell';
-
-        ctx.save();
-        ctx.shadowColor = colorHex;
-        ctx.shadowBlur = 16 / zoom;
-        drawLightSourceIcon(ctx, targetX, targetY, preset, zoom);
-        ctx.restore();
-      }
-    }
-
-    // 4.B. Render Vector Walls and Doors
-    if (vectorWalls && vectorWalls.length > 0) {
-      vectorWalls.forEach((wall) => {
-        const x1 = (bgImage ? gridOffsetX : 0) + wall.x1 * CELL_SIZE;
-        const y1 = (bgImage ? gridOffsetY : 0) + wall.y1 * CELL_SIZE;
-        const x2 = (bgImage ? gridOffsetX : 0) + wall.x2 * CELL_SIZE;
-        const y2 = (bgImage ? gridOffsetY : 0) + wall.y2 * CELL_SIZE;
-
-        if (wall.type === 'secret_door' && isPlayerView && wall.doorState === 'closed') {
-          return; // Secret doors closed are invisible to players
-        }
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-
-        if (wall.type === 'door' || wall.type === 'secret_door') {
-          const isOpen = wall.doorState === 'open';
-          const isLocked = wall.doorState === 'locked';
-          const isBroken = wall.doorState === 'broken';
-
-          ctx.strokeStyle = isBroken ? '#94a3b8' : isLocked ? '#ef4444' : isOpen ? '#22c55e' : '#f59e0b';
-          ctx.lineWidth = 4;
-          ctx.setLineDash(isOpen ? [4, 6] : [6, 3]);
-
-          // Draw door icon / handle in center
-          const mx = (x1 + x2) / 2;
-          const my = (y1 + y2) / 2;
-          ctx.fillStyle = isBroken ? '#94a3b8' : isLocked ? '#ef4444' : isOpen ? '#22c55e' : '#f59e0b';
-          ctx.fillRect(mx - 5, my - 5, 10, 10);
-
-          // Mini center badge border
-          ctx.strokeStyle = '#0f172a';
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(mx - 5, my - 5, 10, 10);
-        } else if (wall.type === 'window') {
-          ctx.strokeStyle = '#38bdf8';
-          ctx.lineWidth = 3.5;
-          ctx.setLineDash([4, 4]);
-        } else if (wall.type === 'illusion') {
-          ctx.strokeStyle = isPlayerView ? 'transparent' : '#a855f7';
-          ctx.lineWidth = 2.5;
-          ctx.setLineDash([2, 4]);
-        } else {
-          // Solid Wall
-          ctx.strokeStyle = isPlayerView ? 'transparent' : '#ef4444';
-          ctx.lineWidth = 3;
-        }
-
-        ctx.stroke();
-        ctx.restore();
-      });
-    }
-
-    // 4.C. Render Flat Black Light Source Map Decoration Icons (Dyson Style)
-    if (lightSources && lightSources.length > 0) {
-      lightSources.forEach((light) => {
-        const lx = bgImage ? gridOffsetX + light.x * CELL_SIZE : light.x * CELL_SIZE;
-        const ly = bgImage ? gridOffsetY + light.y * CELL_SIZE : light.y * CELL_SIZE;
-
-        let preset = 'torch';
-        if (light.color === '#ffcc66' || light.brightRadius === 10) preset = 'candle';
-        else if (light.color === '#ffee88' || light.brightRadius === 30) preset = 'lantern';
-        else if (light.color === '#38bdf8') preset = 'spell';
-        else if (light.color === '#ef4444') preset = 'dragon';
-
-        drawLightSourceIcon(ctx, lx, ly, preset, zoom);
-      });
-    }
-
-
-    // 5. Draw Ruler Measurement
-
-
-    if (selectedTool === 'measure' && rulerPoints.length > 0) {
-      const isMeasuring = rulerStatus === 'measuring';
-      const hasLiveCursor = isMeasuring && rulerCursor && (
-        rulerCursor.r !== rulerPoints[rulerPoints.length - 1].r || 
-        rulerCursor.c !== rulerPoints[rulerPoints.length - 1].c
-      );
-
-      const getPointCoords = (pt: { r: number; c: number }) => {
-        const x = (bgImage ? gridOffsetX + pt.c * CELL_SIZE : pt.c * CELL_SIZE) + CELL_SIZE / 2;
-        const y = (bgImage ? gridOffsetY + pt.r * CELL_SIZE : pt.r * CELL_SIZE) + CELL_SIZE / 2;
-        return { x, y };
-      };
-
-      // 5.A. Draw all confirmed segments
-      for (let i = 0; i < rulerPoints.length - 1; i++) {
-        const p1 = getPointCoords(rulerPoints[i]);
-        const p2 = getPointCoords(rulerPoints[i + 1]);
-        const segDist = calculateSegmentDistance(rulerPoints[i], rulerPoints[i + 1]);
-
-        // Outer glow
-        ctx.save();
-        ctx.shadowColor = '#06b6d4';
-        ctx.shadowBlur = 12 / zoom;
-        ctx.strokeStyle = 'rgba(6, 182, 212, 0.45)';
-        ctx.lineWidth = Math.max(5, 7 / zoom);
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        ctx.stroke();
-        ctx.restore();
-
-        // Core solid neon line
-        ctx.save();
-        ctx.strokeStyle = '#22d3ee';
-        ctx.lineWidth = Math.max(2.5, 3.5 / zoom);
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        ctx.stroke();
-        ctx.restore();
-
-        // Segment distance badge at midpoint
-        if (segDist.steps > 0) {
-          const midX = (p1.x + p2.x) / 2;
-          const midY = (p1.y + p2.y) / 2;
-          const badgeText = `${segDist.feet}ft`;
-          ctx.save();
-          ctx.font = `bold ${Math.max(10, 11 / zoom)}px Inter, sans-serif`;
-          const textWidth = ctx.measureText(badgeText).width;
-          const padX = 5 / zoom;
-          const padY = 2.5 / zoom;
-          const boxW = textWidth + padX * 2;
-          const boxH = (14 / zoom) + padY;
-
-          ctx.fillStyle = 'rgba(10, 15, 29, 0.92)';
-          ctx.strokeStyle = '#0891b2';
-          ctx.lineWidth = 1 / zoom;
-          ctx.beginPath();
-          ctx.roundRect(midX - boxW / 2, midY - boxH / 2, boxW, boxH, 3 / zoom);
-          ctx.fill();
-          ctx.stroke();
-
-          ctx.fillStyle = '#67e8f9';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(badgeText, midX, midY);
-          ctx.restore();
-        }
-      }
-
-      // 5.B. Draw live preview segment to cursor (Orthogonal / L-shaped)
-      if (hasLiveCursor && rulerCursor) {
-        const lastPt = rulerPoints[rulerPoints.length - 1];
-        const previewNodes = getOrthogonalPath(lastPt, rulerCursor);
-        const previewPoints = [lastPt, ...previewNodes];
-        const liveDist = calculateSegmentDistance(lastPt, rulerCursor);
-
-        // Dashed preview lines following orthogonal grid lines
-        ctx.save();
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = Math.max(2, 3 / zoom);
-        ctx.setLineDash([8 / zoom, 5 / zoom]);
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        const startCoord = getPointCoords(previewPoints[0]);
-        ctx.moveTo(startCoord.x, startCoord.y);
-        for (let i = 1; i < previewPoints.length; i++) {
-          const ptCoord = getPointCoords(previewPoints[i]);
-          ctx.lineTo(ptCoord.x, ptCoord.y);
-        }
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.restore();
-
-        // If orthogonal preview creates an intermediate corner, draw corner hint
-        if (previewPoints.length > 2) {
-          const cornerCoord = getPointCoords(previewPoints[1]);
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(cornerCoord.x, cornerCoord.y, Math.max(3, 4.5 / zoom), 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(56, 189, 248, 0.6)';
-          ctx.fill();
-          ctx.strokeStyle = '#38bdf8';
-          ctx.lineWidth = 1 / zoom;
-          ctx.stroke();
-          ctx.restore();
-        }
-
-        // Live segment badge
-        if (liveDist.steps > 0) {
-          const curP = getPointCoords(rulerCursor);
-          const midX = (startCoord.x + curP.x) / 2;
-          const midY = (startCoord.y + curP.y) / 2;
-          const badgeText = `+${liveDist.feet}ft`;
-          ctx.save();
-          ctx.font = `bold ${Math.max(10, 11 / zoom)}px Inter, sans-serif`;
-          const textWidth = ctx.measureText(badgeText).width;
-          const padX = 5 / zoom;
-          const padY = 2.5 / zoom;
-          const boxW = textWidth + padX * 2;
-          const boxH = (14 / zoom) + padY;
-
-          ctx.fillStyle = 'rgba(12, 74, 96, 0.92)';
-          ctx.strokeStyle = '#38bdf8';
-          ctx.lineWidth = 1 / zoom;
-          ctx.beginPath();
-          ctx.roundRect(midX - boxW / 2, midY - boxH / 2, boxW, boxH, 3 / zoom);
-          ctx.fill();
-          ctx.stroke();
-
-          ctx.fillStyle = '#bae6fd';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(badgeText, midX, midY);
-          ctx.restore();
-        }
-      }
-
-      // 5.C. Draw Waypoint Nodes
-      rulerPoints.forEach((pt, idx) => {
-        const coord = getPointCoords(pt);
-        const isStart = idx === 0;
-        const isEnd = idx === rulerPoints.length - 1 && !hasLiveCursor;
-
-        ctx.save();
-        if (isStart) {
-          // Start node: emerald ring
-          ctx.beginPath();
-          ctx.arc(coord.x, coord.y, Math.max(6, 8 / zoom), 0, Math.PI * 2);
-          ctx.fillStyle = '#10b981';
-          ctx.fill();
-          ctx.strokeStyle = '#022c22';
-          ctx.lineWidth = 2 / zoom;
-          ctx.stroke();
-
-          // Inner dot
-          ctx.beginPath();
-          ctx.arc(coord.x, coord.y, Math.max(2.5, 3.5 / zoom), 0, Math.PI * 2);
-          ctx.fillStyle = '#ffffff';
-          ctx.fill();
-
-          // Label
-          ctx.font = `bold ${Math.max(9, 10 / zoom)}px Inter, sans-serif`;
-          ctx.fillStyle = '#a7f3d0';
-          ctx.textAlign = 'center';
-          ctx.fillText('Início', coord.x, coord.y - (12 / zoom));
-        } else if (isEnd) {
-          // Final node
-          ctx.beginPath();
-          ctx.arc(coord.x, coord.y, Math.max(7, 9 / zoom), 0, Math.PI * 2);
-          ctx.fillStyle = '#06b6d4';
-          ctx.fill();
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 2 / zoom;
-          ctx.stroke();
-
-          // Target bullseye
-          ctx.beginPath();
-          ctx.arc(coord.x, coord.y, Math.max(3, 4 / zoom), 0, Math.PI * 2);
-          ctx.fillStyle = '#083344';
-          ctx.fill();
-
-          ctx.font = `bold ${Math.max(9, 10 / zoom)}px Inter, sans-serif`;
-          ctx.fillStyle = '#67e8f9';
-          ctx.textAlign = 'center';
-          ctx.fillText('Fim', coord.x, coord.y - (12 / zoom));
-        } else {
-          // Intermediate curve node
-          ctx.beginPath();
-          ctx.arc(coord.x, coord.y, Math.max(4, 5.5 / zoom), 0, Math.PI * 2);
-          ctx.fillStyle = '#0891b2';
-          ctx.fill();
-          ctx.strokeStyle = '#67e8f9';
-          ctx.lineWidth = 1.5 / zoom;
-          ctx.stroke();
-
-          // Mini index
-          ctx.font = `bold ${Math.max(8, 9 / zoom)}px Inter, sans-serif`;
-          ctx.fillStyle = '#e0f2fe';
-          ctx.textAlign = 'center';
-          ctx.fillText(`${idx}`, coord.x, coord.y - (9 / zoom));
-        }
-        ctx.restore();
-      });
-
-      // 5.D. Draw live cursor node
-      if (hasLiveCursor && rulerCursor) {
-        const curP = getPointCoords(rulerCursor);
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(curP.x, curP.y, Math.max(6, 8 / zoom), 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(6, 182, 212, 0.6)';
-        ctx.fill();
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = 2 / zoom;
-        ctx.stroke();
-
-        // Reticle crosshair
-        const crossSize = 10 / zoom;
-        ctx.beginPath();
-        ctx.moveTo(curP.x - crossSize, curP.y);
-        ctx.lineTo(curP.x + crossSize, curP.y);
-        ctx.moveTo(curP.x, curP.y - crossSize);
-        ctx.lineTo(curP.x, curP.y + crossSize);
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
-        ctx.lineWidth = 1.5 / zoom;
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
-
-    // 6. Draw Grid Calibration Line (Red Line)
+    // 1. Calibração (Linha Vermelha)
     if (selectedTool === 'calibrate' && calibrationLine) {
       ctx.strokeStyle = '#ef4444';
       ctx.lineWidth = 3;
@@ -1874,7 +1054,6 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       ctx.lineTo(calibrationLine.x2, calibrationLine.y2);
       ctx.stroke();
 
-      // anchor points
       ctx.fillStyle = '#ef4444';
       ctx.beginPath();
       ctx.arc(calibrationLine.x1, calibrationLine.y1, 6, 0, Math.PI * 2);
@@ -1882,7 +1061,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       ctx.fill();
     }
 
-    // 7. Draw Rectangle Selection Box Overlay
+    // 2. Caixa de Seleção
     if (selectedTool === 'box' && selectionBox) {
       const minR = Math.min(selectionBox.startR, selectionBox.currentR);
       const maxR = Math.max(selectionBox.startR, selectionBox.currentR);
@@ -1894,320 +1073,199 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       const bw = (maxC - minC + 1) * CELL_SIZE;
       const bh = (maxR - minR + 1) * CELL_SIZE;
 
-      // Fill translucent preview
       ctx.fillStyle = 'rgba(245, 158, 11, 0.25)';
       ctx.fillRect(bx, by, bw, bh);
 
-      // Dashed border
       ctx.strokeStyle = '#f59e0b';
       ctx.lineWidth = Math.max(1.5, 2 / zoom);
       ctx.setLineDash([6 / zoom, 4 / zoom]);
       ctx.strokeRect(bx, by, bw, bh);
       ctx.setLineDash([]);
 
-      // Corner handles
-      ctx.fillStyle = '#f59e0b';
       const handleSize = Math.max(4, 6 / zoom);
+      ctx.fillStyle = '#f59e0b';
       ctx.fillRect(bx - handleSize / 2, by - handleSize / 2, handleSize, handleSize);
       ctx.fillRect(bx + bw - handleSize / 2, by - handleSize / 2, handleSize, handleSize);
       ctx.fillRect(bx - handleSize / 2, by + bh - handleSize / 2, handleSize, handleSize);
       ctx.fillRect(bx + bw - handleSize / 2, by + bh - handleSize / 2, handleSize, handleSize);
+    }
 
-      // Dimensions badge
-      const countW = maxC - minC + 1;
-      const countH = maxR - minR + 1;
-      const feetW = countW * 5;
-      const feetH = countH * 5;
-      const badgeText = `${countW}x${countH} (${feetW}ft x ${feetH}ft)`;
+    // 3. Régua Tática Ortogonal
+    if (selectedTool === 'measure' && rulerPoints.length > 0) {
+      const isMeasuring = rulerStatus === 'measuring';
+      const hasLiveCursor = isMeasuring && rulerCursor && (
+        rulerCursor.r !== rulerPoints[rulerPoints.length - 1].r || 
+        rulerCursor.c !== rulerPoints[rulerPoints.length - 1].c
+      );
 
-      ctx.font = `bold ${Math.max(11, 13 / zoom)}px Inter, sans-serif`;
-      const textWidth = ctx.measureText(badgeText).width;
-      const badgePadX = 6 / zoom;
-      const badgePadY = 3 / zoom;
-      const badgeX = bx + bw / 2 - textWidth / 2 - badgePadX;
-      const badgeY = by - (18 / zoom);
+      const getPointCoords = (pt: { r: number; c: number }) => ({
+        x: (bgImage ? gridOffsetX + pt.c * CELL_SIZE : pt.c * CELL_SIZE) + CELL_SIZE / 2,
+        y: (bgImage ? gridOffsetY + pt.r * CELL_SIZE : pt.r * CELL_SIZE) + CELL_SIZE / 2
+      });
 
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-      ctx.beginPath();
-      ctx.roundRect(badgeX, badgeY, textWidth + badgePadX * 2, (16 / zoom) + badgePadY, 4 / zoom);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(245, 158, 11, 0.6)';
-      ctx.lineWidth = 1 / zoom;
-      ctx.stroke();
+      // Segmentos confirmados
+      for (let i = 0; i < rulerPoints.length - 1; i++) {
+        const p1 = getPointCoords(rulerPoints[i]);
+        const p2 = getPointCoords(rulerPoints[i + 1]);
+        const segDist = calculateSegmentDistance(rulerPoints[i], rulerPoints[i + 1]);
 
-      ctx.fillStyle = '#fbbf24';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillText(badgeText, badgeX + badgePadX, badgeY + badgePadY);
+        ctx.save();
+        ctx.shadowColor = '#06b6d4';
+        ctx.shadowBlur = 12 / zoom;
+        ctx.strokeStyle = 'rgba(6, 182, 212, 0.45)';
+        ctx.lineWidth = Math.max(5, 7 / zoom);
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.save();
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = Math.max(2.5, 3.5 / zoom);
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+        ctx.restore();
+
+        if (segDist.steps > 0) {
+          const midX = (p1.x + p2.x) / 2;
+          const midY = (p1.y + p2.y) / 2;
+          const badgeText = `${segDist.feet}ft`;
+          ctx.save();
+          ctx.font = `bold ${Math.max(10, 11 / zoom)}px Inter, sans-serif`;
+          const textWidth = ctx.measureText(badgeText).width;
+          const padX = 5 / zoom;
+          const padY = 2.5 / zoom;
+          ctx.fillStyle = 'rgba(10, 15, 29, 0.92)';
+          ctx.strokeStyle = '#0891b2';
+          ctx.lineWidth = 1 / zoom;
+          ctx.beginPath();
+          ctx.roundRect(midX - (textWidth + padX * 2) / 2, midY - (14 / zoom + padY) / 2, textWidth + padX * 2, 14 / zoom + padY, 3 / zoom);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#67e8f9';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(badgeText, midX, midY);
+          ctx.restore();
+        }
+      }
+
+      // Preview dinâmico para o cursor
+      if (hasLiveCursor && rulerCursor) {
+        const lastPt = rulerPoints[rulerPoints.length - 1];
+        const previewNodes = getOrthogonalPath(lastPt, rulerCursor);
+        const previewPoints = [lastPt, ...previewNodes];
+
+        ctx.save();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = Math.max(2, 3 / zoom);
+        ctx.setLineDash([8 / zoom, 5 / zoom]);
+        ctx.beginPath();
+        const startCoord = getPointCoords(previewPoints[0]);
+        ctx.moveTo(startCoord.x, startCoord.y);
+        for (let i = 1; i < previewPoints.length; i++) {
+          const ptCoord = getPointCoords(previewPoints[i]);
+          ctx.lineTo(ptCoord.x, ptCoord.y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Nós waypoints
+      rulerPoints.forEach((pt, idx) => {
+        const coord = getPointCoords(pt);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(coord.x, coord.y, Math.max(5, 7 / zoom), 0, Math.PI * 2);
+        ctx.fillStyle = idx === 0 ? '#10b981' : idx === rulerPoints.length - 1 ? '#06b6d4' : '#0891b2';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5 / zoom;
+        ctx.stroke();
+        ctx.restore();
+      });
     }
 
     ctx.restore();
-  }, [grid, bgImage, CELL_SIZE, COLS, ROWS, gridOffsetX, gridOffsetY, selectedTool, selectionBox, measureStart, calibrationLine, rulerPoints, rulerCursor, rulerStatus, zoom, panOffset, canvasSize, isPlayerView, lightSources, combatants, vectorWalls, draggingItem, renderLighting, renderVision, renderFog]);
+  }, [
+    getViewportBounds, 
+    panOffset, 
+    zoom, 
+    selectedTool, 
+    calibrationLine, 
+    selectionBox, 
+    bgImage, 
+    gridOffsetX, 
+    gridOffsetY, 
+    CELL_SIZE, 
+    rulerPoints, 
+    rulerStatus, 
+    rulerCursor
+  ]);
 
-  // Utility to convert client mouse events to Canvas coordinates
+  useEffect(() => {
+    renderInteractionLayer();
+  }, [renderInteractionLayer]);
+
+  // =========================================================================
+  // COORDENADAS E MANIPULAÇÃO DE MOUSE / GESTOS
+  // =========================================================================
   const getCanvasCoords = (e: React.MouseEvent) => {
     const container = containerRef.current;
     if (!container) return { x: 0, y: 0 };
     const rect = container.getBoundingClientRect();
-    const x = (e.clientX - rect.left - panOffsetRef.current.x) / zoom;
-    const y = (e.clientY - rect.top - panOffsetRef.current.y) / zoom;
-    return { x, y };
-  };
-
-  // Convert Canvas coordinates to grid row and column
-  const getGridPos = (x: number, y: number) => {
-    const actualX = bgImageUrl ? x - gridOffsetX : x;
-    const actualY = bgImageUrl ? y - gridOffsetY : y;
-
     return {
-      c: Math.floor(actualX / CELL_SIZE),
-      r: Math.floor(actualY / CELL_SIZE)
+      x: (e.clientX - rect.left - panOffsetRef.current.x) / zoom,
+      y: (e.clientY - rect.top - panOffsetRef.current.y) / zoom,
     };
   };
 
-  const isCellVisibleToPlayers = useCallback((col: number, row: number): boolean => {
-    if (!isPlayerView) return true;
-    
-    if (playerTokens.length === 0) {
-      return grid[row]?.[col] ? !grid[row][col].fog : false;
-    }
-    
-    for (const pt of playerTokens) {
-      const dist = Math.hypot(row - pt.r, col - pt.c);
-      if (dist > pt.radius) continue;
-      if (hasLineOfSight(pt.c, pt.r, col, row, grid, vectorWalls, CELL_SIZE)) {
-        return true;
-      }
-    }
-    return false;
-  }, [isPlayerView, playerTokens, grid, vectorWalls, CELL_SIZE]);
+  const getGridPos = (x: number, y: number) => ({
+    c: Math.floor((bgImageUrl ? x - gridOffsetX : x) / CELL_SIZE),
+    r: Math.floor((bgImageUrl ? y - gridOffsetY : y) / CELL_SIZE),
+  });
 
   const moveToken = (tokenName: string, tokenColor: string, targetR: number, targetC: number) => {
-    const { rows: currentRows, cols: currentCols } = gridDims.current;
-    
-    let expandN = 0, expandS = 0, expandW = 0, expandE = 0;
-    const margin = 3;
-    if (targetR < 0) expandN = Math.abs(targetR) + margin;
-    else if (targetR >= currentRows) expandS = (targetR - currentRows) + margin + 1;
-    
-    if (targetC < 0) expandW = Math.abs(targetC) + margin;
-    else if (targetC >= currentCols) expandE = (targetC - currentCols) + margin + 1;
-    
-    if (expandN > 0 || expandS > 0 || expandW > 0 || expandE > 0) {
-      gridDims.current = { 
-        rows: currentRows + expandN + expandS, 
-        cols: currentCols + expandW + expandE 
-      };
-      
-      if (expandN > 0 || expandW > 0) {
-        const dx = expandW * CELL_SIZE * zoom;
-        const dy = expandN * CELL_SIZE * zoom;
-        panOffsetRef.current = {
-          x: panOffsetRef.current.x - dx,
-          y: panOffsetRef.current.y - dy
-        };
-        setPanOffset(panOffsetRef.current);
-      }
-    }
-
     onGridChange((prev) => {
-      let copy = prev;
-      let r = targetR;
-      let c = targetC;
-      
-      if (expandN > 0 || expandS > 0 || expandW > 0 || expandE > 0) {
-        const prevRows = copy.length;
-        const prevCols = copy[0]?.length || 0;
-        const newCols = prevCols + expandW + expandE;
-        const newGrid: Cell[][] = [];
-        
-        for(let i=0; i<expandN; i++) {
-           newGrid.push(Array(newCols).fill(null).map((_, idx) => ({ x: idx, y: i, type: 'wall' as const, fog: true })));
-        }
-        
-        for(let i=0; i<prevRows; i++) {
-           const row = [];
-           for(let j=0; j<expandW; j++) row.push({ x: j, y: i + expandN, type: 'wall' as const, fog: true });
-           for(let j=0; j<prevCols; j++) {
-              row.push({ ...copy[i][j], x: j + expandW, y: i + expandN });
-           }
-           for(let j=0; j<expandE; j++) row.push({ x: prevCols + expandW + j, y: i + expandN, type: 'wall' as const, fog: true });
-           newGrid.push(row);
-        }
-        
-        for(let i=0; i<expandS; i++) {
-           newGrid.push(Array(newCols).fill(null).map((_, idx) => ({ x: idx, y: prevRows + expandN + i, type: 'wall' as const, fog: true })));
-        }
-        
-        copy = newGrid;
-      } else {
-        copy = copy.map(row => row.map(cell => ({...cell})));
-      }
-      
-      r = targetR + expandN;
-      c = targetC + expandW;
-      
-      for (let rowIdx = 0; rowIdx < copy.length; rowIdx++) {
-        for (let colIdx = 0; colIdx < copy[0].length; colIdx++) {
-          if (copy[rowIdx][colIdx].tokenName === tokenName) {
-            copy[rowIdx][colIdx].tokenName = undefined;
-            copy[rowIdx][colIdx].tokenColor = undefined;
+      const copy = prev.map(row => row.map(cell => ({ ...cell })));
+      for (let r = 0; r < copy.length; r++) {
+        for (let c = 0; c < copy[0].length; c++) {
+          if (copy[r][c].tokenName === tokenName) {
+            copy[r][c].tokenName = undefined;
+            copy[r][c].tokenColor = undefined;
           }
         }
       }
-      
-      if (r >= 0 && r < copy.length && c >= 0 && c < copy[0].length) {
-         copy[r][c].tokenName = tokenName;
-         copy[r][c].tokenColor = tokenColor;
-         revealVisionWithLOS(copy, r, c, getTokenVisionRadius(tokenName, combatants));
+      if (targetR >= 0 && targetR < copy.length && targetC >= 0 && targetC < copy[0].length) {
+        copy[targetR][targetC].tokenName = tokenName;
+        copy[targetR][targetC].tokenColor = tokenColor;
+        revealVisionWithLOS(copy, targetR, targetC, getTokenVisionRadius(tokenName, combatants));
 
-         // 💥 RECTIVE SCENES: Check Trap or Pressure Plate Trigger
-         const destCell = copy[r][c];
-         if (destCell.type === 'trap' || destCell.trapConfig) {
-           const trapCfg = destCell.trapConfig || {
-             trapType: 'Fosso de Estacas',
-             detectDC: 13,
-             disarmDC: 13,
-             revealedToPlayers: false,
-             description: 'Mecanismo oculto no piso',
-           };
-
-           const trapEffect: ReactiveTrapEffect = {
-             type: 'trap_damage',
-             name: trapCfg.trapType || 'Armadilha no Piso',
-             description: trapCfg.description || 'Mecanismo no piso',
-             detectDC: trapCfg.detectDC || 13,
-             disarmDC: trapCfg.disarmDC || 13,
-             saveStat: (trapCfg as any).saveStat || 'dex',
-             saveDC: (trapCfg as any).saveDC || 13,
-             damageDice: (trapCfg as any).damageDice || '2d10',
-             damageType: (trapCfg as any).damageType || 'Perfurante',
-             conditionApplied: (trapCfg as any).conditionApplied || 'Caído',
-             revealedToPlayers: trapCfg.revealedToPlayers || false,
-             isArmed: (trapCfg as any).isArmed !== false,
-             oneShot: (trapCfg as any).oneShot !== false,
-             soundEffect: 'trap_spike',
-           };
-
-           const matchedComb = combatants.find(cb => cb.name.trim().toUpperCase() === tokenName.trim().toUpperCase());
-           const passivePerception = 10 + (matchedComb?.initiative || 0);
-
-           const triggerRes = evaluateTokenStep({
-             tokenName,
-             passivePerception,
-             trap: trapEffect,
-             forceStepEvenIfDetected: true,
-           });
-
-           if (triggerRes.triggered) {
-             destCell.trapConfig = {
-               ...trapCfg,
-               revealedToPlayers: true,
-             };
-             (destCell.trapConfig as any).isArmed = triggerRes.updatedTrap.isArmed;
-             toast.error(triggerRes.message, { duration: 7000 });
-           } else if (triggerRes.detectedEarly) {
-             destCell.trapConfig = {
-               ...trapCfg,
-               revealedToPlayers: true,
-             };
-             toast.warning(triggerRes.message, { duration: 6000 });
-           }
-         } else if (destCell.type === 'trigger' && destCell.triggerConfig) {
-           const trig = destCell.triggerConfig;
-           toast.info(`⚙️ ${tokenName} pisou em "${trig.name || 'Gatilho de Pressão'}"! O mecanismo ressoou no calabouço.`, { duration: 5000 });
-           
-           // Toggle connected portcullis / gate if targetId exists
-           if (trig.targetId) {
-             for (let rowI = 0; rowI < copy.length; rowI++) {
-               for (let colI = 0; colI < copy[rowI].length; colI++) {
-                 if (copy[rowI][colI].portcullisConfig?.id === trig.targetId) {
-                   const currStatus = copy[rowI][colI].portcullisConfig!.status;
-                   copy[rowI][colI].portcullisConfig!.status = currStatus === 'closed' ? 'open' : 'closed';
-                   toast.success(`Grade "${copy[rowI][colI].portcullisConfig!.name || 'Portcullis'}" agora está ${currStatus === 'closed' ? 'ABERTA 🔓' : 'FECHADA 🔒'}!`);
-                 }
-               }
-             }
-           }
-         }
-
-         // 🔍 BG3 PROXIMITY PERCEPTION CHECK: Search for hidden secrets nearby (radius <= 2)
-         let nearestSecret: { r: number; c: number; name: string; dc: number; type: string } | null = null;
-         for (let dr = -2; dr <= 2; dr++) {
-           for (let dc = -2; dc <= 2; dc++) {
-             const nr = r + dr;
-             const nc = c + dc;
-             if (nr >= 0 && nr < copy.length && nc >= 0 && nc < copy[0].length) {
-               const cell = copy[nr][nc];
-               // Check stash / hidden chest
-               if (cell.type === 'stash' || (cell.chestConfig?.containerType === 'hidden_stash' && !cell.chestConfig?.revealedToPlayers)) {
-                 if (cell.chestConfig && !cell.chestConfig.revealedToPlayers) {
-                   nearestSecret = { r: nr, c: nc, name: cell.chestConfig.name || 'Esconderijo Secreto', dc: cell.chestConfig.detectDC || 14, type: 'stash' };
-                   break;
-                 }
-               }
-               // Check secret door
-               if (cell.type === 'door' && cell.doorConfig?.doorType === 'secret' && !cell.doorConfig?.secretRevealed) {
-                 nearestSecret = { r: nr, c: nc, name: 'Passagem Secreta Oculta', dc: 14, type: 'door' };
-                 break;
-               }
-               // Check illusion wall
-               if (cell.type === 'illusion_wall' && cell.illusionWallConfig && !cell.illusionWallConfig.revealedToPlayers) {
-                 nearestSecret = { r: nr, c: nc, name: 'Parede Ilusória', dc: cell.illusionWallConfig.detectDC || 15, type: 'illusion_wall' };
-                 break;
-               }
-             }
-           }
-           if (nearestSecret) break;
-         }
-
-         if (nearestSecret) {
-           const secretObj = nearestSecret;
-           const matchedComb = combatants.find(cb => cb.name.trim().toUpperCase() === tokenName.trim().toUpperCase());
-           const wisMod = matchedComb?.initiative !== undefined ? Math.max(0, matchedComb.initiative) : 2;
-
-           // Open 3D BG3 Dice Modal for player to roll the d20!
-           setTimeout(() => {
-             useLiveCockpitStudioStore.getState().setBg3DiceOverlay({
-               title: 'Teste de Percepção',
-               subtitle: `Investigando arredores com ${tokenName}`,
-               actorName: tokenName,
-               targetName: secretObj.name,
-               modifier: wisMod,
-               difficultyClass: secretObj.dc,
-               modifierCards: [
-                 {
-                   id: 'wis_mod',
-                   label: 'Percepção (Sabedoria)',
-                   value: wisMod >= 0 ? `+${wisMod}` : `${wisMod}`,
-                   numericValue: wisMod,
-                   iconType: 'attribute',
-                   sourceName: 'Atributo',
-                   isEnabled: true,
-                 }
-               ],
-               phase: 'd20',
-               isRolling: false,
-               onRollComplete: (finalTotal) => {
-                 if (finalTotal >= secretObj.dc) {
-                   onGridChange((currGrid) => {
-                     const updated = currGrid.map(row => row.map(cell => ({ ...cell })));
-                     const targetCell = updated[secretObj.r]?.[secretObj.c];
-                     if (targetCell) {
-                       if (targetCell.chestConfig) targetCell.chestConfig.revealedToPlayers = true;
-                       if (targetCell.doorConfig) targetCell.doorConfig.secretRevealed = true;
-                       if (targetCell.illusionWallConfig) targetCell.illusionWallConfig.revealedToPlayers = true;
-                     }
-                     return updated;
-                   });
-                   toast.success(`✨ Sucesso! ${tokenName} notou um "${secretObj.name}"! (Total: ${finalTotal} vs CD ${secretObj.dc})`, { duration: 7000 });
-                 } else {
-                   toast.info(`👀 ${tokenName} olhou com atenção, mas não percebeu nada fora do comum. (Total: ${finalTotal} vs CD ${secretObj.dc})`, { duration: 4000 });
-                 }
-               }
-             });
-           }, 250);
-         }
+        const destCell = copy[targetR][targetC];
+        if (destCell.type === 'trap' || destCell.trapConfig) {
+          const trapCfg = destCell.trapConfig || { trapType: 'Armadilha', detectDC: 13, disarmDC: 13 };
+          const trapEffect: ReactiveTrapEffect = {
+            id: `trap_${targetR}_${targetC}`,
+            type: 'trap_damage',
+            name: trapCfg.trapType || 'Armadilha',
+            description: ('description' in trapCfg && trapCfg.description) ? trapCfg.description : 'Armadilha mecânica oculta no piso.',
+            detectDC: trapCfg.detectDC || 13,
+            disarmDC: trapCfg.disarmDC || 13,
+            revealedToPlayers: false,
+            isArmed: true,
+            oneShot: true,
+            soundEffect: 'trap_spike'
+          };
+          evaluateTokenStep({
+            tokenName,
+            passivePerception: 14,
+            trap: trapEffect,
+            forceStepEvenIfDetected: true
+          });
+        }
       }
       return copy;
     });
@@ -2216,38 +1274,8 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   const isPOIType = (t: string | undefined) => 
     t === 'door' || t === 'trap' || t === 'chest' || t === 'stash' || t === 'trigger' || t === 'portcullis' || t === 'illusion_wall' || t === 'transition';
 
-  const getPOIEmoji = (cell: Cell | undefined) => {
-    if (!cell) return '📦';
-    if (cell.type === 'door') return '🚪';
-    if (cell.type === 'trap') return cell.trapConfig?.revealedToPlayers ? '⚠️' : '💥';
-    if (cell.type === 'chest') return cell.chestConfig?.status === 'looted' ? '✨' : '🧰';
-    if (cell.type === 'stash') return '💎';
-    if (cell.type === 'trigger') return '🕹️';
-    if (cell.type === 'portcullis') return '⛓️';
-    if (cell.type === 'illusion_wall') return '〰️';
-    if (cell.type === 'transition') return cell.transitionConfig?.type === 'portal' ? '🌀' : '🪜';
-    return '📦';
-  };
-
-  const getPOIName = (cell: Cell | undefined) => {
-    if (!cell) return 'Objeto';
-    if (cell.type === 'door') return cell.doorConfig?.doorType === 'secret' ? 'Porta Secreta' : 'Porta';
-    if (cell.type === 'trap') return cell.trapConfig?.trapType || 'Armadilha';
-    if (cell.type === 'chest') return cell.chestConfig?.name || 'Baú';
-    if (cell.type === 'stash') return 'Esconderijo Secreto';
-    if (cell.type === 'trigger') return cell.triggerConfig?.triggerType === 'lever' ? 'Alavanca' : 'Gatilho';
-    if (cell.type === 'portcullis') return 'Grade / Portcullis';
-    if (cell.type === 'illusion_wall') return 'Parede Ilusória';
-    if (cell.type === 'transition') return 'Escada / Transição';
-    return 'Objeto Interativo';
-  };
-
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (editingCell) {
-      setIsDrawing(false);
-      setDrawButton(-1);
-      return;
-    }
+    if (editingCell) return;
 
     if (e.button === 1 || e.shiftKey || selectedTool === 'pan' || isSpacePressed) {
       setIsPanning(true);
@@ -2269,43 +1297,23 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       if (toolType === 'eraser') {
         setIsDrawing(true);
         if (drawings && drawings.length > 0) {
-          let closestId = null;
+          let closestId: string | null = null;
           let minDist = Infinity;
-          drawings.forEach((d: any) => {
-            if (!d.points || d.points.length === 0) return;
-            for (let i = 0; i < d.points.length; i++) {
-              const p = d.points[i];
+          drawings.forEach((d) => {
+            d.points?.forEach((p) => {
               const dist = Math.hypot(p.x - x, p.y - y);
-              if (dist < minDist) {
-                minDist = dist;
-                closestId = d.id;
-              }
-            }
+              if (dist < minDist) { minDist = dist; closestId = d.id; }
+            });
           });
-          if (closestId && minDist < 60 / zoom) {
-            onDrawingAction?.({ action: 'remove', strokeId: closestId });
-          }
-        }
-      } else if (toolType === 'text') {
-        const text = window.prompt('Digite o texto para anotação no mapa:');
-        if (text && text.trim()) {
-          const newStroke = {
-            id: Math.random().toString(36).substring(7),
-            tool: 'text',
-            color: drawColor || '#f59e0b',
-            lineWidth: drawLineWidth || 3,
-            points: [{ x, y }],
-            text: text.trim()
-          };
-          onDrawingAction?.({ action: 'add', stroke: newStroke });
+          if (closestId && minDist < 60 / zoom) onDrawingAction?.({ action: 'remove', strokeId: closestId });
         }
       } else {
         setIsDrawing(true);
-        const strokeData = {
-          id: Math.random().toString(36).substring(7),
+        const strokeData: DrawingStroke = {
+          id: `stroke_${++strokeCounterRef.current}_${Math.floor(x)}_${Math.floor(y)}`,
           tool: toolType,
-          color: drawColor || '#f59e0b',
-          lineWidth: drawLineWidth || 4,
+          color: drawColor,
+          lineWidth: drawLineWidth,
           points: [{ x, y }]
         };
         activeStrokeRef.current = strokeData;
@@ -2317,81 +1325,103 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     if (selectedTool === 'box') {
       setIsDrawing(true);
       setDrawButton(e.button);
-      setSelectionBox({
-        startR: pos.r,
-        startC: pos.c,
-        currentR: pos.r,
-        currentC: pos.c
-      });
+      setSelectionBox({ startR: pos.r, startC: pos.c, currentR: pos.r, currentC: pos.c });
       return;
     }
 
     const clickedCell = grid[pos.r]?.[pos.c];
 
-    // 1. Check Token Hit
-    const tokenHit = (() => {
-      if (clickedCell?.tokenName) {
-        return { name: clickedCell.tokenName, color: clickedCell.tokenColor || '', originR: pos.r, originC: pos.c };
-      }
-      for (let tr = Math.max(0, pos.r - 6); tr <= pos.r; tr++) {
-        for (let tc = Math.max(0, pos.c - 6); tc <= pos.c; tc++) {
-          const candidateCell = grid[tr]?.[tc];
-          if (candidateCell?.tokenName) {
-            const comb = combatants?.find(combItem => combItem.name.trim().toLowerCase() === candidateCell.tokenName?.trim().toLowerCase());
-            const gridSquares = getCreatureGridSize(comb?.size).gridSquares;
-            if (gridSquares > 1 && pos.r >= tr && pos.r < tr + gridSquares && pos.c >= tc && pos.c < tc + gridSquares) {
-              return { name: candidateCell.tokenName, color: candidateCell.tokenColor || '', originR: tr, originC: tc };
-            }
-          }
+    // 1. Right Click on Token -> Remove token immediately
+    if (e.button === 2 && clickedCell?.tokenName) {
+      const removedTokenName = clickedCell.tokenName;
+      onGridChange((prev) => {
+        const copy = prev.map((row) => row.map((c) => ({ ...c })));
+        if (copy[pos.r]?.[pos.c]) {
+          copy[pos.r][pos.c].tokenName = undefined;
+          copy[pos.r][pos.c].tokenColor = undefined;
         }
-      }
-      return null;
-    })();
+        return copy;
+      });
+      toast.info(`Token "${removedTokenName}" removido do mapa.`);
+      return;
+    }
 
-    if (tokenHit && !isSpacePressed) {
-      if (e.button === 2 && !isPlayerView) {
-        onGridChange((prev) => {
-          const copy = prev.map((row) => row.map((cell) => ({ ...cell })));
-          const targetR = tokenHit.originR;
-          const targetC = tokenHit.originC;
-          if (copy[targetR]?.[targetC]?.tokenName) {
-            copy[targetR][targetC].tokenName = undefined;
-            copy[targetR][targetC].tokenColor = undefined;
-          }
-          return copy;
-        });
-        return;
-      }
-      if (e.button === 0) {
-        dragCandidateRef.current = {
-          kind: 'token',
-          startR: tokenHit.originR,
-          startC: tokenHit.originC,
-          startX: x,
-          startY: y,
-          initialClientX: e.clientX,
-          initialClientY: e.clientY,
-          tokenName: tokenHit.name,
-          tokenColor: tokenHit.color
-        };
+    // 2. Right Click on Light -> Remove light source immediately
+    if (e.button === 2 && lightSources && lightSources.length > 0) {
+      const clickedLight = lightSources.find(l => {
+        const lx = bgImage ? gridOffsetX + l.x * CELL_SIZE : l.x * CELL_SIZE;
+        const ly = bgImage ? gridOffsetY + l.y * CELL_SIZE : l.y * CELL_SIZE;
+        return Math.hypot(x - lx, y - ly) <= CELL_SIZE * 0.7;
+      });
+      if (clickedLight) {
+        onRemoveLightSource?.(clickedLight.id);
+        toast.info('Fonte de luz removida.');
         return;
       }
     }
 
-    // 2. Check Light Source Hit
-    const hitLight = lightSources?.find((l) => {
-      const lx = l.x < 150 ? (bgImage ? gridOffsetX + l.x * CELL_SIZE + CELL_SIZE / 2 : l.x * CELL_SIZE + CELL_SIZE / 2) : l.x;
-      const ly = l.y < 150 ? (bgImage ? gridOffsetY + l.y * CELL_SIZE + CELL_SIZE / 2 : l.y * CELL_SIZE + CELL_SIZE / 2) : l.y;
-      return Math.hypot(x - lx, y - ly) <= Math.max(22, CELL_SIZE * 0.55);
-    });
-
-    if (hitLight && !isSpacePressed && !isPlayerView) {
-      if (e.button === 2 || (selectedTool === 'paint' && e.button === 2)) {
-        onRemoveLightSource?.(hitLight.id);
-        toast.info('Fonte de luz removida.');
+    // 3. Left Click with Token Tool or Selected Token Combatant -> Place Token
+    if (e.button === 0 && (selectedTool === 'token' || selectedTokenCombatant)) {
+      if (selectedTokenCombatant) {
+        const tok = selectedTokenCombatant;
+        const isPlayer = tok.type === 'player';
+        onGridChange((prev) => {
+          const copy = prev.map((row) => row.map((c) => ({ ...c })));
+          if (pos.r >= 0 && pos.r < copy.length && pos.c >= 0 && pos.c < copy[0].length) {
+            copy[pos.r][pos.c].tokenName = tok.name;
+            copy[pos.r][pos.c].tokenColor = isPlayer ? 'bg-cyan-500' : 'bg-rose-500';
+            revealVisionWithLOS(copy, pos.r, pos.c, getTokenVisionRadius(tok.name, combatants));
+          }
+          return copy;
+        });
+        toast.success(`Token de "${tok.name}" posicionado no mapa!`);
         return;
       }
-      if (e.button === 0) {
+    }
+
+    // 4. Left Click with Light Tool -> Place Light Source
+    if (e.button === 0 && selectedTool === 'light') {
+      const lx = (pos.c + 0.5) * CELL_SIZE;
+      const ly = (pos.r + 0.5) * CELL_SIZE;
+      const newLight: LightSource = {
+        id: `light-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        x: lx,
+        y: ly,
+        brightRadius: selectedLightPreset === 'candle' ? 10 : selectedLightPreset === 'lantern' || selectedLightPreset === 'dragon' ? 30 : 20,
+        dimRadius: selectedLightPreset === 'candle' ? 20 : selectedLightPreset === 'lantern' || selectedLightPreset === 'dragon' ? 60 : 40,
+        color: selectedLightPreset === 'candle' ? '#ffcc66' : selectedLightPreset === 'spell' ? '#38bdf8' : selectedLightPreset === 'dragon' ? '#ef4444' : '#ffaa33',
+        intensity: 0.85,
+        animation: selectedLightPreset === 'candle' ? 'candle' : 'torch',
+      };
+      onAddLightSource?.(newLight);
+      toast.success('Fonte de luz adicionada ao mapa!');
+      return;
+    }
+
+    // Check Token Hit for Dragging (Left Click)
+    if (e.button === 0 && clickedCell?.tokenName) {
+      dragCandidateRef.current = {
+        kind: 'token',
+        startR: pos.r,
+        startC: pos.c,
+        startX: x,
+        startY: y,
+        initialClientX: e.clientX,
+        initialClientY: e.clientY,
+        tokenName: clickedCell.tokenName,
+        tokenColor: clickedCell.tokenColor
+      };
+      return;
+    }
+
+    // Check Light Hit
+    if (lightSources && lightSources.length > 0) {
+      const clickedLight = lightSources.find(l => {
+        const lx = bgImage ? gridOffsetX + l.x * CELL_SIZE : l.x * CELL_SIZE;
+        const ly = bgImage ? gridOffsetY + l.y * CELL_SIZE : l.y * CELL_SIZE;
+        return Math.hypot(x - lx, y - ly) <= CELL_SIZE * 0.7;
+      });
+      if (clickedLight) {
         dragCandidateRef.current = {
           kind: 'light',
           startR: pos.r,
@@ -2400,180 +1430,61 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           startY: y,
           initialClientX: e.clientX,
           initialClientY: e.clientY,
-          light: hitLight
+          light: clickedLight
         };
         return;
       }
     }
 
-    // Placing a new light source if tool is 'light'
-    if (selectedTool === 'light') {
-      const gridPos = getGridPos(x, y);
-
-      let brightRadius = 20;
-      let dimRadius = 40;
-      let color = '#ff9900';
-      let animation: any = 'torch';
-
-      if (selectedLightPreset === 'candle') {
-        brightRadius = 10;
-        dimRadius = 20;
-        color = '#ffaa33';
-        animation = 'candle';
-      } else if (selectedLightPreset === 'lantern') {
-        brightRadius = 30;
-        dimRadius = 60;
-        color = '#ffee77';
-        animation = 'none';
-      } else if (selectedLightPreset === 'spell') {
-        brightRadius = 20;
-        dimRadius = 40;
-        color = '#00ccff';
-        animation = 'chroma';
-      } else if (selectedLightPreset === 'dragon') {
-        brightRadius = 25;
-        dimRadius = 50;
-        color = '#ff4400';
-        animation = 'pulse';
-      }
-
-      const pixelX = (gridPos.c + 0.5) * CELL_SIZE;
-      const pixelY = (gridPos.r + 0.5) * CELL_SIZE;
-
-      const newLight: import('@/lib/types').LightSource = {
-        id: `light-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        x: pixelX,
-        y: pixelY,
-        brightRadius,
-        dimRadius,
-        color,
-        intensity: 0.9,
-        animation
+    // Check POI Hit
+    if (clickedCell && isPOIType(clickedCell.type)) {
+      dragCandidateRef.current = {
+        kind: 'poi',
+        startR: pos.r,
+        startC: pos.c,
+        startX: x,
+        startY: y,
+        initialClientX: e.clientX,
+        initialClientY: e.clientY,
+        cell: clickedCell
       };
-
-      onGridChange((prev) => {
-        const copy = prev.map((row) => row.map((c) => ({ ...c })));
-        if (copy[gridPos.r]?.[gridPos.c]) {
-          copy[gridPos.r][gridPos.c].fog = false;
-          if (copy[gridPos.r][gridPos.c].type === 'wall' && !bgImageUrl) {
-            copy[gridPos.r][gridPos.c].type = 'floor';
-          }
-        }
-        revealVisionWithLOS(copy, gridPos.r, gridPos.c, dimRadius / 5, vectorWalls, CELL_SIZE);
-        return copy;
-      });
-
-      onAddLightSource?.(newLight);
       return;
     }
 
-    // 2.B. Check Vector Door Interactivity (1-Click Door Toggle)
-    const mapCoordX = (x - (bgImage ? gridOffsetX : 0)) / CELL_SIZE;
-    const mapCoordY = (y - (bgImage ? gridOffsetY : 0)) / CELL_SIZE;
-    const doorHit = findDoorNearPoint(mapCoordX, mapCoordY, vectorWalls, 0.45);
-
-    if (doorHit && !isSpacePressed) {
-      const isShift = e.shiftKey || e.button === 2;
-      const res = toggleDoorState(doorHit.wall, {
-        isDm: !isPlayerView,
-        forceLockToggle: isShift,
-      });
-
-      if (res.action.startsWith('failed')) {
-        toast.error(res.message);
-      } else {
-        toast.success(res.message);
-        if (onUpdateVectorWalls) {
-          const updatedList = vectorWalls.map((w) => (w.id === res.updatedWall.id ? res.updatedWall : w));
-          onUpdateVectorWalls(updatedList);
-        }
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('masters_codex_door_toggle', { detail: res }));
-        }
-      }
-      return;
-    }
-
-    // 3. Check Existing Interactive Functional POI Hit (door, trap, chest, stash, trigger, portcullis, illusion_wall, transition)
-    if (clickedCell && !isPlayerView && isPOIType(clickedCell.type) && !isSpacePressed) {
-      if (e.button === 0) {
-        dragCandidateRef.current = {
-          kind: 'poi',
-          startR: pos.r,
-          startC: pos.c,
-          startX: x,
-          startY: y,
-          initialClientX: e.clientX,
-          initialClientY: e.clientY,
-          cell: clickedCell
-        };
+    if (selectedTool === 'measure' && e.button === 0) {
+      if (rulerStatus === 'completed' || rulerStatus === 'idle' || rulerPoints.length === 0) {
+        setRulerPoints([pos]);
+        setRulerStatus('measuring');
+        setIsRulerDragging(true);
+        rulerDragStartCell.current = pos;
+        setMeasureStart?.(pos);
+        setMeasuredDistance?.(null);
         return;
       }
-    }
-
-    if (selectedTool === 'measure') {
-      if (e.button === 0) {
-        if (rulerStatus === 'completed') {
-          setRulerPoints([pos]);
-          setRulerStatus('measuring');
+      if (rulerStatus === 'measuring') {
+        const lastPoint = rulerPoints[rulerPoints.length - 1];
+        if (pos.r === lastPoint.r && pos.c === lastPoint.c) {
+          if (rulerPoints.length >= 2) handleFinishRuler();
+        } else {
+          const added = getOrthogonalPath(lastPoint, pos);
+          const newPoints = [...rulerPoints, ...added];
+          setRulerPoints(newPoints);
           setIsRulerDragging(true);
           rulerDragStartCell.current = pos;
-          setMeasureStart?.(pos);
-          setMeasuredDistance?.(null);
-          return;
+          const summary = getRulerSummary(newPoints, null, false);
+          setMeasuredDistance?.({ feet: summary.totalFeet, meters: summary.totalMeters });
         }
-
-        if (rulerStatus === 'idle' || rulerPoints.length === 0) {
-          setRulerPoints([pos]);
-          setRulerStatus('measuring');
-          setIsRulerDragging(true);
-          rulerDragStartCell.current = pos;
-          setMeasureStart?.(pos);
-          setMeasuredDistance?.(null);
-          return;
-        }
-
-        if (rulerStatus === 'measuring') {
-          const lastPoint = rulerPoints[rulerPoints.length - 1];
-          if (pos.r === lastPoint.r && pos.c === lastPoint.c) {
-            if (rulerPoints.length >= 2) {
-              handleFinishRuler();
-            }
-          } else {
-            const added = getOrthogonalPath(lastPoint, pos);
-            const newPoints = [...rulerPoints, ...added];
-            setRulerPoints(newPoints);
-            setIsRulerDragging(true);
-            rulerDragStartCell.current = pos;
-            const summary = getRulerSummary(newPoints, null, false);
-            setMeasuredDistance?.({ feet: summary.totalFeet, meters: summary.totalMeters });
-          }
-          return;
-        }
+        return;
       }
-      return;
-    }
-
-    // Placing a NEW POI (door, trap, chest, stash, etc.) with paint tool - single placement
-    if (selectedTool === 'paint' && isPOIType(selectedTileType) && e.button === 0 && !isSpacePressed) {
-      setIsDrawing(false);
-      setDrawButton(-1);
-      handleCellAction(pos.r, pos.c, e.button, true);
       return;
     }
 
     setIsDrawing(true);
     setDrawButton(e.button);
-    handleCellAction(pos.r, pos.c, e.button, e.type === 'mousedown');
+    handleCellAction(pos.r, pos.c, e.button);
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (editingCell) {
-      if (isDrawing) setIsDrawing(false);
-      setDrawButton(-1);
-      return;
-    }
-
     if (isPanning) {
       const dx = e.clientX - panStart.x;
       const dy = e.clientY - panStart.y;
@@ -2584,42 +1495,14 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     const { x, y } = getCanvasCoords(e);
 
-    if (selectedTool.startsWith('draw-')) {
+    if (activeStrokeRef.current && selectedTool.startsWith('draw-')) {
       const toolType = selectedTool.replace('draw-', '');
-      if (toolType === 'eraser') {
-        if (isDrawing && drawings && drawings.length > 0) {
-          let closestId = null;
-          let minDist = Infinity;
-          drawings.forEach((d: any) => {
-            if (!d.points || d.points.length === 0) return;
-            for (let i = 0; i < d.points.length; i++) {
-              const p = d.points[i];
-              const dist = Math.hypot(p.x - x, p.y - y);
-              if (dist < minDist) {
-                minDist = dist;
-                closestId = d.id;
-              }
-            }
-          });
-          if (closestId && minDist < 60 / zoom) {
-            onDrawingAction?.({ action: 'remove', strokeId: closestId });
-          }
-        }
-        return;
+      if (toolType === 'pencil') {
+        activeStrokeRef.current.points.push({ x, y });
+      } else if (toolType === 'circle' || toolType === 'rect') {
+        activeStrokeRef.current.points[1] = { x, y };
       }
-      if (activeStrokeRef.current) {
-        if (toolType === 'pencil') {
-          const pts = activeStrokeRef.current.points;
-          const lastPt = pts[pts.length - 1];
-          if (!lastPt || Math.hypot(lastPt.x - x, lastPt.y - y) > 2 / zoom) {
-            pts.push({ x, y });
-          }
-        } else if (toolType === 'circle' || toolType === 'rect') {
-          activeStrokeRef.current.points[1] = { x, y };
-        }
-        renderDrawings(activeStrokeRef.current);
-        return;
-      }
+      renderDrawings(activeStrokeRef.current);
       return;
     }
 
@@ -2630,55 +1513,24 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     const pos = getGridPos(x, y);
 
-    // Promote candidate to active drag if mouse moved >= 4px
+    // Promover drag candidate se arrastou >= 4px
     if (dragCandidateRef.current && !isPanning) {
-      const moveDist = Math.hypot(e.clientX - dragCandidateRef.current.initialClientX, e.clientY - dragCandidateRef.current.initialClientY);
-      if (moveDist >= 4) {
+      const dist = Math.hypot(e.clientX - dragCandidateRef.current.initialClientX, e.clientY - dragCandidateRef.current.initialClientY);
+      if (dist >= 4) {
         const cand = dragCandidateRef.current;
         if (cand.kind === 'token') {
-          setDraggingItem({
-            kind: 'token',
-            tokenName: cand.tokenName,
-            tokenColor: cand.tokenColor,
-            startR: cand.startR,
-            startC: cand.startC,
-            currentR: pos.r,
-            currentC: pos.c
-          });
+          setDraggingItem({ kind: 'token', tokenName: cand.tokenName, tokenColor: cand.tokenColor, startR: cand.startR, startC: cand.startC, currentR: pos.r, currentC: pos.c });
         } else if (cand.kind === 'poi' && cand.cell) {
-          setDraggingItem({
-            kind: 'poi',
-            poiType: cand.cell.type,
-            poiCell: cand.cell,
-            startR: cand.startR,
-            startC: cand.startC,
-            currentR: pos.r,
-            currentC: pos.c
-          });
+          setDraggingItem({ kind: 'poi', poiType: cand.cell.type, poiCell: cand.cell, startR: cand.startR, startC: cand.startC, currentR: pos.r, currentC: pos.c });
         } else if (cand.kind === 'light' && cand.light) {
-          setDraggingItem({
-            kind: 'light',
-            lightId: cand.light.id,
-            light: cand.light,
-            startR: cand.startR,
-            startC: cand.startC,
-            currentR: pos.r,
-            currentC: pos.c,
-            startX: cand.startX,
-            startY: cand.startY,
-            currentX: x,
-            currentY: y
-          });
+          setDraggingItem({ kind: 'light', lightId: cand.light.id, light: cand.light, startR: cand.startR, startC: cand.startC, currentR: pos.r, currentC: pos.c });
         }
         dragCandidateRef.current = null;
-        setEditingCell(null);
       }
     }
 
     if (draggingItem) {
-      if (draggingItem.kind === 'light') {
-        setDraggingItem(prev => prev ? { ...prev, currentR: pos.r, currentC: pos.c, currentX: x, currentY: y } : null);
-      } else if (pos.r !== draggingItem.currentR || pos.c !== draggingItem.currentC) {
+      if (pos.r !== draggingItem.currentR || pos.c !== draggingItem.currentC) {
         setDraggingItem(prev => prev ? { ...prev, currentR: pos.r, currentC: pos.c } : null);
       }
       return;
@@ -2697,14 +1549,11 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return;
     }
 
+    // Hover tooltip para POIs e Tokens
     if (!isPlayerView && !isPanning && !draggingItem) {
       const cell = grid[pos.r]?.[pos.c];
       if (cell && (isPOIType(cell.type) || Boolean(cell.tokenName))) {
-        setHoveredCell({
-          x: e.clientX,
-          y: e.clientY,
-          cell
-        });
+        setHoveredCell({ x: e.clientX, y: e.clientY, cell });
       } else {
         setHoveredCell(null);
       }
@@ -2712,189 +1561,65 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       setHoveredCell(null);
     }
 
-    if (!isDrawing) return;
-    if (selectedTool === 'paint' && isPOIType(selectedTileType)) {
-      return;
-    }
+    if (!isDrawing || selectedTool !== 'paint') return;
 
-    if (lastPaintedCellRef.current?.r === pos.r && 
-        lastPaintedCellRef.current?.c === pos.c && 
-        lastPaintedCellRef.current?.tool === selectedTool) {
-      return;
-    }
+    if (lastPaintedCellRef.current?.r === pos.r && lastPaintedCellRef.current?.c === pos.c) return;
     lastPaintedCellRef.current = { r: pos.r, c: pos.c, tool: selectedTool };
-
-    handleCellAction(pos.r, pos.c, drawButton, false);
+    handleCellAction(pos.r, pos.c, drawButton);
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
     lastPaintedCellRef.current = null;
+    if (isPanning) { setIsPanning(false); return; }
 
-    if (editingCell) {
-      setIsDrawing(false);
-      setDrawButton(-1);
-      return;
-    }
-
-    if (isPanning) {
-      setIsPanning(false);
-      return;
-    }
-
-    // 1. Click without dragging -> Open configuration or select
+    // Click sem arrastar abre configuração do POI
     if (dragCandidateRef.current) {
       const cand = dragCandidateRef.current;
       dragCandidateRef.current = null;
       if (cand.kind === 'poi' && cand.cell && !isPlayerView) {
-        setIsDrawing(false);
-        setDrawButton(-1);
-        setEditingCell({
-          r: cand.startR,
-          c: cand.startC,
-          cell: cand.cell
-        });
-        return;
-      }
-      if (cand.kind === 'light' && cand.light) {
-        toast.info(`Fonte de luz (${cand.light.animation || 'tocha'}) selecionada. Arraste para reposicionar.`);
-        return;
-      }
-      if (cand.kind === 'token') {
+        setEditingCell({ r: cand.startR, c: cand.startC, cell: cand.cell });
         return;
       }
     }
 
-    // 2. Drag & Drop release -> Move object to destination
+    // Soltar arrasto
     if (draggingItem) {
       if (draggingItem.kind === 'token' && draggingItem.tokenName) {
-        if (draggingItem.currentR !== draggingItem.startR || draggingItem.currentC !== draggingItem.startC) {
-          const targetCell = grid[draggingItem.currentR]?.[draggingItem.currentC];
-          const isPortcullisClosed = targetCell?.type === 'portcullis' && targetCell.portcullisConfig?.status === 'closed';
-          if (!isCellBlockingVision(targetCell) && !isPortcullisClosed) {
-            moveToken(draggingItem.tokenName, draggingItem.tokenColor || '', draggingItem.currentR, draggingItem.currentC);
-          }
-        }
+        moveToken(draggingItem.tokenName, draggingItem.tokenColor || '', draggingItem.currentR, draggingItem.currentC);
       } else if (draggingItem.kind === 'poi' && draggingItem.poiCell) {
-        if (draggingItem.currentR !== draggingItem.startR || draggingItem.currentC !== draggingItem.startC) {
-          const sourceR = draggingItem.startR;
-          const sourceC = draggingItem.startC;
-          const targetR = draggingItem.currentR;
-          const targetC = draggingItem.currentC;
-
-          if (targetR >= 0 && targetR < ROWS && targetC >= 0 && targetC < COLS) {
-            onGridChange((prev) => {
-              const copy = prev.map((row) => row.map((cell) => ({ ...cell })));
-              const src = copy[sourceR]?.[sourceC];
-              const dest = copy[targetR]?.[targetC];
-              if (src && dest) {
-                // Transfer functional data to destination
-                dest.type = src.type;
-                dest.doorConfig = src.doorConfig ? { ...src.doorConfig } : undefined;
-                dest.trapConfig = src.trapConfig ? { ...src.trapConfig } : undefined;
-                dest.chestConfig = src.chestConfig ? { ...src.chestConfig } : undefined;
-                dest.triggerConfig = src.triggerConfig ? { ...src.triggerConfig } : undefined;
-                dest.portcullisConfig = src.portcullisConfig ? { ...src.portcullisConfig } : undefined;
-                dest.illusionWallConfig = src.illusionWallConfig ? { ...src.illusionWallConfig } : undefined;
-                dest.transitionConfig = src.transitionConfig ? { ...src.transitionConfig } : undefined;
-
-                // Reset source cell to floor
-                src.type = 'floor';
-                src.doorConfig = undefined;
-                src.trapConfig = undefined;
-                src.chestConfig = undefined;
-                src.triggerConfig = undefined;
-                src.portcullisConfig = undefined;
-                src.illusionWallConfig = undefined;
-                src.transitionConfig = undefined;
-              }
-              return copy;
-            });
-            toast.success(`${getPOIName(draggingItem.poiCell)} movido para a nova posição!`);
+        onGridChange((prev) => {
+          const copy = prev.map(row => row.map(cell => ({ ...cell })));
+          const src = copy[draggingItem.startR]?.[draggingItem.startC];
+          const dest = copy[draggingItem.currentR]?.[draggingItem.currentC];
+          if (src && dest) {
+            dest.type = src.type;
+            dest.doorConfig = src.doorConfig ? { ...src.doorConfig } : undefined;
+            dest.trapConfig = src.trapConfig ? { ...src.trapConfig } : undefined;
+            dest.chestConfig = src.chestConfig ? { ...src.chestConfig } : undefined;
+            dest.triggerConfig = src.triggerConfig ? { ...src.triggerConfig } : undefined;
+            dest.portcullisConfig = src.portcullisConfig ? { ...src.portcullisConfig } : undefined;
+            dest.illusionWallConfig = src.illusionWallConfig ? { ...src.illusionWallConfig } : undefined;
+            dest.transitionConfig = src.transitionConfig ? { ...src.transitionConfig } : undefined;
+            src.type = 'floor';
           }
-        }
+          return copy;
+        });
       } else if (draggingItem.kind === 'light' && draggingItem.light) {
-        const newPixelX = (draggingItem.currentC + 0.5) * CELL_SIZE;
-        const newPixelY = (draggingItem.currentR + 0.5) * CELL_SIZE;
-        const updatedLight: import('@/lib/types').LightSource = {
+        const updatedLight: LightSource = {
           ...draggingItem.light,
-          x: newPixelX,
-          y: newPixelY
+          x: (draggingItem.currentC + 0.5) * CELL_SIZE,
+          y: (draggingItem.currentR + 0.5) * CELL_SIZE
         };
-        if (onUpdateLightSource) {
-          onUpdateLightSource(updatedLight);
-        } else if (onAddLightSource) {
-          onRemoveLightSource?.(draggingItem.light.id);
-          onAddLightSource(updatedLight);
-        }
-        toast.success('Fonte de luz movida!');
+        onUpdateLightSource?.(updatedLight);
       }
-
       setDraggingItem(null);
-      setHoveredCell(null);
-      return;
-    }
-
-    const { x, y } = getCanvasCoords(e);
-    const pos = getGridPos(x, y);
-
-    if (selectedTool === 'measure') {
-      if (isRulerDragging) {
-        setIsRulerDragging(false);
-        if (rulerDragStartCell.current) {
-          const dragStart = rulerDragStartCell.current;
-          const wasDraggedToNewCell = (pos.r !== dragStart.r || pos.c !== dragStart.c);
-          if (wasDraggedToNewCell) {
-            if (rulerPoints.length === 1 && rulerPoints[0].r === dragStart.r && rulerPoints[0].c === dragStart.c) {
-              const added = getOrthogonalPath(dragStart, pos);
-              const newPoints = [dragStart, ...added];
-              setRulerPoints(newPoints);
-              const summary = getRulerSummary(newPoints, null, false);
-              setMeasuredDistance?.({ feet: summary.totalFeet, meters: summary.totalMeters });
-            } else if (rulerPoints.length > 1) {
-              const lastPt = rulerPoints[rulerPoints.length - 1];
-              if (pos.r !== lastPt.r || pos.c !== lastPt.c) {
-                const added = getOrthogonalPath(lastPt, pos);
-                const newPoints = [...rulerPoints, ...added];
-                setRulerPoints(newPoints);
-                const summary = getRulerSummary(newPoints, null, false);
-                setMeasuredDistance?.({ feet: summary.totalFeet, meters: summary.totalMeters });
-              }
-            }
-          }
-          rulerDragStartCell.current = null;
-        }
-      }
       return;
     }
 
     if (activeStrokeRef.current && selectedTool.startsWith('draw-')) {
-      const strokeToSave = { ...activeStrokeRef.current, points: [...activeStrokeRef.current.points] };
-      if (strokeToSave.points.length > 0) {
-        if ((strokeToSave.tool === 'circle' || strokeToSave.tool === 'rect') && strokeToSave.points.length === 1) {
-          strokeToSave.points.push({ x: strokeToSave.points[0].x + 30, y: strokeToSave.points[0].y + 30 });
-        }
-        onDrawingAction?.({ action: 'add', stroke: strokeToSave });
-      }
+      onDrawingAction?.({ action: 'add', stroke: { ...activeStrokeRef.current } });
       activeStrokeRef.current = null;
-      setIsDrawing(false);
       renderDrawings();
-      return;
-    }
-
-    if (selectedTool === 'draw-eraser') {
-      setIsDrawing(false);
-      return;
-    }
-
-    if (selectedTool === 'calibrate' && calibrationLine) {
-      const dx = calibrationLine.x2 - calibrationLine.x1;
-      const dy = calibrationLine.y2 - calibrationLine.y1;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      
-      if (length > 10) {
-        onCalibrateGridSize?.(Math.round(length));
-      }
-      setCalibrationLine?.(null);
     }
 
     if (selectedTool === 'box' && selectionBox) {
@@ -2906,181 +1631,50 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     setDrawButton(-1);
   };
 
-  const handleCellAction = (targetR: number, targetC: number, button: number, isInitialClick: boolean) => {
-    if (selectedTool === 'measure') {
-      return;
-    }
-
-    const { rows: currentRows, cols: currentCols } = gridDims.current;
-    
-    let expandN = 0, expandS = 0, expandW = 0, expandE = 0;
-    const margin = 3;
-    if (targetR < 0) expandN = Math.abs(targetR) + margin;
-    else if (targetR >= currentRows) expandS = (targetR - currentRows) + margin + 1;
-    
-    if (targetC < 0) expandW = Math.abs(targetC) + margin;
-    else if (targetC >= currentCols) expandE = (targetC - currentCols) + margin + 1;
-    
-    if (expandN > 0 || expandS > 0 || expandW > 0 || expandE > 0) {
-      gridDims.current = { 
-        rows: currentRows + expandN + expandS, 
-        cols: currentCols + expandW + expandE 
-      };
-      
-      if (expandN > 0 || expandW > 0) {
-        const dx = expandW * CELL_SIZE * zoom;
-        const dy = expandN * CELL_SIZE * zoom;
-        panOffsetRef.current = {
-          x: panOffsetRef.current.x - dx,
-          y: panOffsetRef.current.y - dy
-        };
-        setPanOffset(panOffsetRef.current);
-      }
-    }
-
+  const handleCellAction = (targetR: number, targetC: number, button: number) => {
     onGridChange((prev) => {
-      let copy = prev;
-      let r = targetR;
-      let c = targetC;
-      
-      if (expandN > 0 || expandS > 0 || expandW > 0 || expandE > 0) {
-        const prevRows = copy.length;
-        const prevCols = copy[0]?.length || 0;
-        const newCols = prevCols + expandW + expandE;
-        const newGrid: Cell[][] = [];
-        
-        for(let i=0; i<expandN; i++) {
-           newGrid.push(Array(newCols).fill(null).map((_, idx) => ({ x: idx, y: i, type: 'wall' as const, fog: true })));
-        }
-        
-        for(let i=0; i<prevRows; i++) {
-           const row = [];
-           for(let j=0; j<expandW; j++) row.push({ x: j, y: i + expandN, type: 'wall' as const, fog: true });
-           for(let j=0; j<prevCols; j++) {
-              row.push({ ...copy[i][j], x: j + expandW, y: i + expandN });
-           }
-           for(let j=0; j<expandE; j++) row.push({ x: prevCols + expandW + j, y: i + expandN, type: 'wall' as const, fog: true });
-           newGrid.push(row);
-        }
-        
-        for(let i=0; i<expandS; i++) {
-           newGrid.push(Array(newCols).fill(null).map((_, idx) => ({ x: idx, y: prevRows + expandN + i, type: 'wall' as const, fog: true })));
-        }
-        
-        copy = newGrid;
-      } else {
-        copy = copy.map(row => row.map(cell => ({...cell})));
-      }
-      
-      r = targetR + expandN;
-      c = targetC + expandW;
-      
-      if (r >= 0 && r < copy.length && c >= 0 && c < copy[0].length) {
-         const cell = copy[r][c];
-         const paintValue = (button === 2) ? 'wall' as const : selectedTileType as TileType;
+      const copy = prev.map(row => row.map(cell => ({ ...cell })));
+      if (targetR >= 0 && targetR < copy.length && targetC >= 0 && targetC < copy[0].length) {
+        const cell = copy[targetR][targetC];
+        const paintValue = (button === 2) ? 'wall' as const : selectedTileType as TileType;
 
-         if (selectedTool === 'fog-reveal') cell.fog = false;
-         else if (selectedTool === 'fog-cover') cell.fog = true;
-         else if (selectedTool === 'paint') {
-           cell.type = paintValue;
-           
-           if (paintValue === 'door' && !cell.doorConfig) {
-             cell.doorConfig = {
-               status: 'closed',
-               doorType: 'wooden',
-               breakDC: 15,
-               lockpickDC: 15,
-               secretRevealed: false
-             };
-           }
-           if (paintValue === 'trap' && !cell.trapConfig) {
-             cell.trapConfig = {
-               trapType: 'Armadilha de Agulha',
-               detectDC: 15,
-               disarmDC: 15,
-               revealedToPlayers: false,
-               description: 'Causa 1d10 de dano físico e envenenamento se falhar num teste de resistência.'
-             };
-           }
-           if (paintValue === 'chest' && !cell.chestConfig) {
-             cell.chestConfig = {
-               name: 'Baú de Madeira',
-               containerType: 'wooden_chest',
-               status: 'locked',
-               lockpickDC: 15,
-               breakDC: 16,
-               revealedToPlayers: true,
-               loot: {
-                 gp: 25,
-                 sp: 50,
-                 items: ['Poção de Cura (2d4+2)'],
-               }
-             };
-           }
-           if (paintValue === 'stash' && !cell.chestConfig) {
-             cell.chestConfig = {
-               name: 'Esconderijo Oculto',
-               containerType: 'hidden_stash',
-               status: 'unlocked',
-               lockpickDC: 12,
-               breakDC: 14,
-               detectDC: 15,
-               revealedToPlayers: false,
-               loot: {
-                 gp: 60,
-                 items: ['Gema de Quartzo (50 PO)', 'Pergaminho de Mísseis Mágicos'],
-               }
-             };
-           }
-           if (paintValue === 'trigger' && !cell.triggerConfig) {
-             cell.triggerConfig = {
-               id: `trigger-${Math.random().toString(36).substring(2, 8)}`,
-               targetId: '',
-               triggerType: 'lever',
-               state: 'inactive',
-               name: 'Alavanca Antiga',
-               isSecret: false,
-               revealedToPlayers: true
-             };
-           }
-           if (paintValue === 'portcullis' && !cell.portcullisConfig) {
-             cell.portcullisConfig = {
-               id: `grade-${Math.random().toString(36).substring(2, 8)}`,
-               status: 'closed',
-               material: 'iron',
-               name: 'Grade de Ferro'
-             };
-           }
-           if (paintValue === 'illusion_wall' && !cell.illusionWallConfig) {
-             cell.illusionWallConfig = {
-               detectDC: 15,
-               revealedToPlayers: false,
-               blocksLight: true
-             };
-           }
-         } else if (selectedTool === 'token') {
-            if (button === 2) {
-              if (cell.tokenName) {
-                cell.tokenName = undefined;
-                cell.tokenColor = undefined;
-              }
-            } else if (selectedTokenCombatant) {
-              const targetName = selectedTokenCombatant.name;
-              const nameKey = targetName.trim().toUpperCase();
-              for (let rowIdx = 0; rowIdx < copy.length; rowIdx++) {
-                for (let colIdx = 0; colIdx < copy[0].length; colIdx++) {
-                  const existingName = copy[rowIdx][colIdx].tokenName;
-                  if (existingName && existingName.trim().toUpperCase() === nameKey) {
-                    copy[rowIdx][colIdx].tokenName = undefined;
-                    copy[rowIdx][colIdx].tokenColor = undefined;
-                  }
-                }
-              }
-              cell.tokenName = targetName;
-              cell.tokenColor = selectedTokenCombatant.type === 'player' ? 'bg-cyan-500' : 'bg-rose-600';
-              revealVisionWithLOS(copy, r, c, getTokenVisionRadius(selectedTokenCombatant.name, combatants));
-            }
+        if (selectedTool === 'fog-reveal') cell.fog = false;
+        else if (selectedTool === 'fog-cover') cell.fog = true;
+        else if (selectedTool === 'token') {
+          if (button === 2) {
+            cell.tokenName = undefined;
+            cell.tokenColor = undefined;
+          } else if (selectedTokenCombatant) {
+            const isPlayer = selectedTokenCombatant.type === 'player';
+            cell.tokenName = selectedTokenCombatant.name;
+            cell.tokenColor = isPlayer ? 'bg-cyan-500' : 'bg-rose-500';
+            revealVisionWithLOS(copy, targetR, targetC, getTokenVisionRadius(selectedTokenCombatant.name, combatants));
           }
+        }
+        else if (selectedTool === 'paint') {
+          cell.type = paintValue;
+          if (paintValue === 'door' && !cell.doorConfig) {
+            cell.doorConfig = { status: 'closed', doorType: 'wooden', breakDC: 15, lockpickDC: 15, secretRevealed: false };
+          }
+          if (paintValue === 'trap' && !cell.trapConfig) {
+            cell.trapConfig = { trapType: 'Armadilha', detectDC: 15, disarmDC: 15, revealedToPlayers: false };
+          }
+          if (paintValue === 'chest' && !cell.chestConfig) {
+            cell.chestConfig = { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true, loot: { gp: 25, items: [] } };
+          }
+          if (paintValue === 'stash' && !cell.chestConfig) {
+            cell.chestConfig = { name: 'Esconderijo', containerType: 'hidden_stash', status: 'unlocked', lockpickDC: 12, breakDC: 14, detectDC: 15, revealedToPlayers: false, loot: { gp: 50, items: [] } };
+          }
+          if (paintValue === 'trigger' && !cell.triggerConfig) {
+            cell.triggerConfig = { id: `trigger-${Math.random().toString(36).substring(2, 8)}`, targetId: '', triggerType: 'lever', state: 'inactive', name: 'Alavanca', isSecret: false, revealedToPlayers: true };
+          }
+          if (paintValue === 'portcullis' && !cell.portcullisConfig) {
+            cell.portcullisConfig = { id: `grade-${Math.random().toString(36).substring(2, 8)}`, status: 'closed', material: 'iron', name: 'Grade de Ferro' };
+          }
+          if (paintValue === 'illusion_wall' && !cell.illusionWallConfig) {
+            cell.illusionWallConfig = { detectDC: 15, revealedToPlayers: false, blocksLight: true };
+          }
+        }
       }
       return copy;
     });
@@ -3091,141 +1685,51 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     const maxR = Math.max(box.startR, box.currentR);
     const minC = Math.min(box.startC, box.currentC);
     const maxC = Math.max(box.startC, box.currentC);
-
-    const { rows: currentRows, cols: currentCols } = gridDims.current;
-    
-    let expandN = 0, expandS = 0, expandW = 0, expandE = 0;
-    const margin = 3;
-    if (minR < 0) expandN = Math.abs(minR) + margin;
-    if (maxR >= currentRows) expandS = (maxR - currentRows) + margin + 1;
-    
-    if (minC < 0) expandW = Math.abs(minC) + margin;
-    if (maxC >= currentCols) expandE = (maxC - currentCols) + margin + 1;
-    
-    if (expandN > 0 || expandS > 0 || expandW > 0 || expandE > 0) {
-      gridDims.current = { 
-        rows: currentRows + expandN + expandS, 
-        cols: currentCols + expandW + expandE 
-      };
-      
-      if (expandN > 0 || expandW > 0) {
-        const dx = expandW * CELL_SIZE * zoom;
-        const dy = expandN * CELL_SIZE * zoom;
-        panOffsetRef.current = {
-          x: panOffsetRef.current.x - dx,
-          y: panOffsetRef.current.y - dy
-        };
-        setPanOffset(panOffsetRef.current);
-      }
-    }
+    const paintValue = (button === 2) ? 'wall' as const : selectedTileType as TileType;
 
     onGridChange((prev) => {
-      let copy = prev;
-      
-      if (expandN > 0 || expandS > 0 || expandW > 0 || expandE > 0) {
-        const prevRows = copy.length;
-        const prevCols = copy[0]?.length || 0;
-        const newCols = prevCols + expandW + expandE;
-        const newGrid: Cell[][] = [];
-        
-        for(let i=0; i<expandN; i++) {
-           newGrid.push(Array(newCols).fill(null).map((_, idx) => ({ x: idx, y: i, type: 'wall' as const, fog: true })));
-        }
-        
-        for(let i=0; i<prevRows; i++) {
-           const row = [];
-           for(let j=0; j<expandW; j++) row.push({ x: j, y: i + expandN, type: 'wall' as const, fog: true });
-           for(let j=0; j<prevCols; j++) {
-              row.push({ ...copy[i][j], x: j + expandW, y: i + expandN });
-           }
-           for(let j=0; j<expandE; j++) row.push({ x: prevCols + expandW + j, y: i + expandN, type: 'wall' as const, fog: true });
-           newGrid.push(row);
-        }
-        
-        for(let i=0; i<expandS; i++) {
-           newGrid.push(Array(newCols).fill(null).map((_, idx) => ({ x: idx, y: prevRows + expandN + i, type: 'wall' as const, fog: true })));
-        }
-        
-        copy = newGrid;
-      } else {
-        copy = copy.map(row => row.map(cell => ({...cell})));
-      }
+      const copy = prev.map(row => row.map(cell => ({ ...cell })));
+      for (let r = minR; r <= maxR; r++) {
+        for (let c = minC; c <= maxC; c++) {
+          if (r >= 0 && r < copy.length && c >= 0 && c < copy[0].length) {
+            const isBorder = (r === minR || r === maxR || c === minC || c === maxC);
+            const cell = copy[r][c];
 
-      const startR = minR + expandN;
-      const endR = maxR + expandN;
-      const startC = minC + expandW;
-      const endC = maxC + expandW;
-
-      const paintValue = (button === 2) ? 'wall' as const : selectedTileType as TileType;
-
-      for (let r = Math.max(0, startR); r <= Math.min(copy.length - 1, endR); r++) {
-        for (let c = Math.max(0, startC); c <= Math.min((copy[0]?.length || 1) - 1, endC); c++) {
-          const isBorder = (r === startR || r === endR || c === startC || c === endC);
-          const cell = copy[r][c];
-
-          if (boxMode === 'room') {
-            if (isBorder) {
-              cell.type = 'wall';
+            if (boxMode === 'room') {
+              cell.type = isBorder ? 'wall' : 'floor';
+              if (!isBorder) cell.fog = false;
+            } else if (boxMode === 'hollow') {
+              if (isBorder) cell.type = paintValue;
+            } else if (boxMode === 'fog-reveal') {
+              cell.fog = false;
+            } else if (boxMode === 'fog-cover') {
+              cell.fog = true;
             } else {
-              cell.type = 'floor';
-              cell.fog = false;
-            }
-          } else if (boxMode === 'hollow') {
-            if (isBorder) {
               cell.type = paintValue;
-              if (paintValue === 'floor' || paintValue === 'grass' || paintValue === 'water') {
-                cell.fog = false;
-              }
-            }
-          } else if (boxMode === 'fog-reveal') {
-            cell.fog = false;
-          } else if (boxMode === 'fog-cover') {
-            cell.fog = true;
-          } else {
-            // 'fill'
-            cell.type = paintValue;
-            if (paintValue === 'floor' || paintValue === 'grass' || paintValue === 'water') {
-              cell.fog = false;
+              if (paintValue === 'floor' || paintValue === 'grass' || paintValue === 'water') cell.fog = false;
             }
           }
         }
       }
-
-      // Re-apply LOS for any active tokens
-      for (let r = 0; r < copy.length; r++) {
-        for (let c = 0; c < copy[r].length; c++) {
-          if (copy[r][c].tokenName) {
-            revealVisionWithLOS(copy, r, c, getTokenVisionRadius(copy[r][c].tokenName, combatants));
-          }
-        }
-      }
-
       return copy;
     });
   };
 
-  // Zoom handling using non-passive native wheel event (centered on mouse cursor)
+  // Zoom nativo suave centrado no cursor
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const handleNativeWheel = (e: WheelEvent) => {
       e.preventDefault();
-
       const rect = container.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
-
-      // Smooth multiplicative zoom centered on mouse
       const zoomFactor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
+      const nextZoom = Math.max(0.05, Math.min(zoomRef.current * zoomFactor, 5.0));
 
-      const currentZoom = zoomRef.current;
-      const currentPan = panOffsetRef.current;
-
-      const nextZoom = Math.max(0.05, Math.min(currentZoom * zoomFactor, 5.0));
-
-      const localMouseX = (mouseX - currentPan.x) / currentZoom;
-      const localMouseY = (mouseY - currentPan.y) / currentZoom;
+      const localMouseX = (mouseX - panOffsetRef.current.x) / zoomRef.current;
+      const localMouseY = (mouseY - panOffsetRef.current.y) / zoomRef.current;
 
       const nextPan = {
         x: mouseX - localMouseX * nextZoom,
@@ -3234,47 +1738,22 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
       zoomRef.current = nextZoom;
       panOffsetRef.current = nextPan;
-
       setZoom(nextZoom);
       setPanOffset(nextPan);
     };
 
     container.addEventListener('wheel', handleNativeWheel, { passive: false });
-    return () => {
-      container.removeEventListener('wheel', handleNativeWheel);
-    };
+    return () => container.removeEventListener('wheel', handleNativeWheel);
   }, []);
-
-  const handleFitToScreen = useCallback(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const padding = 60;
-    const availWidth = Math.max(100, container.clientWidth - padding * 2);
-    const availHeight = Math.max(100, container.clientHeight - padding * 2);
-    const totalMapW = COLS * CELL_SIZE;
-    const totalMapH = ROWS * CELL_SIZE;
-
-    const fitZoom = Math.max(0.05, Math.min(availWidth / totalMapW, availHeight / totalMapH, 1.5));
-    const nextPan = {
-      x: (container.clientWidth - totalMapW * fitZoom) / 2,
-      y: (container.clientHeight - totalMapH * fitZoom) / 2,
-    };
-
-    zoomRef.current = fitZoom;
-    panOffsetRef.current = nextPan;
-    setZoom(fitZoom);
-    setPanOffset(nextPan);
-  }, [COLS, ROWS, CELL_SIZE]);
 
   const handleZoomStep = (delta: number) => {
     const container = containerRef.current;
     if (!container) return;
-    const currentZoom = zoomRef.current;
-    const nextZoom = Math.max(0.05, Math.min(5.0, currentZoom + delta));
+    const nextZoom = Math.max(0.05, Math.min(5.0, zoomRef.current + delta));
     const centerX = container.clientWidth / 2;
     const centerY = container.clientHeight / 2;
-    const localCenterX = (centerX - panOffsetRef.current.x) / currentZoom;
-    const localCenterY = (centerY - panOffsetRef.current.y) / currentZoom;
+    const localCenterX = (centerX - panOffsetRef.current.x) / zoomRef.current;
+    const localCenterY = (centerY - panOffsetRef.current.y) / zoomRef.current;
     const nextPan = {
       x: centerX - localCenterX * nextZoom,
       y: centerY - localCenterY * nextZoom,
@@ -3285,21 +1764,51 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     setPanOffset(nextPan);
   };
 
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    if (selectedTool === 'measure') {
-      e.preventDefault();
-      handleFinishRuler();
+  const fitAndCenterView = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const totalW = COLS * CELL_SIZE;
+    const totalH = ROWS * CELL_SIZE;
+    const fitZoom = Math.max(0.05, Math.min((container.clientWidth - 100) / totalW, (container.clientHeight - 100) / totalH, 1.5));
+    const nextPan = {
+      x: (container.clientWidth - totalW * fitZoom) / 2,
+      y: (container.clientHeight - totalH * fitZoom) / 2,
+    };
+    zoomRef.current = fitZoom;
+    panOffsetRef.current = nextPan;
+    setZoom(fitZoom);
+    setPanOffset(nextPan);
+  }, [COLS, ROWS, CELL_SIZE]);
+
+  // Handlers da Régua
+  const handleExitRuler = () => {
+    setRulerStatus('idle');
+    setRulerPoints([]);
+    setRulerCursor(null);
+    setMeasureStart?.(null);
+    setMeasuredDistance?.(null);
+    setSelectedTool?.('fog-reveal');
+  };
+
+  const handleFinishRuler = () => {
+    if (rulerPoints.length >= 1) setRulerStatus('completed');
+  };
+
+  const handleUndoRulerPoint = () => {
+    if (rulerPoints.length > 1) {
+      const next = rulerPoints.slice(0, -1);
+      setRulerPoints(next);
+      const summary = getRulerSummary(next, null, false);
+      setMeasuredDistance?.({ feet: summary.totalFeet, meters: summary.totalMeters });
     }
   };
 
-  const getCursorClass = () => {
-    if (selectedTool === 'pan' || isSpacePressed) {
-      return isPanning ? 'cursor-grabbing' : 'cursor-grab';
-    }
-    if (draggingItem) return 'cursor-grabbing';
-    if (selectedTool === 'measure') return 'cursor-crosshair';
-    if (selectedTool === 'paint' || selectedTool === 'box' || selectedTool.startsWith('draw-')) return 'cursor-crosshair';
-    return 'cursor-default';
+  const handleResetRuler = () => {
+    setRulerStatus('idle');
+    setRulerPoints([]);
+    setRulerCursor(null);
+    setMeasureStart?.(null);
+    setMeasuredDistance?.(null);
   };
 
   const hasDarkvision = useMemo(() => {
@@ -3308,73 +1817,49 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     return false;
   }, [selectedTokenCombatant, isPlayerView, combatants]);
 
-  const hasTremorsense = useMemo(() => {
-    if (selectedTokenCombatant) return selectedTokenCombatant.visionType === 'tremorsense';
-    if (isPlayerView) return combatants.some(c => c.type === 'player' && c.visionType === 'tremorsense');
-    return false;
-  }, [selectedTokenCombatant, isPlayerView, combatants]);
-
-  // Touch Pinch-to-Zoom & Pan Handlers for Tablet Support
-  const touchDistRef = useRef<number | null>(null);
-
-  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (e.touches.length === 2) {
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      touchDistRef.current = dist;
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (e.touches.length === 2 && touchDistRef.current !== null) {
-      const newDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const delta = newDist - touchDistRef.current;
-      if (Math.abs(delta) > 5) {
-        setZoom((prev) => Math.max(0.05, Math.min(5.0, prev + (delta > 0 ? 0.03 : -0.03))));
-        touchDistRef.current = newDist;
-      }
-    }
-  };
-
-  const handleTouchEnd = () => {
-    touchDistRef.current = null;
-  };
-
   return (
     <div 
       ref={containerRef}
-      className={`w-full h-full overflow-hidden relative ${getCursorClass()} bg-slate-950`}
+      className="w-full h-full overflow-hidden relative cursor-default bg-slate-950 select-none"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onDoubleClick={handleDoubleClick}
       onMouseLeave={() => setHoveredCell(null)}
       onContextMenu={(e) => e.preventDefault()}
       style={{ userSelect: 'none', touchAction: 'none' }}
     >
+      {/* 1. Camada Estática Bakada (Hachuras Dyson + Paredes + Fundo) */}
       <canvas
-        ref={canvasRef}
-        className="absolute top-0 left-0 w-full h-full"
+        ref={staticCanvasRef}
+        className="absolute top-0 left-0 w-full h-full pointer-events-none"
         style={{ filter: hasDarkvision ? 'grayscale(100%) brightness(0.8)' : 'none', transition: 'filter 0.5s ease' }}
       />
+
+      {/* 2. Camada de Iluminação, Sombras e Névoa de Guerra */}
+      <canvas
+        ref={lightingCanvasRef}
+        className="absolute top-0 left-0 w-full h-full pointer-events-none"
+      />
+
+      {/* 3. Camada de Entidades (Tokens, POIs, Luzes, Paredes Vetoriais) */}
+      <canvas
+        ref={entitiesCanvasRef}
+        className="absolute top-0 left-0 w-full h-full pointer-events-none"
+      />
+
+      {/* 4. Camada de Desenhos Livres */}
       <canvas
         ref={drawingCanvasRef}
         className="absolute top-0 left-0 w-full h-full pointer-events-none"
       />
-      {hasTremorsense && (
-        <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center">
-          <div className="w-64 h-64 border-2 border-emerald-500/30 rounded-full animate-ping" />
-        </div>
-      )}
-      {/* Bottom Right Floating HUD with Zoom and Fit Controls */}
+
+      {/* 5. Camada Superior de Interação (Régua Tática, Seleção, Calibração) */}
+      <canvas
+        ref={interactionCanvasRef}
+        className="absolute top-0 left-0 w-full h-full pointer-events-none"
+      />
+
+      {/* HUD Flutuante de Zoom e Ajuste */}
       <div 
         onMouseDown={(e) => e.stopPropagation()}
         className="absolute bottom-4 right-4 bg-[#0d121a]/95 backdrop-blur-md text-xs font-mono text-slate-300 px-3 py-1.5 rounded-xl border border-[#222c3d] shadow-2xl flex items-center gap-2.5 z-20"
@@ -3391,26 +1876,11 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
           <button
             type="button"
             onClick={() => {
-              const currentZoom = zoomRef.current;
-              const nextZoom = 1.0;
-              const container = containerRef.current;
-              if (container) {
-                const centerX = container.clientWidth / 2;
-                const centerY = container.clientHeight / 2;
-                const localCenterX = (centerX - panOffsetRef.current.x) / currentZoom;
-                const localCenterY = (centerY - panOffsetRef.current.y) / currentZoom;
-                const nextPan = {
-                  x: centerX - localCenterX * nextZoom,
-                  y: centerY - localCenterY * nextZoom,
-                };
-                panOffsetRef.current = nextPan;
-                setPanOffset(nextPan);
-              }
-              zoomRef.current = nextZoom;
-              setZoom(nextZoom);
+              zoomRef.current = 1.0;
+              setZoom(1.0);
             }}
             className="min-w-[48px] text-center font-bold text-amber-400 hover:text-amber-300 cursor-pointer text-xs"
-            title="Clique para resetar para 100%"
+            title="Resetar Zoom para 100%"
           >
             {Math.round(zoom * 100)}%
           </button>
@@ -3426,1158 +1896,31 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
             type="button"
             onClick={fitAndCenterView}
             className="px-2.5 py-1 flex items-center gap-1.5 rounded-lg bg-[#141a26] hover:bg-cyan-500/20 text-xs text-cyan-300 hover:text-cyan-200 border border-cyan-500/30 font-sans font-bold cursor-pointer ml-1 transition-all"
-            title="Enquadrar e centralizar o mapa inteiro na tela"
+            title="Enquadrar e centralizar o mapa"
           >
             <Maximize2 className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Centralizar Mapa</span>
+            <span>Centralizar</span>
           </button>
         </div>
-
         <div className="h-3 w-px bg-slate-700 hidden sm:block" />
         <span className="text-[10px] text-slate-400 hidden sm:inline">Grid: {CELL_SIZE}px</span>
       </div>
 
-      {editingCell && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto"
-          onMouseDown={(e) => { e.stopPropagation(); setIsDrawing(false); }}
-          onMouseMove={(e) => e.stopPropagation()}
-          onMouseUp={(e) => { e.stopPropagation(); setIsDrawing(false); }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div 
-            className="bg-[#121824] border border-[#2a3449] w-full max-w-[420px] rounded-2xl shadow-2xl p-5 select-none animate-fade-in font-sans max-h-[90vh] overflow-y-auto"
-            onMouseDown={(e) => e.stopPropagation()}
-            onMouseMove={(e) => e.stopPropagation()}
-            onMouseUp={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-[#2a3449]/60 pb-3 mb-4">
-              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2 uppercase tracking-wide">
-                {editingCell.cell.type === 'door' && <><DoorClosed className="w-4 h-4 text-amber-400" /> Configurar Porta</>}
-                {editingCell.cell.type === 'trap' && <><ShieldAlert className="w-4 h-4 text-rose-400" /> Configurar Armadilha</>}
-                {editingCell.cell.type === 'chest' && <><Package className="w-4 h-4 text-amber-300" /> Configurar Baú & Tesouro</>}
-                {editingCell.cell.type === 'stash' && <><Gem className="w-4 h-4 text-emerald-300" /> Configurar Esconderijo Oculto</>}
-                {editingCell.cell.type === 'trigger' && <><SlidersHorizontal className="w-4 h-4 text-cyan-400" /> Configurar Mecanismo</>}
-                {editingCell.cell.type === 'portcullis' && <><Grid className="w-4 h-4 text-slate-300" /> Configurar Grade de Ferro</>}
-                {editingCell.cell.type === 'illusion_wall' && <><EyeOff className="w-4 h-4 text-purple-400" /> Configurar Parede Falsa</>}
-              </h3>
-              <button 
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsDrawing(false);
-                  setDrawButton(-1);
-                  setEditingCell(null);
-                }}
-                className="text-slate-400 hover:text-slate-200 text-base p-1"
-              >
-                ✕
-              </button>
-            </div>
+      {/* Modal Modular de Configuração de Célula */}
+      <CellConfigModal
+        editingCell={editingCell}
+        setEditingCell={setEditingCell}
+        onClose={() => setEditingCell(null)}
+        onGridChange={onGridChange}
+        onOpenLoot={(target) => {
+          setEditingCell(null);
+          setActiveLootContainer(target);
+        }}
+        onOpenCompendium={() => setIsChestCompendiumOpen(true)}
+        onOpenCampaignDocs={() => setIsChestCampaignDocsOpen(true)}
+      />
 
-            {editingCell.cell.type === 'door' && (
-              <div className="space-y-3.5">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Status da Porta</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingCell(prev => prev ? {
-                        ...prev,
-                        cell: {
-                          ...prev.cell,
-                          doorConfig: {
-                            ...(prev.cell.doorConfig || { status: 'closed', doorType: 'wooden', breakDC: 15, lockpickDC: 15 }),
-                            status: 'open'
-                          }
-                        }
-                      } : null)}
-                      className={`py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                        editingCell.cell.doorConfig?.status === 'open'
-                          ? 'bg-emerald-600 border-emerald-500 text-white shadow'
-                          : 'bg-[#0a0d14] border-[#2a3449] text-slate-400 hover:bg-[#161c28]'
-                      }`}
-                    >
-                      Aberta (Dashed)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditingCell(prev => prev ? {
-                        ...prev,
-                        cell: {
-                          ...prev.cell,
-                          doorConfig: {
-                            ...(prev.cell.doorConfig || { status: 'closed', doorType: 'wooden', breakDC: 15, lockpickDC: 15 }),
-                            status: 'closed'
-                          }
-                        }
-                      } : null)}
-                      className={`py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                        editingCell.cell.doorConfig?.status === 'closed' || !editingCell.cell.doorConfig?.status
-                          ? 'bg-amber-600 border-amber-500 text-white shadow'
-                          : 'bg-[#0a0d14] border-[#2a3449] text-slate-400 hover:bg-[#161c28]'
-                      }`}
-                    >
-                      Fechada (Solid)
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Tipo de Porta (D&D)</label>
-                  <select
-                    value={editingCell.cell.doorConfig?.doorType || 'wooden'}
-                    onChange={(e) => {
-                      const t = e.target.value as 'wooden' | 'iron' | 'stone' | 'secret';
-                      setEditingCell(prev => prev ? {
-                        ...prev,
-                        cell: {
-                          ...prev.cell,
-                          doorConfig: {
-                            ...(prev.cell.doorConfig || { status: 'closed', doorType: 'wooden', breakDC: 15, lockpickDC: 15 }),
-                            doorType: t
-                          }
-                        }
-                      } : null);
-                    }}
-                    className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                  >
-                    <option value="wooden">Madeira Seca (CD 13)</option>
-                    <option value="iron">Ferro Reforçado (CD 18)</option>
-                    <option value="stone">Pedra Pesada (CD 20)</option>
-                    <option value="secret">Secreta (Oculta)</option>
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1">
-                      <Hammer className="w-3 h-3 text-amber-400" /> CD Arrombar
-                    </label>
-                    <input
-                      type="number"
-                      value={editingCell.cell.doorConfig?.breakDC ?? 15}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setEditingCell(prev => prev ? {
-                          ...prev,
-                          cell: {
-                            ...prev.cell,
-                            doorConfig: {
-                              ...(prev.cell.doorConfig || { status: 'closed', doorType: 'wooden', breakDC: 15, lockpickDC: 15 }),
-                              breakDC: val
-                            }
-                          }
-                        } : null);
-                      }}
-                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1">
-                      <Key className="w-3 h-3 text-amber-400" /> CD Lockpick
-                    </label>
-                    <input
-                      type="number"
-                      value={editingCell.cell.doorConfig?.lockpickDC ?? 15}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setEditingCell(prev => prev ? {
-                          ...prev,
-                          cell: {
-                            ...prev.cell,
-                            doorConfig: {
-                              ...(prev.cell.doorConfig || { status: 'closed', doorType: 'wooden', breakDC: 15, lockpickDC: 15 }),
-                              lockpickDC: val
-                            }
-                          }
-                        } : null);
-                      }}
-                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
-                    />
-                  </div>
-                </div>
-
-                {editingCell.cell.doorConfig?.doorType === 'secret' && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="checkbox"
-                      id="secretRevealedCheck"
-                      checked={editingCell.cell.doorConfig?.secretRevealed || false}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setEditingCell(prev => prev ? {
-                          ...prev,
-                          cell: {
-                            ...prev.cell,
-                            doorConfig: {
-                              ...(prev.cell.doorConfig || { status: 'closed', doorType: 'wooden', breakDC: 15, lockpickDC: 15 }),
-                              secretRevealed: checked
-                            }
-                          }
-                        } : null);
-                      }}
-                      className="rounded accent-amber-500 bg-[#0a0d14] border-[#2a3449]"
-                    />
-                    <label htmlFor="secretRevealedCheck" className="text-xs text-slate-300 cursor-pointer">Revelada aos Jogadores</label>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {editingCell.cell.type === 'trap' && (
-              <div className="space-y-3.5">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Nome/Tipo da Armadilha</label>
-                  <input
-                    type="text"
-                    value={editingCell.cell.trapConfig?.trapType || 'Armadilha'}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setEditingCell(prev => prev ? {
-                        ...prev,
-                        cell: {
-                          ...prev.cell,
-                          trapConfig: {
-                            ...(prev.cell.trapConfig || { trapType: 'Armadilha', detectDC: 15, disarmDC: 15, revealedToPlayers: false }),
-                            trapType: val
-                          }
-                        }
-                      } : null);
-                    }}
-                    className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-semibold"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">👁️ CD Percepção</label>
-                    <input
-                      type="number"
-                      value={editingCell.cell.trapConfig?.detectDC ?? 15}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setEditingCell(prev => prev ? {
-                          ...prev,
-                          cell: {
-                            ...prev.cell,
-                            trapConfig: {
-                              ...(prev.cell.trapConfig || { trapType: 'Armadilha', detectDC: 15, disarmDC: 15, revealedToPlayers: false }),
-                              detectDC: val
-                            }
-                          }
-                        } : null);
-                      }}
-                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">🔧 CD Desarmar</label>
-                    <input
-                      type="number"
-                      value={editingCell.cell.trapConfig?.disarmDC ?? 15}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setEditingCell(prev => prev ? {
-                          ...prev,
-                          cell: {
-                            ...prev.cell,
-                            trapConfig: {
-                              ...(prev.cell.trapConfig || { trapType: 'Armadilha', detectDC: 15, disarmDC: 15, revealedToPlayers: false }),
-                              disarmDC: val
-                            }
-                          }
-                        } : null);
-                      }}
-                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Descrição / Efeitos</label>
-                  <textarea
-                    rows={2}
-                    value={editingCell.cell.trapConfig?.description || ''}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setEditingCell(prev => prev ? {
-                        ...prev,
-                        cell: {
-                          ...prev.cell,
-                          trapConfig: {
-                            ...(prev.cell.trapConfig || { trapType: 'Armadilha', detectDC: 15, disarmDC: 15, revealedToPlayers: false }),
-                            description: val
-                          }
-                        }
-                      } : null);
-                    }}
-                    className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 resize-none"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="trapRevealedCheck"
-                    checked={editingCell.cell.trapConfig?.revealedToPlayers || false}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setEditingCell(prev => prev ? {
-                        ...prev,
-                        cell: {
-                          ...prev.cell,
-                          trapConfig: {
-                            ...(prev.cell.trapConfig || { trapType: 'Armadilha', detectDC: 15, disarmDC: 15, revealedToPlayers: false }),
-                            revealedToPlayers: checked
-                          }
-                        }
-                      } : null);
-                    }}
-                    className="rounded accent-amber-500 bg-[#0a0d14] border-[#2a3449]"
-                  />
-                  <label htmlFor="trapRevealedCheck" className="text-xs text-slate-300 cursor-pointer">Revelada aos Jogadores</label>
-                </div>
-              </div>
-            )}
-
-            {(editingCell.cell.type === 'chest' || editingCell.cell.type === 'stash') && (
-              <div className="space-y-3.5">
-                {/* 1. Nome e Tipo */}
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Nome</label>
-                    <input
-                      type="text"
-                      value={editingCell.cell.chestConfig?.name || (editingCell.cell.type === 'chest' ? 'Baú de Madeira' : 'Esconderijo Secreto')}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setEditingCell(prev => prev ? {
-                          ...prev,
-                          cell: {
-                            ...prev.cell,
-                            chestConfig: {
-                              ...(prev.cell.chestConfig || { name: val, containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                              name: val
-                            }
-                          }
-                        } : null);
-                      }}
-                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-semibold"
-                    />
-                  </div>
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Tipo de Recipiente</label>
-                    <select
-                      value={editingCell.cell.chestConfig?.containerType || (editingCell.cell.type === 'stash' ? 'hidden_stash' : 'wooden_chest')}
-                      onChange={(e) => {
-                        const ct = e.target.value as ContainerType;
-                        setEditingCell(prev => prev ? {
-                          ...prev,
-                          cell: {
-                            ...prev.cell,
-                            chestConfig: {
-                              ...(prev.cell.chestConfig || { name: 'Baú', containerType: ct, status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                              containerType: ct
-                            }
-                          }
-                        } : null);
-                      }}
-                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                    >
-                      <option value="wooden_chest">Baú de Madeira</option>
-                      <option value="iron_chest">Baú de Ferro Reforçado</option>
-                      <option value="ornate_chest">Baú Nobre / Rúnico</option>
-                      <option value="hidden_stash">Esconderijo (Fundo Falso)</option>
-                      <option value="mimic">Mímico Camuflado (Ameaça)</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* 2. Status do Recipiente */}
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Estado</label>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {[
-                      { id: 'locked', label: 'Trancado', activeClass: 'bg-amber-600 border-amber-500 text-white' },
-                      { id: 'unlocked', label: 'Destrancado', activeClass: 'bg-sky-600 border-sky-500 text-white' },
-                      { id: 'open', label: 'Aberto', activeClass: 'bg-indigo-600 border-indigo-500 text-white' },
-                      { id: 'looted', label: 'Saqueado', activeClass: 'bg-emerald-600 border-emerald-500 text-white' },
-                    ].map((s) => {
-                      const isCurrent = (editingCell.cell.chestConfig?.status || 'locked') === s.id;
-                      return (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => {
-                            setEditingCell(prev => prev ? {
-                              ...prev,
-                              cell: {
-                                ...prev.cell,
-                                chestConfig: {
-                                  ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: s.id as ContainerStatus, lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                                  status: s.id as ContainerStatus
-                                }
-                              }
-                            } : null);
-                          }}
-                          className={`py-1.5 rounded-lg text-[11px] font-semibold transition-all border text-center ${
-                            isCurrent
-                              ? `${s.activeClass} shadow`
-                              : 'bg-[#0a0d14] border-[#2a3449] text-slate-400 hover:bg-[#161c28]'
-                          }`}
-                        >
-                          {s.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 3. CDs D&D */}
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">🔑 Lockpick</label>
-                    <input
-                      type="number"
-                      value={editingCell.cell.chestConfig?.lockpickDC ?? 15}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setEditingCell(prev => prev ? {
-                          ...prev,
-                          cell: {
-                            ...prev.cell,
-                            chestConfig: {
-                              ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                              lockpickDC: val
-                            }
-                          }
-                        } : null);
-                      }}
-                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">🔨 Arrombar</label>
-                    <input
-                      type="number"
-                      value={editingCell.cell.chestConfig?.breakDC ?? 16}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setEditingCell(prev => prev ? {
-                          ...prev,
-                          cell: {
-                            ...prev.cell,
-                            chestConfig: {
-                              ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                              breakDC: val
-                            }
-                          }
-                        } : null);
-                      }}
-                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">👁️ Investigar</label>
-                    <input
-                      type="number"
-                      value={editingCell.cell.chestConfig?.detectDC ?? 15}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setEditingCell(prev => prev ? {
-                          ...prev,
-                          cell: {
-                            ...prev.cell,
-                            chestConfig: {
-                              ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                              detectDC: val
-                            }
-                          }
-                        } : null);
-                      }}
-                      className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
-                    />
-                  </div>
-                </div>
-
-                {/* 4. Armadilha no Fecho */}
-                <div className="bg-[#0a0d14] border border-[#2a3449] rounded-xl p-2.5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-xs font-semibold text-rose-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={editingCell.cell.chestConfig?.isTrapped || false}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setEditingCell(prev => prev ? {
-                            ...prev,
-                            cell: {
-                              ...prev.cell,
-                              chestConfig: {
-                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                                isTrapped: checked,
-                                trapDisarmDC: prev.cell.chestConfig?.trapDisarmDC ?? 15,
-                                trapDescription: prev.cell.chestConfig?.trapDescription || 'Agulha envenenada: 2d6 de dano de veneno (CD 13 CON)'
-                              }
-                            }
-                          } : null);
-                        }}
-                        className="rounded accent-rose-500 bg-[#121824] border-[#2a3449]"
-                      />
-                      <span>⚠️ Armadilha no Fecho</span>
-                    </label>
-                    {editingCell.cell.chestConfig?.isTrapped && (
-                      <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono">
-                        <span>CD Desarmar:</span>
-                        <input
-                          type="number"
-                          value={editingCell.cell.chestConfig?.trapDisarmDC ?? 15}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value) || 0;
-                            setEditingCell(prev => prev ? {
-                              ...prev,
-                              cell: {
-                                ...prev.cell,
-                                chestConfig: {
-                                  ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                                  trapDisarmDC: val
-                                }
-                              }
-                            } : null);
-                          }}
-                          className="w-12 bg-[#121824] border border-[#2a3449] rounded px-1.5 py-0.5 text-center text-rose-300 focus:outline-none"
-                        />
-                      </div>
-                    )}
-                  </div>
-                  {editingCell.cell.chestConfig?.isTrapped && (
-                    <input
-                      type="text"
-                      placeholder="Descrição / Efeito da armadilha..."
-                      value={editingCell.cell.chestConfig?.trapDescription || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setEditingCell(prev => prev ? {
-                          ...prev,
-                          cell: {
-                            ...prev.cell,
-                            chestConfig: {
-                              ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                              trapDescription: val
-                            }
-                          }
-                        } : null);
-                      }}
-                      className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-rose-500"
-                    />
-                  )}
-                </div>
-
-                {/* 5. Gerenciador de Tesouro & Gerador de Loot */}
-                <div className="bg-[#0a0d14] border border-[#2a3449] rounded-xl p-3 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold uppercase text-amber-400 flex items-center gap-1.5">
-                      <Coins className="w-3.5 h-3.5" /> Tesouro & Itens
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        title="Gerar tesouro Tier 1 (Nv 1-4)"
-                        onClick={() => {
-                          const gp = 15 + Math.floor(Math.random() * 45);
-                          const sp = 20 + Math.floor(Math.random() * 80);
-                          const items = ['Poção de Cura (2d4+2)'];
-                          if (Math.random() > 0.4) items.push('Pergaminho de Mísseis Mágicos');
-                          setEditingCell(prev => prev ? {
-                            ...prev,
-                            cell: {
-                              ...prev.cell,
-                              chestConfig: {
-                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                                loot: { gp, sp, cp: 50, pp: 0, items }
-                              }
-                            }
-                          } : null);
-                          toast.success('Loot Tier 1 gerado!');
-                        }}
-                        className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded text-[10px] font-bold transition-all"
-                      >
-                        🎲 Nv 1-4
-                      </button>
-                      <button
-                        type="button"
-                        title="Gerar tesouro Tier 2 (Nv 5-10)"
-                        onClick={() => {
-                          const gp = 180 + Math.floor(Math.random() * 320);
-                          const sp = 150 + Math.floor(Math.random() * 250);
-                          const pp = 8 + Math.floor(Math.random() * 15);
-                          const items = ['Poção de Cura Maior (4d4+4)', 'Gema de Rubi (100 PO)', 'Pergaminho de Bola de Fogo'];
-                          setEditingCell(prev => prev ? {
-                            ...prev,
-                            cell: {
-                              ...prev.cell,
-                              chestConfig: {
-                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                                loot: { gp, sp, pp, cp: 0, items }
-                              }
-                            }
-                          } : null);
-                          toast.success('Loot Tier 2 gerado!');
-                        }}
-                        className="px-2 py-0.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 rounded text-[10px] font-bold transition-all"
-                      >
-                        🎲 Nv 5-10
-                      </button>
-                      <button
-                        type="button"
-                        title="Gerar tesouro Tier 3+ (Nv 11+)"
-                        onClick={() => {
-                          const gp = 1500 + Math.floor(Math.random() * 2500);
-                          const pp = 120 + Math.floor(Math.random() * 200);
-                          const items = ['Poção de Cura Suprema (10d4+20)', 'Diamante Puro (500 PO)', 'Anel de Proteção Mágica (+1)'];
-                          setEditingCell(prev => prev ? {
-                            ...prev,
-                            cell: {
-                              ...prev.cell,
-                              chestConfig: {
-                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                                loot: { gp, pp, sp: 0, cp: 0, items }
-                              }
-                            }
-                          } : null);
-                          toast.success('Loot Tier 3+ gerado!');
-                        }}
-                        className="px-2 py-0.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded text-[10px] font-bold transition-all"
-                      >
-                        🎲 Nv 11+
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Moedas */}
-                  <div className="grid grid-cols-4 gap-1.5">
-                    <div>
-                      <span className="block text-[9px] uppercase font-bold text-amber-400">PO (Ouro)</span>
-                      <input
-                        type="number"
-                        value={editingCell.cell.chestConfig?.loot?.gp ?? 0}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value) || 0;
-                          setEditingCell(prev => prev ? {
-                            ...prev,
-                            cell: {
-                              ...prev.cell,
-                              chestConfig: {
-                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                                loot: { ...(prev.cell.chestConfig?.loot || {}), gp: val }
-                              }
-                            }
-                          } : null);
-                        }}
-                        className="w-full bg-[#121824] border border-[#2a3449] rounded px-1.5 py-1 text-xs text-amber-200 focus:outline-none font-mono"
-                      />
-                    </div>
-                    <div>
-                      <span className="block text-[9px] uppercase font-bold text-slate-300">PP (Prata)</span>
-                      <input
-                        type="number"
-                        value={editingCell.cell.chestConfig?.loot?.sp ?? 0}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value) || 0;
-                          setEditingCell(prev => prev ? {
-                            ...prev,
-                            cell: {
-                              ...prev.cell,
-                              chestConfig: {
-                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                                loot: { ...(prev.cell.chestConfig?.loot || {}), sp: val }
-                              }
-                            }
-                          } : null);
-                        }}
-                        className="w-full bg-[#121824] border border-[#2a3449] rounded px-1.5 py-1 text-xs text-slate-300 focus:outline-none font-mono"
-                      />
-                    </div>
-                    <div>
-                      <span className="block text-[9px] uppercase font-bold text-orange-400">PC (Cobre)</span>
-                      <input
-                        type="number"
-                        value={editingCell.cell.chestConfig?.loot?.cp ?? 0}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value) || 0;
-                          setEditingCell(prev => prev ? {
-                            ...prev,
-                            cell: {
-                              ...prev.cell,
-                              chestConfig: {
-                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                                loot: { ...(prev.cell.chestConfig?.loot || {}), cp: val }
-                              }
-                            }
-                          } : null);
-                        }}
-                        className="w-full bg-[#121824] border border-[#2a3449] rounded px-1.5 py-1 text-xs text-orange-200 focus:outline-none font-mono"
-                      />
-                    </div>
-                    <div>
-                      <span className="block text-[9px] uppercase font-bold text-cyan-300">PL (Platina)</span>
-                      <input
-                        type="number"
-                        value={editingCell.cell.chestConfig?.loot?.pp ?? 0}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value) || 0;
-                          setEditingCell(prev => prev ? {
-                            ...prev,
-                            cell: {
-                              ...prev.cell,
-                              chestConfig: {
-                                ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                                loot: { ...(prev.cell.chestConfig?.loot || {}), pp: val }
-                              }
-                            }
-                          } : null);
-                        }}
-                        className="w-full bg-[#121824] border border-[#2a3449] rounded px-1.5 py-1 text-xs text-cyan-200 focus:outline-none font-mono"
-                      />
-                    </div>
-                  </div>
-
-                    {/* Itens do Compêndio e Customizados */}
-                    <div className="space-y-1.5 pt-1 border-t border-[#2a3449]/60">
-                      <div className="flex items-center justify-between gap-1 flex-wrap">
-                        <span className="block text-[9px] uppercase font-bold text-amber-400">
-                          Itens e Equipamentos ({editingCell.cell.chestConfig?.loot?.items?.length || 0})
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setIsChestCampaignDocsOpen(true)}
-                            className="px-2 py-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 rounded text-[9px] font-bold transition flex items-center gap-1 cursor-pointer"
-                            title="Inserir cartas, bilhetes, livros e diários criados na Campanha"
-                          >
-                            <Plus className="w-3 h-3" />
-                            <span>📜 Lore / Carta</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setIsChestCompendiumOpen(true)}
-                            className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded text-[9px] font-bold transition flex items-center gap-1 cursor-pointer"
-                            title="Buscar e adicionar armas, armaduras, poções e itens diretamente do Compêndio D&D 5e"
-                          >
-                            <Plus className="w-3 h-3" />
-                            <span>Compêndio</span>
-                          </button>
-                        </div>
-                      </div>
-
-                    {/* Lista visual de itens no baú com badges de tipo/categoria */}
-                    <div className="space-y-1 max-h-32 overflow-y-auto pr-0.5">
-                      {(!editingCell.cell.chestConfig?.loot?.items || editingCell.cell.chestConfig.loot.items.length === 0) ? (
-                        <p className="text-[10px] text-slate-500 italic py-2 text-center bg-[#121824]/60 rounded border border-dashed border-[#2a3449]">
-                          Nenhum item adicionado. Clique em &quot;Adicionar do Compêndio&quot; acima.
-                        </p>
-                      ) : (
-                        editingCell.cell.chestConfig.loot.items.map((rawItem, idx) => {
-                          const item = normalizeChestItem(rawItem, editingCell.cell.chestConfig?.loot?.notes);
-                          const badge = getItemTypeBadgeInfo(item);
-
-                          return (
-                            <div
-                              key={idx}
-                              className="flex items-center justify-between p-1.5 rounded bg-[#121824] border border-[#2a3449] text-xs"
-                            >
-                              <div className="flex items-center gap-1.5 truncate">
-                                <span className={`text-[8px] font-bold px-1 py-0.2 rounded border flex items-center gap-0.5 ${badge.badgeClass}`}>
-                                  <span>{badge.icon}</span>
-                                  <span>{badge.label}</span>
-                                </span>
-                                <span className="font-bold text-slate-100 truncate text-[11px]">
-                                  {item.quantity > 1 ? `${item.quantity}x ` : ''}{item.name}
-                                </span>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const currentItems = [...(editingCell.cell.chestConfig?.loot?.items || [])];
-                                  currentItems.splice(idx, 1);
-                                  setEditingCell((prev) =>
-                                    prev
-                                      ? {
-                                          ...prev,
-                                          cell: {
-                                            ...prev.cell,
-                                            chestConfig: {
-                                              ...(prev.cell.chestConfig || {
-                                                name: 'Baú',
-                                                containerType: 'wooden_chest',
-                                                status: 'locked',
-                                                lockpickDC: 15,
-                                                breakDC: 16,
-                                                revealedToPlayers: true,
-                                              }),
-                                              loot: { ...(prev.cell.chestConfig?.loot || {}), items: currentItems },
-                                            },
-                                          },
-                                        }
-                                      : null
-                                  );
-                                }}
-                                className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 rounded transition cursor-pointer"
-                                title="Remover item do baú"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Botão de Abrir Saque Interativo */}
-                  {editingCell.cell.chestConfig?.loot && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const target = { ...editingCell };
-                        setEditingCell(null);
-                        setActiveLootContainer(target);
-                      }}
-                      className="w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Abrir Modal de Saque & Distribuir Loot</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* 6. Visibilidade para Jogadores */}
-                <div className="flex items-center gap-2 pt-0.5">
-                  <input
-                    type="checkbox"
-                    id="chestRevealedCheck"
-                    checked={editingCell.cell.chestConfig?.revealedToPlayers ?? true}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setEditingCell(prev => prev ? {
-                        ...prev,
-                        cell: {
-                          ...prev.cell,
-                          chestConfig: {
-                            ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
-                            revealedToPlayers: checked
-                          }
-                        }
-                      } : null);
-                    }}
-                    className="rounded accent-amber-500 bg-[#0a0d14] border-[#2a3449]"
-                  />
-                  <label htmlFor="chestRevealedCheck" className="text-xs text-slate-300 cursor-pointer">
-                    Visível aos Jogadores no Mapa
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {editingCell.cell.type === 'trigger' && (
-              <div className="space-y-3.5">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Tipo de Gatilho</label>
-                  <select
-                    value={editingCell.cell.triggerConfig?.triggerType || 'lever'}
-                    onChange={(e) => {
-                      setEditingCell(prev => prev ? {
-                        ...prev,
-                        cell: { ...prev.cell, triggerConfig: { ...(prev.cell.triggerConfig || { id: `trigger-${Math.random().toString(36).substring(2, 8)}`, targetId: '', state: 'inactive', name: '', isSecret: false, revealedToPlayers: true, triggerType: 'lever' }), triggerType: e.target.value as any } }
-                      } : null);
-                    }}
-                    className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                  >
-                    <option value="lever">Alavanca</option>
-                    <option value="pressure_plate">Placa de Pressão</option>
-                    <option value="button">Botão / Runas</option>
-                    <option value="chain">Corrente de Puxar</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Estado</label>
-                  <select
-                    value={editingCell.cell.triggerConfig?.state || 'inactive'}
-                    onChange={(e) => {
-                      setEditingCell(prev => prev ? {
-                        ...prev,
-                        cell: { ...prev.cell, triggerConfig: { ...(prev.cell.triggerConfig || { id: `trigger-${Math.random().toString(36).substring(2, 8)}`, targetId: '', state: 'inactive', name: '', isSecret: false, revealedToPlayers: true, triggerType: 'lever' }), state: e.target.value as 'inactive' | 'active' } }
-                      } : null);
-                    }}
-                    className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                  >
-                    <option value="inactive">Inativo (Desligado)</option>
-                    <option value="active">Ativo (Ligado)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">ID do Alvo (Target ID)</label>
-                  <input
-                    type="text"
-                    value={editingCell.cell.triggerConfig?.targetId || ''}
-                    onChange={(e) => {
-                      setEditingCell(prev => prev ? {
-                        ...prev,
-                        cell: { ...prev.cell, triggerConfig: { ...(prev.cell.triggerConfig || { id: `trigger-${Math.random().toString(36).substring(2, 8)}`, targetId: '', state: 'inactive', name: '', isSecret: false, revealedToPlayers: true, triggerType: 'lever' }), targetId: e.target.value } }
-                      } : null);
-                    }}
-                    placeholder="Ex: grade-123456"
-                    className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                  />
-                  <span className="text-[9px] text-slate-500 mt-1 block">Quando ativado, envia sinal para alterar o estado do alvo.</span>
-                </div>
-                <div className="flex items-center gap-2 pt-0.5">
-                  <input
-                    type="checkbox"
-                    id="triggerSecretCheck"
-                    checked={editingCell.cell.triggerConfig?.isSecret ?? false}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setEditingCell(prev => prev ? {
-                        ...prev,
-                        cell: { ...prev.cell, triggerConfig: { ...(prev.cell.triggerConfig || { id: `trigger-${Math.random().toString(36).substring(2, 8)}`, targetId: '', state: 'inactive', name: '', isSecret: false, revealedToPlayers: true, triggerType: 'lever' }), isSecret: checked } }
-                      } : null);
-                    }}
-                    className="rounded accent-amber-500 bg-[#0a0d14] border-[#2a3449]"
-                  />
-                  <label htmlFor="triggerSecretCheck" className="text-xs text-slate-300 cursor-pointer">
-                    É um gatilho secreto/escondido?
-                  </label>
-                </div>
-                {(editingCell.cell.triggerConfig?.isSecret) && (
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <input
-                      type="checkbox"
-                      id="triggerRevealedCheck"
-                      checked={editingCell.cell.triggerConfig?.revealedToPlayers ?? false}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setEditingCell(prev => prev ? {
-                          ...prev,
-                          cell: { ...prev.cell, triggerConfig: { ...prev.cell.triggerConfig!, revealedToPlayers: checked } }
-                        } : null);
-                      }}
-                      className="rounded accent-amber-500 bg-[#0a0d14] border-[#2a3449]"
-                    />
-                    <label htmlFor="triggerRevealedCheck" className="text-xs text-slate-300 cursor-pointer">
-                      Revelado aos jogadores
-                    </label>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {editingCell.cell.type === 'portcullis' && (
-              <div className="space-y-3.5">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Status da Grade</label>
-                  <select
-                    value={editingCell.cell.portcullisConfig?.status || 'closed'}
-                    onChange={(e) => {
-                      setEditingCell(prev => prev ? {
-                        ...prev,
-                        cell: { ...prev.cell, portcullisConfig: { ...(prev.cell.portcullisConfig || { id: `grade-${Math.random().toString(36).substring(2, 8)}`, status: 'closed', material: 'iron', name: '' }), status: e.target.value as 'open' | 'closed' } }
-                      } : null);
-                    }}
-                    className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                  >
-                    <option value="closed">Abaixada (Bloqueia Passagem)</option>
-                    <option value="open">Erguida (Livre Passagem)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">ID da Grade</label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={editingCell.cell.portcullisConfig?.id || ''}
-                    className="w-full bg-[#0a0d14] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-400 focus:outline-none cursor-copy"
-                    onClick={(e) => {
-                      navigator.clipboard.writeText((e.target as HTMLInputElement).value);
-                      toast.success('ID copiado!');
-                    }}
-                  />
-                  <span className="text-[9px] text-slate-500 mt-1 block">Clique para copiar. Use no ID do Alvo de Gatilhos.</span>
-                </div>
-              </div>
-            )}
-
-            {editingCell.cell.type === 'illusion_wall' && (
-              <div className="space-y-3.5">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Bloqueia Visão?</label>
-                  <select
-                    value={editingCell.cell.illusionWallConfig?.blocksLight ? 'true' : 'false'}
-                    onChange={(e) => {
-                      const blocksLight = e.target.value === 'true';
-                      setEditingCell(prev => prev ? {
-                        ...prev,
-                        cell: { ...prev.cell, illusionWallConfig: { ...(prev.cell.illusionWallConfig || { detectDC: 15, revealedToPlayers: false, blocksLight: true }), blocksLight } }
-                      } : null);
-                    }}
-                    className="w-full bg-[#121824] border border-[#2a3449] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                  >
-                    <option value="true">Sim (Parece parede real até descoberta)</option>
-                    <option value="false">Não (Luz/visão passam direto)</option>
-                  </select>
-                </div>
-                <div className="flex items-center gap-2 pt-0.5">
-                  <input
-                    type="checkbox"
-                    id="illusionRevealedCheck"
-                    checked={editingCell.cell.illusionWallConfig?.revealedToPlayers ?? false}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setEditingCell(prev => prev ? {
-                        ...prev,
-                        cell: { ...prev.cell, illusionWallConfig: { ...(prev.cell.illusionWallConfig || { detectDC: 15, revealedToPlayers: false, blocksLight: true }), revealedToPlayers: checked } }
-                      } : null);
-                    }}
-                    className="rounded accent-amber-500 bg-[#0a0d14] border-[#2a3449]"
-                  />
-                  <label htmlFor="illusionRevealedCheck" className="text-xs text-slate-300 cursor-pointer">
-                    Descoberta pelos Jogadores
-                  </label>
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 mt-5 border-t border-[#2a3449]/40 pt-3.5">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsDrawing(false);
-                  setDrawButton(-1);
-                  onGridChange((prev) => {
-                    const copy = prev.map(row => row.map(cell => ({ ...cell })));
-                    const cell = copy[editingCell.r][editingCell.c];
-                    if (editingCell.cell.type === 'door') {
-                      cell.doorConfig = editingCell.cell.doorConfig || { status: 'closed', doorType: 'wooden', breakDC: 15, lockpickDC: 15 };
-                    } else if (editingCell.cell.type === 'trap') {
-                      cell.trapConfig = editingCell.cell.trapConfig || { trapType: 'Armadilha', detectDC: 15, disarmDC: 15, revealedToPlayers: false };
-                    } else if (editingCell.cell.type === 'chest' || editingCell.cell.type === 'stash') {
-                      cell.chestConfig = editingCell.cell.chestConfig || {
-                        name: editingCell.cell.type === 'chest' ? 'Baú' : 'Esconderijo',
-                        containerType: editingCell.cell.type === 'stash' ? 'hidden_stash' : 'wooden_chest',
-                        status: 'locked',
-                        lockpickDC: 15,
-                        breakDC: 16,
-                        revealedToPlayers: editingCell.cell.type === 'chest',
-                        loot: { gp: 25, items: [] }
-                      };
-                    } else if (editingCell.cell.type === 'trigger') {
-                      const newConfig = editingCell.cell.triggerConfig || {
-                        id: `trigger-${Math.random().toString(36).substring(2, 8)}`,
-                        targetId: '',
-                        triggerType: 'lever',
-                        state: 'inactive',
-                        name: '',
-                        isSecret: false,
-                        revealedToPlayers: true
-                      };
-                      const oldState = cell.triggerConfig?.state;
-                      cell.triggerConfig = newConfig;
-
-                      if (oldState && oldState !== newConfig.state && newConfig.targetId) {
-                        let targetFound = false;
-                        for (let i = 0; i < copy.length; i++) {
-                          for (let j = 0; j < copy[0].length; j++) {
-                            const tc = copy[i][j];
-                            if (tc.type === 'portcullis' && tc.portcullisConfig?.id === newConfig.targetId) {
-                              tc.portcullisConfig = {
-                                ...tc.portcullisConfig,
-                                status: newConfig.state === 'active' ? 'open' : 'closed'
-                              };
-                              targetFound = true;
-                            }
-                          }
-                        }
-                        if (targetFound) {
-                          setTimeout(() => toast.success('A engrenagem girou! A grade conectada foi acionada.'), 300);
-                        }
-                      }
-                    } else if (editingCell.cell.type === 'portcullis') {
-                      cell.portcullisConfig = editingCell.cell.portcullisConfig || {
-                        id: `grade-${Math.random().toString(36).substring(2, 8)}`,
-                        status: 'closed',
-                        material: 'iron',
-                        name: ''
-                      };
-                    } else if (editingCell.cell.type === 'illusion_wall') {
-                      cell.illusionWallConfig = editingCell.cell.illusionWallConfig || {
-                        detectDC: 15,
-                        revealedToPlayers: false,
-                        blocksLight: true
-                      };
-                    } else if (editingCell.cell.type === 'transition') {
-                      cell.transitionConfig = editingCell.cell.transitionConfig || {
-                        id: `trans-${Math.random().toString(36).substring(2, 8)}`,
-                        name: 'Escada para Outro Nível',
-                        type: 'stairs_down',
-                        targetLevelId: '',
-                        status: 'open'
-                      };
-                    }
-                    return copy;
-                  });
-                  setEditingCell(null);
-                  toast.success('Alterações salvas no grid.');
-                }}
-                className="flex-1 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs transition-all text-center shadow-md cursor-pointer"
-              >
-                Salvar
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsDrawing(false);
-                  setDrawButton(-1);
-                  onGridChange((prev) => {
-                    const copy = prev.map(row => row.map(cell => ({ ...cell })));
-                    copy[editingCell.r][editingCell.c].type = 'floor';
-                    copy[editingCell.r][editingCell.c].doorConfig = undefined;
-                    copy[editingCell.r][editingCell.c].trapConfig = undefined;
-                    copy[editingCell.r][editingCell.c].chestConfig = undefined;
-                    copy[editingCell.r][editingCell.c].triggerConfig = undefined;
-                    copy[editingCell.r][editingCell.c].portcullisConfig = undefined;
-                    copy[editingCell.r][editingCell.c].illusionWallConfig = undefined;
-                    return copy;
-                  });
-                  setEditingCell(null);
-                  toast.success('Elemento removido.');
-                }}
-                className="py-2 px-3 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/20 text-rose-300 font-semibold rounded-lg text-xs transition-all text-center cursor-pointer font-sans"
-              >
-                Remover
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsDrawing(false);
-                  setDrawButton(-1);
-                  setEditingCell(null);
-                }}
-                className="py-2 px-3 bg-[#161c28] hover:bg-[#1f2738] border border-[#2a3449] text-slate-300 font-semibold rounded-lg text-xs transition-all text-center cursor-pointer"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Dedicated Dungeon Transition Modal */}
+      {/* Modal Dedicado de Transição de Nível */}
       {editingCell && editingCell.cell.type === 'transition' && (
         <DungeonTransitionModal
           isOpen={true}
@@ -4612,491 +1955,32 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         />
       )}
 
-      {hoveredCell && !editingCell && (
-        <div 
-          className="fixed pointer-events-none z-40 bg-[#0d1117]/95 border border-[#30363d] rounded-xl shadow-2xl p-3 w-[270px] text-xs font-sans text-slate-200 backdrop-blur-md animate-fade-in"
-          style={{ 
-            left: `${hoveredCell.x + 15}px`, 
-            top: `${hoveredCell.y + 15}px` 
-          }}
-        >
-          {hoveredCell.cell.tokenName && (() => {
-            const tokenName = hoveredCell.cell.tokenName;
-            const tokenComb = combatants?.find(
-              (c) => c.name.trim().toLowerCase() === tokenName.trim().toLowerCase()
-            );
-            const isPlayer = tokenComb?.type === 'player' || hoveredCell.cell.tokenColor?.includes('cyan') || hoveredCell.cell.tokenColor?.includes('emerald');
-            const hp = tokenComb?.hp ?? 10;
-            const maxHp = tokenComb?.maxHp ?? 10;
-            const hpPercent = Math.max(0, Math.min(100, Math.round((hp / maxHp) * 100)));
-            const ac = tokenComb?.ac ?? 10;
-            const visRadius = getTokenVisionRadius(tokenName, combatants);
-            const visType = getCombatantVisionType(tokenName, combatants);
-            const speedVal = typeof tokenComb?.speed === 'number' 
-              ? tokenComb.speed 
-              : parseInt(String(tokenComb?.speed || '30').replace(/\D/g, ''), 10) || 30;
+      {/* Tooltip Flutuante no Hover */}
+      <CellHoverTooltip
+        hoveredCell={hoveredCell}
+        combatants={combatants}
+        activeLevels={activeLevels}
+      />
 
-            const visTypeLabel =
-              visType === 'darkvision' ? '🌙 Visão no Escuro' :
-              visType === 'truesight' ? '✨ Visão Verdadeira' :
-              visType === 'blindsight' ? '🦇 Percepção às Cegas' :
-              visType === 'tremorsense' ? '🌐 Sentido Sísmico' : '☀️ Visão Padrão (Luz)';
+      {/* HUD da Régua Tática */}
+      <RulerHUD
+        selectedTool={selectedTool}
+        rulerStatus={rulerStatus}
+        rulerPoints={rulerPoints}
+        rulerCursor={rulerCursor}
+        getRulerSummary={getRulerSummary}
+        onExitRuler={handleExitRuler}
+        onFinishRuler={handleFinishRuler}
+        onUndoRulerPoint={handleUndoRulerPoint}
+        onResetRuler={handleResetRuler}
+      />
 
-            return (
-              <div className="space-y-2.5">
-                {/* Header with Name and Badge */}
-                <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-800">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className={`w-3.5 h-3.5 rounded-full border shrink-0 ${
-                      isPlayer ? 'bg-cyan-500 border-cyan-300 shadow-sm shadow-cyan-500/50' : 'bg-rose-600 border-rose-400 shadow-sm shadow-rose-600/50'
-                    }`} />
-                    <span className="font-black text-slate-100 uppercase tracking-wide text-xs truncate">
-                      {tokenName}
-                    </span>
-                  </div>
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shrink-0 ${
-                    isPlayer 
-                      ? 'bg-cyan-950/70 border-cyan-500/40 text-cyan-300' 
-                      : 'bg-rose-950/70 border-rose-500/40 text-rose-300'
-                  }`}>
-                    {tokenComb?.type === 'player' ? 'Jogador' : (tokenComb?.type === 'npc' ? 'NPC' : 'Monstro / Ameaça')}
-                  </span>
-                </div>
-
-                {/* HP & AC Bar */}
-                <div className="bg-[#070a10] border border-slate-800/80 rounded-lg p-2 space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px] font-mono font-bold">
-                    <div className="flex items-center gap-1 text-rose-400">
-                      <Heart className="w-3 h-3 text-rose-400 fill-rose-500/30" />
-                      <span>HP:</span>
-                      <span className="text-slate-100">{hp} / {maxHp}</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-500/30">
-                      <Shield className="w-3 h-3 text-cyan-400" />
-                      <span className="text-[10px] text-slate-400">CA</span>
-                      <span className="text-cyan-200">{ac}</span>
-                    </div>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-                    <div
-                      className={`h-full transition-all duration-300 ${
-                        hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 25 ? 'bg-amber-500' : 'bg-rose-600'
-                      }`}
-                      style={{ width: `${hpPercent}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Dungeon Vision & Movement Stats */}
-                <div className="grid grid-cols-2 gap-1.5 text-[10px]">
-                  <div className="bg-[#070a10] border border-slate-800/80 rounded-md p-1.5 flex flex-col">
-                    <span className="text-slate-400 flex items-center gap-1 font-bold">
-                      <Eye className="w-3 h-3 text-cyan-400" /> Alcance Visão
-                    </span>
-                    <span className="text-cyan-300 font-mono font-bold mt-0.5">
-                      {visRadius * 5}ft <span className="text-slate-500 font-normal">({(visRadius * 1.5).toFixed(1)}m)</span>
-                    </span>
-                  </div>
-
-                  <div className="bg-[#070a10] border border-slate-800/80 rounded-md p-1.5 flex flex-col">
-                    <span className="text-slate-400 flex items-center gap-1 font-bold">
-                      <Sparkles className="w-3 h-3 text-amber-400" /> Modo Visão
-                    </span>
-                    <span className="text-amber-300 font-bold mt-0.5 truncate" title={visTypeLabel}>
-                      {visTypeLabel}
-                    </span>
-                  </div>
-
-                  <div className="bg-[#070a10] border border-slate-800/80 rounded-md p-1.5 flex flex-col">
-                    <span className="text-slate-400 flex items-center gap-1 font-bold">
-                      <Navigation className="w-3 h-3 text-emerald-400" /> Deslocamento
-                    </span>
-                    <span className="text-emerald-300 font-mono font-bold mt-0.5">
-                      {speedVal}ft <span className="text-slate-500 font-normal">({Math.round(speedVal * 0.3)}m)</span>
-                    </span>
-                  </div>
-
-                  <div className="bg-[#070a10] border border-slate-800/80 rounded-md p-1.5 flex flex-col">
-                    <span className="text-slate-400 flex items-center gap-1 font-bold">
-                      <Shield className="w-3 h-3 text-indigo-400" /> Percepção Passiva
-                    </span>
-                    <span className="text-indigo-300 font-mono font-bold mt-0.5">
-                      {tokenComb?.wis !== undefined ? 10 + Math.floor((tokenComb.wis - 10) / 2) : 12}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Conditions (if active) */}
-                {Boolean(tokenComb?.conditions && tokenComb.conditions.length > 0) && (
-                  <div className="pt-1 border-t border-slate-800 flex flex-wrap gap-1">
-                    {tokenComb!.conditions.map((cond: string) => (
-                      <span key={cond} className="px-1.5 py-0.5 bg-rose-950/60 border border-rose-500/40 text-rose-300 text-[9px] font-bold rounded capitalize">
-                        ⚠️ {cond}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {!hoveredCell.cell.tokenName && hoveredCell.cell.type === 'transition' && (
-            <div className="space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-amber-400 uppercase tracking-wider text-[11px] pb-1 border-b border-slate-800">
-                <span>🪜 {hoveredCell.cell.transitionConfig?.name || 'Passagem de Nível'}</span>
-              </div>
-              <div className="pt-1 flex flex-col gap-1 text-[11px]">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Tipo:</span>
-                  <span className="font-bold text-slate-200 capitalize">
-                    {hoveredCell.cell.transitionConfig?.type?.replace('_', ' ') || 'Escada'}
-                  </span>
-                </div>
-                {hoveredCell.cell.transitionConfig?.targetLevelId && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Destino:</span>
-                    <span className="font-bold text-cyan-400">
-                      {activeLevels?.find(l => l.id === hoveredCell.cell.transitionConfig?.targetLevelId)?.name || 'Outro Andar'}
-                    </span>
-                  </div>
-                )}
-                <div className="text-[10px] text-amber-300/80 pt-1">
-                  💡 Clique para configurar ou teletransportar heróis
-                </div>
-              </div>
-            </div>
-          )}
-          {hoveredCell.cell.type === 'door' && (
-            <div className="space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-slate-100 uppercase tracking-wider text-[11px] pb-1 border-b border-slate-800">
-                <span>🚪 Porta de {
-                  hoveredCell.cell.doorConfig?.doorType === 'wooden' ? 'Madeira' :
-                  hoveredCell.cell.doorConfig?.doorType === 'iron' ? 'Ferro' :
-                  hoveredCell.cell.doorConfig?.doorType === 'stone' ? 'Pedra' : 'Segredo (Secreta)'
-                }</span>
-              </div>
-              <div className="pt-1 flex flex-col gap-1 text-[11px]">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Estado:</span>
-                  <span className={`font-bold ${hoveredCell.cell.doorConfig?.status === 'open' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                    {hoveredCell.cell.doorConfig?.status === 'open' ? 'Aberta' : 'Fechada'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">CD Arrombar:</span>
-                  <span className="font-mono font-bold text-slate-300">{hoveredCell.cell.doorConfig?.breakDC ?? 15}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">CD Lockpick:</span>
-                  <span className="font-mono font-bold text-slate-300">{hoveredCell.cell.doorConfig?.lockpickDC ?? 15}</span>
-                </div>
-                {hoveredCell.cell.doorConfig?.doorType === 'secret' && (
-                  <div className="flex justify-between border-t border-slate-800/50 pt-1 mt-0.5">
-                    <span className="text-slate-400">Visível aos Jogadores:</span>
-                    <span className={`font-bold ${hoveredCell.cell.doorConfig?.secretRevealed ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {hoveredCell.cell.doorConfig?.secretRevealed ? 'Sim' : 'Não'}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {hoveredCell.cell.type === 'trap' && (
-            <div className="space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-slate-100 uppercase tracking-wider text-[11px] pb-1 border-b border-slate-800">
-                <span className="text-rose-400">⚠️ {hoveredCell.cell.trapConfig?.trapType || 'Armadilha'}</span>
-              </div>
-              <div className="pt-1 flex flex-col gap-1 text-[11px]">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">CD Percepção:</span>
-                  <span className="font-mono font-bold text-slate-300">{hoveredCell.cell.trapConfig?.detectDC ?? 15}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">CD Desarmar:</span>
-                  <span className="font-mono font-bold text-slate-300">{hoveredCell.cell.trapConfig?.disarmDC ?? 15}</span>
-                </div>
-                <div className="flex justify-between border-t border-slate-800/50 pt-1 mt-0.5">
-                  <span className="text-slate-400">Revelada aos Jogadores:</span>
-                  <span className={`font-bold ${hoveredCell.cell.trapConfig?.revealedToPlayers ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {hoveredCell.cell.trapConfig?.revealedToPlayers ? 'Sim' : 'Não'}
-                  </span>
-                </div>
-                {hoveredCell.cell.trapConfig?.description && (
-                  <p className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-800/50 mt-1 leading-relaxed">
-                    {hoveredCell.cell.trapConfig.description}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {(hoveredCell.cell.type === 'chest' || hoveredCell.cell.type === 'stash') && (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-1.5 pb-1 border-b border-slate-800">
-                <span className="font-bold text-slate-100 uppercase tracking-wider text-[11px] truncate">
-                  {hoveredCell.cell.type === 'chest' ? '🧰' : '💎'} {hoveredCell.cell.chestConfig?.name || 'Recipiente'}
-                </span>
-                {hoveredCell.cell.chestConfig?.containerType === 'mimic' && (
-                  <span className="px-1.5 py-0.2 bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded text-[9px] font-bold">
-                    🦷 MÍMICO
-                  </span>
-                )}
-              </div>
-              <div className="pt-0.5 flex flex-col gap-1 text-[11px]">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Estado:</span>
-                  <span className={`font-bold capitalize ${
-                    hoveredCell.cell.chestConfig?.status === 'open' ? 'text-indigo-400' :
-                    hoveredCell.cell.chestConfig?.status === 'looted' ? 'text-emerald-400' :
-                    hoveredCell.cell.chestConfig?.status === 'unlocked' ? 'text-sky-400' : 'text-amber-400'
-                  }`}>
-                    {hoveredCell.cell.chestConfig?.status === 'open' ? '📦 Aberto' :
-                     hoveredCell.cell.chestConfig?.status === 'looted' ? '✨ Saqueado' :
-                     hoveredCell.cell.chestConfig?.status === 'unlocked' ? '🔓 Destrancado' : '🔒 Trancado'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">CDs (Lock / Força):</span>
-                  <span className="font-mono font-bold text-slate-300">
-                    DC {hoveredCell.cell.chestConfig?.lockpickDC ?? 15} / {hoveredCell.cell.chestConfig?.breakDC ?? 16}
-                  </span>
-                </div>
-                {hoveredCell.cell.chestConfig?.detectDC && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">CD Percepção/Invest.:</span>
-                    <span className="font-mono font-bold text-slate-300">
-                      DC {hoveredCell.cell.chestConfig.detectDC}
-                    </span>
-                  </div>
-                )}
-                {hoveredCell.cell.chestConfig?.isTrapped && (
-                  <div className="flex justify-between text-rose-400 border-t border-slate-800/40 pt-1">
-                    <span>⚠️ Armadilha no Fecho:</span>
-                    <span className="font-mono font-bold">DC {hoveredCell.cell.chestConfig.trapDisarmDC ?? 15}</span>
-                  </div>
-                )}
-                <div className="flex justify-between border-t border-slate-800/50 pt-1 mt-0.5">
-                  <span className="text-slate-400">Visível aos Jogadores:</span>
-                  <span className={`font-bold ${hoveredCell.cell.chestConfig?.revealedToPlayers ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {hoveredCell.cell.chestConfig?.revealedToPlayers ? 'Sim' : 'Não'}
-                  </span>
-                </div>
-                {/* Loot preview */}
-                {hoveredCell.cell.chestConfig?.loot && (
-                  <div className="bg-slate-950/60 rounded p-1.5 border border-slate-800/60 mt-1 space-y-0.5">
-                    <div className="flex flex-wrap gap-1 text-[10px] text-amber-300 font-mono">
-                      {hoveredCell.cell.chestConfig.loot.gp ? <span>🪙 {hoveredCell.cell.chestConfig.loot.gp} PO</span> : null}
-                      {hoveredCell.cell.chestConfig.loot.sp ? <span>⚪ {hoveredCell.cell.chestConfig.loot.sp} PP</span> : null}
-                      {hoveredCell.cell.chestConfig.loot.cp ? <span>🟤 {hoveredCell.cell.chestConfig.loot.cp} PC</span> : null}
-                      {hoveredCell.cell.chestConfig.loot.pp ? <span>💎 {hoveredCell.cell.chestConfig.loot.pp} PL</span> : null}
-                    </div>
-                    {hoveredCell.cell.chestConfig.loot.items && hoveredCell.cell.chestConfig.loot.items.length > 0 && (
-                      <div className="text-[10px] text-slate-300 truncate">
-                        📦 {hoveredCell.cell.chestConfig.loot.items.join(', ')}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Advanced Ruler Floating HUD & Completion Card */}
-      {selectedTool === 'measure' && (
-        <div 
-          onMouseDown={(e) => e.stopPropagation()} 
-          onMouseMove={(e) => e.stopPropagation()}
-          onMouseUp={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-          onDoubleClick={(e) => e.stopPropagation()}
-          className="select-none pointer-events-auto"
-        >
-          {rulerStatus === 'idle' && (
-            <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-slate-950/90 backdrop-blur-md border border-cyan-500/30 rounded-2xl flex items-center gap-3 text-xs text-cyan-200 shadow-2xl animate-fade-in pointer-events-auto max-w-[90vw]">
-              <div className="w-7 h-7 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0 shadow-inner">
-                <Ruler className="w-4 h-4 animate-pulse" />
-              </div>
-              <div className="flex flex-col pr-1">
-                <span className="font-semibold text-slate-100">Régua Tática Ortogonal (D&D 5e)</span>
-                <span className="text-[11px] text-cyan-300/80">
-                  Medição estritamente ortogonal (sem diagonal). Arraste ou clique para traçar o caminho.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={handleExitRuler}
-                className="p-1 text-slate-400 hover:text-slate-100 rounded-lg hover:bg-slate-800 transition-colors ml-1"
-                title="Fechar Régua e voltar às ferramentas (ESC)"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-
-          {rulerStatus === 'measuring' && (() => {
-            const summary = getRulerSummary(rulerPoints, rulerCursor, true);
-            return (
-              <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 px-4 py-2.5 bg-slate-950/95 backdrop-blur-md border border-cyan-500/50 rounded-2xl flex flex-wrap items-center gap-4 text-xs text-cyan-200 shadow-2xl animate-fade-in pointer-events-auto max-w-[92vw]">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-xl bg-cyan-500 text-slate-950 flex items-center justify-center font-bold shrink-0 shadow-md shadow-cyan-500/30">
-                    <Ruler className="w-4 h-4" />
-                  </div>
-                  <div className="flex flex-col">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-base font-bold text-white font-mono">
-                        {summary.totalFeet}ft
-                      </span>
-                      <span className="text-[11px] text-cyan-300 font-mono">
-                        ({summary.totalMeters}m)
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                      <span>{summary.totalSteps} casas</span>
-                      <span>•</span>
-                      <span>{summary.activePoints.length} pontos {summary.segments.length > 1 ? `(${summary.segments.length} curvas)` : ''}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="h-6 w-[1px] bg-slate-800 hidden sm:block" />
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleFinishRuler}
-                    className="px-3.5 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-md shadow-cyan-500/20 cursor-pointer active:scale-95"
-                    title="Confirmar fim da medição (ESC / Enter / Espaço / Duplo-clique)"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Concluir (ESC)</span>
-                  </button>
-                  
-                  {rulerPoints.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={handleUndoRulerPoint}
-                      className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs transition-all flex items-center gap-1 cursor-pointer"
-                      title="Desfazer último ponto (Backspace)"
-                    >
-                      <Undo2 className="w-3.5 h-3.5" />
-                      <span className="hidden md:inline">Desfazer</span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={handleResetRuler}
-                    className="px-2.5 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 rounded-xl text-xs transition-all flex items-center gap-1 cursor-pointer"
-                    title="Limpar medição"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    <span>Limpar</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-
-          {rulerStatus === 'completed' && (() => {
-            const summary = getRulerSummary(rulerPoints, null, false);
-            return (
-              <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 w-[360px] max-w-[92vw] bg-slate-950/95 backdrop-blur-md border border-cyan-500/40 rounded-2xl p-3.5 text-xs text-slate-200 shadow-2xl animate-fade-in pointer-events-auto">
-                {/* Header */}
-                <div className="flex items-center justify-between pb-2.5 border-b border-slate-800/80">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="font-bold text-slate-100 text-xs">Medição da Rota Concluída</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleExitRuler}
-                    className="p-1 text-slate-400 hover:text-slate-100 rounded-lg hover:bg-slate-800 transition-colors"
-                    title="Fechar Régua e voltar (ESC)"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Main Stats */}
-                <div className="grid grid-cols-2 gap-2 my-2.5">
-                  <div className="bg-[#0e1422] border border-cyan-500/20 rounded-xl p-2.5 flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-slate-400">Distância Total</span>
-                    <div className="flex items-baseline gap-1 mt-0.5">
-                      <span className="text-base font-black text-cyan-400 font-mono">{summary.totalFeet}ft</span>
-                      <span className="text-[11px] text-cyan-300/70 font-mono">({summary.totalMeters}m)</span>
-                    </div>
-                  </div>
-                  <div className="bg-[#0e1422] border border-cyan-500/20 rounded-xl p-2.5 flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-slate-400">Quadrados / Passos</span>
-                    <div className="flex items-baseline gap-1 mt-0.5">
-                      <span className="text-base font-black text-amber-400 font-mono">{summary.totalSteps}</span>
-                      <span className="text-[11px] text-slate-400 font-mono">casas</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Segments Breakdown */}
-                {summary.segments.length > 1 && (
-                  <div className="mb-2.5 max-h-28 overflow-y-auto pr-1 space-y-1.5 custom-scrollbar">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                      Detalhamento dos Segmentos:
-                    </span>
-                    {summary.segments.map((seg, sIdx) => (
-                      <div key={sIdx} className="flex items-center justify-between text-[11px] bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-800/60 font-mono">
-                        <span className="text-slate-300 flex items-center gap-1.5">
-                          <span className="w-4 h-4 rounded-full bg-cyan-950 text-cyan-400 text-[9px] flex items-center justify-center font-bold">
-                            {sIdx + 1}
-                          </span>
-                          Segmento {sIdx + 1}
-                        </span>
-                        <span className="font-bold text-cyan-300">
-                          +{seg.feet}ft ({seg.steps} casas)
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Action Footer */}
-                <div className="flex items-center gap-2 pt-1 border-t border-slate-800/80">
-                  <button
-                    type="button"
-                    onClick={handleExitRuler}
-                    className="flex-1 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-cyan-500/20 active:scale-95"
-                    title="Fechar medição e voltar às ferramentas (ESC / Enter / OK)"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>OK / Fechar (ESC)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleResetRuler}
-                    className="py-2 px-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 font-semibold rounded-xl text-xs transition-all cursor-pointer flex items-center gap-1.5"
-                    title="Iniciar nova medição"
-                  >
-                    <Ruler className="w-3.5 h-3.5" />
-                    <span>Nova Medição</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      )}
-
-      {/* Interactive Container Loot Modal */}
+      {/* Modal de Saque Interativo */}
       {activeLootContainer && activeLootContainer.cell.chestConfig?.loot && (
         <ContainerLootModal
           isOpen={Boolean(activeLootContainer)}
           onClose={() => setActiveLootContainer(null)}
-          containerName={activeLootContainer.cell.chestConfig.name || (activeLootContainer.cell.type === 'stash' ? 'Esconderijo Secreto' : 'Baú de Tesouro')}
+          containerName={activeLootContainer.cell.chestConfig.name || 'Baú de Tesouro'}
           containerType={activeLootContainer.cell.chestConfig.containerType || activeLootContainer.cell.type}
           loot={activeLootContainer.cell.chestConfig.loot}
           combatants={combatants}
@@ -5106,9 +1990,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
               const target = updated[activeLootContainer.r]?.[activeLootContainer.c];
               if (target && target.chestConfig) {
                 target.chestConfig.loot = updatedLoot;
-                if (isFullyLooted) {
-                  target.chestConfig.status = 'looted';
-                }
+                if (isFullyLooted) target.chestConfig.status = 'looted';
               }
               return updated;
             });
@@ -5116,7 +1998,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         />
       )}
 
-      {/* Item Compendium Modal for Chest Item Selection */}
+      {/* Modal de Compêndio de Itens */}
       {isChestCompendiumOpen && (
         <ItemCompendiumModal
           isOpen={isChestCompendiumOpen}
@@ -5125,33 +2007,22 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
             if (!editingCell) return;
             const currentItems = [...(editingCell.cell.chestConfig?.loot?.items || [])];
             currentItems.push(newItem);
-            setEditingCell((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    cell: {
-                      ...prev.cell,
-                      chestConfig: {
-                        ...(prev.cell.chestConfig || {
-                          name: 'Baú',
-                          containerType: 'wooden_chest',
-                          status: 'locked',
-                          lockpickDC: 15,
-                          breakDC: 16,
-                          revealedToPlayers: true,
-                        }),
-                        loot: { ...(prev.cell.chestConfig?.loot || {}), items: currentItems },
-                      },
-                    },
-                  }
-                : null
-            );
+            setEditingCell((prev) => prev ? {
+              ...prev,
+              cell: {
+                ...prev.cell,
+                chestConfig: {
+                  ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                  loot: { ...(prev.cell.chestConfig?.loot || {}), items: currentItems }
+                }
+              }
+            } : null);
             toast.success(`"${newItem.name}" adicionado ao baú!`);
           }}
         />
       )}
 
-      {/* Campaign Document Select Modal */}
+      {/* Modal de Seleção de Documentos de Campanha */}
       {isChestCampaignDocsOpen && (
         <CampaignDocumentSelectModal
           isOpen={isChestCampaignDocsOpen}
@@ -5161,27 +2032,16 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
             const equipItem = documentToEquipmentItem(doc);
             const currentItems = [...(editingCell.cell.chestConfig?.loot?.items || [])];
             currentItems.push(equipItem);
-            setEditingCell((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    cell: {
-                      ...prev.cell,
-                      chestConfig: {
-                        ...(prev.cell.chestConfig || {
-                          name: 'Baú',
-                          containerType: 'wooden_chest',
-                          status: 'locked',
-                          lockpickDC: 15,
-                          breakDC: 16,
-                          revealedToPlayers: true,
-                        }),
-                        loot: { ...(prev.cell.chestConfig?.loot || {}), items: currentItems },
-                      },
-                    },
-                  }
-                : null
-            );
+            setEditingCell((prev) => prev ? {
+              ...prev,
+              cell: {
+                ...prev.cell,
+                chestConfig: {
+                  ...(prev.cell.chestConfig || { name: 'Baú', containerType: 'wooden_chest', status: 'locked', lockpickDC: 15, breakDC: 16, revealedToPlayers: true }),
+                  loot: { ...(prev.cell.chestConfig?.loot || {}), items: currentItems }
+                }
+              }
+            } : null);
             toast.success(`Documento "${doc.name}" colocado no baú!`);
           }}
         />
@@ -5189,4 +2049,3 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     </div>
   );
 };
-

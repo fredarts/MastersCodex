@@ -1,5 +1,5 @@
 import { Cell } from '../MapMaker';
-import { Combatant, WallSegment, LightSource, VisionType, BarrierMaterialType, BarrierCoverType, DoorStateType } from '@/lib/types';
+import { Combatant, WallSegment, LightSource, VisionType, BarrierMaterialType } from '@/lib/types';
 
 /**
  * Checks if a cell blocks light and vision (walls, closed doors, locked doors, or out of bounds)
@@ -20,8 +20,7 @@ export function isCellBlockingVision(cell: Cell | undefined): boolean {
  */
 export function isWallSegmentBlockingVision(
   wall: WallSegment,
-  viewerId?: string,
-  isPlayer?: boolean
+  viewerId?: string
 ): boolean {
   if (wall.blocksVision === false) return false;
 
@@ -300,20 +299,7 @@ export function computeVisibilityPolygon(
   const startC = Math.floor((hasBgImage ? tx - gridOffsetX : tx) / cellSize);
   const startR = Math.floor((hasBgImage ? ty - gridOffsetY : ty) / cellSize);
 
-  const isPointBlockingGrid = (px: number, py: number) => {
-    const adjX = hasBgImage ? px - gridOffsetX : px;
-    const adjY = hasBgImage ? py - gridOffsetY : py;
-    const c = Math.floor(adjX / cellSize);
-    const r = Math.floor(adjY / cellSize);
-
-    if (c < 0 || c >= cols || r < 0 || r >= rows) return true;
-    if (c === startC && r === startR) return false; // Origin cell never blocks its own rays
-    const cell = grid[r]?.[c];
-    return isCellBlockingVision(cell);
-  };
-
-  const step = Math.max(1.5, Math.min(cellSize * 0.05, 3.0));
-
+  // 3. Fast DDA Grid Raycasting for each angle
   for (const angle of sortedAngles) {
     const cosA = Math.cos(angle);
     const sinA = Math.sin(angle);
@@ -336,19 +322,67 @@ export function computeVisibilityPolygon(
       }
     }
 
+    // High-performance DDA (Digital Differential Analyzer) across discrete grid cells
+    const originGridX = (hasBgImage ? tx - gridOffsetX : tx) / cellSize;
+    const originGridY = (hasBgImage ? ty - gridOffsetY : ty) / cellSize;
 
-    // Step along ray for grid cell walls
-    let currentDist = 0;
-    let rx = tx;
-    let ry = ty;
+    let mapX = Math.floor(originGridX);
+    let mapY = Math.floor(originGridY);
 
-    while (currentDist < closestDist) {
-      rx += cosA * step;
-      ry += sinA * step;
-      currentDist += step;
+    const absCos = Math.abs(cosA);
+    const absSin = Math.abs(sinA);
 
-      if (isPointBlockingGrid(rx, ry)) {
-        closestDist = currentDist;
+    const deltaDistX = absCos > 1e-6 ? 1 / absCos : 1e6;
+    const deltaDistY = absSin > 1e-6 ? 1 / absSin : 1e6;
+
+    let stepX = 0;
+    let sideDistX = 0;
+    if (cosA > 0) {
+      stepX = 1;
+      sideDistX = (mapX + 1 - originGridX) * deltaDistX;
+    } else {
+      stepX = -1;
+      sideDistX = (originGridX - mapX) * deltaDistX;
+    }
+
+    let stepY = 0;
+    let sideDistY = 0;
+    if (sinA > 0) {
+      stepY = 1;
+      sideDistY = (mapY + 1 - originGridY) * deltaDistY;
+    } else {
+      stepY = -1;
+      sideDistY = (originGridY - mapY) * deltaDistY;
+    }
+
+    const maxGridDist = closestDist / cellSize;
+    let gridDist = 0;
+
+    while (gridDist < maxGridDist) {
+      if (sideDistX < sideDistY) {
+        gridDist = sideDistX;
+        sideDistX += deltaDistX;
+        mapX += stepX;
+      } else {
+        gridDist = sideDistY;
+        sideDistY += deltaDistY;
+        mapY += stepY;
+      }
+
+      if (gridDist >= maxGridDist) break;
+
+      // Out of grid bounds check
+      if (mapX < 0 || mapX >= cols || mapY < 0 || mapY >= rows) {
+        closestDist = Math.min(closestDist, gridDist * cellSize);
+        break;
+      }
+
+      // Origin cell never blocks its own vision
+      if (mapX === startC && mapY === startR) continue;
+
+      const cell = grid[mapY]?.[mapX];
+      if (isCellBlockingVision(cell)) {
+        closestDist = Math.min(closestDist, gridDist * cellSize);
         break;
       }
     }
