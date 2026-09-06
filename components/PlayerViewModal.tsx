@@ -835,6 +835,7 @@ export const PlayerViewModal: React.FC<PlayerViewModalProps> = ({
                         imageUrl={normalizeImageUrl(rawUrl)}
                         transitionType={resolved?.transitionType || currentScene?.defaultTransition || 'magical_dissolve'}
                         aspectRatio={activeAspectRatio as any}
+                        triggerKey={`${rawUrl}-${resolved?.activeImageIndex ?? 0}`}
                         className="w-full h-full"
                       />
                     )}

@@ -499,6 +499,7 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
                         imageUrl={displayImageUrl}
                         transitionType={currentPack?.transitionType || activeScene?.defaultTransition || 'magical_dissolve'}
                         aspectRatio={activeSlideImage?.aspectRatio || currentPack?.aspectRatio || activeScene?.defaultAspectRatio || '16:9'}
+                        triggerKey={`${displayImageUrl}-${activeImageIndex}`}
                         className="w-full h-full"
                       />
                     );

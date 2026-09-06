@@ -892,7 +892,6 @@ export const BattleControlsToolbar: React.FC<BattleControlsToolbarProps> = ({
                                 key={theme.id}
                                 disabled={!hasFog}
                                 onClick={() => {
-                                  setInternalFogColorPreset(theme.id);
                                   triggerEnvChange({ fogColorPreset: theme.id });
                                 }}
                                 className={`py-1 px-0.5 rounded flex flex-col items-center justify-center border text-[8px] font-bold transition-all disabled:opacity-30 ${

@@ -81,6 +81,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
 }) => {
   const [selectedSlideIndex, setSelectedSlideIndex] = useState<number>(0);
   const [testTransitionUrl, setTestTransitionUrl] = useState<string | null>(null);
+  const [previewTriggerKey, setPreviewTriggerKey] = useState<number>(0);
   const [isCreatingPack, setIsCreatingPack] = useState(false);
   const [newPackTitle, setNewPackTitle] = useState('');
   const [newPackCategory, setNewPackCategory] = useState<'sonho' | 'lore' | 'flashback' | 'custom'>('sonho');
@@ -90,6 +91,13 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [editingOverlaySlideIndex, setEditingOverlaySlideIndex] = useState<number | null>(null);
   const [aiEditingSlideIndex, setAiEditingSlideIndex] = useState<number | null>(null);
+
+  // Helper para selecionar slide limpando estados temporários
+  const selectSlide = (index: number) => {
+    setTestTransitionUrl(null);
+    setSelectedSlideIndex(index);
+    setPreviewTriggerKey((prev) => prev + 1);
+  };
 
   // Pack atualmente ativo
   const currentPack = slidePacks.find((p) => p.id === activeSlidePackId) || slidePacks[0] || {
@@ -180,6 +188,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
 
     if (updates.transitionType) {
       setDefaultTransition(updates.transitionType);
+      setPreviewTriggerKey((prev) => prev + 1);
     }
     if (updates.aspectRatio) {
       setDefaultAspectRatio(updates.aspectRatio);
@@ -209,7 +218,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
 
     setSlidePacks((prev) => [...prev, newPack]);
     setActiveSlidePackId(newPackId);
-    setSelectedSlideIndex(0);
+    selectSlide(0);
     setNewPackTitle('');
     setIsCreatingPack(false);
     toast.success(`Pack "${newPack.title}" criado com sucesso!`);
@@ -226,7 +235,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
       const remaining = prev.filter((p) => p.id !== packId);
       if (activeSlidePackId === packId) {
         setActiveSlidePackId(remaining[0].id);
-        setSelectedSlideIndex(0);
+        selectSlide(0);
       }
       toast.success('Pack removido.');
       return remaining;
@@ -246,7 +255,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
     const nextImages = [...currentPackImages, newImg];
     updateCurrentPackImages(nextImages);
     if (!primaryImageUrl) setPrimaryImageUrl(imageUrl);
-    setSelectedSlideIndex(nextImages.length - 1);
+    selectSlide(nextImages.length - 1);
     setShowAddMediaModal(false);
     setUrlInput('');
   };
@@ -260,15 +269,15 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
       ];
       const nextDemo = testTransitionUrl === demoImages[0] ? demoImages[1] : demoImages[0];
       setTestTransitionUrl(nextDemo);
+      setPreviewTriggerKey((prev) => prev + 1);
       return;
     }
 
     if (currentPackImages.length > 1) {
       const nextIdx = (selectedSlideIndex + 1) % currentPackImages.length;
-      setSelectedSlideIndex(nextIdx);
+      selectSlide(nextIdx);
     } else {
-      const currentUrl = currentPackImages[0].imageUrl;
-      setTestTransitionUrl(currentUrl);
+      setPreviewTriggerKey((prev) => prev + 1);
     }
     toast.info(`Efeito "${SLIDE_TRANSITION_OPTIONS.find(t => t.id === currentPack.transitionType)?.label || 'Transição'}" executado!`);
   };
@@ -360,6 +369,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                     imageUrl={normalizeImageUrl(activeDisplayUrl)}
                     transitionType={currentPack.transitionType || defaultTransition}
                     aspectRatio={currentAspect}
+                    triggerKey={previewTriggerKey}
                     className="w-full h-full"
                   />
                 )
@@ -387,7 +397,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => setSelectedSlideIndex((prev) => Math.max(0, prev - 1))}
+                onClick={() => selectSlide(Math.max(0, selectedSlideIndex - 1))}
                 disabled={selectedSlideIndex <= 0}
                 className="p-1.5 bg-[#161c28] hover:bg-[#1f2738] disabled:opacity-30 border border-[#2a3449] rounded-lg text-slate-300 transition-all cursor-pointer"
                 title="Slide Anterior"
@@ -399,7 +409,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
               </span>
               <button
                 type="button"
-                onClick={() => setSelectedSlideIndex((prev) => Math.min(currentPackImages.length - 1, prev + 1))}
+                onClick={() => selectSlide(Math.min(currentPackImages.length - 1, selectedSlideIndex + 1))}
                 disabled={selectedSlideIndex >= currentPackImages.length - 1}
                 className="p-1.5 bg-[#161c28] hover:bg-[#1f2738] disabled:opacity-30 border border-[#2a3449] rounded-lg text-slate-300 transition-all cursor-pointer"
                 title="Próximo Slide"
@@ -646,7 +656,7 @@ export const SceneSlideshowStudio: React.FC<SceneSlideshowStudioProps> = ({
                 return (
                   <div
                     key={imgObj.id}
-                    onClick={() => setSelectedSlideIndex(idx)}
+                    onClick={() => selectSlide(idx)}
                     className={`p-2.5 rounded-xl border transition-all flex flex-col gap-2 cursor-pointer ${
                       isSelected
                         ? 'bg-[#161f30] border-amber-500/60 shadow-lg ring-1 ring-amber-500/30'

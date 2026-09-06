@@ -461,6 +461,7 @@ export interface UserCampaign {
   calendarConfig?: import('./types/calendar').CampaignCalendarConfig;
   calendarState?: import('./types/calendar').CampaignCalendarState;
   documents?: CampaignDocumentItem[];
+  houseRules?: import('./types/houseRules').HouseRuleItem[];
   npcDisclosures?: Record<string, CampaignNPCDisclosure>; // Vínculo de visibilidade de NPCs por campanha
   activeSceneId?: string; // ID da cena que o mestre está projetando ativamente
   liveState?: {

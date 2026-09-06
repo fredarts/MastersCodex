@@ -1,6 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
-import { patchWebGLContext } from '@/lib/webgl-utils';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { SlideTransitionType, SlideAspectRatio } from '@/lib/types';
 
 interface MagicShaderSlideshowProps {
@@ -11,9 +9,9 @@ interface MagicShaderSlideshowProps {
   fitMode?: 'cover' | 'contain';
   onTransitionEnd?: () => void;
   isPaused?: boolean;
+  triggerKey?: string | number;
 }
 
-// Convert transition type to uniform integer
 function getTransitionTypeInt(type?: SlideTransitionType): number {
   switch (type) {
     case 'dream_waves':
@@ -32,19 +30,306 @@ function getTransitionTypeInt(type?: SlideTransitionType): number {
   }
 }
 
-// Create a tiny canvas base64 image as default placeholder texture
-function createPlaceholderTexture() {
-  if (typeof window === 'undefined') return new THREE.Texture();
-  const canvas = document.createElement('canvas');
-  canvas.width = 2;
-  canvas.height = 2;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.fillStyle = '#0a0d14';
-    ctx.fillRect(0, 0, 2, 2);
+const VERTEX_SHADER_SRC = `
+  attribute vec2 a_position;
+  varying vec2 vUv;
+  void main() {
+    vUv = (a_position + 1.0) * 0.5;
+    gl_Position = vec4(a_position, 0.0, 1.0);
   }
-  const texture = new THREE.CanvasTexture(canvas);
-  return texture;
+`;
+
+const FRAGMENT_SHADER_SRC = `
+  precision mediump float;
+
+  uniform sampler2D uTex1;
+  uniform sampler2D uTex2;
+  uniform float uTransition;
+  uniform float uTime;
+  uniform int uTransitionType;
+  uniform float uFitMode; // 0.0 = cover, 1.0 = contain
+  uniform vec2 uImageSize1;
+  uniform vec2 uImageSize2;
+  uniform vec2 uPlaneSize;
+  varying vec2 vUv;
+
+  #define PI 3.14159265358979323846
+
+  vec2 getUv(vec2 uv, vec2 imgSize, vec2 planeSize, float mode, out bool isOutOfBound) {
+    isOutOfBound = false;
+    if (imgSize.x <= 0.0 || imgSize.y <= 0.0 || planeSize.x <= 0.0 || planeSize.y <= 0.0) {
+      return uv;
+    }
+    float screenAspect = planeSize.x / planeSize.y;
+    float imageAspect = imgSize.x / imgSize.y;
+    vec2 newUv = uv;
+
+    if (mode < 0.5) {
+      // COVER
+      if (screenAspect > imageAspect) {
+        float newHeight = planeSize.x / imageAspect;
+        newUv.y = (uv.y - 0.5) * (planeSize.y / newHeight) + 0.5;
+      } else {
+        float newWidth = planeSize.y * imageAspect;
+        newUv.x = (uv.x - 0.5) * (planeSize.x / newWidth) + 0.5;
+      }
+    } else {
+      // CONTAIN
+      if (screenAspect > imageAspect) {
+        float newWidth = planeSize.y * imageAspect;
+        newUv.x = (uv.x - 0.5) * (planeSize.x / newWidth) + 0.5;
+      } else {
+        float newHeight = planeSize.x / imageAspect;
+        newUv.y = (uv.y - 0.5) * (planeSize.y / newHeight) + 0.5;
+      }
+      if (newUv.x < 0.0 || newUv.x > 1.0 || newUv.y < 0.0 || newUv.y > 1.0) {
+        isOutOfBound = true;
+      }
+    }
+    return clamp(newUv, 0.0, 1.0);
+  }
+
+  float random(vec2 co) {
+    return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  }
+
+  float noise(vec2 p) {
+    vec2 ip = floor(p);
+    vec2 u = fract(p);
+    u = u * u * (3.0 - 2.0 * u);
+    float res = mix(
+      mix(random(ip), random(ip + vec2(1.0, 0.0)), u.x),
+      mix(random(ip + vec2(0.0, 1.0)), random(ip + vec2(1.0, 1.0)), u.x),
+      u.y
+    );
+    return res;
+  }
+
+  float fbm(vec2 p) {
+    float f = 0.0;
+    f += 0.5000 * noise(p); p = p * 2.02;
+    f += 0.2500 * noise(p); p = p * 2.03;
+    f += 0.1250 * noise(p); p = p * 2.01;
+    return f;
+  }
+
+  vec4 sampleTexture(sampler2D tex, vec2 uv, vec2 imgSize, vec2 planeSize, float mode) {
+    bool outOfBound = false;
+    vec2 finalUv = getUv(uv, imgSize, planeSize, mode, outOfBound);
+    if (outOfBound) {
+      return vec4(0.04, 0.05, 0.08, 1.0);
+    }
+    return texture2D(tex, finalUv);
+  }
+
+  void main() {
+    float progress = clamp(uTransition, 0.0, 1.0);
+    vec4 finalColor = vec4(0.0);
+
+    // 1. DREAM WAVES
+    if (uTransitionType == 1) {
+      float waveStrength = sin(progress * PI) * 0.05;
+      float waveFreq = 14.0;
+
+      vec2 waveUv1 = vUv + vec2(
+        sin(vUv.y * waveFreq + uTime * 2.5) * waveStrength,
+        cos(vUv.x * waveFreq + uTime * 2.0) * waveStrength
+      );
+      vec2 waveUv2 = vUv + vec2(
+        sin(vUv.y * waveFreq - uTime * 2.5) * waveStrength * (1.0 - progress),
+        cos(vUv.x * waveFreq - uTime * 2.0) * waveStrength * (1.0 - progress)
+      );
+
+      float aberration = sin(progress * PI) * 0.012;
+      vec4 col1 = vec4(
+        sampleTexture(uTex1, waveUv1 + vec2(aberration, 0.0), uImageSize1, uPlaneSize, uFitMode).r,
+        sampleTexture(uTex1, waveUv1, uImageSize1, uPlaneSize, uFitMode).g,
+        sampleTexture(uTex1, waveUv1 - vec2(aberration, 0.0), uImageSize1, uPlaneSize, uFitMode).b,
+        1.0
+      );
+      vec4 col2 = vec4(
+        sampleTexture(uTex2, waveUv2 - vec2(aberration, 0.0), uImageSize2, uPlaneSize, uFitMode).r,
+        sampleTexture(uTex2, waveUv2, uImageSize2, uPlaneSize, uFitMode).g,
+        sampleTexture(uTex2, waveUv2 + vec2(aberration, 0.0), uImageSize2, uPlaneSize, uFitMode).b,
+        1.0
+      );
+
+      float blendFactor = smoothstep(0.0, 1.0, progress);
+      vec4 blended = mix(col1, col2, blendFactor);
+
+      float dreamGlow = sin(progress * PI) * 0.35;
+      vec3 auraColor = vec3(0.5, 0.85, 1.0);
+      blended.rgb += auraColor * dreamGlow * (0.6 + 0.4 * sin(uTime * 4.0));
+      finalColor = blended;
+    }
+    // 2. 3D BOOK PAGE FLIP
+    else if (uTransitionType == 2) {
+      float curlRadius = 0.22;
+      float curlCenter = (1.0 - progress) * (1.0 + curlRadius * 2.5) - curlRadius * 1.25;
+      float xDist = vUv.x - curlCenter;
+
+      vec4 col1 = sampleTexture(uTex1, vUv, uImageSize1, uPlaneSize, uFitMode);
+      vec4 col2 = sampleTexture(uTex2, vUv, uImageSize2, uPlaneSize, uFitMode);
+
+      if (xDist > curlRadius) {
+        float shadow = smoothstep(curlRadius + 0.2, curlRadius, xDist) * 0.35 * sin(progress * PI);
+        col1.rgb *= (1.0 - shadow);
+        finalColor = col1;
+      } else if (xDist > 0.0) {
+        float angle = asin(clamp(xDist / curlRadius, 0.0, 1.0));
+        float depthShade = cos(angle);
+        vec2 deformedUv = vUv;
+        deformedUv.x -= (curlRadius * (1.0 - cos(angle))) * 0.4;
+        vec4 curCol = sampleTexture(uTex1, deformedUv, uImageSize1, uPlaneSize, uFitMode);
+
+        float highlight = pow(1.0 - depthShade, 2.0) * 0.3;
+        curCol.rgb = curCol.rgb * (depthShade * 0.7 + 0.3) + vec3(highlight);
+        finalColor = curCol;
+      } else {
+        float shadow = smoothstep(-0.35, 0.0, xDist) * 0.3 * (1.0 - progress);
+        col2.rgb *= (1.0 - shadow);
+        finalColor = col2;
+      }
+    }
+    // 3. ARCANE VISION
+    else if (uTransitionType == 3) {
+      vec2 center = vec2(0.5, 0.5);
+      vec2 d = vUv - center;
+      float dist = length(d);
+      float angle = atan(d.y, d.x);
+
+      float maxRadius = 1.55;
+      float currentRadius = progress * maxRadius;
+      float edgeWidth = 0.14;
+
+      float runeDistort = sin(angle * 8.0 + uTime * 3.5) * 0.035 * sin(progress * PI)
+                        + noise(vUv * 8.0 + uTime * 2.0) * 0.03 * sin(progress * PI);
+      float effectiveDist = dist + runeDistort;
+
+      float gate = smoothstep(currentRadius - edgeWidth, currentRadius + edgeWidth, effectiveDist);
+
+      vec4 col1 = sampleTexture(uTex1, vUv, uImageSize1, uPlaneSize, uFitMode);
+      vec4 col2 = sampleTexture(uTex2, vUv, uImageSize2, uPlaneSize, uFitMode);
+
+      vec4 blended = mix(col2, col1, gate);
+
+      float boundaryDist = abs(effectiveDist - currentRadius);
+      float glow = (1.0 - smoothstep(0.0, edgeWidth * 1.8, boundaryDist)) * sin(progress * PI);
+      vec3 arcaneColor = mix(vec3(0.05, 0.9, 0.8), vec3(1.0, 0.75, 0.2), sin(angle * 3.0 + uTime * 3.0) * 0.5 + 0.5);
+      blended.rgb += arcaneColor * glow * 1.8;
+
+      finalColor = blended;
+    }
+    // 4. DARK MIST
+    else if (uTransitionType == 4) {
+      vec2 mistUv = vUv * 4.5 + vec2(uTime * 0.25, -uTime * 0.15);
+      float mistNoise = fbm(mistUv);
+
+      float edgeWidth = 0.18;
+      float threshold = progress * (1.0 + edgeWidth * 2.0) - edgeWidth;
+      float reveal = 1.0 - smoothstep(threshold - edgeWidth, threshold + edgeWidth, mistNoise);
+
+      vec4 col1 = sampleTexture(uTex1, vUv, uImageSize1, uPlaneSize, uFitMode);
+      vec4 col2 = sampleTexture(uTex2, vUv, uImageSize2, uPlaneSize, uFitMode);
+
+      vec4 mixed = mix(col1, col2, reveal);
+
+      float smoke = smoothstep(0.0, edgeWidth * 1.5, abs(mistNoise - threshold));
+      float shadowEdge = (1.0 - smoke) * sin(progress * PI);
+      mixed.rgb = mix(mixed.rgb, vec3(0.02, 0.03, 0.06), shadowEdge * 0.7);
+
+      finalColor = mixed;
+    }
+    // 5. CROSSFADE
+    else if (uTransitionType == 5) {
+      vec4 col1 = sampleTexture(uTex1, vUv, uImageSize1, uPlaneSize, uFitMode);
+      vec4 col2 = sampleTexture(uTex2, vUv, uImageSize2, uPlaneSize, uFitMode);
+      finalColor = mix(col1, col2, smoothstep(0.0, 1.0, progress));
+    }
+    // 0. MAGICAL DISSOLVE
+    else {
+      vec2 dissolveUv = vUv * 5.0 + vec2(uTime * 0.1, uTime * 0.08);
+      float noiseVal = fbm(dissolveUv);
+
+      float edgeWidth = 0.16;
+      float threshold = progress * (1.0 + edgeWidth * 2.0) - edgeWidth;
+      float factor = 1.0 - smoothstep(threshold - edgeWidth, threshold + edgeWidth, noiseVal);
+
+      vec4 col1 = sampleTexture(uTex1, vUv, uImageSize1, uPlaneSize, uFitMode);
+      vec4 col2 = sampleTexture(uTex2, vUv, uImageSize2, uPlaneSize, uFitMode);
+
+      vec4 blended = mix(col1, col2, factor);
+
+      float boundaryDist = abs(noiseVal - threshold);
+      float ember = (1.0 - smoothstep(0.0, edgeWidth * 1.5, boundaryDist)) * sin(progress * PI);
+      vec3 emberColor = mix(vec3(1.0, 0.5, 0.05), vec3(1.0, 0.88, 0.35), random(vUv + uTime * 0.1));
+      blended.rgb += emberColor * ember * 1.8;
+
+      finalColor = blended;
+    }
+
+    gl_FragColor = finalColor;
+  }
+`;
+
+function createShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
+  const shader = gl.createShader(type);
+  if (!shader) return null;
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    console.error('Shader compilation error:', gl.getShaderInfoLog(shader));
+    gl.deleteShader(shader);
+    return null;
+  }
+  return shader;
+}
+
+function createProgram(gl: WebGLRenderingContext, vsSource: string, fsSource: string): WebGLProgram | null {
+  const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+  const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+  if (!vs || !fs) return null;
+
+  const program = gl.createProgram();
+  if (!program) return null;
+  gl.attachShader(program, vs);
+  gl.attachShader(program, fs);
+  gl.linkProgram(program);
+
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error('Program link error:', gl.getProgramInfoLog(program));
+    gl.deleteProgram(program);
+    return null;
+  }
+  return program;
+}
+
+function createSolidTexture(gl: WebGLRenderingContext, r = 10, g = 13, b = 20): WebGLTexture | null {
+  const tex = gl.createTexture();
+  if (!tex) return null;
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RGBA,
+    1,
+    1,
+    0,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    new Uint8Array([r, g, b, 255])
+  );
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  return tex;
+}
+
+interface LoadedTexture {
+  texture: WebGLTexture;
+  width: number;
+  height: number;
 }
 
 export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
@@ -54,509 +339,360 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
   fitMode = 'cover',
   onTransitionEnd,
   isPaused = false,
+  triggerKey,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [webglFailed, setWebglFailed] = useState(false);
+
   const isPausedRef = useRef(Boolean(isPaused));
   useEffect(() => {
     isPausedRef.current = Boolean(isPaused);
   }, [isPaused]);
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [webglFailed, setWebglFailed] = useState(false);
-  const retryCountRef = useRef(0);
-  const stateRef = useRef({
-    renderer: null as THREE.WebGLRenderer | null,
-    scene: null as THREE.Scene | null,
-    camera: null as THREE.OrthographicCamera | null,
-    material: null as THREE.ShaderMaterial | null,
-    textureLoader: new THREE.TextureLoader(),
-    currentUrl: imageUrl,
-    texture1: null as THREE.Texture | null,
-    texture2: null as THREE.Texture | null,
-    transition: 0.0,
-    isTransitioning: false,
-    startTime: 0,
-    imageSize1: new THREE.Vector2(1, 1),
-    imageSize2: new THREE.Vector2(1, 1),
-    transitionTypeInt: getTransitionTypeInt(transitionType),
-  });
-
-  // Keep transition type updated in stateRef
+  const onTransitionEndRef = useRef(onTransitionEnd);
   useEffect(() => {
-    stateRef.current.transitionTypeInt = getTransitionTypeInt(transitionType);
-    if (stateRef.current.material) {
-      stateRef.current.material.uniforms.uTransitionType.value = stateRef.current.transitionTypeInt;
-    }
-  }, [transitionType]);
+    onTransitionEndRef.current = onTransitionEnd;
+  }, [onTransitionEnd]);
 
-  // Keep fit mode updated in stateRef
+  const fitModeRef = useRef(fitMode);
   useEffect(() => {
-    if (stateRef.current.material) {
-      stateRef.current.material.uniforms.uFitMode.value = fitMode === 'contain' ? 1.0 : 0.0;
-    }
+    fitModeRef.current = fitMode;
   }, [fitMode]);
 
-  // Vertex Shader
-  const vertexShader = `
-    varying vec2 vUv;
-    void main() {
-      vUv = uv;
-      gl_Position = vec4(position, 1.0);
-    }
-  `;
-
-  // Fragment Shader supporting multiple transitions (Dream waves, 3D Book Page Curl, Arcane Vision, Dark Mist, Magical Dissolve, Crossfade)
-  const fragmentShader = `
-    uniform sampler2D uTex1;
-    uniform sampler2D uTex2;
-    uniform float uTransition;
-    uniform float uTime;
-    uniform int uTransitionType;
-    uniform float uFitMode; // 0.0 = cover, 1.0 = contain
-    uniform vec2 uImageSize1;
-    uniform vec2 uImageSize2;
-    uniform vec2 uPlaneSize;
-    varying vec2 vUv;
-
-    #define PI 3.14159265359
-
-    // Aspect ratio correction (object-fit: cover)
-    vec2 getCoverUv(vec2 uv, vec2 imgSize, vec2 planeSize) {
-      if (imgSize.x <= 0.0 || imgSize.y <= 0.0 || planeSize.x <= 0.0 || planeSize.y <= 0.0) {
-        return uv;
-      }
-      float s = planeSize.x / planeSize.y;
-      float i = imgSize.x / imgSize.y;
-      vec2 newUv = uv;
-      if (s > i) {
-        float newHeight = planeSize.x / i;
-        newUv.y = (uv.y - 0.5) * (planeSize.y / newHeight) + 0.5;
-      } else {
-        float newWidth = planeSize.y * i;
-        newUv.x = (uv.x - 0.5) * (planeSize.x / newWidth) + 0.5;
-      }
-      return newUv;
-    }
-
-    // Pseudo random noise
-    float random(vec2 co) {
-      return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
-    }
-
-    // Smooth value noise
-    float noise(vec2 p) {
-      vec2 ip = floor(p);
-      vec2 u = fract(p);
-      u = u * u * (3.0 - 2.0 * u);
-      float res = mix(
-        mix(random(ip), random(ip + vec2(1.0, 0.0)), u.x),
-        mix(random(ip + vec2(0.0, 1.0)), random(ip + vec2(1.0, 1.0)), u.x),
-        u.y
-      );
-      return res;
-    }
-
-    // Fractional Brownian Motion for ethereal clouds/mist
-    float fbm(vec2 p) {
-      float f = 0.0;
-      f += 0.5000 * noise(p); p = p * 2.02;
-      f += 0.2500 * noise(p); p = p * 2.03;
-      f += 0.1250 * noise(p); p = p * 2.01;
-      return f;
-    }
-
-    void main() {
-      vec2 uv1 = getCoverUv(vUv, uImageSize1, uPlaneSize);
-      vec2 uv2 = getCoverUv(vUv, uImageSize2, uPlaneSize);
-
-      float progress = clamp(uTransition, 0.0, 1.0);
-      vec4 finalColor = vec4(0.0);
-
-      // ==========================================
-      // 1. DREAM WAVES (Sonhos & Ondas Etéreas)
-      // ==========================================
-      if (uTransitionType == 1) {
-        float waveStrength = sin(progress * PI) * 0.06;
-        float waveFreq = 12.0;
-        
-        vec2 waveUv1 = uv1 + vec2(
-          sin(uv1.y * waveFreq + uTime * 3.0) * waveStrength,
-          cos(uv1.x * waveFreq + uTime * 2.5) * waveStrength
-        );
-        vec2 waveUv2 = uv2 + vec2(
-          sin(uv2.y * waveFreq - uTime * 3.0) * waveStrength * (1.0 - progress),
-          cos(uv2.x * waveFreq - uTime * 2.5) * waveStrength * (1.0 - progress)
-        );
-
-        // Chromatic aberration during transition
-        float aberration = sin(progress * PI) * 0.015;
-        vec4 col1 = vec4(
-          texture2D(uTex1, waveUv1 + vec2(aberration, 0.0)).r,
-          texture2D(uTex1, waveUv1).g,
-          texture2D(uTex1, waveUv1 - vec2(aberration, 0.0)).b,
-          1.0
-        );
-        vec4 col2 = vec4(
-          texture2D(uTex2, waveUv2 - vec2(aberration, 0.0)).r,
-          texture2D(uTex2, waveUv2).g,
-          texture2D(uTex2, waveUv2 + vec2(aberration, 0.0)).b,
-          1.0
-        );
-
-        // Ethereal dream glow
-        float dreamGlow = sin(progress * PI) * 0.35;
-        vec4 blended = mix(col1, col2, smoothstep(0.1, 0.9, progress));
-        vec3 auraColor = vec3(0.65, 0.8, 1.0); // Celestial dream aura
-        blended.rgb += auraColor * dreamGlow * (0.5 + 0.5 * sin(uTime * 4.0));
-        finalColor = blended;
-      }
-
-      // ==========================================
-      // 2. 3D BOOK PAGE FLIP (Virar Página de Livro 3D)
-      // ==========================================
-      else if (uTransitionType == 2) {
-        float curlRadius = 0.18;
-        float curlProgress = progress * (1.0 + curlRadius * 2.0) - curlRadius;
-        
-        // Horizontal page flip line (from right to left)
-        float xDist = (1.0 - vUv.x) - curlProgress;
-
-        if (xDist < 0.0) {
-          // Area already turned: reveal page 2 with ambient shadow fading
-          float shadow = smoothstep(-0.35, 0.0, xDist) * 0.3;
-          vec4 col2 = texture2D(uTex2, uv2);
-          col2.rgb *= (1.0 - shadow);
-          finalColor = col2;
-        } else if (xDist < curlRadius) {
-          // The cylindrical 3D curl region
-          float angle = asin(clamp(xDist / curlRadius, -1.0, 1.0));
-          float depthShade = cos(angle);
-          
-          // Deform UV on the curl
-          vec2 curlUv = uv1;
-          curlUv.x += (curlRadius * (1.0 - cos(angle))) * 0.5;
-          vec4 col1 = texture2D(uTex1, curlUv);
-          
-          // Add 3D page highlight and shadow
-          col1.rgb = mix(col1.rgb * depthShade, vec3(1.0, 0.95, 0.85), (1.0 - depthShade) * 0.4);
-          finalColor = col1;
-        } else {
-          // Unturned page 1 with casting shadow under the curl
-          float castShadow = smoothstep(curlRadius + 0.25, curlRadius, xDist) * 0.4;
-          vec4 col1 = texture2D(uTex1, uv1);
-          col1.rgb *= (1.0 - castShadow);
-          finalColor = col1;
-        }
-      }
-
-      // ==========================================
-      // 3. ARCANE VISION (Visão Mística & Clarividência)
-      // ==========================================
-      else if (uTransitionType == 3) {
-        vec2 center = vec2(0.5, 0.5);
-        vec2 d = vUv - center;
-        float dist = length(d);
-        
-        // Arcane rune pulse & ripple
-        float ripple = sin(dist * 25.0 - progress * 15.0) * 0.03 * (1.0 - progress);
-        vec2 warpedUv1 = uv1 + (d / max(dist, 0.001)) * ripple;
-        vec2 warpedUv2 = uv2 - (d / max(dist, 0.001)) * ripple;
-
-        // Slit / Dimensional gate expansion
-        float gate = smoothstep(progress - 0.2, progress + 0.2, (1.0 - dist * 1.4) + noise(vUv * 8.0) * 0.25);
-        
-        vec4 col1 = texture2D(uTex1, warpedUv1);
-        vec4 col2 = texture2D(uTex2, warpedUv2);
-
-        // Arcane glow boundary (Cyan / Emerald / Amber Arcana)
-        float edge = abs(gate - 0.5);
-        float glow = smoothstep(0.4, 0.0, edge) * sin(progress * PI);
-        vec3 arcaneColor = mix(vec3(0.1, 0.9, 0.8), vec3(1.0, 0.75, 0.2), sin(uTime * 3.0) * 0.5 + 0.5);
-
-        finalColor = mix(col1, col2, gate);
-        finalColor.rgb += arcaneColor * glow * 1.6;
-      }
-
-      // ==========================================
-      // 4. DARK MIST (Névoa Sombria & Mistério)
-      // ==========================================
-      else if (uTransitionType == 4) {
-        float mist = fbm(vUv * 4.0 + vec2(uTime * 0.4, -uTime * 0.2));
-        float threshold = progress * 1.4 - 0.2;
-        float reveal = smoothstep(threshold - 0.25, threshold + 0.25, mist);
-
-        vec4 col1 = texture2D(uTex1, uv1);
-        vec4 col2 = texture2D(uTex2, uv2);
-
-        // Smoke / Shadow tint on boundary
-        float smoke = smoothstep(0.3, 0.0, abs(mist - threshold)) * sin(progress * PI);
-        vec4 mixed = mix(col1, col2, reveal);
-        mixed.rgb = mix(mixed.rgb, vec3(0.02, 0.03, 0.06), smoke * 0.75);
-
-        finalColor = mixed;
-      }
-
-      // ==========================================
-      // 5. CROSSFADE (Crossfade Suave)
-      // ==========================================
-      else if (uTransitionType == 5) {
-        vec4 col1 = texture2D(uTex1, uv1);
-        vec4 col2 = texture2D(uTex2, uv2);
-        finalColor = mix(col1, col2, smoothstep(0.0, 1.0, progress));
-      }
-
-      // ==========================================
-      // 0. MAGICAL DISSOLVE (Dissolve Mágico Dourado - Padrão)
-      // ==========================================
-      else {
-        vec4 color1 = texture2D(uTex1, uv1);
-        vec4 color2 = texture2D(uTex2, uv2);
-
-        float noiseBase = random(vUv * 3.0 + vec2(uTime * 0.3));
-        float dissolve = smoothstep(progress - 0.3, progress + 0.3, noiseBase);
-
-        vec4 blended = mix(color1, color2, dissolve * progress);
-
-        // Edge glow effect during transition
-        float edge = 0.0;
-        if (progress > 0.0 && progress < 1.0) {
-          float diff = abs(dissolve - 0.5);
-          edge = smoothstep(0.35, 0.0, diff) * progress * 1.5;
-        }
-
-        // Golden orange stardust
-        vec3 glowColor = vec3(0.95, 0.55, 0.1);
-        float sparkle = random(vUv + uTime * 0.1) * edge;
-        blended.rgb = mix(blended.rgb, glowColor + vec3(sparkle * 0.4), edge);
-
-        finalColor = blended;
-      }
-
-      gl_FragColor = finalColor;
-    }
-  `;
-
+  const transitionTypeRef = useRef(transitionType);
   useEffect(() => {
-    if (!canvasRef.current || !containerRef.current) return;
+    transitionTypeRef.current = transitionType;
+  }, [transitionType]);
 
-    const container = containerRef.current;
-    const canvas = canvasRef.current;
+  const textureCacheRef = useRef<Map<string, LoadedTexture>>(new Map());
+
+  const stateRef = useRef<{
+    gl: WebGLRenderingContext | null;
+    program: WebGLProgram | null;
+    locations: {
+      position: number;
+      uTex1: WebGLUniformLocation | null;
+      uTex2: WebGLUniformLocation | null;
+      uTransition: WebGLUniformLocation | null;
+      uTime: WebGLUniformLocation | null;
+      uTransitionType: WebGLUniformLocation | null;
+      uFitMode: WebGLUniformLocation | null;
+      uImageSize1: WebGLUniformLocation | null;
+      uImageSize2: WebGLUniformLocation | null;
+      uPlaneSize: WebGLUniformLocation | null;
+    } | null;
+    currentTexture: LoadedTexture | null;
+    targetTexture: LoadedTexture | null;
+    placeholderTexture: WebGLTexture | null;
+    isTransitioning: boolean;
+    transitionStartTime: number;
+    currentUrl: string;
+    rafId: number;
+    isRunning: boolean;
+    startLoop: () => void;
+    renderFrame: () => void;
+  }>({
+    gl: null,
+    program: null,
+    locations: null,
+    currentTexture: null,
+    targetTexture: null,
+    placeholderTexture: null,
+    isTransitioning: false,
+    transitionStartTime: 0,
+    currentUrl: '',
+    rafId: 0,
+    isRunning: false,
+    startLoop: () => {},
+    renderFrame: () => {},
+  });
+
+  const loadTextureAsync = useCallback((url: string): Promise<LoadedTexture> => {
+    const gl = stateRef.current.gl;
+    if (!gl) return Promise.reject(new Error('WebGL not initialized'));
+
+    const cached = textureCacheRef.current.get(url);
+    if (cached) return Promise.resolve(cached);
+
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        if (!stateRef.current.gl) {
+          reject(new Error('WebGL unmounted'));
+          return;
+        }
+        const currentGl = stateRef.current.gl;
+        const texture = currentGl.createTexture();
+        if (!texture) {
+          reject(new Error('Failed to create WebGL texture'));
+          return;
+        }
+        currentGl.bindTexture(currentGl.TEXTURE_2D, texture);
+        currentGl.pixelStorei(currentGl.UNPACK_FLIP_Y_WEBGL, 1);
+        currentGl.texImage2D(currentGl.TEXTURE_2D, 0, currentGl.RGBA, currentGl.RGBA, currentGl.UNSIGNED_BYTE, img);
+        currentGl.texParameteri(currentGl.TEXTURE_2D, currentGl.TEXTURE_WRAP_S, currentGl.CLAMP_TO_EDGE);
+        currentGl.texParameteri(currentGl.TEXTURE_2D, currentGl.TEXTURE_WRAP_T, currentGl.CLAMP_TO_EDGE);
+        currentGl.texParameteri(currentGl.TEXTURE_2D, currentGl.TEXTURE_MIN_FILTER, currentGl.LINEAR);
+        currentGl.texParameteri(currentGl.TEXTURE_2D, currentGl.TEXTURE_MAG_FILTER, currentGl.LINEAR);
+
+        const loaded: LoadedTexture = {
+          texture,
+          width: img.naturalWidth || img.width || 800,
+          height: img.naturalHeight || img.height || 600,
+        };
+        textureCacheRef.current.set(url, loaded);
+        resolve(loaded);
+      };
+      img.onerror = (err) => reject(err);
+      img.src = url;
+    });
+  }, []);
+
+  const startTransition = useCallback((nextTexture: LoadedTexture) => {
     const state = stateRef.current;
+    if (!state.gl) return;
 
-    // 1. Initialize WebGL Renderer
-    const width = container.clientWidth || 800;
-    const height = container.clientHeight || 600;
+    if (!state.currentTexture) {
+      state.currentTexture = nextTexture;
+      state.targetTexture = nextTexture;
+      state.isTransitioning = false;
+      state.renderFrame();
+      return;
+    }
 
-    let renderer: THREE.WebGLRenderer;
-    try {
-      renderer = new THREE.WebGLRenderer({
-        canvas,
-        antialias: true,
-        alpha: true,
-        depth: false,
-        stencil: false,
-        powerPreference: 'high-performance',
-      });
-    } catch (e) {
-      console.warn('MagicShaderSlideshow: WebGL context creation failed.', e);
-      if (retryCountRef.current < 2) {
-        retryCountRef.current++;
-        const retryTimer = setTimeout(() => {
-          setWebglFailed((prev) => !prev);
-        }, 500);
-        return () => clearTimeout(retryTimer);
-      }
+    state.targetTexture = nextTexture;
+    state.transitionStartTime = performance.now();
+    state.isTransitioning = true;
+    state.startLoop();
+  }, []);
+
+  // WebGL Context Setup
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    const gl = canvas.getContext('webgl', {
+      alpha: true,
+      antialias: false,
+      depth: false,
+      stencil: false,
+      preserveDrawingBuffer: false,
+      powerPreference: 'high-performance',
+    });
+
+    if (!gl) {
+      console.warn('MagicShaderSlideshow: WebGL context not supported.');
       setWebglFailed(true);
       return;
     }
-    patchWebGLContext(renderer);
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1.5));
-    state.renderer = renderer;
-    retryCountRef.current = 0;
-    setWebglFailed(false);
 
-    // 2. Initialize Scene & Camera
-    const scene = new THREE.Scene();
-    state.scene = scene;
-
-    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    state.camera = camera;
-
-    // 3. Create Uniforms & Shader Material
-    const placeholderTex = createPlaceholderTexture() as THREE.Texture;
-    state.texture1 = placeholderTex;
-    state.texture2 = placeholderTex;
-
-    const uniforms = {
-      uTex1: { value: placeholderTex },
-      uTex2: { value: placeholderTex },
-      uTransition: { value: 0.0 },
-      uTime: { value: 0.0 },
-      uTransitionType: { value: state.transitionTypeInt },
-      uFitMode: { value: fitMode === 'contain' ? 1.0 : 0.0 },
-      uImageSize1: { value: new THREE.Vector2(100, 100) },
-      uImageSize2: { value: new THREE.Vector2(100, 100) },
-      uPlaneSize: { value: new THREE.Vector2(width, height) },
-    };
-
-    const material = new THREE.ShaderMaterial({
-      vertexShader,
-      fragmentShader,
-      uniforms,
-      depthWrite: false,
-      depthTest: false,
-    });
-    state.material = material;
-
-    // 4. Create Plane Mesh
-    const geometry = new THREE.PlaneGeometry(2, 2);
-    const mesh = new THREE.Mesh(geometry, material);
-    scene.add(mesh);
-
-    // 5. Load Initial Image
-    if (imageUrl) {
-      state.textureLoader.load(
-        imageUrl,
-        (tex) => {
-          tex.minFilter = THREE.LinearFilter;
-          tex.generateMipmaps = false;
-          state.texture1 = tex;
-          state.texture2 = tex;
-          state.imageSize1.set(tex.image.width || 1, tex.image.height || 1);
-          state.imageSize2.set(tex.image.width || 1, tex.image.height || 1);
-
-          uniforms.uTex1.value = tex;
-          uniforms.uTex2.value = tex;
-          uniforms.uImageSize1.value.copy(state.imageSize1);
-          uniforms.uImageSize2.value.copy(state.imageSize2);
-          if (renderer && scene && camera) {
-            renderer.render(scene, camera);
-          }
-        },
-        undefined,
-        () => {}
-      );
-      state.currentUrl = imageUrl;
+    const program = createProgram(gl, VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC);
+    if (!program) {
+      setWebglFailed(true);
+      return;
     }
 
-    // 6. Resize Observer
+    const positionLoc = gl.getAttribLocation(program, 'a_position');
+    const posBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+      gl.STATIC_DRAW
+    );
+
+    const locations = {
+      position: positionLoc,
+      uTex1: gl.getUniformLocation(program, 'uTex1'),
+      uTex2: gl.getUniformLocation(program, 'uTex2'),
+      uTransition: gl.getUniformLocation(program, 'uTransition'),
+      uTime: gl.getUniformLocation(program, 'uTime'),
+      uTransitionType: gl.getUniformLocation(program, 'uTransitionType'),
+      uFitMode: gl.getUniformLocation(program, 'uFitMode'),
+      uImageSize1: gl.getUniformLocation(program, 'uImageSize1'),
+      uImageSize2: gl.getUniformLocation(program, 'uImageSize2'),
+      uPlaneSize: gl.getUniformLocation(program, 'uPlaneSize'),
+    };
+
+    const placeholder = createSolidTexture(gl);
+
+    const state = stateRef.current;
+    state.gl = gl;
+    state.program = program;
+    state.locations = locations;
+    state.placeholderTexture = placeholder;
+
+    const render = (progress = 0.0, time = 0.0) => {
+      if (!gl || !program || !locations) return;
+
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.useProgram(program);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
+      gl.enableVertexAttribArray(locations.position);
+      gl.vertexAttribPointer(locations.position, 2, gl.FLOAT, false, 0, 0);
+
+      const tex1 = state.currentTexture?.texture || state.placeholderTexture;
+      const tex2 = state.targetTexture?.texture || tex1;
+      const size1 = state.currentTexture || { width: 1, height: 1 };
+      const size2 = state.targetTexture || size1;
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, tex1);
+      gl.uniform1i(locations.uTex1, 0);
+
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, tex2);
+      gl.uniform1i(locations.uTex2, 1);
+
+      gl.uniform1f(locations.uTransition, progress);
+      gl.uniform1f(locations.uTime, time);
+      gl.uniform1i(locations.uTransitionType, getTransitionTypeInt(transitionTypeRef.current));
+      gl.uniform1f(locations.uFitMode, fitModeRef.current === 'contain' ? 1.0 : 0.0);
+      gl.uniform2f(locations.uImageSize1, size1.width, size1.height);
+      gl.uniform2f(locations.uImageSize2, size2.width, size2.height);
+      gl.uniform2f(locations.uPlaneSize, canvas.width, canvas.height);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    };
+
+    state.renderFrame = () => {
+      const now = performance.now() / 1000;
+      render(0.0, now);
+    };
+
+    const DURATION = 1.25; // 1.25s cinematic transition
+
+    const loop = () => {
+      const isHidden = typeof document !== 'undefined' && document.hidden;
+      if (isPausedRef.current || isHidden) {
+        state.isRunning = false;
+        return;
+      }
+
+      state.isRunning = true;
+      state.rafId = requestAnimationFrame(loop);
+
+      const now = performance.now();
+      const timeInSec = now / 1000;
+
+      if (state.isTransitioning) {
+        const elapsed = (now - state.transitionStartTime) / 1000;
+        const progress = Math.min(elapsed / DURATION, 1.0);
+
+        render(progress, timeInSec);
+
+        if (progress >= 1.0) {
+          state.isTransitioning = false;
+          state.currentTexture = state.targetTexture;
+          render(0.0, timeInSec);
+
+          if (onTransitionEndRef.current) {
+            onTransitionEndRef.current();
+          }
+        }
+      } else {
+        render(0.0, timeInSec);
+      }
+    };
+
+    state.startLoop = () => {
+      if (!state.isRunning && !isPausedRef.current) {
+        loop();
+      }
+    };
+
+    // Resize handling
     const resizeObserver = new ResizeObserver((entries) => {
       if (!entries || entries.length === 0) return;
       const entry = entries[0];
-      const w = entry.contentRect.width;
-      const h = entry.contentRect.height;
+      const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1.5);
+      const w = Math.floor(entry.contentRect.width * dpr);
+      const h = Math.floor(entry.contentRect.height * dpr);
       if (w > 0 && h > 0) {
-        renderer.setSize(w, h);
-        uniforms.uPlaneSize.value.set(w, h);
-        if (renderer && scene && camera) {
-          renderer.render(scene, camera);
-        }
+        canvas.width = w;
+        canvas.height = h;
+        state.renderFrame();
       }
     });
     resizeObserver.observe(container);
 
-    // 7. Animation Loop com Eco Mode & Visibility Detection
-    let animationId: number;
-    let isLoopRunning = false;
-    const loopStartTime = performance.now();
-
-    const animate = () => {
-      const isHidden = typeof document !== 'undefined' && document.hidden;
-      if (isPausedRef.current || isHidden) {
-        isLoopRunning = false;
-        return;
-      }
-
-      animationId = requestAnimationFrame(animate);
-      isLoopRunning = true;
-      const currentTime = (performance.now() - loopStartTime) / 1000;
-      uniforms.uTime.value = currentTime;
-
-      if (state.isTransitioning) {
-        const elapsed = currentTime - state.startTime;
-        const duration = 1.35; // 1.35 seconds for rich cinematic transition
-        const progress = Math.min(elapsed / duration, 1.0);
-        state.transition = progress;
-        uniforms.uTransition.value = progress;
-
-        if (progress >= 1.0) {
-          // Transition complete: Swap texture 1 and texture 2
-          state.isTransitioning = false;
-          state.texture1 = state.texture2;
-          state.imageSize1.copy(state.imageSize2);
-          uniforms.uTex1.value = state.texture2!;
-          uniforms.uImageSize1.value.copy(state.imageSize2);
-          state.transition = 0.0;
-          uniforms.uTransition.value = 0.0;
-          if (onTransitionEnd) onTransitionEnd();
-        }
-      }
-
-      renderer.render(scene, camera);
-    };
-    animate();
-
-    const handleVisibilityChange = () => {
-      if (!document.hidden && !isPausedRef.current && !isLoopRunning) {
-        animate();
+    const handleVisibility = () => {
+      if (!document.hidden && !isPausedRef.current) {
+        state.startLoop();
       }
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    // Initial load if imageUrl already present
+    if (imageUrl) {
+      loadTextureAsync(imageUrl)
+        .then((tex) => {
+          state.currentUrl = imageUrl;
+          state.currentTexture = tex;
+          state.targetTexture = tex;
+          state.renderFrame();
+        })
+        .catch((err) => {
+          console.warn('Initial texture load failed:', err);
+        });
+    }
+
+    state.startLoop();
 
     return () => {
-      cancelAnimationFrame(animationId);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      cancelAnimationFrame(state.rafId);
+      state.isRunning = false;
+      document.removeEventListener('visibilitychange', handleVisibility);
       resizeObserver.disconnect();
-      geometry.dispose();
-      material.dispose();
-      placeholderTex.dispose();
-      if (state.texture1 && state.texture1 !== placeholderTex) state.texture1.dispose();
-      if (state.texture2 && state.texture2 !== placeholderTex && state.texture2 !== state.texture1) {
-        state.texture2.dispose();
+      if (gl) {
+        if (posBuffer) gl.deleteBuffer(posBuffer);
+        if (program) gl.deleteProgram(program);
+        if (placeholder) gl.deleteTexture(placeholder);
+        textureCacheRef.current.forEach((item) => {
+          gl.deleteTexture(item.texture);
+        });
+        textureCacheRef.current.clear();
       }
-      renderer.dispose();
-      state.renderer = null;
-      state.material = null;
+      state.gl = null;
+      state.program = null;
+      state.locations = null;
     };
-  }, [webglFailed]);
+  }, [loadTextureAsync]);
 
-  // Effect to load new texture and trigger transition
+  // Handle URL change or forced trigger
   useEffect(() => {
+    if (!imageUrl) return;
     const state = stateRef.current;
-    if (!imageUrl || state.currentUrl === imageUrl) return;
 
-    state.textureLoader.load(
-      imageUrl,
-      (tex) => {
-        tex.minFilter = THREE.LinearFilter;
-        tex.generateMipmaps = false;
+    const isUrlChange = state.currentUrl !== imageUrl;
+    state.currentUrl = imageUrl;
 
-        // Set target texture
-        state.texture2 = tex;
-        state.imageSize2.set(tex.image.width || 1, tex.image.height || 1);
-
-        if (state.material) {
-          state.material.uniforms.uTex2.value = tex;
-          state.material.uniforms.uImageSize2.value.copy(state.imageSize2);
-          state.material.uniforms.uTransitionType.value = getTransitionTypeInt(transitionType);
-
-          // Start transition
-          state.startTime = state.material.uniforms.uTime.value;
-          state.isTransitioning = true;
-          state.transition = 0.0;
-          state.material.uniforms.uTransition.value = 0.0;
+    loadTextureAsync(imageUrl)
+      .then((tex) => {
+        if (!state.currentTexture) {
+          state.currentTexture = tex;
+          state.targetTexture = tex;
+          state.renderFrame();
+        } else if (isUrlChange || triggerKey !== undefined) {
+          startTransition(tex);
         }
-        state.currentUrl = imageUrl;
-      },
-      undefined,
-      (err) => {
-        console.error('Failed to load slideshow texture: ', imageUrl, err);
-      }
-    );
-  }, [imageUrl, transitionType]);
+      })
+      .catch((err) => {
+        console.warn('Failed to load transition texture:', imageUrl, err);
+      });
+  }, [imageUrl, triggerKey, loadTextureAsync, startTransition]);
 
-  // CSS Fallback: when WebGL is unavailable, render the image with CSS effects
+  // Pause / Resume listener
+  useEffect(() => {
+    if (!isPaused) {
+      stateRef.current.startLoop();
+    }
+  }, [isPaused]);
+
   if (webglFailed) {
     return (
       <div className={`relative w-full h-full min-h-0 overflow-hidden ${className}`}>
@@ -564,7 +700,7 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
           <img
             src={imageUrl}
             alt="Ilustração da cena"
-            className="absolute inset-0 w-full h-full object-cover"
+            className={`absolute inset-0 w-full h-full ${fitMode === 'contain' ? 'object-contain' : 'object-cover'}`}
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-[#0a0d14]/80 via-transparent to-[#0a0d14]/40 pointer-events-none" />
@@ -575,7 +711,8 @@ export const MagicShaderSlideshow: React.FC<MagicShaderSlideshowProps> = ({
 
   return (
     <div ref={containerRef} className={`relative w-full h-full min-h-0 overflow-hidden ${className}`}>
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full block" />
     </div>
   );
 };
+

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut, Gift, Mic, MicOff, Video, VideoOff, PhoneCall, Radio, Headphones, Store, ChevronDown, Layers, Play, BookOpen, Smartphone } from 'lucide-react';
+import { Shield, Search, Tv, Dices, User, LogIn, Crown, Swords, Database, Key, PanelLeft, Sparkles, Menu, Settings, LogOut, Gift, Mic, MicOff, Video, VideoOff, PhoneCall, Radio, Headphones, Store, ChevronDown, Layers, Play, BookOpen, Smartphone, Scroll } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useCampaign } from '@/lib/hooks/useCampaign';
@@ -18,6 +18,8 @@ import { DetectivePinboardModal } from '@/components/investigation/DetectivePinb
 import { DMNotebookDrawer } from '@/components/live-cockpit/DMNotebookDrawer';
 import { StreamerOverlayModal } from '@/components/overlay/config/StreamerOverlayModal';
 import { CompanionQrModal } from '@/components/companion/CompanionQrModal';
+import { HouseRulesModal } from '@/components/modals/HouseRulesModal';
+import { normalizeHouseRules } from '@/lib/types/houseRules';
 
 interface HeaderProps {
   onOpenSearch: () => void;
@@ -59,6 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [isNotebookOpen, setIsNotebookOpen] = useState(false);
   const [isStreamerOverlayOpen, setIsStreamerOverlayOpen] = useState(false);
   const [isCompanionQrOpen, setIsCompanionQrOpen] = useState(false);
+  const [isHouseRulesOpen, setIsHouseRulesOpen] = useState(false);
 
   const previewSheet: CharacterSheet = {
     id: 'dm-preview-character',
@@ -395,6 +398,32 @@ export const Header: React.FC<HeaderProps> = ({
                   </button>
                 )}
 
+                {/* Regras da Casa & Diretrizes */}
+                {isInsideCampaign && (
+                  <button
+                    onClick={() => {
+                      setIsToolsMenuOpen(false);
+                      setIsHouseRulesOpen(true);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:text-amber-300 hover:bg-[#1f2738] rounded-xl transition-all flex items-center justify-between group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 group-hover:bg-amber-500/20 group-hover:scale-105 transition-all">
+                        <Scroll className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-200 group-hover:text-amber-300">Regras da Casa</span>
+                        <span className="text-[10px] text-slate-400 font-normal">Mecânicas & acordos da mesa</span>
+                      </div>
+                    </div>
+                    {activeCampaign?.houseRules && normalizeHouseRules(activeCampaign.houseRules).filter(r => r.isActive).length > 0 && (
+                      <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
+                        {normalizeHouseRules(activeCampaign.houseRules).filter(r => r.isActive).length} REGRAS
+                      </span>
+                    )}
+                  </button>
+                )}
+
                 {/* Mural de Investigação & Pistas */}
                 {isInsideCampaign && (
                   <button
@@ -614,6 +643,39 @@ export const Header: React.FC<HeaderProps> = ({
       <CompanionQrModal
         isOpen={isCompanionQrOpen}
         onClose={() => setIsCompanionQrOpen(false)}
+      />
+
+      {/* House Rules Modal for Players & DM */}
+      <HouseRulesModal
+        isOpen={isHouseRulesOpen}
+        onClose={() => setIsHouseRulesOpen(false)}
+        houseRules={normalizeHouseRules(activeCampaign?.houseRules || [
+          {
+            id: 'rule-legacy-1',
+            title: 'Poção de Cura como Ação Bônus',
+            description: 'Beber Poção de Cura custa Ação Bônus (Dar a outro jogador custa Ação).',
+            category: 'potions',
+            impact: 'comfort',
+            isActive: true,
+          },
+          {
+            id: 'rule-legacy-2',
+            title: 'Acerto Crítico Brutal',
+            description: 'Acerto Crítico causa Dano Máximo do 1º dado + rolagem do 2º dado.',
+            category: 'dice',
+            impact: 'buff',
+            isActive: true,
+          },
+          {
+            id: 'rule-legacy-3',
+            title: 'Descanso Realista em Local Seguro',
+            description: 'Descanso Curto dura 8 horas; Descanso Longo dura 24 horas em local seguro.',
+            category: 'rest',
+            impact: 'gritty',
+            isActive: true,
+          },
+        ])}
+        campaignTitle={activeCampaign?.title}
       />
     </header>
   );
