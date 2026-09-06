@@ -36,7 +36,7 @@ import { DysonCanvas } from '@/components/map/DysonCanvas';
 import { revealVisionWithLOS, getTokenVisionRadius } from '@/components/map/visionCore';
 import { normalizeToMultiLevel } from '@/lib/map/mapLevelsCore';
 import { normalizeImageUrl } from '@/lib/imageUtils';
-import { MapLevel, Combatant, DungeonTransitionConfig, TransitionType } from '@/lib/types';
+import { MapLevel, Combatant, DungeonTransitionConfig, TransitionType, LightSource } from '@/lib/types';
 import { INITIAL_MONSTERS, NPC_TEMPLATES } from '@/lib/srd-data';
 import { resolveTokenAvatar } from '@/lib/utils/tokenAvatarResolver';
 import { Cell } from '../MapMaker';
@@ -74,7 +74,7 @@ interface MultiMapState {
 
 export const CockpitDungeonMap: React.FC = () => {
   const { activeScene, updateScene, fetchSceneMap, saveSceneMap, campaignMaps } = useSession();
-  const { combatants, broadcastToPlayerView, drawings, broadcastDrawingAction } = useLiveCockpit();
+  const { combatants, broadcastToPlayerView, drawings, broadcastDrawingAction, setMapData } = useLiveCockpit();
   const { activeCampaign } = useCampaign();
 
   // Stable refs to prevent re-triggering effects on frequent parent/realtime re-renders
@@ -83,6 +83,9 @@ export const CockpitDungeonMap: React.FC = () => {
 
   const broadcastToPlayerViewRef = useRef(broadcastToPlayerView);
   broadcastToPlayerViewRef.current = broadcastToPlayerView;
+
+  const setMapDataRef = useRef(setMapData);
+  setMapDataRef.current = setMapData;
 
   const fetchSceneMapRef = useRef(fetchSceneMap);
   fetchSceneMapRef.current = fetchSceneMap;
@@ -179,8 +182,9 @@ export const CockpitDungeonMap: React.FC = () => {
     }
 
     const activeLevelName = activeLevels.find((l) => l.id === activeLevelId)?.name;
+    const associatedMap = campaignMapsRef.current.find((m) => m.id === currentMapId);
+    const coverImg = associatedMap?.gridData?.coverImageUrl || associatedMap?.gridData?.levels?.[0]?.bgImageUrl || associatedMap?.gridData?.bgImageUrl || bgImageUrl || null;
     const mapPayload = {
-      grid,
       bgImageUrl,
       gridScale,
       gridOffsetX,
@@ -194,6 +198,10 @@ export const CockpitDungeonMap: React.FC = () => {
       fogMatrix,
       tokens,
       dungeonExplorationStarted: true,
+      mapTitle: associatedMap?.title || activeScene?.title,
+      coverImageUrl: coverImg,
+      description: associatedMap?.gridData?.description || '',
+      challengeRating: associatedMap?.gridData?.challengeRating || 'Nível Recomendado',
     };
     lastBroadcast.current = JSON.stringify(mapPayload);
     broadcastToPlayerView({
@@ -259,8 +267,9 @@ export const CockpitDungeonMap: React.FC = () => {
     }
 
     const activeLevelName = activeLevels.find((l) => l.id === activeLevelId)?.name;
+    const associatedMap = campaignMapsRef.current.find((m) => m.id === currentMapId);
+    const coverImg = associatedMap?.gridData?.coverImageUrl || associatedMap?.gridData?.levels?.[0]?.bgImageUrl || associatedMap?.gridData?.bgImageUrl || bgImageUrl || null;
     const mapPayload = {
-      grid: coveredGrid,
       bgImageUrl,
       gridScale,
       gridOffsetX,
@@ -274,6 +283,10 @@ export const CockpitDungeonMap: React.FC = () => {
       fogMatrix,
       tokens,
       dungeonExplorationStarted: false,
+      mapTitle: associatedMap?.title || activeScene?.title,
+      coverImageUrl: coverImg,
+      description: associatedMap?.gridData?.description || '',
+      challengeRating: associatedMap?.gridData?.challengeRating || 'Nível Recomendado',
     };
     lastBroadcast.current = JSON.stringify(mapPayload);
 
@@ -884,6 +897,123 @@ export const CockpitDungeonMap: React.FC = () => {
     return () => clearTimeout(delayDebounce);
   }, [grid, bgImageUrl, vectorWalls, lightSources, gridScale, gridOffsetX, gridOffsetY, activeScene?.id, isLoading, currentMapId, activeLevelId, activeLevels, isExplorationStarted]);
 
+  // Instant Realtime Broadcast to All Player Screens (<16ms)
+  const broadcastMapNow = useCallback((targetGrid?: Cell[][], overrideExploration?: boolean) => {
+    const gridToBroadcast = targetGrid || grid;
+    if (!gridToBroadcast || gridToBroadcast.length === 0 || !currentMapId) return;
+
+    let fogMatrix = '';
+    const tokens: { name: string; color: string; r: number; c: number }[] = [];
+    for (let r = 0; r < gridToBroadcast.length; r++) {
+      for (let c = 0; c < gridToBroadcast[r].length; c++) {
+        fogMatrix += gridToBroadcast[r][c].fog ? '1' : '0';
+        if (gridToBroadcast[r][c].tokenName) {
+          tokens.push({
+            name: gridToBroadcast[r][c].tokenName!,
+            color: gridToBroadcast[r][c].tokenColor || 'bg-cyan-500',
+            r,
+            c,
+          });
+        }
+      }
+    }
+
+    const activeLevelName = activeLevels.find((l) => l.id === activeLevelId)?.name;
+    const associatedMap = campaignMapsRef.current.find((m) => m.id === currentMapId);
+    const coverImg = associatedMap?.gridData?.coverImageUrl || associatedMap?.gridData?.levels?.[0]?.bgImageUrl || associatedMap?.gridData?.bgImageUrl || bgImageUrl || null;
+    const isExpl = overrideExploration !== undefined ? overrideExploration : isExplorationStarted;
+
+    const mapPayload = {
+      bgImageUrl,
+      gridScale,
+      gridOffsetX,
+      gridOffsetY,
+      vectorWalls,
+      lightSources,
+      activeMapId: currentMapId,
+      activeLevelId,
+      currentLevelName: activeLevelName,
+      sceneId: activeScene?.id,
+      fogMatrix,
+      tokens,
+      rows: gridToBroadcast.length,
+      cols: gridToBroadcast[0]?.length || 0,
+      dungeonExplorationStarted: isExpl,
+      mapTitle: associatedMap?.title || activeScene?.title,
+      coverImageUrl: coverImg,
+      description: associatedMap?.gridData?.description || '',
+      challengeRating: associatedMap?.gridData?.challengeRating || 'Nível Recomendado',
+    };
+
+    // Sincroniza localmente no LiveCockpitContext para responder a STATE_REQUEST de novos peers
+    if (setMapDataRef.current) {
+      setMapDataRef.current({
+        ...mapPayload,
+        grid: gridToBroadcast,
+      });
+    }
+
+    lastBroadcast.current = JSON.stringify(mapPayload);
+    broadcastToPlayerViewRef.current({
+      dungeonExplorationStarted: isExpl,
+      activeMapId: currentMapId,
+      mapData: mapPayload,
+    });
+  }, [grid, currentMapId, activeLevelId, activeLevels, bgImageUrl, gridScale, gridOffsetX, gridOffsetY, vectorWalls, lightSources, activeScene?.id, activeScene?.title, isExplorationStarted]);
+
+  // Master Grid Change Handler - Propagates token moves, LOS, and map edits instantly
+  const handleGridChange = useCallback((updater: (prev: Cell[][]) => Cell[][]) => {
+    setGrid((prevGrid) => {
+      const nextGrid = updater(prevGrid);
+
+      // 1. Update multiMapStateRef in-memory
+      if (multiMapStateRef.current && currentMapId) {
+        if (activeLevelId && multiMapStateRef.current.maps[currentMapId]?.levels?.[activeLevelId]) {
+          multiMapStateRef.current.maps[currentMapId].levels[activeLevelId].grid = nextGrid;
+        } else if (multiMapStateRef.current.maps[currentMapId]) {
+          multiMapStateRef.current.maps[currentMapId].grid = nextGrid;
+        }
+      }
+
+      // 2. Broadcast immediately in real time (<16ms) outside React reducer phase
+      queueMicrotask(() => {
+        broadcastMapNow(nextGrid);
+      });
+
+      return nextGrid;
+    });
+  }, [currentMapId, activeLevelId, broadcastMapNow]);
+
+  const handleAddLightSource = useCallback((light: LightSource) => {
+    setLightSources((prev) => {
+      const next = [...prev, light];
+      queueMicrotask(() => {
+        broadcastToPlayerViewRef.current({ lightSources: next });
+      });
+      return next;
+    });
+  }, []);
+
+  const handleRemoveLightSource = useCallback((lightId: string) => {
+    setLightSources((prev) => {
+      const next = prev.filter((l) => l.id !== lightId);
+      queueMicrotask(() => {
+        broadcastToPlayerViewRef.current({ lightSources: next });
+      });
+      return next;
+    });
+  }, []);
+
+  const handleUpdateLightSource = useCallback((light: LightSource) => {
+    setLightSources((prev) => {
+      const next = prev.map((l) => (l.id === light.id ? light : l));
+      queueMicrotask(() => {
+        broadcastToPlayerViewRef.current({ lightSources: next });
+      });
+      return next;
+    });
+  }, []);
+
   // Instant In-Memory Floor / Level Switcher
   const handleSwitchLevel = (targetLevelId: string) => {
     if (!currentMapId || !multiMapStateRef.current || !activeScene) return;
@@ -950,22 +1080,7 @@ export const CockpitDungeonMap: React.FC = () => {
       setLightSources(targetState.lightSources || []);
 
       // 4. Instant broadcast to Player View
-      const targetLevelObj = activeLevels.find((l) => l.id === targetLevelId);
-      const payload = {
-        grid: targetState.grid,
-        bgImageUrl: targetState.bgImageUrl,
-        gridScale: targetState.gridScale,
-        gridOffsetX: targetState.gridOffsetX,
-        gridOffsetY: targetState.gridOffsetY,
-        vectorWalls: targetState.vectorWalls || [],
-        lightSources: targetState.lightSources || [],
-        activeMapId: currentMapId,
-        activeLevelId: targetLevelId,
-        currentLevelName: targetLevelObj?.name || 'Andar',
-        sceneId: activeScene.id,
-      };
-      lastBroadcast.current = JSON.stringify(payload);
-      broadcastToPlayerView({ mapData: payload });
+      broadcastMapNow(targetState.grid);
     }
   };
 
@@ -973,7 +1088,7 @@ export const CockpitDungeonMap: React.FC = () => {
   const handleRemoveToken = (tokenName: string) => {
     const key = tokenName.trim().toUpperCase();
 
-    // 1. Remove from active React state
+    // 1. Remove from active React state and broadcast immediately
     setGrid((prev) => {
       const copy = prev.map((row) => row.map((cell) => ({ ...cell })));
       for (let r = 0; r < copy.length; r++) {
@@ -984,6 +1099,9 @@ export const CockpitDungeonMap: React.FC = () => {
           }
         }
       }
+      queueMicrotask(() => {
+        broadcastMapNow(copy);
+      });
       return copy;
     });
 
@@ -1141,21 +1259,7 @@ export const CockpitDungeonMap: React.FC = () => {
     setLightSources(updatedTargetState.lightSources || []);
 
     // 6. Broadcast instantly to Player View
-    const payload = {
-      grid: targetGrid,
-      bgImageUrl: updatedTargetState.bgImageUrl,
-      gridScale: updatedTargetState.gridScale,
-      gridOffsetX: updatedTargetState.gridOffsetX,
-      gridOffsetY: updatedTargetState.gridOffsetY,
-      vectorWalls: updatedTargetState.vectorWalls || [],
-      lightSources: updatedTargetState.lightSources || [],
-      activeMapId: currentMapId,
-      activeLevelId: targetLevelId,
-      currentLevelName: targetLevelObj.name || 'Andar',
-      sceneId: activeScene.id,
-    };
-    lastBroadcast.current = JSON.stringify(payload);
-    broadcastToPlayerView({ mapData: payload });
+    broadcastMapNow(targetGrid);
 
     toast.success(`🚀 Grupo de heróis transportado para "${targetLevelObj.name}"!`);
   };
@@ -1262,6 +1366,9 @@ export const CockpitDungeonMap: React.FC = () => {
 
     if (targetLevelId === activeLevelId) {
       setGrid(targetGrid);
+      queueMicrotask(() => {
+        broadcastMapNow(targetGrid);
+      });
     }
     if (!targetState) {
       targetState = {
@@ -1456,6 +1563,9 @@ export const CockpitDungeonMap: React.FC = () => {
       }
 
       toast.success('Todo o mapa foi coberto por névoa (visão dos pinos preservada com Line of Sight).');
+      queueMicrotask(() => {
+        broadcastMapNow(coveredGrid);
+      });
       return coveredGrid;
     });
   };
@@ -2041,7 +2151,10 @@ export const CockpitDungeonMap: React.FC = () => {
         measureStart={measureStart}
         setMeasureStart={setMeasureStart}
         setMeasuredDistance={setMeasuredDistance}
-        onGridChange={setGrid}
+        onGridChange={handleGridChange}
+        onAddLightSource={handleAddLightSource}
+        onRemoveLightSource={handleRemoveLightSource}
+        onUpdateLightSource={handleUpdateLightSource}
         drawings={drawings}
         onDrawingAction={broadcastDrawingAction}
         drawColor={drawColor}

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { useCampaign } from '@/context/CampaignContext';
+import { useLiveCockpit } from '@/context/LiveCockpitContext';
 import { DysonCanvas } from '@/components/map/DysonCanvas';
 import { Combatant, GameScene } from '@/lib/types';
 import { 
@@ -33,6 +34,7 @@ export const TvDisplayContainer: React.FC<TvDisplayContainerProps> = ({
 }) => {
   const { activeScene, campaignMaps, fetchSceneMap } = useSession();
   const { activeCampaign } = useCampaign();
+  const { mapData: liveMapData, liveDisplayMode } = useLiveCockpit();
 
   const [rotation, setRotation] = useState<number>(initialRotation);
   const [scale, setScale] = useState<number>(initialScale);
@@ -79,13 +81,13 @@ export const TvDisplayContainer: React.FC<TvDisplayContainerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Dados do mapa da cena
-  const activeMapData = sceneMapData || null;
+  // Dados do mapa da cena (sincronizados em tempo real)
+  const activeMapData = (liveMapData as any) || sceneMapData || null;
   const hasMap = Boolean(activeMapData?.grid && activeMapData.grid.length > 0);
   const hasImage = Boolean(activeScene?.imageUrl || (activeScene?.sceneImages && activeScene.sceneImages.length > 0));
 
   // Determinar o que renderizar
-  const isShowingMap = displayMode === 'map' || (displayMode === 'auto' && hasMap);
+  const isShowingMap = displayMode === 'map' || (displayMode === 'auto' && (liveDisplayMode === 'map' || hasMap));
 
   return (
     <div className="w-screen h-screen overflow-hidden bg-black text-slate-100 relative select-none cursor-none group hover:cursor-default">

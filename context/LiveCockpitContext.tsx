@@ -161,8 +161,95 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
   // Active campaign ID for Supabase WebSocket channels
   const { activeCampaign } = useCampaign();
   const { user } = useAuth();
-  const { activeScene, updateScene } = useSession();
+  const { activeScene, updateScene, campaignMaps } = useSession();
   const campaignId = activeCampaign?.id || ((!user || user.id === 'user-demo') ? 'camp-demo-1' : null);
+
+  // Helper to resolve and unpack grid from template or delta payload
+  const resolveAndUnpackGrid = useCallback((
+    prevGrid: any[][] | null | undefined,
+    prevMapMeta: any,
+    data: any
+  ): any[][] => {
+    if (data.grid && Array.isArray(data.grid) && data.grid.length > 0) {
+      return data.grid.map((row: any[]) => row.map((cell: any) => ({ ...cell })));
+    }
+
+    let baseGrid: any[][] | null = null;
+    const targetMapId = data.activeMapId !== undefined ? data.activeMapId : prevMapMeta?.activeMapId;
+    const targetLevelId = data.activeLevelId !== undefined ? data.activeLevelId : prevMapMeta?.activeLevelId;
+
+    // 1. Check if previous in-memory grid matches dimensions and map/level ID
+    if (
+      prevGrid &&
+      Array.isArray(prevGrid) &&
+      prevGrid.length > 0 &&
+      (!data.rows || prevGrid.length === data.rows) &&
+      (!data.cols || (prevGrid[0] && prevGrid[0].length === data.cols)) &&
+      (!targetMapId || prevMapMeta?.activeMapId === targetMapId) &&
+      (!targetLevelId || prevMapMeta?.activeLevelId === targetLevelId)
+    ) {
+      baseGrid = prevGrid.map((row: any[]) => row.map((cell: any) => ({ ...cell })));
+    } else {
+      // 2. Look up base terrain from campaignMaps
+      const matchingMap = (campaignMaps || []).find((m: any) => m.id === targetMapId);
+      if (matchingMap?.gridData) {
+        let candidateGrid = matchingMap.gridData.grid;
+        if (targetLevelId && matchingMap.gridData.levels) {
+          const lvl = matchingMap.gridData.levels.find((l: any) => l.id === targetLevelId);
+          if (lvl?.grid && Array.isArray(lvl.grid) && lvl.grid.length > 0) {
+            candidateGrid = lvl.grid;
+          }
+        }
+        if (candidateGrid && Array.isArray(candidateGrid) && candidateGrid.length > 0) {
+          baseGrid = candidateGrid.map((row: any[]) => row.map((cell: any) => ({ ...cell, fog: true })));
+        }
+      }
+
+      // 3. Fallback: generate default grid with dimensions
+      if (!baseGrid) {
+        const rows = data.rows || prevGrid?.length || 60;
+        const cols = data.cols || prevGrid?.[0]?.length || 60;
+        baseGrid = Array.from({ length: rows }, () =>
+          Array.from({ length: cols }, () => ({
+            type: 'floor',
+            fog: true,
+          }))
+        );
+      }
+    }
+
+    // 4. Clear existing tokens and place new tokens
+    if (data.tokens && Array.isArray(data.tokens)) {
+      for (let r = 0; r < baseGrid.length; r++) {
+        for (let c = 0; c < baseGrid[r].length; c++) {
+          baseGrid[r][c].tokenName = undefined;
+          baseGrid[r][c].tokenColor = undefined;
+        }
+      }
+      for (const tk of data.tokens) {
+        if (baseGrid[tk.r]?.[tk.c]) {
+          baseGrid[tk.r][tk.c].tokenName = tk.name;
+          baseGrid[tk.r][tk.c].tokenColor = tk.color;
+        }
+      }
+    }
+
+    // 5. Unpack fogMatrix
+    if (data.fogMatrix && typeof data.fogMatrix === 'string') {
+      let idx = 0;
+      for (let r = 0; r < baseGrid.length; r++) {
+        for (let c = 0; c < baseGrid[r].length; c++) {
+          if (idx < data.fogMatrix.length) {
+            const char = data.fogMatrix[idx++];
+            if (char === '0') baseGrid[r][c].fog = false;
+            else if (char === '1') baseGrid[r][c].fog = true;
+          }
+        }
+      }
+    }
+
+    return baseGrid;
+  }, [campaignMaps]);
 
   // Helper para obter a presença do usuário local com dados da campanha ativa
   const getMyPresence = useCallback((): PresencePayload | null => {
@@ -255,67 +342,29 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         ? data.dungeonExplorationStarted 
         : payload.dungeonExplorationStarted;
 
-      if (data && data.grid && Array.isArray(data.grid) && data.grid.length > 0) {
-        setMapData((prev: any) => ({
-          ...(prev || {}),
-          ...data,
-          dungeonExplorationStarted: explorationFlag !== undefined ? explorationFlag : prev?.dungeonExplorationStarted,
-        }));
-      } else if (data && data.fogMatrix) {
-        setMapData((prev: any) => {
-          if (!prev || prev.activeMapId !== data.activeMapId || !prev.grid) {
-            return {
-              ...data,
-              dungeonExplorationStarted: explorationFlag !== undefined ? explorationFlag : prev?.dungeonExplorationStarted,
-            };
-          }
-          const gridCopy = prev.grid.map((row: any[]) => row.map(cell => ({ ...cell })));
-          
-          // 1. Clear old tokens from gridCopy
-          for (let r = 0; r < gridCopy.length; r++) {
-            for (let c = 0; c < gridCopy[r].length; c++) {
-              gridCopy[r][c].tokenName = undefined;
-              gridCopy[r][c].tokenColor = undefined;
-            }
-          }
-          
-          // 2. Put tokens in their new cells
-          if (data.tokens) {
-            for (const tk of data.tokens) {
-              if (gridCopy[tk.r]?.[tk.c]) {
-                gridCopy[tk.r][tk.c].tokenName = tk.name;
-                gridCopy[tk.r][tk.c].tokenColor = tk.color;
-              }
-            }
-          }
+      setMapData((prev: any) => {
+        const gridCopy = resolveAndUnpackGrid(prev?.grid, prev, data);
 
-          // 3. Unpack fogMatrix string back into the grid cells
-          let idx = 0;
-          for (let r = 0; r < gridCopy.length; r++) {
-            for (let c = 0; c < gridCopy[r].length; c++) {
-              const char = data.fogMatrix[idx++];
-              if (char === '0') gridCopy[r][c].fog = false;
-              else if (char === '1') gridCopy[r][c].fog = true;
-            }
-          }
-          return {
-            ...prev,
-            grid: gridCopy,
-            bgImageUrl: data.bgImageUrl !== undefined ? data.bgImageUrl : prev.bgImageUrl,
-            gridScale: data.gridScale !== undefined ? data.gridScale : prev.gridScale,
-            gridOffsetX: data.gridOffsetX !== undefined ? data.gridOffsetX : prev.gridOffsetX,
-            gridOffsetY: data.gridOffsetY !== undefined ? data.gridOffsetY : prev.gridOffsetY,
-            dungeonExplorationStarted: explorationFlag !== undefined ? explorationFlag : prev.dungeonExplorationStarted,
-            activeMapId: data.activeMapId !== undefined ? data.activeMapId : prev.activeMapId,
-          };
-        });
-      } else {
-        setMapData((prev: any) => ({
+        return {
           ...(prev || {}),
           ...data,
+          grid: gridCopy,
           dungeonExplorationStarted: explorationFlag !== undefined ? explorationFlag : prev?.dungeonExplorationStarted,
-        }));
-      }
+          activeMapId: data.activeMapId !== undefined ? data.activeMapId : prev?.activeMapId,
+          activeLevelId: data.activeLevelId !== undefined ? data.activeLevelId : prev?.activeLevelId,
+          currentLevelName: data.currentLevelName !== undefined ? data.currentLevelName : prev?.currentLevelName,
+          vectorWalls: data.vectorWalls !== undefined ? data.vectorWalls : prev?.vectorWalls,
+          lightSources: data.lightSources !== undefined ? data.lightSources : prev?.lightSources,
+          bgImageUrl: data.bgImageUrl !== undefined ? data.bgImageUrl : prev?.bgImageUrl,
+          gridScale: data.gridScale !== undefined ? data.gridScale : prev?.gridScale,
+          gridOffsetX: data.gridOffsetX !== undefined ? data.gridOffsetX : prev?.gridOffsetX,
+          gridOffsetY: data.gridOffsetY !== undefined ? data.gridOffsetY : prev?.gridOffsetY,
+          mapTitle: data.mapTitle !== undefined ? data.mapTitle : prev?.mapTitle,
+          coverImageUrl: data.coverImageUrl !== undefined ? data.coverImageUrl : prev?.coverImageUrl,
+          description: data.description !== undefined ? data.description : prev?.description,
+          challengeRating: data.challengeRating !== undefined ? data.challengeRating : prev?.challengeRating,
+        };
+      });
     } else if (payload.dungeonExplorationStarted !== undefined) {
       setMapData((prev: any) => ({
         ...(prev || {}),
@@ -716,13 +765,19 @@ export const LiveCockpitProvider: React.FC<{ children: React.ReactNode }> = ({ c
         if (snapshot.currentTurnIndex !== undefined) setCurrentTurnIndex(snapshot.currentTurnIndex);
         if (snapshot.roundCount !== undefined) setRoundCount(snapshot.roundCount);
         if (snapshot.mapData !== undefined) {
-          setMapData((prev: any) => ({
-            ...(prev || {}),
-            ...snapshot.mapData,
-            dungeonExplorationStarted: snapshot.dungeonExplorationStarted !== undefined
-              ? snapshot.dungeonExplorationStarted
-              : (snapshot.mapData?.dungeonExplorationStarted ?? prev?.dungeonExplorationStarted),
-          }));
+          const sMap = snapshot.mapData;
+          setMapData((prev: any) => {
+            const gridCopy = resolveAndUnpackGrid(prev?.grid, prev, sMap);
+
+            return {
+              ...(prev || {}),
+              ...sMap,
+              grid: gridCopy,
+              dungeonExplorationStarted: snapshot.dungeonExplorationStarted !== undefined
+                ? snapshot.dungeonExplorationStarted
+                : (snapshot.mapData?.dungeonExplorationStarted ?? prev?.dungeonExplorationStarted),
+            };
+          });
         } else if (snapshot.dungeonExplorationStarted !== undefined) {
           setMapData((prev: any) => ({
             ...(prev || {}),

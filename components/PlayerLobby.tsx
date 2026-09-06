@@ -283,6 +283,35 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
         }
 
         if (gridData && gridData.grid && gridData.grid.length > 0) {
+          if (typedMap) {
+            const finalGrid = gridData.grid.map((row: any[]) => row.map((cell: any) => ({ ...cell })));
+            if ((typedMap as any).tokens && Array.isArray((typedMap as any).tokens)) {
+              for (let r = 0; r < finalGrid.length; r++) {
+                for (let c = 0; c < finalGrid[r].length; c++) {
+                  finalGrid[r][c].tokenName = undefined;
+                  finalGrid[r][c].tokenColor = undefined;
+                }
+              }
+              for (const tk of (typedMap as any).tokens) {
+                if (finalGrid[tk.r]?.[tk.c]) {
+                  finalGrid[tk.r][tk.c].tokenName = tk.name;
+                  finalGrid[tk.r][tk.c].tokenColor = tk.color;
+                }
+              }
+            }
+            if ((typedMap as any).fogMatrix && typeof (typedMap as any).fogMatrix === 'string') {
+              let idx = 0;
+              for (let r = 0; r < finalGrid.length; r++) {
+                for (let c = 0; c < finalGrid[r].length; c++) {
+                  const char = (typedMap as any).fogMatrix[idx++];
+                  if (char === '0') finalGrid[r][c].fog = false;
+                  else if (char === '1') finalGrid[r][c].fog = true;
+                }
+              }
+            }
+            gridData.grid = finalGrid;
+          }
+
           console.log('[PlayerLobby] Map loaded successfully. Grid size:', gridData.grid.length, 'x', gridData.grid[0]?.length);
           const isExplStarted = 
             savedData?.isExplorationStarted === true || 
@@ -290,19 +319,64 @@ export const PlayerLobby: React.FC<PlayerLobbyProps> = ({ onOpenPlayerView }) =>
             currentScene.isDungeonExplorationStarted === true ||
             (mapData as any)?.dungeonExplorationStarted === true;
 
-          setMapData((prev: any) => ({
-            ...(prev || {}),
-            grid: gridData.grid || [],
-            bgImageUrl: gridData.bgImageUrl || null,
-            gridScale: gridData.gridScale || 40,
-            gridOffsetX: gridData.gridOffsetX || 0,
-            gridOffsetY: gridData.gridOffsetY || 0,
-            vectorWalls: gridData.vectorWalls || [],
-            lightSources: gridData.lightSources || [],
-            activeMapId: activeId,
-            sceneId: currentScene.id,
-            dungeonExplorationStarted: isExplStarted,
-          }));
+          setMapData((prev: any) => {
+            let finalGrid = gridData.grid || [];
+            // If prev already has real-time tokens or fog from live broadcast, merge them on top of DB template!
+            if (prev && finalGrid.length > 0) {
+              const clone = finalGrid.map((row: any[]) => row.map((cell: any) => ({ ...cell })));
+              if (prev.tokens && Array.isArray(prev.tokens)) {
+                for (let r = 0; r < clone.length; r++) {
+                  for (let c = 0; c < clone[r].length; c++) {
+                    clone[r][c].tokenName = undefined;
+                    clone[r][c].tokenColor = undefined;
+                  }
+                }
+                for (const tk of prev.tokens) {
+                  if (clone[tk.r]?.[tk.c]) {
+                    clone[tk.r][tk.c].tokenName = tk.name;
+                    clone[tk.r][tk.c].tokenColor = tk.color;
+                  }
+                }
+              } else if (prev.grid && Array.isArray(prev.grid) && prev.grid.length === clone.length) {
+                for (let r = 0; r < clone.length; r++) {
+                  for (let c = 0; c < clone[r].length; c++) {
+                    if (prev.grid[r]?.[c]?.tokenName) {
+                      clone[r][c].tokenName = prev.grid[r][c].tokenName;
+                      clone[r][c].tokenColor = prev.grid[r][c].tokenColor;
+                    }
+                  }
+                }
+              }
+
+              if (prev.fogMatrix && typeof prev.fogMatrix === 'string') {
+                let idx = 0;
+                for (let r = 0; r < clone.length; r++) {
+                  for (let c = 0; c < clone[r].length; c++) {
+                    if (idx < prev.fogMatrix.length) {
+                      const char = prev.fogMatrix[idx++];
+                      if (char === '0') clone[r][c].fog = false;
+                      else if (char === '1') clone[r][c].fog = true;
+                    }
+                  }
+                }
+              }
+              finalGrid = clone;
+            }
+
+            return {
+              ...(prev || {}),
+              grid: finalGrid,
+              bgImageUrl: gridData.bgImageUrl || null,
+              gridScale: gridData.gridScale || 40,
+              gridOffsetX: gridData.gridOffsetX || 0,
+              gridOffsetY: gridData.gridOffsetY || 0,
+              vectorWalls: gridData.vectorWalls || [],
+              lightSources: gridData.lightSources || [],
+              activeMapId: activeId,
+              sceneId: currentScene.id,
+              dungeonExplorationStarted: isExplStarted,
+            };
+          });
         } else {
           console.warn('[PlayerLobby] No grid data found for scene:', currentScene.id);
         }

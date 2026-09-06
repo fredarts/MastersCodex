@@ -10,8 +10,16 @@ import {
   Undo2, 
   Maximize2,
   SlidersHorizontal,
-  Grid
+  Grid,
+  Hand,
+  Move
 } from 'lucide-react';
+import { 
+  getTouchDistance, 
+  getTouchMidpoint, 
+  calculatePinchZoomAndPan, 
+  isDragThresholdExceeded 
+} from '@/lib/utils/touchGestures';
 import { 
   drawLightSourceIcon, 
   drawStashIcon, 
@@ -233,6 +241,12 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   } | null>(null);
   const activeStrokeRef = useRef<DrawingStroke | null>(null);
   const strokeCounterRef = useRef<number>(0);
+
+  // Rastreamento de Gestos Multi-Touch e Toque Longo (Tablet/Mobile)
+  const activePointersRef = useRef<Map<number, { clientX: number; clientY: number; pointerId: number; pointerType: string }>>(new Map());
+  const twoFingerGestureRef = useRef<{ prevDist: number; prevMid: { x: number; y: number } } | null>(null);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [longPressFeedback, setLongPressFeedback] = useState<{ x: number; y: number } | null>(null);
 
   const CELL_SIZE = bgImageUrl ? gridScale : 40;
   const COLS = grid[0]?.length || 12;
@@ -1211,15 +1225,15 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   }, [renderInteractionLayer]);
 
   // =========================================================================
-  // COORDENADAS E MANIPULAÇÃO DE MOUSE / GESTOS
+  // COORDENADAS E MANIPULAÇÃO DE PONTEIROS / GESTOS MULTI-TOUCH
   // =========================================================================
-  const getCanvasCoords = (e: React.MouseEvent) => {
+  const getCanvasCoords = (e: { clientX: number; clientY: number }) => {
     const container = containerRef.current;
     if (!container) return { x: 0, y: 0 };
     const rect = container.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left - panOffsetRef.current.x) / zoom,
-      y: (e.clientY - rect.top - panOffsetRef.current.y) / zoom,
+      x: (e.clientX - rect.left - panOffsetRef.current.x) / zoomRef.current,
+      y: (e.clientY - rect.top - panOffsetRef.current.y) / zoomRef.current,
     };
   };
 
@@ -1274,8 +1288,41 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   const isPOIType = (t: string | undefined) => 
     t === 'door' || t === 'trap' || t === 'chest' || t === 'stash' || t === 'trigger' || t === 'portcullis' || t === 'illusion_wall' || t === 'transition';
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     if (editingCell) return;
+
+    // Registrar ponteiro ativo
+    activePointersRef.current.set(e.pointerId, {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      pointerId: e.pointerId,
+      pointerType: e.pointerType,
+    });
+
+    // Se 2 ou mais dedos tocarem: ativar imediatamente gesto multi-touch e cancelar qualquer ação unitária
+    if (activePointersRef.current.size >= 2) {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+      setLongPressFeedback(null);
+      dragCandidateRef.current = null;
+      setDraggingItem(null);
+      activeStrokeRef.current = null;
+      setIsDrawing(false);
+      setIsPanning(false);
+
+      const pointers = Array.from(activePointersRef.current.values());
+      const p1 = pointers[0];
+      const p2 = pointers[1];
+      const containerRect = containerRef.current?.getBoundingClientRect();
+      const dist = getTouchDistance(p1, p2);
+      const mid = getTouchMidpoint(p1, p2, containerRect);
+      twoFingerGestureRef.current = { prevDist: dist, prevMid: mid };
+      return;
+    }
+
+    twoFingerGestureRef.current = null;
 
     if (e.button === 1 || e.shiftKey || selectedTool === 'pan' || isSpacePressed) {
       setIsPanning(true);
@@ -1285,6 +1332,56 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     const { x, y } = getCanvasCoords(e);
     const pos = getGridPos(x, y);
+
+    // Detecção de Toque Longo (Long Press) para Tablets/Touch (500ms)
+    if (e.pointerType === 'touch' && e.button === 0) {
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+      setLongPressFeedback({ x: e.clientX, y: e.clientY });
+
+      longPressTimerRef.current = setTimeout(() => {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate(40);
+        }
+
+        const clickedTarget = grid[pos.r]?.[pos.c];
+        if (clickedTarget?.tokenName) {
+          const removedName = clickedTarget.tokenName;
+          onGridChange((prev) => {
+            const copy = prev.map((row) => row.map((c) => ({ ...c })));
+            if (copy[pos.r]?.[pos.c]) {
+              copy[pos.r][pos.c].tokenName = undefined;
+              copy[pos.r][pos.c].tokenColor = undefined;
+            }
+            return copy;
+          });
+          toast.info(`Token "${removedName}" removido do mapa.`);
+          dragCandidateRef.current = null;
+          setDraggingItem(null);
+        } else if (clickedTarget && isPOIType(clickedTarget.type) && !isPlayerView) {
+          if (clickedTarget.type === 'chest' || clickedTarget.type === 'stash') {
+            setActiveLootContainer({ r: pos.r, c: pos.c, cell: clickedTarget });
+          } else {
+            setEditingCell({ r: pos.r, c: pos.c, cell: clickedTarget });
+          }
+          dragCandidateRef.current = null;
+          setDraggingItem(null);
+        } else if (lightSources && lightSources.length > 0) {
+          const clickedLight = lightSources.find(l => {
+            const lx = bgImage ? gridOffsetX + l.x * CELL_SIZE : l.x * CELL_SIZE;
+            const ly = bgImage ? gridOffsetY + l.y * CELL_SIZE : l.y * CELL_SIZE;
+            return Math.hypot(x - lx, y - ly) <= CELL_SIZE * 0.7;
+          });
+          if (clickedLight) {
+            onRemoveLightSource?.(clickedLight.id);
+            toast.info('Fonte de luz removida.');
+            dragCandidateRef.current = null;
+            setDraggingItem(null);
+          }
+        }
+        setLongPressFeedback(null);
+        longPressTimerRef.current = null;
+      }, 500);
+    }
 
     if (selectedTool === 'calibrate') {
       setIsDrawing(true);
@@ -1305,7 +1402,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
               if (dist < minDist) { minDist = dist; closestId = d.id; }
             });
           });
-          if (closestId && minDist < 60 / zoom) onDrawingAction?.({ action: 'remove', strokeId: closestId });
+          if (closestId && minDist < 60 / zoomRef.current) onDrawingAction?.({ action: 'remove', strokeId: closestId });
         }
       } else {
         setIsDrawing(true);
@@ -1398,7 +1495,7 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return;
     }
 
-    // Check Token Hit for Dragging (Left Click)
+    // Check Token Hit for Dragging (Left Click or Touch)
     if (e.button === 0 && clickedCell?.tokenName) {
       dragCandidateRef.current = {
         kind: 'token',
@@ -1484,7 +1581,62 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     handleCellAction(pos.r, pos.c, e.button);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (activePointersRef.current.has(e.pointerId)) {
+      activePointersRef.current.set(e.pointerId, {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        pointerId: e.pointerId,
+        pointerType: e.pointerType,
+      });
+    }
+
+    // 2 ou mais dedos: Gesto de Zoom (Pinch) e Pan Universal
+    if (activePointersRef.current.size >= 2) {
+      const pointers = Array.from(activePointersRef.current.values());
+      const p1 = pointers[0];
+      const p2 = pointers[1];
+      const containerRect = containerRef.current?.getBoundingClientRect();
+      const newDist = getTouchDistance(p1, p2);
+      const newMid = getTouchMidpoint(p1, p2, containerRect);
+
+      if (twoFingerGestureRef.current) {
+        const { nextZoom, nextPan } = calculatePinchZoomAndPan({
+          currentZoom: zoomRef.current,
+          currentPan: panOffsetRef.current,
+          prevDistance: twoFingerGestureRef.current.prevDist,
+          newDistance: newDist,
+          prevMidpoint: twoFingerGestureRef.current.prevMid,
+          newMidpoint: newMid,
+          minZoom: 0.05,
+          maxZoom: 5.0,
+        });
+
+        zoomRef.current = nextZoom;
+        panOffsetRef.current = nextPan;
+        setZoom(nextZoom);
+        setPanOffset(nextPan);
+
+        twoFingerGestureRef.current = { prevDist: newDist, prevMid: newMid };
+      } else {
+        twoFingerGestureRef.current = { prevDist: newDist, prevMid: newMid };
+      }
+      return;
+    }
+
+    // Cancelar long press se moveu mais de 8px
+    if (longPressTimerRef.current && dragCandidateRef.current) {
+      const dist = Math.hypot(
+        e.clientX - dragCandidateRef.current.initialClientX,
+        e.clientY - dragCandidateRef.current.initialClientY
+      );
+      if (dist > 8) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+        setLongPressFeedback(null);
+      }
+    }
+
     if (isPanning) {
       const dx = e.clientX - panStart.x;
       const dy = e.clientY - panStart.y;
@@ -1513,10 +1665,15 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     const pos = getGridPos(x, y);
 
-    // Promover drag candidate se arrastou >= 4px
+    // Promover drag candidate se arrastou >= 6px
     if (dragCandidateRef.current && !isPanning) {
       const dist = Math.hypot(e.clientX - dragCandidateRef.current.initialClientX, e.clientY - dragCandidateRef.current.initialClientY);
-      if (dist >= 4) {
+      if (dist >= 6) {
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+          setLongPressFeedback(null);
+        }
         const cand = dragCandidateRef.current;
         if (cand.kind === 'token') {
           setDraggingItem({ kind: 'token', tokenName: cand.tokenName, tokenColor: cand.tokenColor, startR: cand.startR, startC: cand.startC, currentR: pos.r, currentC: pos.c });
@@ -1549,8 +1706,8 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return;
     }
 
-    // Hover tooltip para POIs e Tokens
-    if (!isPlayerView && !isPanning && !draggingItem) {
+    // Hover tooltip para POIs e Tokens (apenas desktop mouse)
+    if (!isPlayerView && !isPanning && !draggingItem && e.pointerType === 'mouse') {
       const cell = grid[pos.r]?.[pos.c];
       if (cell && (isPOIType(cell.type) || Boolean(cell.tokenName))) {
         setHoveredCell({ x: e.clientX, y: e.clientY, cell });
@@ -1568,16 +1725,30 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
     handleCellAction(pos.r, pos.c, drawButton);
   };
 
-  const handleMouseUp = (e: React.MouseEvent) => {
+  const handlePointerUp = (e: React.PointerEvent) => {
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size < 2) {
+      twoFingerGestureRef.current = null;
+    }
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    setLongPressFeedback(null);
+
     lastPaintedCellRef.current = null;
     if (isPanning) { setIsPanning(false); return; }
 
-    // Click sem arrastar abre configuração do POI
+    // Click/Toque rápido sem arrastar abre configuração ou baú do POI
     if (dragCandidateRef.current) {
       const cand = dragCandidateRef.current;
       dragCandidateRef.current = null;
       if (cand.kind === 'poi' && cand.cell && !isPlayerView) {
-        setEditingCell({ r: cand.startR, c: cand.startC, cell: cand.cell });
+        if (cand.cell.type === 'chest' || cand.cell.type === 'stash') {
+          setActiveLootContainer({ r: cand.startR, c: cand.startC, cell: cand.cell });
+        } else {
+          setEditingCell({ r: cand.startR, c: cand.startC, cell: cand.cell });
+        }
         return;
       }
     }
@@ -1629,6 +1800,23 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
 
     setIsDrawing(false);
     setDrawButton(-1);
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size < 2) {
+      twoFingerGestureRef.current = null;
+    }
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    setLongPressFeedback(null);
+    dragCandidateRef.current = null;
+    setDraggingItem(null);
+    setIsDrawing(false);
+    setIsPanning(false);
+    setSelectionBox(null);
   };
 
   const handleCellAction = (targetR: number, targetC: number, button: number) => {
@@ -1820,11 +2008,15 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
   return (
     <div 
       ref={containerRef}
-      className="w-full h-full overflow-hidden relative cursor-default bg-slate-950 select-none"
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={() => setHoveredCell(null)}
+      className="w-full h-full overflow-hidden relative cursor-default bg-slate-950 select-none touch-none"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onPointerLeave={(e) => {
+        handlePointerUp(e);
+        setHoveredCell(null);
+      }}
       onContextMenu={(e) => e.preventDefault()}
       style={{ userSelect: 'none', touchAction: 'none' }}
     >
@@ -1859,12 +2051,47 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
         className="absolute top-0 left-0 w-full h-full pointer-events-none"
       />
 
-      {/* HUD Flutuante de Zoom e Ajuste */}
+      {/* Indicador Visual Animado de Toque Longo / Long Press */}
+      {longPressFeedback && (
+        <div 
+          className="fixed pointer-events-none z-50 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center"
+          style={{ left: longPressFeedback.x, top: longPressFeedback.y }}
+        >
+          <div className="w-14 h-14 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin shadow-lg shadow-cyan-500/50 bg-cyan-950/40 backdrop-blur-sm flex items-center justify-center">
+            <div className="w-3 h-3 rounded-full bg-cyan-400 animate-ping" />
+          </div>
+        </div>
+      )}
+
+      {/* HUD Flutuante de Zoom, Modo Mão Touch e Ajuste */}
       <div 
+        onPointerDown={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
         className="absolute bottom-4 right-4 bg-[#0d121a]/95 backdrop-blur-md text-xs font-mono text-slate-300 px-3 py-1.5 rounded-xl border border-[#222c3d] shadow-2xl flex items-center gap-2.5 z-20"
       >
         <div className="flex items-center gap-1">
+          {/* Alternador Rápido de Mão / Navegação para Tablet */}
+          {setSelectedTool && (
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedTool === 'pan') {
+                  setSelectedTool('token');
+                } else {
+                  setSelectedTool('pan');
+                }
+              }}
+              className={`px-2 py-1 flex items-center gap-1 rounded-lg border font-sans font-bold cursor-pointer transition-all mr-1 text-xs ${
+                selectedTool === 'pan'
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md shadow-cyan-500/30'
+                  : 'bg-[#141a26] hover:bg-[#1c2638] text-slate-300 border-[#222c3d]'
+              }`}
+              title={selectedTool === 'pan' ? 'Voltar para Ferramenta' : 'Modo Navegação Touch (Mão)'}
+            >
+              <Hand className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{selectedTool === 'pan' ? 'Mão' : 'Mão'}</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => handleZoomStep(-0.15)}

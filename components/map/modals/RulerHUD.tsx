@@ -39,12 +39,15 @@ export const RulerHUD: React.FC<RulerHUDProps> = ({
 
   return (
     <div 
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerMove={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()} 
       onMouseMove={(e) => e.stopPropagation()}
       onMouseUp={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
-      className="select-none pointer-events-auto"
+      className="select-none pointer-events-auto touch-manipulation"
     >
       {rulerStatus === 'idle' && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-slate-950/90 backdrop-blur-md border border-cyan-500/30 rounded-2xl flex items-center gap-3 text-xs text-cyan-200 shadow-2xl animate-fade-in pointer-events-auto max-w-[90vw]">
