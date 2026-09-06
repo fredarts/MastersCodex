@@ -112,10 +112,13 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
 
   const initMod = matchingSheet
     ? (matchingSheet.initiativeBonus ?? getAttributeModifier(matchingSheet, 'dex')) + getJackOfAllTradesBonus(matchingSheet)
+    : c.initiativeBonus !== undefined
+    ? c.initiativeBonus
     : c.dex !== undefined
     ? Math.floor((c.dex - 10) / 2)
     : 0;
   const initModStr = initMod >= 0 ? `+${initMod}` : `${initMod}`;
+  const rawRoll = c.initiativeRoll !== undefined ? c.initiativeRoll : Math.max(1, Math.min(20, c.initiative - initMod));
 
   const maxSpeed = getSpeedInMeters(matchingSheet?.speed || c.notes) * (c.hasDashed ? 2 : 1);
   const remainingMovement = Math.max(0, maxSpeed - (c.movementUsed || 0));
@@ -329,7 +332,7 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                 const total = d20 + initMod;
                 onUpdateCombatants((prev) => {
                   const next = prev
-                    .map((x) => (x.id === c.id ? { ...x, initiative: total } : x))
+                    .map((x) => (x.id === c.id ? { ...x, initiative: total, initiativeRoll: d20, initiativeBonus: initMod } : x))
                     .sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
                   if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
                   return next;
@@ -337,7 +340,7 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
                 toast.success(`Nova iniciativa de ${c.name}: d20(${d20}) ${initModStr} = ${total}`);
               }}
               className="absolute bottom-0 right-0 bg-[#0a0d14]/90 hover:bg-amber-500 hover:text-slate-950 text-amber-400 font-mono text-[8px] font-extrabold px-1 py-0.2 rounded-tl-md border-t border-l border-amber-500/40 backdrop-blur-xs transition-colors cursor-pointer"
-              title={`Iniciativa: ${c.initiative} (${initModStr}). Clique para rolar novamente.`}
+              title={`Iniciativa Total: ${c.initiative} [Dado: ${rawRoll} | Base: ${initModStr}]. Clique para rolar novamente.`}
             >
               #{c.initiative}
             </button>
@@ -374,14 +377,39 @@ export const CombatantCard: React.FC<CombatantCardProps> = ({
               {subtitle}
             </div>
 
-            {/* Row 3: Compact Stat Chips (CA, PV, Mov) */}
+            {/* Row 3: Compact Stat Chips (Iniciativa, CA, PV, Mov) */}
             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              {/* Initiative Chip */}
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const d20 = Math.floor(Math.random() * 20) + 1;
+                  const total = d20 + initMod;
+                  onUpdateCombatants((prev) => {
+                    const next = prev
+                      .map((x) => (x.id === c.id ? { ...x, initiative: total, initiativeRoll: d20, initiativeBonus: initMod } : x))
+                      .sort((a, b) => (b.initiative || 0) - (a.initiative || 0));
+                    if (activeScene) onUpdateScene({ ...activeScene, combatants: next });
+                    return next;
+                  });
+                  toast.success(`Nova iniciativa de ${c.name}: d20(${d20}) ${initModStr} = ${total}`);
+                }}
+                className="flex items-center gap-1 bg-[#090d14] hover:bg-amber-500/20 border border-amber-500/50 hover:border-amber-400 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold text-amber-300 shadow-inner shrink-0 cursor-pointer transition-colors group/init"
+                title={`Iniciativa: Total ${c.initiative} (Rolagem d20: ${rawRoll} + Base: ${initModStr}). Clique para rolar novamente.`}
+              >
+                <Dices className="w-2.5 h-2.5 text-amber-400 group-hover/init:rotate-180 transition-transform shrink-0" />
+                <span>Inic {c.initiative}</span>
+                <span className="text-[9px] text-amber-400/80 font-normal">
+                  (d20:{rawRoll} | {initModStr})
+                </span>
+              </div>
+
               {/* CA Badge */}
               <div 
-                className="flex items-center gap-1 bg-[#090d14] border border-amber-500/40 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold text-amber-300 shadow-inner shrink-0"
+                className="flex items-center gap-1 bg-[#090d14] border border-cyan-500/40 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold text-cyan-300 shadow-inner shrink-0"
                 title="Classe de Armadura (CA)"
               >
-                <Shield className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                <Shield className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
                 <span>CA {c.ac}</span>
               </div>
 

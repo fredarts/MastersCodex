@@ -180,7 +180,24 @@ const CombatTurnOrderItem: React.FC<CombatTurnOrderItemProps> = ({
 
         <div className="flex flex-col gap-0.5 min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-[10px] font-mono font-bold text-amber-400 shrink-0">#{c.initiative ?? '-'}</span>
+            {(() => {
+              const baseMod = c.initiativeBonus !== undefined
+                ? c.initiativeBonus
+                : c.dex !== undefined
+                ? Math.floor((c.dex - 10) / 2)
+                : 0;
+              const baseModStr = baseMod >= 0 ? `+${baseMod}` : `${baseMod}`;
+              const rawD20 = c.initiativeRoll !== undefined ? c.initiativeRoll : Math.max(1, Math.min(20, (c.initiative || 0) - baseMod));
+              return (
+                <span
+                  className="text-[10px] font-mono font-bold text-amber-400 shrink-0 bg-black/40 px-1 py-0.2 rounded border border-amber-500/30"
+                  title={`Iniciativa Total: ${c.initiative ?? '-'} (Dado: ${rawD20} | Base: ${baseModStr})`}
+                >
+                  #{c.initiative ?? '-'}{' '}
+                  <span className="text-[8px] text-amber-300/70 font-normal">({baseModStr})</span>
+                </span>
+              );
+            })()}
             <span className={`truncate ${isPlayer ? 'text-sky-400 font-bold' : 'text-rose-400'}`}>{c.name}</span>
           </div>
           

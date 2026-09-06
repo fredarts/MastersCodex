@@ -1224,7 +1224,9 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants, selectedMapId })
       }
 
       const key = e.key.toLowerCase();
-      if (key === 'p' || key === 'b') {
+      if (key === 'escape') {
+        setSelectedTool('pan');
+      } else if (key === 'p' || key === 'b') {
         setSelectedTool('paint');
       } else if (key === 'r') {
         setSelectedTool('box');
@@ -1312,6 +1314,7 @@ export const MapMaker: React.FC<MapMakerProps> = ({ combatants, selectedMapId })
         {/* Contextual Sub-bar for selected tool */}
         <ToolSubBar
           selectedTool={selectedTool}
+          onCloseTool={() => setSelectedTool('pan')}
           selectedTileType={selectedTileType}
           onSelectTileType={setSelectedTileType}
           boxMode={boxMode}

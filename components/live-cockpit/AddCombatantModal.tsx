@@ -112,7 +112,9 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
   );
 
   const handleAddMonster = (monster: any) => {
-    const rollInit = Math.floor(Math.random() * 20) + 1;
+    const dexMod = Math.floor(((monster.dex || 10) - 10) / 2);
+    const d20 = Math.floor(Math.random() * 20) + 1;
+    const rollInit = d20 + dexMod;
     const newCombatant: Combatant = {
       id: `mon-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       name: monster.name,
@@ -120,6 +122,8 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
       maxHp: monster.hp,
       ac: monster.ac,
       initiative: rollInit,
+      initiativeRoll: d20,
+      initiativeBonus: dexMod,
       type: 'monster',
       cr: monster.cr,
       conditions: [],
@@ -141,7 +145,6 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
   };
 
   const handleAddPlayer = (member: CampaignMember) => {
-    const rollInit = Math.floor(Math.random() * 20) + 1;
     const pName = member.characterName || member.displayName || 'Jogador';
 
     // Read real HP, AC, tokenType, modelUrl, and avatarUrl from character sheet in localStorage/member
@@ -151,6 +154,8 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
     let resolvedTokenType: 'billboard' | '3d' = member.tokenType || '3d';
     let resolvedModelUrl = member.modelUrl || getModelUrlByNameOrPath(member.characterName || '');
     let resolvedAvatarUrl = member.avatarUrl || '';
+    let playerInitMod = 0;
+    let resolvedDex = 10;
 
     try {
       const saved = localStorage.getItem('masters_codex_character_sheets_v1') || localStorage.getItem('codex_character_sheets_v1');
@@ -171,9 +176,14 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
           if (found.tokenType) resolvedTokenType = found.tokenType;
           if (found.modelUrl) resolvedModelUrl = found.modelUrl;
           if (found.avatarUrl) resolvedAvatarUrl = found.avatarUrl;
+          if (found.attributes?.dex?.value) resolvedDex = found.attributes.dex.value;
+          playerInitMod = found.initiativeBonus ?? Math.floor((resolvedDex - 10) / 2);
         }
       }
     } catch (e) {}
+
+    const d20 = Math.floor(Math.random() * 20) + 1;
+    const rollInit = d20 + playerInitMod;
 
     const newCombatant: Combatant = {
       id: `pc-${Date.now()}-${member.id}`,
@@ -182,6 +192,9 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
       maxHp: resolvedMaxHp,
       ac: resolvedAc,
       initiative: rollInit,
+      initiativeRoll: d20,
+      initiativeBonus: playerInitMod,
+      dex: resolvedDex,
       type: 'player',
       conditions: [],
       tokenType: resolvedTokenType,
@@ -505,7 +518,9 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
                             <button
                               type="button"
                               onClick={() => {
-                                const rollInit = Math.floor(Math.random() * 20) + 1;
+                                const dexMod = Math.floor(((m.dex || 10) - 10) / 2);
+                                const d20 = Math.floor(Math.random() * 20) + 1;
+                                const rollInit = d20 + dexMod;
                                 const newCombatant: Combatant = {
                                   id: `mon-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
                                   name: m.name,
@@ -513,9 +528,17 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
                                   maxHp: m.maxHp || m.hp,
                                   ac: m.ac,
                                   initiative: rollInit,
+                                  initiativeRoll: d20,
+                                  initiativeBonus: dexMod,
                                   type: 'monster',
                                   cr: m.cr,
                                   size: m.size,
+                                  str: m.str,
+                                  dex: m.dex,
+                                  con: m.con,
+                                  int: m.int,
+                                  wis: m.wis,
+                                  cha: m.cha,
                                   tokenType: m.tokenType,
                                   tokenImageUrl: m.tokenImageUrl,
                                   modelUrl: m.modelUrl || (m.tokenType === '3d' ? getModelUrlByNameOrPath(m.name) : undefined),
@@ -647,7 +670,10 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
 
                         <button
                           onClick={() => {
-                            const rollInit = Math.floor(Math.random() * 20) + 1;
+                            const dexVal = (npc as any).dex ?? (npc.attributes ? npc.attributes.dex : 10);
+                            const dexMod = Math.floor((dexVal - 10) / 2);
+                            const d20 = Math.floor(Math.random() * 20) + 1;
+                            const rollInit = d20 + dexMod;
                             onAddCombatant({
                               id: `npc-${Date.now()}-${npc.id}`,
                               name: npc.name,
@@ -656,6 +682,9 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
                               ac,
                               cr: npcCr,
                               initiative: rollInit,
+                              initiativeRoll: d20,
+                              initiativeBonus: dexMod,
+                              dex: dexVal,
                               type: 'npc',
                               conditions: [],
                               modelUrl: getModelUrlByNameOrPath(npc.name),

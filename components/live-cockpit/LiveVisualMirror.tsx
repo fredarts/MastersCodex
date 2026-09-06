@@ -251,68 +251,128 @@ export const LiveVisualMirror: React.FC<LiveVisualMirrorProps> = ({
   }, [broadcastToPlayerView, setSelectedTargetId]);
 
   const handleBuildingBlocksChange = useCallback((blocks: any) => {
-    const newSettings = { ...(liveEnvironmentSettings || {}), building_blocks_3d: blocks };
+    const newSettings = {
+      ...(liveEnvironmentSettings || {}),
+      building_blocks_3d: blocks,
+      hasFog: liveHasFog,
+      hasRain: liveHasRain,
+      timeOfDayHour: liveTimeOfDayHour,
+      timeOfDayPreset: selectedTimeOfDay,
+    };
     setLiveEnvironmentSettings(newSettings);
     if (activeScene && updateScene) {
       updateScene({
         ...activeScene,
+        hasFog: liveHasFog,
+        hasRain: liveHasRain,
+        timeOfDayHour: liveTimeOfDayHour,
+        timeOfDay: selectedTimeOfDay,
         buildingBlocks: blocks,
         environmentSettings: newSettings,
       });
     }
     broadcastToPlayerView({
+      hasFog: liveHasFog,
+      hasRain: liveHasRain,
+      timeOfDayHour: liveTimeOfDayHour,
+      timeOfDay: selectedTimeOfDay,
       building_blocks_3d: blocks,
       environmentSettings: newSettings,
     });
-  }, [activeScene, broadcastToPlayerView, liveEnvironmentSettings, setLiveEnvironmentSettings, updateScene]);
+  }, [activeScene, broadcastToPlayerView, liveEnvironmentSettings, liveHasFog, liveHasRain, liveTimeOfDayHour, selectedTimeOfDay, setLiveEnvironmentSettings, updateScene]);
 
   const handleTerrainSurfacesChange = useCallback((surfaces: any) => {
-    const newSettings = { ...(liveEnvironmentSettings || {}), terrain_surfaces_3d: surfaces };
+    const newSettings = {
+      ...(liveEnvironmentSettings || {}),
+      terrain_surfaces_3d: surfaces,
+      hasFog: liveHasFog,
+      hasRain: liveHasRain,
+      timeOfDayHour: liveTimeOfDayHour,
+      timeOfDayPreset: selectedTimeOfDay,
+    };
     setLiveEnvironmentSettings(newSettings);
     if (activeScene && updateScene) {
       updateScene({
         ...activeScene,
+        hasFog: liveHasFog,
+        hasRain: liveHasRain,
+        timeOfDayHour: liveTimeOfDayHour,
+        timeOfDay: selectedTimeOfDay,
         terrainSurfaces: surfaces,
         environmentSettings: newSettings,
       });
     }
     broadcastToPlayerView({
+      hasFog: liveHasFog,
+      hasRain: liveHasRain,
+      timeOfDayHour: liveTimeOfDayHour,
+      timeOfDay: selectedTimeOfDay,
       terrain_surfaces_3d: surfaces,
       environmentSettings: newSettings,
     });
-  }, [activeScene, broadcastToPlayerView, liveEnvironmentSettings, setLiveEnvironmentSettings, updateScene]);
+  }, [activeScene, broadcastToPlayerView, liveEnvironmentSettings, liveHasFog, liveHasRain, liveTimeOfDayHour, selectedTimeOfDay, setLiveEnvironmentSettings, updateScene]);
 
   const handleGridConfigChange = useCallback((gridCfg: any) => {
-    const newSettings = { ...(liveEnvironmentSettings || {}), grid_config_3d: gridCfg };
+    const newSettings = {
+      ...(liveEnvironmentSettings || {}),
+      grid_config_3d: gridCfg,
+      hasFog: liveHasFog,
+      hasRain: liveHasRain,
+      timeOfDayHour: liveTimeOfDayHour,
+      timeOfDayPreset: selectedTimeOfDay,
+    };
     setLiveEnvironmentSettings(newSettings);
     if (activeScene && updateScene) {
       updateScene({
         ...activeScene,
+        hasFog: liveHasFog,
+        hasRain: liveHasRain,
+        timeOfDayHour: liveTimeOfDayHour,
+        timeOfDay: selectedTimeOfDay,
         gridConfig3D: gridCfg,
         environmentSettings: newSettings,
       });
     }
     broadcastToPlayerView({
+      hasFog: liveHasFog,
+      hasRain: liveHasRain,
+      timeOfDayHour: liveTimeOfDayHour,
+      timeOfDay: selectedTimeOfDay,
       grid_config_3d: gridCfg,
       environmentSettings: newSettings,
     });
-  }, [activeScene, broadcastToPlayerView, liveEnvironmentSettings, setLiveEnvironmentSettings, updateScene]);
+  }, [activeScene, broadcastToPlayerView, liveEnvironmentSettings, liveHasFog, liveHasRain, liveTimeOfDayHour, selectedTimeOfDay, setLiveEnvironmentSettings, updateScene]);
 
   const handleTokenElevationsChange = useCallback((elevs: any) => {
-    const newSettings = { ...(liveEnvironmentSettings || {}), token_elevations: elevs };
+    const newSettings = {
+      ...(liveEnvironmentSettings || {}),
+      token_elevations: elevs,
+      hasFog: liveHasFog,
+      hasRain: liveHasRain,
+      timeOfDayHour: liveTimeOfDayHour,
+      timeOfDayPreset: selectedTimeOfDay,
+    };
     setLiveEnvironmentSettings(newSettings);
     if (activeScene && updateScene) {
       updateScene({
         ...activeScene,
+        hasFog: liveHasFog,
+        hasRain: liveHasRain,
+        timeOfDayHour: liveTimeOfDayHour,
+        timeOfDay: selectedTimeOfDay,
         tokenElevations: elevs,
         environmentSettings: newSettings,
       });
     }
     broadcastToPlayerView({
+      hasFog: liveHasFog,
+      hasRain: liveHasRain,
+      timeOfDayHour: liveTimeOfDayHour,
+      timeOfDay: selectedTimeOfDay,
       token_elevations: elevs,
       environmentSettings: newSettings,
     });
-  }, [activeScene, broadcastToPlayerView, liveEnvironmentSettings, setLiveEnvironmentSettings, updateScene]);
+  }, [activeScene, broadcastToPlayerView, liveEnvironmentSettings, liveHasFog, liveHasRain, liveTimeOfDayHour, selectedTimeOfDay, setLiveEnvironmentSettings, updateScene]);
 
   const handleTimeOfDayChange = useCallback((preset: any) => {
     setSelectedTimeOfDay(preset);

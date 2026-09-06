@@ -431,6 +431,7 @@ export const CockpitDungeonMap: React.FC = () => {
     for (const mon of INITIAL_MONSTERS) {
       const nameClean = mon.name.trim().toLowerCase();
       if (!namesSeen.has(nameClean)) {
+        const dexMod = Math.floor((mon.dex - 10) / 2);
         list.push({
           id: `mon-${mon.id}`,
           name: mon.name,
@@ -439,6 +440,14 @@ export const CockpitDungeonMap: React.FC = () => {
           maxHp: mon.hp,
           ac: mon.ac,
           initiative: 0,
+          initiativeBonus: dexMod,
+          dex: mon.dex,
+          str: mon.str,
+          con: mon.con,
+          int: mon.int,
+          wis: mon.wis,
+          cha: mon.cha,
+          cr: mon.cr,
           conditions: [],
           tokenImageUrl: mon.tokenImageUrl,
         });

@@ -178,20 +178,28 @@ export const CombatInitiativeTracker: React.FC<CombatInitiativeTrackerProps> = (
       )}
 
       {/* Lista de Combatentes */}
-      <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+      <div className="flex-1 p-3 overflow-y-auto space-y-2">
         {combatants.length === 0 ? (
-          <div className="p-6 text-center text-zinc-500 text-xs italic">
-            Nenhum combatente ativo. Clique em "+ Combatente" para iniciar a batalha!
+          <div className="h-40 flex flex-col items-center justify-center text-zinc-500 text-xs">
+            <Swords className="w-8 h-8 opacity-20 mb-2" />
+            Nenhum combatente ativo
           </div>
         ) : (
           combatants.map((c, idx) => {
             const isTurn = idx === currentTurnIndex;
-            const hpPct = Math.max(0, Math.min(100, Math.round((c.hp / c.maxHp) * 100)));
+            const hpPct = Math.max(0, Math.min(100, (c.hp / (c.maxHp || 1)) * 100));
+            const baseMod = c.initiativeBonus !== undefined
+              ? c.initiativeBonus
+              : c.dex !== undefined
+              ? Math.floor((c.dex - 10) / 2)
+              : 0;
+            const baseModStr = baseMod >= 0 ? `+${baseMod}` : `${baseMod}`;
+            const rawD20 = c.initiativeRoll !== undefined ? c.initiativeRoll : Math.max(1, Math.min(20, (c.initiative || 0) - baseMod));
 
             return (
               <div
                 key={c.id}
-                className={`p-3 rounded-xl border transition-all ${
+                className={`p-2.5 rounded-xl border transition-all ${
                   isTurn
                     ? 'bg-amber-500/10 border-amber-500/40 shadow-lg shadow-amber-500/5'
                     : 'bg-zinc-950/50 border-zinc-800/80 hover:border-zinc-700'
@@ -200,11 +208,13 @@ export const CombatInitiativeTracker: React.FC<CombatInitiativeTrackerProps> = (
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold font-mono text-xs ${
+                      className={`h-7 px-1.5 rounded-lg flex flex-col items-center justify-center font-bold font-mono text-xs ${
                         isTurn ? 'bg-amber-500 text-zinc-950 font-extrabold' : 'bg-zinc-800 text-zinc-300'
                       }`}
+                      title={`Iniciativa: Total ${c.initiative} [Dado: ${rawD20} | Base: ${baseModStr}]`}
                     >
-                      {c.initiative}
+                      <span>{c.initiative}</span>
+                      <span className="text-[7px] leading-none opacity-80">{baseModStr}</span>
                     </div>
 
                     <div className="min-w-0">

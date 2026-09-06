@@ -135,13 +135,20 @@ export const MapMakerToolbar: React.FC<MapMakerToolbarProps> = ({
         return (
           <div key={tool.id} className="relative group">
             <button
-              onClick={() => onSelectTool(tool.id)}
+              onClick={() => {
+                if (isSelected && tool.id !== 'pan') {
+                  onSelectTool('pan');
+                } else {
+                  onSelectTool(tool.id);
+                }
+              }}
               className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative ${
                 isSelected
                   ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 ring-2 ring-amber-400/40 scale-105 font-bold'
                   : 'text-slate-400 hover:text-slate-100 hover:bg-[#182030]'
               }`}
               aria-label={tool.label}
+              title={isSelected ? `${tool.label} (Clique para desmarcar / ESC)` : tool.label}
             >
               <IconComponent className={`w-4 h-4 ${isSelected ? 'text-slate-950 stroke-[2.5]' : ''}`} />
             </button>

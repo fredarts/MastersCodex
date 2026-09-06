@@ -172,8 +172,14 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
           </div>
         </div>
         <button 
-          onClick={onClose}
+          onClick={() => {
+            if (buildMode === 'terrain' || buildMode === 'place') {
+              onSetBuildMode('idle');
+            }
+            onClose();
+          }}
           className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+          title="Fechar BattleForge (ESC)"
         >
           <X className="w-4 h-4" />
         </button>
@@ -196,6 +202,16 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
           </strong>
         </span>
         <div className="flex items-center gap-1">
+          {buildMode !== 'idle' && (
+            <button
+              onClick={() => onSetBuildMode('idle')}
+              className="px-2 py-0.5 bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40 rounded flex items-center gap-1 text-[10px] font-bold active:scale-95 transition-all"
+              title="Voltar ao modo normal / Desmarcar ferramenta (ESC)"
+            >
+              <X className="w-3 h-3" />
+              <span>Desmarcar (ESC)</span>
+            </button>
+          )}
           {buildMode === 'place' && (
             <button
               onClick={onRotateBlock}
@@ -249,8 +265,10 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
               setActiveTab(tab.id);
               if (tab.id === 'terrains') {
                 onSetBuildMode('terrain');
-              } else if (tab.id === 'blocks' && buildMode === 'terrain') {
-                onSetBuildMode('idle');
+              } else {
+                if (buildMode === 'terrain' || (tab.id !== 'blocks' && buildMode === 'place')) {
+                  onSetBuildMode('idle');
+                }
               }
             }}
             className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1 text-[10px] font-semibold transition-all ${
@@ -396,14 +414,15 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
               {/* Modo de ação: Pincel vs Borracha de Chão */}
               <div className="flex gap-1.5">
                 <button
-                  onClick={() => onSetBuildMode('terrain')}
+                  onClick={() => onSetBuildMode(buildMode === 'terrain' ? 'idle' : 'terrain')}
                   className={`flex-1 py-1 rounded-lg border flex items-center justify-center gap-1.5 text-[10px] font-bold transition-all ${
                     buildMode === 'terrain'
                       ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
                       : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
                   }`}
+                  title={buildMode === 'terrain' ? 'Pintura ativa. Clique para pausar/desmarcar' : 'Ativar modo de pintura de terreno'}
                 >
-                  <Paintbrush className="w-3 h-3" /> Pintar Terreno
+                  <Paintbrush className="w-3 h-3" /> {buildMode === 'terrain' ? 'Pintando (Clique p/ Parar)' : 'Pintar Terreno'}
                 </button>
                 <button
                   onClick={() => onSetBuildMode(buildMode === 'delete' ? 'terrain' : 'delete')}
@@ -455,15 +474,21 @@ export const BattleForgeToolbar: React.FC<BattleForgeToolbarProps> = ({
                     <button
                       key={type}
                       onClick={() => {
-                        if (onSelectTerrainType) onSelectTerrainType(type);
-                        onSetBuildMode('terrain');
-                        toast.info(`Superfície selecionada: ${def.label}. Clique e arraste na arena 3D para pintar.`);
+                        if (isSelected) {
+                          onSetBuildMode('idle');
+                          toast.info('Pintura de terreno desmarcada.');
+                        } else {
+                          if (onSelectTerrainType) onSelectTerrainType(type);
+                          onSetBuildMode('terrain');
+                          toast.info(`Superfície selecionada: ${def.label}. Clique e arraste na arena 3D para pintar.`);
+                        }
                       }}
                       className={`p-2 rounded-xl border text-left flex items-start gap-2 transition-all select-none hover:scale-[1.02] active:scale-95 ${
                         isSelected
                           ? 'bg-emerald-500/20 border-emerald-500 text-emerald-200 shadow-md shadow-emerald-500/10'
                           : 'bg-slate-900/80 hover:bg-slate-850 border-slate-800 text-slate-300 hover:border-slate-700'
                       }`}
+                      title={isSelected ? 'Clique para desmarcar' : 'Clique para selecionar e pintar'}
                     >
                       <span className="text-base shrink-0">{def.icon}</span>
                       <div className="flex flex-col min-w-0">

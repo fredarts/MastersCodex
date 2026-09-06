@@ -204,10 +204,14 @@ export function useCombatEngine() {
     setCombatants((prev) => {
       const rolled = prev.map((c) => {
         const d20 = Math.floor(Math.random() * 20) + 1;
-        const initModifier = Math.floor(((c.dex || 10) - 10) / 2);
+        const initModifier = c.initiativeBonus !== undefined
+          ? c.initiativeBonus
+          : Math.floor(((c.dex || 10) - 10) / 2);
         return {
           ...c,
           initiative: d20 + initModifier,
+          initiativeRoll: d20,
+          initiativeBonus: initModifier,
         };
       });
       return rolled.sort((a, b) => (b.initiative || 0) - (a.initiative || 0));

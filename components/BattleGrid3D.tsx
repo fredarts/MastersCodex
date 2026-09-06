@@ -77,6 +77,34 @@ const getCombatantDisplayName = (combatant: Combatant, allCombatants: Combatant[
   return `${combatant.name} ${idx + 1}`;
 };
 
+/**
+ * Gera caminho passo-a-passo direto entre a célula inicial e a célula de destino no grid tático 3D.
+ * Cada passo avança 1 casa (2 unidades 3D / 5 pés) em X e/ou Z.
+ */
+export function generateDirectGridPath(
+  start: { x: number; z: number },
+  target: { x: number; z: number }
+): { x: number; z: number }[] {
+  const path: { x: number; z: number }[] = [{ x: start.x, z: start.z }];
+  let curX = start.x;
+  let curZ = start.z;
+
+  let iter = 0;
+  while ((Math.abs(curX - target.x) > 0.1 || Math.abs(curZ - target.z) > 0.1) && iter < 200) {
+    iter++;
+    const dx = target.x - curX;
+    const dz = target.z - curZ;
+
+    const stepX = Math.abs(dx) >= 1.0 ? (dx > 0 ? 2 : -2) : 0;
+    const stepZ = Math.abs(dz) >= 1.0 ? (dz > 0 ? 2 : -2) : 0;
+
+    curX += stepX;
+    curZ += stepZ;
+    path.push({ x: curX, z: curZ });
+  }
+  return path;
+}
+
 export function createCustomGridLines(
   widthCells = 20,
   heightCells = 20,
@@ -1014,6 +1042,7 @@ export const BattleGrid3D: React.FC<BattleGrid3DProps> = ({
   // Dragging state references
   const isDraggingRef = useRef(false);
   const draggedTokenKeyRef = useRef<string | null>(null);
+  const dragStartPosRef = useRef<{ x: number; z: number }>({ x: 0, z: 0 });
   const lastDragSnapRef = useRef<{ x: number; z: number } | null>(null);
   const groundPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
   const planeIntersectPoint = useRef(new THREE.Vector3());
@@ -2329,10 +2358,14 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
               draggedTokenKeyRef.current = targetKey;
               controls.enabled = false; // Desativa a rotação da câmera durante o arrasto do token
               
-              // Inicializa o rastro (trail) na casa snapped inicial do token
+              // Inicializa o rastro (trail) e posição base com snap preciso na grade
               const cPos = getPos(targetKey);
-              const startSnapX = Math.floor(cPos.x / 2) * 2 + 1;
-              const startSnapZ = Math.floor(cPos.z / 2) * 2 + 1;
+              const cfg = forgeRef.current.gridConfig || DEFAULT_GRID_CONFIG_3D;
+              const snap = worldPosToGridCell(cPos.x, cPos.z, cfg.widthCells || 20, cfg.heightCells || 20);
+              const startSnapX = snap.snappedX;
+              const startSnapZ = snap.snappedZ;
+
+              dragStartPosRef.current = { x: startSnapX, z: startSnapZ };
               dragTrailRef.current = [{ x: startSnapX, z: startSnapZ }];
               lastDragSnapRef.current = { x: startSnapX, z: startSnapZ };
 
@@ -2661,93 +2694,59 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       raycaster.setFromCamera(mouse, camera);
       if (raycaster.ray.intersectPlane(groundPlane.current, planeIntersectPoint.current)) {
         const key = draggedTokenKeyRef.current;
-        // Snap ao centro do grid 3D (quadrados de 2x2 unidades)
-        const snappedX = Math.floor(planeIntersectPoint.current.x / 2) * 2 + 1;
-        const snappedZ = Math.floor(planeIntersectPoint.current.z / 2) * 2 + 1;
+        const cfg = forgeRef.current.gridConfig || DEFAULT_GRID_CONFIG_3D;
+        const snap = worldPosToGridCell(
+          planeIntersectPoint.current.x,
+          planeIntersectPoint.current.z,
+          cfg.widthCells || 20,
+          cfg.heightCells || 20
+        );
+        const snappedX = snap.snappedX;
+        const snappedZ = snap.snappedZ;
 
-        // Skip if snapped position hasn't changed — prevents infinite re-render loop
+        // Ignora se a célula snapped sob o cursor não mudou (evita recálculos redundantes)
         if (lastDragSnapRef.current?.x === snappedX && lastDragSnapRef.current?.z === snappedZ) return;
+        lastDragSnapRef.current = { x: snappedX, z: snappedZ };
 
         const { combatants: activeCombatants, currentTurnIndex: turnIdx } = callbacksRef.current;
         const activeC = activeCombatants[turnIdx];
         const targetC = activeCombatants.find((c) => c.id === key || c.name === key || (c.id || c.name) === key) || activeC;
 
+        const startPt = dragStartPosRef.current;
+        const fullPath = generateDirectGridPath(startPt, { x: snappedX, z: snappedZ });
+
         if (targetC && !isPlacementPhase && callbacksRef.current.isBattleStarted) {
           const speedVal = getSpeedInMeters(targetC.speed || targetC.notes) * (targetC.hasDashed ? 2 : 1);
           const remainingMovementTotal = Math.max(0, speedVal - (targetC.movementUsed || 0));
 
-          let trail = [...dragTrailRef.current];
-          if (trail.length === 0) {
-            const cPos = callbacksRef.current.getCombatantPos(key);
-            trail = [{ x: Math.floor(cPos.x / 2) * 2 + 1, z: Math.floor(cPos.z / 2) * 2 + 1 }];
-          }
-
-          // Check if snapped tile is already in trail (Backtracking)
-          const existingIdx = trail.findIndex((pt) => pt.x === snappedX && pt.z === snappedZ);
-          if (existingIdx !== -1) {
-            // Rewind trail up to existingIdx
-            trail = trail.slice(0, existingIdx + 1);
-          } else {
-            // Forward move: interpolate step-by-step from last point in trail to snapped tile
-            const lastPt = trail[trail.length - 1];
-            const steps: { x: number; z: number }[] = [];
-            let curX = lastPt.x;
-            let curZ = lastPt.z;
-
-            while (curX !== snappedX || curZ !== snappedZ) {
-              if (curX < snappedX) curX += 2;
-              else if (curX > snappedX) curX -= 2;
-
-              if (curZ < snappedZ) curZ += 2;
-              else if (curZ > snappedZ) curZ -= 2;
-
-              steps.push({ x: curX, z: curZ });
-            }
-
-            // Check movement budget with real terrain cost
-            const candidateTrail = [...trail, ...steps];
-            const costObj = calculateTrailTerrainCost(candidateTrail, surfacesMapRef.current);
-
-            if (costObj.totalCostMeters <= remainingMovementTotal) {
-              trail = candidateTrail;
+          // Limita o trajeto passo-a-passo até o alcance máximo permitido pelo orçamento de movimento restante
+          let validPath = [fullPath[0]];
+          for (let i = 1; i < fullPath.length; i++) {
+            const candidate = fullPath.slice(0, i + 1);
+            const cost = calculateTrailTerrainCost(candidate, surfacesMapRef.current);
+            if (cost.totalCostMeters <= remainingMovementTotal + 0.05) {
+              validPath = candidate;
             } else {
-              // Exceeds total remaining movement budget! Cap step by step
-              for (const step of steps) {
-                const nextCandidate = [...trail, step];
-                const nextCost = calculateTrailTerrainCost(nextCandidate, surfacesMapRef.current);
-                if (nextCost.totalCostMeters <= remainingMovementTotal) {
-                  trail = nextCandidate;
-                } else {
-                  break;
-                }
-              }
+              break;
             }
           }
 
-          dragTrailRef.current = trail;
-          const currentHead = trail[trail.length - 1];
-          lastDragSnapRef.current = { x: currentHead.x, z: currentHead.z };
+          dragTrailRef.current = validPath;
+          const currentHead = validPath[validPath.length - 1];
 
+          // Move a malha Three.js diretamente no palco sem disparar re-render de estado por pixel
           const group = tokenMeshMapRef.current.get(key);
           if (group) {
             group.position.x = currentHead.x;
             group.position.z = currentHead.z;
           }
 
-          callbacksRef.current.setLocalPositions((prev) => ({
-            ...prev,
-            [key]: { x: currentHead.x, z: currentHead.z },
-          }));
+          // Atualiza a visualização do rastro tático e régua de passos
+          callbacksRef.current.renderDragTrail(validPath);
 
-          callbacksRef.current.updateTokenPosition3D(key, undefined, undefined, currentHead.x, currentHead.z);
-
-          // Update trail visual rendering
-          callbacksRef.current.renderDragTrail(trail);
-
-          // Dynamic Highlight Reduction: calculate remaining movement after current trail cost
-          const costInfo = calculateTrailTerrainCost(trail, surfacesMapRef.current);
+          // Redução dinâmica do highlight de alcance restante
+          const costInfo = calculateTrailTerrainCost(validPath, surfacesMapRef.current);
           const remainingMeters = Math.max(0, remainingMovementTotal - costInfo.totalCostMeters);
-          const startPt = trail[0] || { x: currentHead.x, z: currentHead.z };
           callbacksRef.current.renderMovementHighlights(
             currentHead.x,
             currentHead.z,
@@ -2759,21 +2758,15 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
           return;
         }
 
-        // Non-active combatant drag, placement phase or before battle starts
-        lastDragSnapRef.current = { x: snappedX, z: snappedZ };
+        // Modo não combate / Fase de posicionamento / Mestre: movimento livre sem restrição de orçamento
+        dragTrailRef.current = fullPath;
+        const currentHead = fullPath[fullPath.length - 1];
 
         const group = tokenMeshMapRef.current.get(key);
         if (group) {
-          group.position.x = snappedX;
-          group.position.z = snappedZ;
+          group.position.x = currentHead.x;
+          group.position.z = currentHead.z;
         }
-
-        callbacksRef.current.setLocalPositions((prev) => ({
-          ...prev,
-          [key]: { x: snappedX, z: snappedZ },
-        }));
-
-        callbacksRef.current.updateTokenPosition3D(key, undefined, undefined, snappedX, snappedZ);
       }
     };
 
@@ -2787,98 +2780,113 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         const key = draggedTokenKeyRef.current;
         if (key) {
           const group = tokenMeshMapRef.current.get(key);
+          const startPt = dragStartPosRef.current;
+          const currentHead = dragTrailRef.current.length > 0
+            ? dragTrailRef.current[dragTrailRef.current.length - 1]
+            : (group ? { x: group.position.x, z: group.position.z } : startPt);
+
+          const snappedX = currentHead.x;
+          const snappedZ = currentHead.z;
+
           if (group) {
-            const snappedX = group.position.x;
-            const snappedZ = group.position.z;
+            group.position.x = snappedX;
+            group.position.z = snappedZ;
+          }
 
-            const { combatants: activeCombatants, isBattleStarted: battleStarted } = callbacksRef.current;
-            const targetC = activeCombatants.find((c) => c.id === key || c.name === key || (c.id || c.name) === key);
-            if (targetC) {
-              if (isPlacementPhase || !battleStarted) {
-                // Placement phase or before battle starts: only update position without tracking movement cost
-                const nextCombatants = activeCombatants.map((c) => {
-                  if (c.id === targetC.id) {
-                    return { ...c, x: snappedX, z: snappedZ };
-                  }
-                  return c;
-                });
+          // Consolida a posição final no estado local e context
+          callbacksRef.current.setLocalPositions((prev) => ({
+            ...prev,
+            [key]: { x: snappedX, z: snappedZ },
+          }));
+          callbacksRef.current.updateTokenPosition3D(key, undefined, undefined, snappedX, snappedZ);
 
-                if (callbacksRef.current.onUpdateCombatants) {
-                  callbacksRef.current.onUpdateCombatants(nextCombatants);
+          const { combatants: activeCombatants, isBattleStarted: battleStarted } = callbacksRef.current;
+          const targetC = activeCombatants.find((c) => c.id === key || c.name === key || (c.id || c.name) === key);
+          if (targetC) {
+            if (isPlacementPhase || !battleStarted) {
+              // Posicionamento / Fora de combate: atualiza posição sem debitar deslocamento
+              const nextCombatants = activeCombatants.map((c) => {
+                if (c.id === targetC.id) {
+                  return { ...c, x: snappedX, z: snappedZ };
                 }
-              } else {
-                // Combat phase: track movement cost via trail
-                const costInfo = calculateTrailTerrainCost(dragTrailRef.current, surfacesMapRef.current);
-                const trailCostMeters = costInfo.totalCostMeters;
+                return c;
+              });
 
-                let nextCombatants = activeCombatants.map((c) => {
-                  if (c.id === targetC.id) {
-                    return {
-                      ...c,
-                      x: snappedX,
-                      z: snappedZ,
-                      movementUsed: (c.movementUsed || 0) + trailCostMeters,
-                    };
-                  }
-                  return c;
-                });
+              if (callbacksRef.current.onUpdateCombatants) {
+                callbacksRef.current.onUpdateCombatants(nextCombatants);
+              }
+            } else {
+              // Fase de combate: calcula o custo exato do deslocamento realizado
+              const costInfo = calculateTrailTerrainCost(dragTrailRef.current, surfacesMapRef.current);
+              const trailCostMeters = costInfo.totalCostMeters;
 
-                // Automated Hazard Resolution (Gelo, Óleo, Fogo, Ácido, Teias)
-                const endSnapKey = `${Math.round(snappedX)}_${Math.round(snappedZ)}`;
-                const surfaceType = surfacesMapRef.current.get(endSnapKey);
-                if (surfaceType && surfaceType !== 'normal') {
-                  const def = TERRAIN_SURFACE_CATALOG[surfaceType];
-                  if (def.isHazard) {
-                    if (def.requiresSave && def.saveAbility === 'dex') {
-                      const d20 = Math.floor(Math.random() * 20) + 1;
-                      const dexMod = targetC.dex ? Math.floor((targetC.dex - 10) / 2) : 0;
-                      const totalSave = d20 + dexMod;
-                      const dc = def.saveDC || 10;
-                      if (totalSave < dc) {
-                        const existingConditions = targetC.conditions || [];
-                        const hasProne = existingConditions.some((c) => String(c).toLowerCase().includes('caído') || String(c).toLowerCase().includes('prone'));
-                        if (!hasProne) {
-                          const newConditions = [...existingConditions, 'Caído' as ConditionType];
-                          nextCombatants = nextCombatants.map((c) => (c.id === targetC.id ? { ...c, conditions: newConditions } : c));
-                        }
-                        toast.error(`❄️ ${targetC.name} escorregou em ${def.label} e caiu Caído (Prone)! (Teste de DES: ${totalSave} vs CD ${dc})`);
-                      } else {
-                        toast.success(`🛡️ ${targetC.name} manteve o equilíbrio em ${def.label}! (Teste de DES: ${totalSave} vs CD ${dc})`);
+              let nextCombatants = activeCombatants.map((c) => {
+                if (c.id === targetC.id) {
+                  return {
+                    ...c,
+                    x: snappedX,
+                    z: snappedZ,
+                    movementUsed: (c.movementUsed || 0) + trailCostMeters,
+                  };
+                }
+                return c;
+              });
+
+              // Resolução automática de perigos de terreno (Gelo, Óleo, Fogo, Ácido, Teias)
+              const endSnapKey = `${Math.round(snappedX)}_${Math.round(snappedZ)}`;
+              const surfaceType = surfacesMapRef.current.get(endSnapKey);
+              if (surfaceType && surfaceType !== 'normal') {
+                const def = TERRAIN_SURFACE_CATALOG[surfaceType];
+                if (def.isHazard) {
+                  if (def.requiresSave && def.saveAbility === 'dex') {
+                    const d20 = Math.floor(Math.random() * 20) + 1;
+                    const dexMod = targetC.dex ? Math.floor((targetC.dex - 10) / 2) : 0;
+                    const totalSave = d20 + dexMod;
+                    const dc = def.saveDC || 10;
+                    if (totalSave < dc) {
+                      const existingConditions = targetC.conditions || [];
+                      const hasProne = existingConditions.some((c) => String(c).toLowerCase().includes('caído') || String(c).toLowerCase().includes('prone'));
+                      if (!hasProne) {
+                        const newConditions = [...existingConditions, 'Caído' as ConditionType];
+                        nextCombatants = nextCombatants.map((c) => (c.id === targetC.id ? { ...c, conditions: newConditions } : c));
                       }
-                    } else if (def.requiresSave && def.saveAbility === 'str') {
-                      const d20 = Math.floor(Math.random() * 20) + 1;
-                      const strMod = targetC.str ? Math.floor((targetC.str - 10) / 2) : 0;
-                      const totalSave = d20 + strMod;
-                      const dc = def.saveDC || 12;
-                      if (totalSave < dc) {
-                        const existingConditions = targetC.conditions || [];
-                        const hasRestrained = existingConditions.some((c) => String(c).toLowerCase().includes('restrito') || String(c).toLowerCase().includes('contido') || String(c).toLowerCase().includes('restrained'));
-                        if (!hasRestrained) {
-                          const newConditions = [...existingConditions, 'Restrito' as ConditionType];
-                          nextCombatants = nextCombatants.map((c) => (c.id === targetC.id ? { ...c, conditions: newConditions } : c));
-                        }
-                        toast.error(`🕸️ ${targetC.name} ficou Restrito em ${def.label}! (Teste de FOR: ${totalSave} vs CD ${dc})`);
-                      } else {
-                        toast.success(`💪 ${targetC.name} escapou de ${def.label}! (Teste de FOR: ${totalSave} vs CD ${dc})`);
-                      }
-                    } else if (def.hazardDamageDice) {
-                      const dmg = def.hazardDamageDice === '2d4' 
-                        ? (Math.floor(Math.random() * 4) + 1 + Math.floor(Math.random() * 4) + 1)
-                        : (Math.floor(Math.random() * 4) + 1);
-                      toast.warning(`⚠️ ${targetC.name} pisou em ${def.label} e sofreu ${dmg} de dano de ${def.hazardDamageType || 'superfície'}!`);
+                      toast.error(`❄️ ${targetC.name} escorregou em ${def.label} e caiu Caído (Prone)! (Teste de DES: ${totalSave} vs CD ${dc})`);
+                    } else {
+                      toast.success(`🛡️ ${targetC.name} manteve o equilíbrio em ${def.label}! (Teste de DES: ${totalSave} vs CD ${dc})`);
                     }
+                  } else if (def.requiresSave && def.saveAbility === 'str') {
+                    const d20 = Math.floor(Math.random() * 20) + 1;
+                    const strMod = targetC.str ? Math.floor((targetC.str - 10) / 2) : 0;
+                    const totalSave = d20 + strMod;
+                    const dc = def.saveDC || 12;
+                    if (totalSave < dc) {
+                      const existingConditions = targetC.conditions || [];
+                      const hasRestrained = existingConditions.some((c) => String(c).toLowerCase().includes('restrito') || String(c).toLowerCase().includes('contido') || String(c).toLowerCase().includes('restrained'));
+                      if (!hasRestrained) {
+                        const newConditions = [...existingConditions, 'Restrito' as ConditionType];
+                        nextCombatants = nextCombatants.map((c) => (c.id === targetC.id ? { ...c, conditions: newConditions } : c));
+                      }
+                      toast.error(`🕸️ ${targetC.name} ficou Restrito em ${def.label}! (Teste de FOR: ${totalSave} vs CD ${dc})`);
+                    } else {
+                      toast.success(`💪 ${targetC.name} escapou de ${def.label}! (Teste de FOR: ${totalSave} vs CD ${dc})`);
+                    }
+                  } else if (def.hazardDamageDice) {
+                    const dmg = def.hazardDamageDice === '2d4' 
+                      ? (Math.floor(Math.random() * 4) + 1 + Math.floor(Math.random() * 4) + 1)
+                      : (Math.floor(Math.random() * 4) + 1);
+                    toast.warning(`⚠️ ${targetC.name} pisou em ${def.label} e sofreu ${dmg} de dano de ${def.hazardDamageType || 'superfície'}!`);
                   }
                 }
+              }
 
-                if (callbacksRef.current.onUpdateCombatants) {
-                  callbacksRef.current.onUpdateCombatants(nextCombatants);
-                }
+              if (callbacksRef.current.onUpdateCombatants) {
+                callbacksRef.current.onUpdateCombatants(nextCombatants);
               }
             }
           }
         }
 
-        // Clear visual trail mesh
+        // Limpa malha visual do rastro
         if (trailGroupRef.current && sceneRef.current) {
           sceneRef.current.remove(trailGroupRef.current);
           disposeHierarchy(trailGroupRef.current);
@@ -2964,6 +2972,9 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         if (forgeRef.current.buildMode !== 'idle') {
           setBuildMode('idle');
           setIsForgeMenuOpen(false);
+          isPaintingTerrainRef.current = false;
+          controls.enabled = true;
+          toast.info('Modo de edição/pintura cancelado (ESC).');
         }
         if (callbacksRef.current.pendingAttack) {
           callbacksRef.current.setPendingAttack(null);
@@ -3013,11 +3024,21 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       }
     };
 
+    const handleReleaseInteractions = () => {
+      if (isPaintingTerrainRef.current) {
+        isPaintingTerrainRef.current = false;
+        controls.enabled = true;
+      }
+      handlePointerUp();
+    };
+
     const domElem = renderer.domElement;
     domElem.addEventListener('pointerdown', (e) => { markInteraction(); handlePointerDown(e); });
     domElem.addEventListener('dblclick', (e) => { markInteraction(); handleDblClick(e); });
     window.addEventListener('pointermove', (e) => { markInteraction(); handlePointerMove(e); });
-    window.addEventListener('pointerup', () => { markInteraction(); handlePointerUp(); });
+    window.addEventListener('pointerup', () => { markInteraction(); handleReleaseInteractions(); });
+    window.addEventListener('pointercancel', handleReleaseInteractions);
+    window.addEventListener('blur', handleReleaseInteractions);
     window.addEventListener('keydown', (e) => { markInteraction(); handleKeyDown(e); });
     controls.addEventListener('change', markInteraction);
 
@@ -3194,7 +3215,9 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
       domElem.removeEventListener('pointerdown', handlePointerDown);
       domElem.removeEventListener('dblclick', handleDblClick);
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointerup', handleReleaseInteractions);
+      window.removeEventListener('pointercancel', handleReleaseInteractions);
+      window.removeEventListener('blur', handleReleaseInteractions);
       window.removeEventListener('keydown', handleKeyDown);
       controls.dispose();
       if (skyDomeRef.current) {
@@ -4270,6 +4293,29 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
         }}
         onToggleHelp={() => setShowHelpModal(true)}
       />
+
+      {/* Floating Active Terrain Paint HUD Indicator */}
+      {buildMode === 'terrain' && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 bg-slate-950/90 backdrop-blur-md border border-emerald-500/50 shadow-2xl px-4 py-2 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 select-none">
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+            Pintando Terreno: <span className="text-emerald-400 font-mono">{TERRAIN_SURFACE_CATALOG[activeTerrainType]?.label || activeTerrainType}</span> ({terrainBrushSize}x{terrainBrushSize})
+          </span>
+          <button
+            onClick={() => {
+              setBuildMode('idle');
+              isPaintingTerrainRef.current = false;
+              if (controlsRef.current) controlsRef.current.enabled = true;
+              toast.info('Pintura de terreno cancelada.');
+            }}
+            className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 hover:text-rose-200 border border-rose-500/40 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+            title="Sair da pintura de terreno (ESC)"
+          >
+            <X className="w-3.5 h-3.5" />
+            <span>Sair da Pintura (ESC)</span>
+          </button>
+        </div>
+      )}
 
       {/* 3D BattleForge (Building Blocks, Grid Size, Terrains & Spell Templates) Drawer */}
       <BattleForgeToolbar

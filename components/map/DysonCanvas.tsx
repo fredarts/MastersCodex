@@ -1894,7 +1894,6 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
               cell.fog = true;
             } else {
               cell.type = paintValue;
-              if (paintValue === 'floor' || paintValue === 'grass' || paintValue === 'water') cell.fog = false;
             }
           }
         }
@@ -1902,6 +1901,28 @@ export const DysonCanvas: React.FC<DysonCanvasProps> = ({
       return copy;
     });
   };
+
+  // Atalho de teclado global para desmarcar ferramentas / cancelar ação
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsDrawing(false);
+        setSelectionBox(null);
+        setDraggingItem(null);
+        if (activeStrokeRef.current) {
+          activeStrokeRef.current = null;
+          renderDrawings();
+        }
+        if (selectedTool !== 'pan') {
+          setSelectedTool?.('pan');
+          toast.info('Modo de navegação ativado (ESC)');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [selectedTool, setSelectedTool]);
 
   // Zoom nativo suave centrado no cursor
   useEffect(() => {

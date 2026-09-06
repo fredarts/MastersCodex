@@ -974,10 +974,16 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
                   </div>
 
                   {/* Core Vitals Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs pt-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-xs pt-1">
                     <div className="p-1.5 bg-[#0a0d14]/80 border border-[#2a3449] rounded-lg text-center shadow-inner flex flex-col justify-center">
                       <span className="text-[9px] uppercase font-bold text-slate-400 block truncate">Desafio</span>
                       <span className="text-xs font-bold text-amber-400 font-mono block">ND {selectedMonster.cr}</span>
+                    </div>
+                    <div className="p-1.5 bg-[#0a0d14]/80 border border-[#2a3449] rounded-lg text-center shadow-inner flex flex-col justify-center">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block truncate">Iniciativa</span>
+                      <span className="text-xs font-bold text-amber-300 font-mono block">
+                        {Math.floor((selectedMonster.dex - 10) / 2) >= 0 ? `+${Math.floor((selectedMonster.dex - 10) / 2)}` : Math.floor((selectedMonster.dex - 10) / 2)}
+                      </span>
                     </div>
                     <div className="p-1.5 bg-[#0a0d14]/80 border border-[#2a3449] rounded-lg text-center shadow-inner flex flex-col justify-center">
                       <span className="text-[9px] uppercase font-bold text-slate-400 block truncate">Proficiência</span>
@@ -1086,7 +1092,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
               {monsterDetailTab === 'stats' && (
                 <div className="space-y-6">
                   {/* Key vitals row */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     <div className="p-4 bg-[#0a0d14] rounded-2xl border border-[#2a3449] text-center shadow-md">
                       <Shield className="w-4 h-4 text-cyan-400 mx-auto mb-1" />
                       <span className="text-[10px] text-slate-400 uppercase block font-semibold">
@@ -1100,6 +1106,18 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
                         Pontos de Vida
                       </span>
                       <span className="text-xl font-extrabold text-rose-400 font-mono">{selectedMonster.hp}</span>
+                    </div>
+                    <div className="p-4 bg-[#0a0d14] rounded-2xl border border-[#2a3449] text-center shadow-md">
+                      <Swords className="w-4 h-4 text-amber-400 mx-auto mb-1" />
+                      <span className="text-[10px] text-slate-400 uppercase block font-semibold">
+                        Iniciativa Base
+                      </span>
+                      <span className="text-xl font-extrabold text-amber-300 font-mono">
+                        {Math.floor((selectedMonster.dex - 10) / 2) >= 0 ? `+${Math.floor((selectedMonster.dex - 10) / 2)}` : Math.floor((selectedMonster.dex - 10) / 2)}
+                      </span>
+                      <span className="text-[9px] text-slate-400 font-mono block mt-0.5">
+                        Passiva: {10 + Math.floor((selectedMonster.dex - 10) / 2)}
+                      </span>
                     </div>
                     <div className="p-4 bg-[#0a0d14] rounded-2xl border border-[#2a3449] text-center shadow-md">
                       <Zap className="w-4 h-4 text-amber-400 mx-auto mb-1" />

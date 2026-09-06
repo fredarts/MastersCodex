@@ -486,6 +486,8 @@ export interface Combatant {
   maxHp: number;
   ac: number;
   initiative: number;
+  initiativeRoll?: number; // Valor bruto rolado no d20 (1-20)
+  initiativeBonus?: number; // Modificador base de iniciativa (+DES / bônus de perícia / alerta)
   conditions: ConditionType[];
   str?: number;
   dex?: number;

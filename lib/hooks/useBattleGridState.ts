@@ -33,9 +33,11 @@ export function useBattleGridState(
         if (cClean === uClean || cClean.includes(uClean) || uClean.includes(cClean)) {
           return true;
         }
+        return false;
       }
 
-      return false;
+      // Se for jogador em modo standalone/local sem vínculo de ficha específico, permite mover tokens do tipo player
+      return true;
     },
     [isDm, isPlacementPhase, setupMode, userCharacterName]
   );

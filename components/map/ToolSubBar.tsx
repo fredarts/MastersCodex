@@ -28,6 +28,7 @@ import { Combatant } from '@/lib/types';
 
 interface ToolSubBarProps {
   selectedTool: string;
+  onCloseTool?: () => void;
   // Paint tool
   selectedTileType: TileType;
   onSelectTileType: (type: TileType) => void;
@@ -57,6 +58,7 @@ interface ToolSubBarProps {
 
 export const ToolSubBar: React.FC<ToolSubBarProps> = ({
   selectedTool,
+  onCloseTool,
   selectedTileType,
   onSelectTileType,
   boxMode,
@@ -114,6 +116,16 @@ export const ToolSubBar: React.FC<ToolSubBarProps> = ({
             <span>{t.label}</span>
           </button>
         ))}
+        {onCloseTool && (
+          <button
+            onClick={onCloseTool}
+            className="ml-2 px-2 py-1 rounded-lg text-xs font-bold bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40 transition-all flex items-center gap-1 shrink-0"
+            title="Desmarcar ferramenta (ESC)"
+          >
+            <X className="w-3 h-3" />
+            <span>Desmarcar (ESC)</span>
+          </button>
+        )}
       </div>
     );
   }
