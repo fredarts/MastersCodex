@@ -427,12 +427,22 @@ CREATE TABLE IF NOT EXISTS public.custom_monsters (
   abilities JSONB DEFAULT '[]'::jsonb,
   actions JSONB DEFAULT '[]'::jsonb,
   spells JSONB DEFAULT '[]'::jsonb,
+  damage_resistances JSONB DEFAULT '[]'::jsonb,
+  damage_immunities JSONB DEFAULT '[]'::jsonb,
+  damage_vulnerabilities JSONB DEFAULT '[]'::jsonb,
+  condition_immunities JSONB DEFAULT '[]'::jsonb,
+  base_monster_id TEXT,
+  base_monster_name TEXT,
+  is_custom_variant BOOLEAN DEFAULT false,
+  variant_tag TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_custom_monsters_user_id ON public.custom_monsters (user_id);
 CREATE INDEX IF NOT EXISTS idx_custom_monsters_campaign_id ON public.custom_monsters (campaign_id);
 CREATE INDEX IF NOT EXISTS idx_custom_monsters_name ON public.custom_monsters USING btree (name text_pattern_ops);
+CREATE INDEX IF NOT EXISTS idx_custom_monsters_base_monster_name ON public.custom_monsters (base_monster_name text_pattern_ops);
+CREATE INDEX IF NOT EXISTS idx_custom_monsters_is_variant ON public.custom_monsters (is_custom_variant) WHERE is_custom_variant = true;
 
 -- ==============================================================================
 -- 8. COMPÊNDIO SRD 5.1 (MONSTROS, MAGIAS, ITENS)

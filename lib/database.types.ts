@@ -304,6 +304,14 @@ export interface CustomMonsterRow {
   abilities?: any[] | null;
   actions?: any[] | null;
   spells?: any[] | null;
+  damage_resistances?: string[] | null;
+  damage_immunities?: string[] | null;
+  damage_vulnerabilities?: string[] | null;
+  condition_immunities?: string[] | null;
+  base_monster_id?: string | null;
+  base_monster_name?: string | null;
+  is_custom_variant?: boolean | null;
+  variant_tag?: string | null;
   created_at?: string;
 }
 

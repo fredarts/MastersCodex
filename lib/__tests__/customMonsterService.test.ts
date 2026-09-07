@@ -103,4 +103,47 @@ describe('customMonsterService Tests', () => {
     monsters = await customMonsterService.fetchCustomMonsters();
     expect(monsters).toHaveLength(0);
   });
+
+  it('deve salvar e carregar variantes de monstros com linhagem e defesas elementais', async () => {
+    vi.mocked(supabaseModule.isSupabaseConfigured).mockReturnValue(false);
+
+    const variant = await customMonsterService.saveCustomMonster({
+      name: 'Goblin Líder',
+      baseMonsterName: 'Goblin',
+      isCustomVariant: true,
+      variantTag: 'Líder',
+      type: 'Humanoide (Goblinóide)',
+      size: 'Pequeno',
+      alignment: 'Neutro e Mau',
+      ac: 16,
+      hp: 35,
+      speed: '9m',
+      cr: '2',
+      xp: 450,
+      str: 14,
+      dex: 16,
+      con: 14,
+      int: 12,
+      wis: 12,
+      cha: 12,
+      tokenType: 'billboard',
+      tokenImageUrl: '/assets/2d/Monstros/Goblin.png',
+      damageResistances: ['Fogo', 'Veneno'],
+      abilities: [{ name: 'Grito de Comando', desc: 'Concede vantagem aos aliados próximos.' }],
+      actions: [{ name: 'Espada Larga Envenenada', attackBonus: 5, damage: '1d8 + 3', desc: 'Ataque corpo a corpo.' }],
+    });
+
+    expect(variant.baseMonsterName).toBe('Goblin');
+    expect(variant.isCustomVariant).toBe(true);
+    expect(variant.variantTag).toBe('Líder');
+    expect(variant.damageResistances).toContain('Fogo');
+    expect(variant.damageResistances).toContain('Veneno');
+
+    const loaded = await customMonsterService.fetchCustomMonsters();
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].name).toBe('Goblin Líder');
+    expect(loaded[0].baseMonsterName).toBe('Goblin');
+    expect(loaded[0].abilities).toHaveLength(1);
+    expect(loaded[0].actions).toHaveLength(1);
+  });
 });

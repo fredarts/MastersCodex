@@ -76,6 +76,14 @@ export const customMonsterService = {
           abilities: item.abilities || [],
           actions: item.actions || [],
           spells: item.spells || [],
+          damageResistances: item.damage_resistances || item.damageResistances || [],
+          damageImmunities: item.damage_immunities || item.damageImmunities || [],
+          damageVulnerabilities: item.damage_vulnerabilities || item.damageVulnerabilities || [],
+          conditionImmunities: item.condition_immunities || item.conditionImmunities || [],
+          baseMonsterId: item.base_monster_id || item.baseMonsterId,
+          baseMonsterName: item.base_monster_name || item.baseMonsterName,
+          isCustomVariant: item.is_custom_variant ?? item.isCustomVariant,
+          variantTag: item.variant_tag || item.variantTag,
           createdAt: item.created_at,
         }));
         // Sincronizar cache local
@@ -147,6 +155,14 @@ export const customMonsterService = {
           abilities: fullMonster.abilities || [],
           actions: fullMonster.actions || [],
           spells: fullMonster.spells || [],
+          damage_resistances: fullMonster.damageResistances || [],
+          damage_immunities: fullMonster.damageImmunities || [],
+          damage_vulnerabilities: fullMonster.damageVulnerabilities || [],
+          condition_immunities: fullMonster.conditionImmunities || [],
+          base_monster_id: fullMonster.baseMonsterId || null,
+          base_monster_name: fullMonster.baseMonsterName || null,
+          is_custom_variant: fullMonster.isCustomVariant || false,
+          variant_tag: fullMonster.variantTag || null,
         };
 
         const { data, error } = await supabase

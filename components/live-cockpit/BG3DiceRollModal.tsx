@@ -37,6 +37,51 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
   const [actualD1, setActualD1] = useState<number>(state?.d20Roll || 1);
   const [actualD2, setActualD2] = useState<number>(state?.secondD20Roll || 1);
 
+  // Custom persistent bonuses for D20 and Damage
+  const [customD20Bonus, setCustomD20Bonus] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('masters_codex_d20_bonus');
+      if (saved !== null) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed)) return parsed;
+      }
+    }
+    return 0;
+  });
+
+  const [customDmgBonus, setCustomDmgBonus] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('masters_codex_dmg_bonus');
+      if (saved !== null) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed)) return parsed;
+      }
+    }
+    return 0;
+  });
+
+  const handleUpdateD20Bonus = (val: number) => {
+    setCustomD20Bonus(val);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('masters_codex_d20_bonus', String(val));
+      } catch (e) {
+        // ignore storage errors
+      }
+    }
+  };
+
+  const handleUpdateDmgBonus = (val: number) => {
+    setCustomDmgBonus(val);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('masters_codex_dmg_bonus', String(val));
+      } catch (e) {
+        // ignore storage errors
+      }
+    }
+  };
+
   const lastStateRef = React.useRef<{ title: string; actorName?: string; targetName?: string; modifier: number } | null>(null);
 
   // Initialize cards when state changes
@@ -84,20 +129,20 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
     setActiveBonusIndex(-1);
   }, [state]);
 
-  if (!state) return null;
+  const isAdvantage = state?.advantageMode === 'advantage';
+  const isDisadvantage = state?.advantageMode === 'disadvantage';
+  const isDualDice = Boolean(isAdvantage || isDisadvantage);
 
-  const isAdvantage = state.advantageMode === 'advantage';
-  const isDisadvantage = state.advantageMode === 'disadvantage';
-  const isDualDice = (isAdvantage || isDisadvantage);
-
-  // Calculate sum of currently enabled modifier cards
-  const totalEnabledModifier = modifierCards
+  // Calculate sum of currently enabled modifier cards + custom situational D20 bonus
+  const totalCardsModifier = modifierCards
     .filter((c) => c.isEnabled !== false)
     .reduce((sum, card) => {
       if (card.numericValue !== undefined) return sum + card.numericValue;
       const parsed = parseInt(card.value.toString().replace('+', ''), 10);
       return sum + (isNaN(parsed) ? 0 : parsed);
     }, 0);
+
+  const totalEnabledModifier = totalCardsModifier + customD20Bonus;
 
   // Determine winning D20 roll
   const d1 = actualD1;
@@ -114,6 +159,7 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
   const [modalPhase, setModalPhase] = useState<'d20' | 'damage'>('d20');
   const [isDamageRolling, setIsDamageRolling] = useState<boolean>(false);
   const [hasDamageRolled, setHasDamageRolled] = useState<boolean>(false);
+  const [rawDamageDieValue, setRawDamageDieValue] = useState<number>(0);
   const [damageRollResult, setDamageRollResult] = useState<number>(0);
   const [animatedDamageDie, setAnimatedDamageDie] = useState<number>(1);
   const [manualDamageModifierRatio, setManualDamageModifierRatio] = useState<number | null>(null);
@@ -140,16 +186,28 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
     return { dieType, count, sides, bonus };
   }, [state?.damageDiceFormula]);
 
+  // Current active raw damage taking into account dice roll, base bonus, and custom damage bonus
+  const activeCalculatedDamage = React.useMemo(() => {
+    if (state?.damageAmount !== undefined) {
+      return Math.max(0, state.damageAmount + customDmgBonus);
+    }
+    if (rawDamageDieValue > 0) {
+      return Math.max(0, rawDamageDieValue + dmgInfo.bonus + customDmgBonus);
+    }
+    return Math.max(0, damageRollResult + (damageRollResult > 0 ? 0 : customDmgBonus));
+  }, [state, rawDamageDieValue, dmgInfo.bonus, customDmgBonus, damageRollResult]);
+
   // Cálculo de Dano Efetivo considerando defesas (Resistências, Imunidades, Vulnerabilidades)
   const effectiveDamageData = React.useMemo(() => {
+    const rawVal = activeCalculatedDamage;
     const baseResult = calculateEffectiveDamage({
-      rawDamage: damageRollResult,
+      rawDamage: rawVal,
       damageType: state?.damageType,
       target: state?.targetCombatant,
     });
 
     if (manualDamageModifierRatio !== null) {
-      const overrideVal = Math.floor(damageRollResult * manualDamageModifierRatio);
+      const overrideVal = Math.floor(rawVal * manualDamageModifierRatio);
       return {
         ...baseResult,
         effectiveDamage: overrideVal,
@@ -162,12 +220,12 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
             : manualDamageModifierRatio === 2
             ? `⚠️ Vulnerabilidade (200%)`
             : `Integral (100%)`,
-        explanation: `Multiplicador manual (${manualDamageModifierRatio * 100}%) aplicado pelo Mestre: ${damageRollResult} ➔ ${overrideVal}.`,
+        explanation: `Multiplicador manual (${manualDamageModifierRatio * 100}%) aplicado pelo Mestre: ${rawVal} ➔ ${overrideVal}.`,
       };
     }
 
     return baseResult;
-  }, [damageRollResult, state?.damageType, state?.targetCombatant, manualDamageModifierRatio]);
+  }, [activeCalculatedDamage, state, manualDamageModifierRatio]);
 
   const isCrit = winningD20 === 20;
   const isFail = winningD20 === 1;
@@ -187,14 +245,15 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
   const handleDamageDieSettled = React.useCallback((result: { value: number }) => {
     setIsDamageRolling(false);
     setHasDamageRolled(true);
+    setRawDamageDieValue(result.value);
 
     const baseVal = result.value;
     const finalDamage = state?.damageAmount !== undefined
-      ? state.damageAmount
-      : Math.max(1, baseVal + dmgInfo.bonus);
+      ? Math.max(0, state.damageAmount + customDmgBonus)
+      : Math.max(0, baseVal + dmgInfo.bonus + customDmgBonus);
 
     setDamageRollResult(finalDamage);
-  }, [state, dmgInfo]);
+  }, [state, dmgInfo, customDmgBonus]);
 
   // Trigger Phase 2 3D Damage Roll
   const handleStartDamageRoll = React.useCallback(() => {
@@ -207,36 +266,12 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
   // Auto-start damage roll as soon as modal transitions to 'damage' phase
   useEffect(() => {
     if (modalPhase === 'damage' && !hasDamageRolled && !isDamageRolling) {
-      handleStartDamageRoll();
+      const timer = setTimeout(() => {
+        handleStartDamageRoll();
+      }, 50);
+      return () => clearTimeout(timer);
     }
   }, [modalPhase, hasDamageRolled, isDamageRolling, handleStartDamageRoll]);
-
-  // Aplicar dano ao alvo
-  const handleApplyDamage = () => {
-    const targetId = state?.targetCombatant?.id;
-    const targetName = state?.targetCombatant?.name || state?.targetName || 'o alvo';
-    const effectiveVal = effectiveDamageData.effectiveDamage;
-
-    if (state?.onApplyDamage && targetId) {
-      state.onApplyDamage(targetId, effectiveVal, effectiveDamageData.explanation);
-    } else if (targetId) {
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('masters_codex_combat_text', {
-          detail: { combatantId: targetId, type: 'damage', amount: effectiveVal }
-        }));
-        window.dispatchEvent(new CustomEvent('masters_codex_apply_damage', {
-          detail: { targetId, amount: effectiveVal, damageType: effectiveDamageData.damageType }
-        }));
-      }
-    }
-
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('masters_codex_clear_target_selection'));
-    }
-
-    toast.success(`💥 ${effectiveVal} de dano (${effectiveDamageData.damageType}) aplicado em ${targetName}!`);
-    onClose();
-  };
 
   // Handler para quando o dado D20 para fisicamente na face superior
   const handleD20Settled = React.useCallback((dieIndex: 1 | 2, result: { value: number; isCrit: boolean; isFail: boolean }) => {
@@ -289,6 +324,35 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
     }
   }, [isDualDice, isAdvantage, isDisadvantage, totalEnabledModifier, dc, modifierCards, onRollComplete, state]);
 
+  if (!state) return null;
+
+  // Aplicar dano ao alvo
+  const handleApplyDamage = () => {
+    const targetId = state?.targetCombatant?.id;
+    const targetName = state?.targetCombatant?.name || state?.targetName || 'o alvo';
+    const effectiveVal = effectiveDamageData.effectiveDamage;
+
+    if (state?.onApplyDamage && targetId) {
+      state.onApplyDamage(targetId, effectiveVal, effectiveDamageData.explanation);
+    } else if (targetId) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('masters_codex_combat_text', {
+          detail: { combatantId: targetId, type: 'damage', amount: effectiveVal }
+        }));
+        window.dispatchEvent(new CustomEvent('masters_codex_apply_damage', {
+          detail: { targetId, amount: effectiveVal, damageType: effectiveDamageData.damageType }
+        }));
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('masters_codex_clear_target_selection'));
+    }
+
+    toast.success(`💥 ${effectiveVal} de dano (${effectiveDamageData.damageType}) aplicado em ${targetName}!`);
+    onClose();
+  };
+
   // Trigger 3D d20 roll action
   const handleStartRoll = () => {
     if (isRolling || hasRolled) return;
@@ -305,7 +369,7 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
       <div className="z-10 text-center mb-4 space-y-1 animate-in slide-in-from-top-4 duration-300">
         {state.contextNarrative && (
           <p className="text-xs font-serif italic text-amber-200/90 max-w-lg mx-auto drop-shadow">
-            "{state.contextNarrative}"
+            &ldquo;{state.contextNarrative}&rdquo;
           </p>
         )}
         <h1 className="text-2xl md:text-3xl font-serif font-black tracking-wide text-slate-100 uppercase drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
@@ -340,8 +404,15 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
             {modalPhase === 'damage' ? 'FÓRMULA DE DANO' : 'DIFFICULTY CLASS'}
           </span>
           {modalPhase === 'damage' ? (
-            <div className="text-3xl md:text-4xl font-serif font-black text-amber-300 tracking-tight drop-shadow-md">
-              {state.damageDiceFormula || '1d8'}
+            <div className="flex flex-col items-center">
+              <div className="text-3xl md:text-4xl font-serif font-black text-amber-300 tracking-tight drop-shadow-md">
+                {state.damageDiceFormula || '1d8'}
+                {customDmgBonus !== 0 && (
+                  <span className="text-lg text-amber-400/90 font-mono ml-2">
+                    ({customDmgBonus > 0 ? `+${customDmgBonus}` : customDmgBonus} bônus)
+                  </span>
+                )}
+              </div>
             </div>
           ) : !hasRolled && !isRolling ? (
             <div className="flex items-center justify-center gap-2 mt-0.5">
@@ -394,14 +465,14 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
           <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
         </div>
 
-        {/* 3D Polyhedral Dice Container (Single or Dual for Adv/Dis OR Damage Die) */}
-        <div className="relative flex items-center justify-center my-2 gap-4">
+        {/* Central 3D Canvas Box */}
+        <div className="w-full flex items-center justify-center gap-4 my-2 relative">
           {modalPhase === 'damage' ? (
             /* Phase 2: 3D Damage Die Canvas (d8, d6, d10, d12, d4, etc.) */
             <Dice3DCanvas
               dieType={dmgInfo.dieType}
               isRolling={isDamageRolling}
-              number={damageRollResult}
+              number={activeCalculatedDamage}
               isCrit={isCrit}
               showNumber={hasDamageRolled}
               onSettled={handleDamageDieSettled}
@@ -471,6 +542,50 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
           </div>
         )}
 
+        {/* Bônus Manual / Situacional de Teste (D20) */}
+        {modalPhase === 'd20' && !hasRolled && !isRolling && (
+          <div className="mt-2 mb-1 w-full max-w-sm px-3 py-2 rounded-2xl bg-[#111624]/90 border border-amber-500/30 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-amber-200/90 font-mono font-semibold">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Bônus Situacional:</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                value={customD20Bonus === 0 ? '' : customD20Bonus}
+                placeholder="+0"
+                onChange={(e) => {
+                  const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10) || 0;
+                  handleUpdateD20Bonus(val);
+                }}
+                className="w-14 text-center font-mono font-bold text-sm bg-slate-950/90 border border-amber-500/40 focus:border-amber-400 rounded-lg px-1 py-1 text-amber-300 outline-none"
+              />
+              <div className="flex items-center gap-0.5">
+                {[-1, 1, 2, 5].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => handleUpdateD20Bonus(customD20Bonus + amt)}
+                    className="px-1.5 py-1 text-[10px] font-mono font-bold rounded-md bg-slate-900/90 hover:bg-amber-500/20 text-slate-300 hover:text-amber-200 border border-slate-700 hover:border-amber-500/40 transition-colors"
+                  >
+                    {amt > 0 ? `+${amt}` : amt}
+                  </button>
+                ))}
+                {customD20Bonus !== 0 && (
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateD20Bonus(0)}
+                    title="Zerar Bônus"
+                    className="px-1.5 py-1 text-[10px] font-mono font-bold rounded-md bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50"
+                  >
+                    0
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Phase 1 Action: Click to Roll D20 */}
         {modalPhase === 'd20' && !hasRolled && !isRolling && (
           <button
@@ -537,6 +652,50 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
           </div>
         )}
 
+        {/* Phase 2: Bônus de Dano Manual / Situacional */}
+        {modalPhase === 'damage' && (
+          <div className="mt-2 mb-1 w-full max-w-sm px-3 py-2 rounded-2xl bg-[#111624]/90 border border-amber-500/30 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-2 animate-in fade-in duration-300">
+            <div className="flex items-center gap-1.5 text-xs text-amber-200/90 font-mono font-semibold">
+              <Flame className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Bônus de Dano:</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                value={customDmgBonus === 0 ? '' : customDmgBonus}
+                placeholder="+0"
+                onChange={(e) => {
+                  const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10) || 0;
+                  handleUpdateDmgBonus(val);
+                }}
+                className="w-14 text-center font-mono font-bold text-sm bg-slate-950/90 border border-amber-500/40 focus:border-amber-400 rounded-lg px-1 py-1 text-amber-300 outline-none"
+              />
+              <div className="flex items-center gap-0.5">
+                {[-1, 1, 2, 5].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => handleUpdateDmgBonus(customDmgBonus + amt)}
+                    className="px-1.5 py-1 text-[10px] font-mono font-bold rounded-md bg-slate-900/90 hover:bg-amber-500/20 text-slate-300 hover:text-amber-200 border border-slate-700 hover:border-amber-500/40 transition-colors"
+                  >
+                    {amt > 0 ? `+${amt}` : amt}
+                  </button>
+                ))}
+                {customDmgBonus !== 0 && (
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateDmgBonus(0)}
+                    title="Zerar Bônus de Dano"
+                    className="px-1.5 py-1 text-[10px] font-mono font-bold rounded-md bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50"
+                  >
+                    0
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Phase 2 Post-Roll Damage Result Display */}
         {modalPhase === 'damage' && hasDamageRolled && (
           <div className="mt-3 text-center space-y-2.5 animate-in zoom-in-95 duration-300 w-full">
@@ -546,10 +705,16 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
                 💥 {effectiveDamageData.effectiveDamage} DANO
               </div>
               <div className="text-xs font-mono text-slate-300">
-                Fórmula: <strong className="text-amber-300">{state.damageDiceFormula}</strong> • Tipo: <strong className="text-amber-200">{effectiveDamageData.damageType}</strong>
+                Fórmula: <strong className="text-amber-300">{state.damageDiceFormula}</strong>
+                {customDmgBonus !== 0 && (
+                  <span className="text-amber-400 font-bold ml-1">
+                    ({customDmgBonus > 0 ? `+${customDmgBonus}` : customDmgBonus} extra)
+                  </span>
+                )}
+                {' '}• Tipo: <strong className="text-amber-200">{effectiveDamageData.damageType}</strong>
                 {effectiveDamageData.rawDamage !== effectiveDamageData.effectiveDamage && (
                   <span className="text-slate-400 ml-1 font-mono">
-                    (Rolado: {effectiveDamageData.rawDamage})
+                    (Bruto: {effectiveDamageData.rawDamage})
                   </span>
                 )}
               </div>
@@ -674,6 +839,22 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
                 </div>
               );
             })}
+
+            {/* Card Dinâmico de Bônus Situacional / Extra */}
+            {customD20Bonus !== 0 && (
+              <div className="relative group min-w-[100px] max-w-[130px] p-2.5 rounded-2xl border bg-amber-950/40 border-amber-400/60 text-amber-200 transition-all duration-300 flex flex-col items-center text-center shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                <div className="text-base font-serif font-black text-amber-300">
+                  {customD20Bonus > 0 ? `+${customD20Bonus}` : customD20Bonus}
+                </div>
+                <div className="my-1 text-amber-400">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div className="text-[10px] font-bold truncate max-w-full leading-tight">Bônus Extra</div>
+                <div className="text-[8px] text-amber-400/70 truncate max-w-full italic mt-0.5">
+                  Situacional
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

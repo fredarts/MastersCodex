@@ -497,6 +497,7 @@ export interface Combatant {
   cha?: number;
   actions?: { name: string; desc: string }[];
   abilities?: { name: string; desc: string }[];
+  spells?: CustomMonsterSpell[];
   cr?: string;
   speed?: string;
   size?: string;
@@ -539,6 +540,11 @@ export interface Combatant {
   auras?: import('./auras/auraTypes').TokenAura[];
   activeAuraBuffs?: import('./auras/auraTypes').ActiveAuraBuff[];
   characterSheet?: CharacterSheet;
+  customMonsterId?: string;
+  baseMonsterId?: string;
+  baseMonsterName?: string;
+  isCustomVariant?: boolean;
+  variantTag?: string;
 }
 
 export type WallType = 'wall' | 'door' | 'secret_door' | 'window' | 'terrain' | 'illusion';
@@ -712,6 +718,10 @@ export interface CustomMonster {
   damageImmunities?: string[];
   damageVulnerabilities?: string[];
   conditionImmunities?: string[];
+  baseMonsterId?: string;
+  baseMonsterName?: string;
+  isCustomVariant?: boolean;
+  variantTag?: string;
   createdAt?: string;
 }
 

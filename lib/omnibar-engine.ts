@@ -7,7 +7,7 @@ import { BATCH_3_MONSTERS } from './srd-monsters-batch-3';
 import { BATCH_4_MONSTERS } from './srd-monsters-batch-4';
 import { BATCH_5_MONSTERS } from './srd-monsters-batch-5';
 import { CONDITIONS, INITIAL_MONSTERS } from './srd-data';
-import { Combatant, ConditionType, SRDMonster, SRDSpell, SRDItem } from './types';
+import { Combatant, ConditionType, SRDMonster, SRDSpell, SRDItem, CustomMonster } from './types';
 
 // Unificação de todas as magias da SRD
 const CONSOLIDATED_SPELLS: SRDSpell[] = Array.from(
@@ -185,6 +185,7 @@ export function evaluateOmnibarQuery(
   rawQuery: string,
   contextData: {
     combatants: Combatant[];
+    customMonsters?: CustomMonster[];
     activeCampaignTitle?: string;
     isPlayingBgm?: boolean;
     activeBgmTitle?: string;
@@ -382,12 +383,36 @@ export function evaluateOmnibarQuery(
   }
 
   // ==========================================
-  // 5. BUSCA NO COMPÊNDIO SRD: MONSTROS
+  // 5. BUSCA NO COMPÊNDIO SRD & MONSTROS CUSTOMIZADOS
   // ==========================================
   const isMonsterQuery = query.startsWith('!monstro') || query.startsWith('!mob') || norm.startsWith('monstro:');
   const monsterFilter = isMonsterQuery ? query.replace(/^(!monstro|!mob|monstro:)/i, '').trim() : query;
 
   if (monsterFilter && (isMonsterQuery || monsterFilter.length >= 3)) {
+    // Monstros Customizados primeiro
+    const customList = contextData.customMonsters || [];
+    const matchedCustoms = customList
+      .filter(
+        (m) =>
+          matchesQuery(m.name, monsterFilter) ||
+          (m.baseMonsterName && matchesQuery(m.baseMonsterName, monsterFilter)) ||
+          (m.variantTag && matchesQuery(m.variantTag, monsterFilter))
+      )
+      .slice(0, 4);
+
+    matchedCustoms.forEach((monster) => {
+      results.push({
+        id: `custom-monster-${monster.id}`,
+        category: 'monster',
+        title: `${monster.name} (ND ${monster.cr})`,
+        subtitle: `${monster.size} ${monster.type} • CA ${monster.ac} • PV ${monster.hp} • ${monster.baseMonsterName ? `Variante de ${monster.baseMonsterName}` : 'Customizado'}`,
+        badge: monster.variantTag ? monster.variantTag.toUpperCase() : 'CUSTOM',
+        iconType: 'Sparkles',
+        handlerType: 'view_srd_monster',
+        payload: monster,
+      });
+    });
+
     const matchedMonsters = UNIQUE_MONSTERS.filter((m) => matchesQuery(m.name, monsterFilter)).slice(0, 6);
 
     matchedMonsters.forEach((monster) => {

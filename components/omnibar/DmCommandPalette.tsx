@@ -34,7 +34,8 @@ import { useCampaign } from '@/context/CampaignContext';
 import { useCampaignCalendar } from '@/context/CalendarContext';
 import { useAuth } from '@/context/AuthContext';
 import { parseDiceCommand } from '@/lib/chat-dice-parser';
-import { SRDSpell, SRDMonster, SRDItem, ConditionType } from '@/lib/types';
+import { SRDSpell, SRDMonster, SRDItem, ConditionType, CustomMonster } from '@/lib/types';
+import { customMonsterService } from '@/lib/services/customMonsterService';
 import { toast } from 'sonner';
 
 interface DmCommandPaletteProps {
@@ -74,28 +75,30 @@ export const DmCommandPalette: React.FC<DmCommandPaletteProps> = ({ onNavigateTa
 
   const { activeCampaign, createFeedEvent } = useCampaign();
   const calendarContext = useCampaignCalendar();
+  const [customMonsters, setCustomMonsters] = useState<CustomMonster[]>([]);
 
-  // Foco automático ao abrir
+  // Foco automático e carregamento ao abrir
   useEffect(() => {
     if (isOpen) {
       setQuery('');
       setSelectedIndex(0);
+      customMonsterService.fetchCustomMonsters(activeCampaign?.id).then(setCustomMonsters).catch(() => {});
       setTimeout(() => {
         inputRef.current?.focus();
       }, 50);
     }
-  }, [isOpen]);
+  }, [isOpen, activeCampaign?.id]);
 
-  // Lista de Itens Filtrados via Engine
   // Lista de Itens Filtrados via Engine
   const items = useMemo(() => {
     return evaluateOmnibarQuery(query, {
       combatants,
+      customMonsters,
       activeCampaignTitle: activeCampaign?.title,
       isPlayingBgm,
       activeBgmTitle: activeBgm?.name,
     });
-  }, [query, combatants, activeCampaign, isPlayingBgm, activeBgm]);
+  }, [query, combatants, customMonsters, activeCampaign, isPlayingBgm, activeBgm]);
 
   // Ajusta o índice selecionado quando a lista muda
   useEffect(() => {
@@ -459,7 +462,19 @@ export const DmCommandPalette: React.FC<DmCommandPaletteProps> = ({ onNavigateTa
                     <div><strong className="text-slate-400">Tempo:</strong> {selectedItem.payload.castingTime}</div>
                     <div><strong className="text-slate-400">Alcance:</strong> {selectedItem.payload.range}</div>
                     <div><strong className="text-slate-400">Duração:</strong> {selectedItem.payload.duration}</div>
-                    <div><strong className="text-slate-400">Componentes:</strong> {selectedItem.payload.components}</div>
+                    <div>
+                      <strong className="text-slate-400">Componentes:</strong>{' '}
+                      {typeof selectedItem.payload.components === 'string'
+                        ? selectedItem.payload.components
+                        : selectedItem.payload.components?.raw ||
+                          [
+                            selectedItem.payload.components?.verbal ? 'V' : null,
+                            selectedItem.payload.components?.somatic ? 'S' : null,
+                            selectedItem.payload.components?.material ? 'M' : null,
+                          ]
+                            .filter(Boolean)
+                            .join(', ') || 'Nenhum'}
+                    </div>
                   </div>
                   <p className="text-slate-300 leading-relaxed text-[11px] whitespace-pre-line">
                     {selectedItem.payload.description}
@@ -485,7 +500,7 @@ export const DmCommandPalette: React.FC<DmCommandPaletteProps> = ({ onNavigateTa
                   <div className="grid grid-cols-3 gap-2 text-[11px] bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-center font-mono">
                     <div><span className="text-slate-500 block text-[9px]">CA</span><strong className="text-emerald-400">{selectedItem.payload.ac}</strong></div>
                     <div><span className="text-slate-500 block text-[9px]">PV</span><strong className="text-red-400">{selectedItem.payload.hp}</strong></div>
-                    <div><span className="text-slate-500 block text-[9px]">VELOCIDADE</span><span className="text-slate-300">{selectedItem.payload.speed}</span></div>
+                    <div><span className="text-slate-500 block text-[9px]">VELOCIDADE</span><span className="text-slate-300">{typeof selectedItem.payload.speed === 'string' ? selectedItem.payload.speed : (selectedItem.payload.speed?.walk || (typeof selectedItem.payload.speed === 'object' ? JSON.stringify(selectedItem.payload.speed) : selectedItem.payload.speed || '-'))}</span></div>
                   </div>
                   <div className="grid grid-cols-6 gap-1 text-[10px] bg-slate-900/40 p-1.5 rounded border border-slate-800/80 text-center">
                     <div><span className="text-slate-500 block">FOR</span>{selectedItem.payload.str}</div>

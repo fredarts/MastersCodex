@@ -25,8 +25,9 @@ import {
   Gift,
   Coins,
   Weight,
+  Wand2,
 } from 'lucide-react';
-import { SRDMonster, SRDSpell, SRDItem, CharacterSheet } from '@/lib/types';
+import { SRDMonster, SRDSpell, SRDItem, CharacterSheet, CustomMonster } from '@/lib/types';
 import { INITIAL_MONSTERS, INITIAL_SPELLS, INITIAL_ITEMS } from '@/lib/srd-data';
 import { srdService } from '@/lib/services/srdService';
 import { useLiveCockpitStudioStore } from '@/lib/stores/useLiveCockpitStudioStore';
@@ -36,6 +37,7 @@ import { useCampaign } from '@/context/CampaignContext';
 import { usePartyLoot } from '@/context/PartyLootContext';
 import { SRD_EQUIPMENT, SRDItem as SRDEquipmentItem } from '@/lib/srd-compendium';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { CreateMonsterModal } from '@/components/modals/CreateMonsterModal';
 
 interface CompendiumViewProps {
   isModal?: boolean;
@@ -215,6 +217,8 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
   const [selectedSpell, setSelectedSpell] = useState<SRDSpell | null>(INITIAL_SPELLS[0] || null);
   const [selectedItem, setSelectedItem] = useState<SRDItem | null>(INITIAL_ITEMS[0] || null);
   const [monsterDetailTab, setMonsterDetailTab] = useState<'narrative' | 'stats'>('narrative');
+  const [showCloneModal, setShowCloneModal] = useState<boolean>(false);
+  const [cloneMonsterData, setCloneMonsterData] = useState<Partial<CustomMonster> | null>(null);
 
   // Image Zoom Lightbox Modal Overlay State
   const [zoomedImage, setZoomedImage] = useState<{ url: string; title: string } | null>(null);
@@ -956,7 +960,7 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
                 <div className="flex flex-col justify-between bg-gradient-to-r from-[#0f141d] to-[#161c28] p-3 md:p-3.5 rounded-2xl border border-[#2a3449]/90 shadow-md min-h-[140px] md:min-h-[155px] max-h-[170px]">
                   <div className="space-y-0.5">
                     <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-[#2a3449]/60 pb-1.5">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h2 className="text-xl md:text-2xl font-extrabold text-amber-100 font-serif tracking-wide truncate">
                           {selectedMonster.name}
                         </h2>
@@ -964,9 +968,52 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
                           ND {selectedMonster.cr}
                         </span>
                       </div>
-                      <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0">
-                        {selectedMonster.xp} XP
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0">
+                          {selectedMonster.xp} XP
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCloneMonsterData({
+                              name: `${selectedMonster.name} (Líder)`,
+                              baseMonsterName: selectedMonster.name,
+                              isCustomVariant: true,
+                              variantTag: 'Líder',
+                              type: selectedMonster.type,
+                              size: selectedMonster.size,
+                              alignment: selectedMonster.alignment,
+                              cr: selectedMonster.cr,
+                              xp: selectedMonster.xp,
+                              ac: selectedMonster.ac,
+                              hp: selectedMonster.hp,
+                              maxHp: selectedMonster.hp,
+                              speed: selectedMonster.speed,
+                              str: selectedMonster.str,
+                              dex: selectedMonster.dex,
+                              con: selectedMonster.con,
+                              int: selectedMonster.int,
+                              wis: selectedMonster.wis,
+                              cha: selectedMonster.cha,
+                              tokenImageUrl: selectedMonster.tokenImageUrl || `/assets/2d/Monstros/${selectedMonster.name}.png`,
+                              tokenType: selectedMonster.tokenType || (selectedMonster.tokenImageUrl ? 'billboard' : '3d'),
+                              modelUrl: selectedMonster.modelUrl,
+                              abilities: selectedMonster.abilities ? [...selectedMonster.abilities] : [],
+                              actions: selectedMonster.actions ? selectedMonster.actions.map(a => ({ name: a.name, desc: a.desc })) : [],
+                              damageResistances: selectedMonster.damageResistances ? [...selectedMonster.damageResistances] : [],
+                              damageImmunities: selectedMonster.damageImmunities ? [...selectedMonster.damageImmunities] : [],
+                              damageVulnerabilities: selectedMonster.damageVulnerabilities ? [...selectedMonster.damageVulnerabilities] : [],
+                              conditionImmunities: selectedMonster.conditionImmunities ? [...selectedMonster.conditionImmunities] : [],
+                            });
+                            setShowCloneModal(true);
+                          }}
+                          className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-purple-600 to-rose-600 hover:brightness-110 text-white font-bold text-[10px] flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                          title="Criar Variante Customizada a partir deste monstro"
+                        >
+                          <Wand2 className="w-3 h-3" />
+                          <span>Criar Variante</span>
+                        </button>
+                      </div>
                     </div>
                     <p className="text-[11px] text-slate-300 font-medium italic truncate">
                       {selectedMonster.size} • {selectedMonster.type} • {selectedMonster.alignment}
@@ -1851,6 +1898,22 @@ export const CompendiumView: React.FC<CompendiumViewProps> = ({ isModal = false,
             </div>
           </div>
         </div>
+      )}
+
+      {showCloneModal && (
+        <CreateMonsterModal
+          isOpen={showCloneModal}
+          initialMonster={cloneMonsterData || undefined}
+          onClose={() => {
+            setShowCloneModal(false);
+            setCloneMonsterData(null);
+          }}
+          onMonsterCreated={async (newMonster) => {
+            setShowCloneModal(false);
+            setCloneMonsterData(null);
+            toast.success(`Variante "${newMonster.name}" criada com sucesso!`);
+          }}
+        />
       )}
     </div>
   );
