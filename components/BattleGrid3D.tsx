@@ -1522,7 +1522,16 @@ const getStableDefaultPos = (idOrName: string): { x: number; z: number } => {
               : getModelUrlByNameOrPath(c.name);
           }
 
-          if (ud.tokenType !== currentType || ud.modelUrl !== currentModel || ud.imageUrl !== currentImg) {
+          const isDead = c.type === 'monster' && (c.hp <= 0 || c.conditions?.includes('Morto'));
+          const isDowned = c.type === 'player' && c.hp <= 0;
+
+          if (
+            ud.tokenType !== currentType ||
+            ud.modelUrl !== currentModel ||
+            ud.imageUrl !== currentImg ||
+            ud.isDead !== isDead ||
+            ud.isDowned !== isDowned
+          ) {
             // Re-create the token mesh because the representation changed!
             tokenGroup.remove(existingGroup);
             disposeHierarchy(existingGroup);

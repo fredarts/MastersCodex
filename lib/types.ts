@@ -539,6 +539,7 @@ export interface Combatant {
   savingThrowBonuses?: Partial<Record<'STR' | 'DEX' | 'CON' | 'INT' | 'WIS' | 'CHA', number>>;
   auras?: import('./auras/auraTypes').TokenAura[];
   activeAuraBuffs?: import('./auras/auraTypes').ActiveAuraBuff[];
+  deathSaves?: { successes: number; failures: number; isStabilized?: boolean };
   characterSheet?: CharacterSheet;
   customMonsterId?: string;
   baseMonsterId?: string;

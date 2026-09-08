@@ -36,6 +36,8 @@ export interface Bg3DiceOverlayState {
   targetCombatant?: Combatant;
   isRolling: boolean;
   phase: 'd20' | 'damage';
+  rollType?: 'attack' | 'saving_throw' | 'death_save' | 'skill_check' | 'generic';
+  deathSaveStats?: { successes: number; failures: number; isStabilized?: boolean };
   onRollComplete?: (finalTotal: number, isHit: boolean, d20Value: number) => void;
   onApplyDamage?: (targetId: string, amount: number, explanation?: string) => void;
 }

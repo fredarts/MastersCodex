@@ -217,6 +217,36 @@ export const LiveCockpitStudio: React.FC<LiveCockpitStudioProps> = ({
     return () => clearInterval(interval);
   }, [bg3DiceOverlay?.isRolling, bg3DiceOverlay?.phase, setAnimatedRollNumber]);
 
+  // Automação de Teste de Morte (Death Saving Throw - D&D 5e)
+  useEffect(() => {
+    const handleDeathSaveTrigger = (e: any) => {
+      const { combatantId, combatantName, combatant, deathSaves } = e.detail || {};
+      if (!combatantId) return;
+
+      const d20 = Math.floor(Math.random() * 20) + 1;
+      setBg3DiceOverlay({
+        title: 'TESTE CONTRA A MORTE',
+        subtitle: `Salvaguarda D&D 5e - DC 10`,
+        actorName: combatantName || combatant?.name || 'Personagem',
+        modifier: 0,
+        d20Roll: d20,
+        difficultyClass: 10,
+        rollType: 'death_save',
+        deathSaveStats: deathSaves || { successes: 0, failures: 0 },
+        isRolling: false,
+        phase: 'd20',
+        onRollComplete: (_finalTotal, _isHit, winningD20) => {
+          combatEngine.handleDeathSaveRoll(combatantId, winningD20);
+        },
+      });
+    };
+
+    window.addEventListener('masters_codex_trigger_death_save', handleDeathSaveTrigger);
+    return () => {
+      window.removeEventListener('masters_codex_trigger_death_save', handleDeathSaveTrigger);
+    };
+  }, [setBg3DiceOverlay, combatEngine]);
+
   // Debounced token positions & rotations save
   useEffect(() => {
     const scene = activeSceneRef.current;

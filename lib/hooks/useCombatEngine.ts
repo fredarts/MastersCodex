@@ -45,9 +45,27 @@ export function useCombatEngine() {
 
     setCurrentTurnIndex(nextIndex);
 
+    // 💀 Automação de Death Save para Jogador Caído a 0 HP
+    if (incomingCombatant && incomingCombatant.type === 'player' && incomingCombatant.hp <= 0) {
+      const isStabilized = incomingCombatant.deathSaves?.isStabilized || (incomingCombatant.deathSaves?.successes || 0) >= 3;
+      const isDead = (incomingCombatant.deathSaves?.failures || 0) >= 3 || incomingCombatant.conditions?.includes('Morto');
+
+      if (!isStabilized && !isDead && typeof window !== 'undefined') {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('masters_codex_trigger_death_save', {
+            detail: {
+              combatantId: incomingCombatant.id,
+              combatantName: incomingCombatant.name,
+              combatant: incomingCombatant,
+              deathSaves: incomingCombatant.deathSaves || { successes: 0, failures: 0 }
+            }
+          }));
+        }, 150);
+      }
+    }
+
     // Checagem de cruzamento da contagem de Iniciativa 20 (Lair Action)
     const currentCombatant = combatants[currentTurnIndex];
-    const incomingCombatant = combatants[nextIndex];
     const crossedInit20 = (currentCombatant && incomingCombatant && currentCombatant.initiative >= 20 && incomingCombatant.initiative < 20) ||
       (nextRound > roundCount && combatants.some((x) => (x.initiative || 0) < 20) && !combatants.some((x) => (x.initiative || 0) >= 20));
 
@@ -161,7 +179,163 @@ export function useCombatEngine() {
       prev.map((c) => {
         if (c.id !== id) return c;
         const newHp = Math.max(0, Math.min(c.maxHp, c.hp + delta));
+
+        // Se estava a 0 HP (caído ou morto) e recuperou vida (> 0), ressuscita e se ergue
+        if (c.hp <= 0 && newHp > 0) {
+          const cleanedConditions = (c.conditions || []).filter(
+            (cond) => !['Morto', 'Inconsciente', 'Incapacitado', 'Caído'].includes(cond)
+          );
+          return {
+            ...c,
+            hp: newHp,
+            conditions: cleanedConditions,
+            deathSaves: { successes: 0, failures: 0, isStabilized: false },
+          };
+        }
+
         return { ...c, hp: newHp };
+      })
+    );
+  }, [setCombatants]);
+
+  const handleDeathSaveRoll = useCallback((id: string, roll: number) => {
+    setCombatants((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+
+        const currentSaves = c.deathSaves || { successes: 0, failures: 0 };
+        let newSuccesses = currentSaves.successes || 0;
+        let newFailures = currentSaves.failures || 0;
+        let newHp = c.hp;
+        let newConditions = [...(c.conditions || [])];
+        let isStabilized = !!currentSaves.isStabilized;
+
+        if (roll === 20) {
+          // Nat 20: Cura 1 HP, acorda de pé e reseta death saves
+          newHp = 1;
+          newSuccesses = 0;
+          newFailures = 0;
+          isStabilized = false;
+          newConditions = newConditions.filter(
+            (cond) => !['Inconsciente', 'Incapacitado', 'Caído', 'Morto'].includes(cond)
+          );
+
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('masters_codex_combat_text', {
+                detail: { combatantId: c.id, type: 'heal', amount: `🌟 Nat 20! +1 PV!` },
+              })
+            );
+            window.dispatchEvent(
+              new CustomEvent('masters_codex_log_entry', {
+                detail: {
+                  message: `🌟 ${c.name} rolou um Nat 20 no Teste de Morte! Recuperou a consciência com 1 PV e se ergueu!`,
+                  description: `Regra Oficial D&D 5e: Um 20 natural em salvaguarda contra a morte recupera imediatamente 1 ponto de vida.`,
+                  type: 'death_save_crit',
+                  actorId: c.id,
+                },
+              })
+            );
+          }
+        } else if (roll === 1) {
+          // Nat 1: 2 Falhas
+          newFailures = Math.min(3, newFailures + 2);
+          if (newFailures >= 3) {
+            if (!newConditions.includes('Morto')) newConditions.push('Morto');
+          }
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('masters_codex_combat_text', {
+                detail: { combatantId: c.id, type: 'damage', amount: `💀 Nat 1! +2 Falhas!` },
+              })
+            );
+            window.dispatchEvent(
+              new CustomEvent('masters_codex_log_entry', {
+                detail: {
+                  message: `💀 FALHA CRÍTICA! ${c.name} rolou Nat 1 (+2 Falhas de Morte: ${newFailures}/3).`,
+                  description:
+                    newFailures >= 3
+                      ? `${c.name} sucumbiu aos ferimentos e faleceu.`
+                      : `${c.name} sofre 2 falhas no teste contra a morte.`,
+                  type: 'death_save_fail',
+                  actorId: c.id,
+                },
+              })
+            );
+          }
+        } else if (roll >= 10) {
+          // Sucesso (10-19)
+          newSuccesses = Math.min(3, newSuccesses + 1);
+          if (newSuccesses >= 3) {
+            isStabilized = true;
+          }
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('masters_codex_combat_text', {
+                detail: {
+                  combatantId: c.id,
+                  type: 'heal',
+                  amount: isStabilized ? `🛡️ Estabilizou!` : `✨ Sucesso (${newSuccesses}/3)`,
+                },
+              })
+            );
+            window.dispatchEvent(
+              new CustomEvent('masters_codex_log_entry', {
+                detail: {
+                  message: isStabilized
+                    ? `🛡️ ${c.name} obteve 3 sucessos e estabilizou! Não precisa mais rolar testes contra a morte.`
+                    : `✨ ${c.name} obteve Sucesso no Teste de Morte (${newSuccesses}/3).`,
+                  description: isStabilized
+                    ? `O personagem está estável a 0 PV.`
+                    : `Resultado: ${roll} (CD 10).`,
+                  type: 'death_save_success',
+                  actorId: c.id,
+                },
+              })
+            );
+          }
+        } else {
+          // Falha (2-9)
+          newFailures = Math.min(3, newFailures + 1);
+          if (newFailures >= 3) {
+            if (!newConditions.includes('Morto')) newConditions.push('Morto');
+          }
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('masters_codex_combat_text', {
+                detail: {
+                  combatantId: c.id,
+                  type: 'damage',
+                  amount: newFailures >= 3 ? `💀 Morto!` : `⚠️ Falha (${newFailures}/3)`,
+                },
+              })
+            );
+            window.dispatchEvent(
+              new CustomEvent('masters_codex_log_entry', {
+                detail: {
+                  message:
+                    newFailures >= 3
+                      ? `💀 ${c.name} acumulou 3 falhas e morreu.`
+                      : `⚠️ ${c.name} Falhou no Teste de Morte (${newFailures}/3).`,
+                  description: `Resultado: ${roll} (CD 10).`,
+                  type: 'death_save_fail',
+                  actorId: c.id,
+                },
+              })
+            );
+          }
+        }
+
+        return {
+          ...c,
+          hp: newHp,
+          conditions: newConditions,
+          deathSaves: {
+            successes: newSuccesses,
+            failures: newFailures,
+            isStabilized,
+          },
+        };
       })
     );
   }, [setCombatants]);
@@ -261,6 +435,7 @@ export function useCombatEngine() {
     handleNextTurn,
     handlePrevTurn,
     handleHpChange,
+    handleDeathSaveRoll,
     handleToggleCondition,
     handleRollInitiativeAll,
     handleAddCombatant,

@@ -459,11 +459,62 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
         </div>
 
         {/* Decorative Gold Separator */}
-        <div className="w-full flex items-center justify-center gap-2 mb-4">
+        <div className="w-full flex items-center justify-center gap-2 mb-2">
           <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
           <div className="w-2 h-2 rotate-45 border border-amber-400/60 bg-amber-500/20" />
           <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
         </div>
+
+        {/* HUD Específico de Death Saves (D&D 5e) */}
+        {state.rollType === 'death_save' && (
+          <div className="w-full max-w-xs mb-3 px-3 py-2 rounded-2xl bg-slate-950/80 border border-slate-800 shadow-inner flex items-center justify-around">
+            {/* Sucessos */}
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                <Shield className="w-3 h-3" /> Sucessos
+              </span>
+              <div className="flex items-center gap-1.5">
+                {[1, 2, 3].map((num) => {
+                  const isFilled = (state.deathSaveStats?.successes || 0) >= num;
+                  return (
+                    <div
+                      key={`succ-${num}`}
+                      className={`w-4 h-4 rounded-full border transition-all ${
+                        isFilled
+                          ? 'bg-emerald-500 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.8)]'
+                          : 'bg-slate-900 border-slate-700'
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="h-6 w-[1px] bg-slate-800" />
+
+            {/* Falhas */}
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] font-mono font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1">
+                <HeartCrack className="w-3 h-3" /> Falhas
+              </span>
+              <div className="flex items-center gap-1.5">
+                {[1, 2, 3].map((num) => {
+                  const isFilled = (state.deathSaveStats?.failures || 0) >= num;
+                  return (
+                    <div
+                      key={`fail-${num}`}
+                      className={`w-4 h-4 rounded-full border transition-all ${
+                        isFilled
+                          ? 'bg-rose-600 border-rose-400 shadow-[0_0_8px_rgba(225,29,72,0.8)]'
+                          : 'bg-slate-900 border-slate-700'
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Central 3D Canvas Box */}
         <div className="w-full flex items-center justify-center gap-4 my-2 relative">
@@ -606,7 +657,45 @@ export const BG3DiceRollModal: React.FC<BG3DiceRollModalProps> = ({
         {/* Phase 1 Post-Roll Result Display Banner */}
         {modalPhase === 'd20' && hasRolled && (
           <div className="mt-3 text-center space-y-2 animate-in zoom-in-95 duration-300">
-            {isCrit ? (
+            {state.rollType === 'death_save' ? (
+              isCrit ? (
+                <div className="space-y-0.5">
+                  <div className="text-2xl font-serif font-black text-amber-400 uppercase tracking-wider drop-shadow-[0_0_15px_rgba(245,158,11,0.8)] animate-bounce">
+                    🌟 20 NATURAL! RECUPEROU 1 PV! 🌟
+                  </div>
+                  <div className="text-xs font-bold text-amber-200">
+                    O personagem recuperou a consciência, curou 1 PV e se ergueu de pé!
+                  </div>
+                </div>
+              ) : isFail ? (
+                <div className="space-y-0.5">
+                  <div className="text-2xl font-serif font-black text-rose-500 uppercase tracking-wider drop-shadow-[0_0_15px_rgba(244,63,94,0.8)] animate-pulse">
+                    💀 FALHA CRÍTICA (+2 FALHAS)! 💀
+                  </div>
+                  <div className="text-xs font-bold text-rose-300">
+                    Regra D&D 5e: Um 1 natural no d20 conta como 2 falhas contra a morte!
+                  </div>
+                </div>
+              ) : isSuccess ? (
+                <div className="space-y-0.5">
+                  <div className="text-2xl font-serif font-black text-emerald-400 uppercase tracking-wider drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]">
+                    ✓ SUCESSO CONTRA A MORTE!
+                  </div>
+                  <div className="text-xs font-mono text-emerald-200">
+                    Resultado: <strong className="text-emerald-300 text-sm">{currentDisplayTotal}</strong> (CD 10) • +1 Sucesso
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  <div className="text-2xl font-serif font-black text-rose-400 uppercase tracking-wider drop-shadow-[0_0_10px_rgba(244,63,94,0.5)]">
+                    ✕ FALHA CONTRA A MORTE!
+                  </div>
+                  <div className="text-xs font-mono text-rose-200">
+                    Resultado: <strong className="text-rose-400 text-sm">{currentDisplayTotal}</strong> (&lt; CD 10) • +1 Falha
+                  </div>
+                </div>
+              )
+            ) : isCrit ? (
               <div className="space-y-0.5">
                 <div className="text-2xl font-serif font-black text-amber-400 uppercase tracking-wider drop-shadow-[0_0_15px_rgba(245,158,11,0.8)] animate-bounce">
                   ✨ CRITICAL SUCCESS ✨
